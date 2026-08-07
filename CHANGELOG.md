@@ -5,10 +5,14 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
 
 ## [Não lançado]
 
+
+
 ### Adicionado
+
 - Estrutura do repositório: `src/`, `testes/`, `docs/`, `dados/`, `backups/`, `logs/`
 - Ambiente virtual com Python 3.11 e `requirements.txt` (Fase 1 sem dependências externas)
 - `.gitignore` a excluir dados operacionais, cópias de segurança e registos (decisão 13)
+- `config.py` com os valores de configuração da análise
 
 ## [0.1.0] — 2026-08-07
 
