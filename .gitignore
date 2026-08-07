@@ -1,0 +1,20 @@
+# Ambiente virtual
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Dados operacionais — nunca versionar (decisão 13, RGPD)
+dados/
+backups/
+logs/
+*.db
+*.sqlite3
+
+# Editor e sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
