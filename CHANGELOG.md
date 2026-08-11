@@ -7,7 +7,7 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
 
 
 
-### Adicionado
+### [0.2.0] — 2026-08-11
 
 - Estrutura do repositório: `src/`, `testes/`, `docs/`, `dados/`, `backups/`, `logs/`
 - Ambiente virtual com Python 3.11 e `requirements.txt` (Fase 1 sem dependências externas)
