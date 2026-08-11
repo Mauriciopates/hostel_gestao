@@ -14,6 +14,8 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
 - `.gitignore` a excluir dados operacionais, cópias de segurança e registos (decisão 13)
 - `config.py` com os valores de configuração da análise
 - `modelos.py` com as 14 estruturas de dados do sistema
+- `repositorio.py` com persistência em JSON, cópias de segurança diárias e contadores de identificadores
+- 15 testes da camada de persistência em `testes/teste_repositorio.py`
 
 ## [0.1.0] — 2026-08-07
 
