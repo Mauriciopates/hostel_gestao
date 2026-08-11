@@ -288,12 +288,14 @@ class TesteIntervalo(unittest.TestCase):
     def teste_estadia_abaixo_do_minimo_e_recusada(self):
         """Uma noite é inferior ao mínimo de duas do regime Airbnb."""
         with self.assertRaises(ValueError):
-            validacoes.validar_intervalo(date(2026, 3, 10), date(2026, 3, 11), minimo=2)
+            validacoes.validar_intervalo(date(2026, 3, 10),
+            date(2026, 3, 11), minimo=2)
 
     def teste_estadia_acima_do_maximo_e_recusada(self):
         """Trinta noites excedem o máximo de vinte e oito."""
         with self.assertRaises(ValueError):
-            validacoes.validar_intervalo(date(2026, 3, 1), date(2026, 3, 31), maximo=28)
+            validacoes.validar_intervalo(date(2026, 3, 1),
+            date(2026, 3, 31), maximo=28)
 
     def teste_contrato_sem_termo_e_aceite(self):
         """Um contrato mensal em vigor não tem fim para validar.
@@ -353,8 +355,13 @@ class TesteTipoUnidade(unittest.TestCase):
         with self.assertRaises(ValueError):
             validacoes.validar_tipo_unidade("mensal", "hotel")
 
+
 class TesteEpocaAlta(unittest.TestCase):
-    """Época alta exige indicador manual E data no período (nunca automática)."""
+    """Época alta exige indicador manual E data no 
+
+    período(nunca automática).
+    
+    """
 
     def teste_data_no_periodo_com_indicador_ativo(self):
         """As duas condições reunidas dão época alta."""
