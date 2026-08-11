@@ -16,6 +16,8 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
 - `modelos.py` com as 14 estruturas de dados do sistema
 - `repositorio.py` com persistência em JSON, cópias de segurança diárias e contadores de identificadores
 - 15 testes da camada de persistência em `testes/teste_repositorio.py`
+- `validacoes.py` com verificação de NIF, campos obrigatórios por regime e regras de negócio
+- 40 testes das validações em `testes/teste_validacoes.py`
 
 ## [0.1.0] — 2026-08-07
 
