@@ -39,6 +39,13 @@ def criar(dados, nome, morada=""):
 
 
 def procurar(dados, propriedade_id):
+    """Devolve a propriedade com o identificador indicado, ou None.
+
+    A ausência não é erro: quem chama é que decide se a falta de
+    resultado impede a operação.
+
+    Não filtra inativas — procura, não decide.
+    """
 
     for p in dados["propriedades"]:
         if p["id"] == propriedade_id:

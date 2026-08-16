@@ -6,6 +6,11 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
 ## [Não lançado]
 
 
+### Adicionado
+
+- `propriedades.py` com criação, procura, listagem, atualização, desativação e reposição
+- 28 testes da gestão de propriedades
+
 
 ### [0.2.0] — 2026-08-11
 
