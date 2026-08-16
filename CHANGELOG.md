@@ -3,13 +3,15 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
-## [Não lançado]
+### [Não lançado]
 
 
 ### Adicionado
 
 - `propriedades.py` com criação, procura, listagem, atualização, desativação e reposição
 - 28 testes da gestão de propriedades
+
+- `unidades.py`: unidades, quartos e lugares — criar, procurar, listar, atualizar, desativar/reativar e marcar/desmarcar manutenção, com 74 testes e pseudocódigo documentado.
 
 
 ### [0.2.0] — 2026-08-11
