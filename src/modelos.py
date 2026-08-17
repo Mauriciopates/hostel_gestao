@@ -93,6 +93,7 @@ class Cliente:
     nif: str = ""
     email: str = ""
     telefone: str = ""
+    morada: str = ""
     nacionalidade: str = ""
     data_nascimento: date | None = None
     validade_documento: date | None = None
