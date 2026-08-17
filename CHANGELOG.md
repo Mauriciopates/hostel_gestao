@@ -13,6 +13,12 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
 
 - `unidades.py`: unidades, quartos e lugares — criar, procurar, listar, atualizar, desativar/reativar e marcar/desmarcar manutenção, com 74 testes e pseudocódigo documentado.
 
+- `clientes.py`: registo de clientes, listagem de registos incompletos (decisão 11) e anonimização RGPD (decisão 8) — criar, procurar, listar, atualizar, desativar/reativar e anonimizar, com 51 testes e pseudocódigo documentado.
+
+### Alterado
+
+- `modelos.py`: acrescentado o campo `morada` à dataclass `Cliente`, para corresponder ao que `validacoes.validar_cliente` já verificava (módulo reaberto pontualmente; as restantes entidades não foram tocadas)
+
 
 ### [0.2.0] — 2026-08-11
 
