@@ -4,20 +4,31 @@ Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
 ### [Não lançado]
+Nada a registar. Próxima versão: 0.5.0 — Ocupação (contratos.py).
 
+
+### [0.4.0] — 2026-08-18
+
+Grupo "Pessoas". Versão par: quem contrata alojamento e quem opera o sistema.
+
+### Adicionado
+
+- `clientes.py`: registo de clientes, listagem de registos incompletos (decisão 11) e anonimização RGPD (decisão 8) — criar, procurar, listar, atualizar, desativar/reativar e anonimizar, com 51 testes e pseudocódigo documentado
+- `responsaveis.py`: autoria de operações sem credenciais (decisão 10) — criar, procurar, listar, atualizar, desativar/reativar e validar_autoria, que exige responsável existente e ativo, com 60 testes e pseudocódigo documentado
+Alterado
+- `modelos.py`: acrescentado o campo morada à dataclass Cliente, para corresponder ao que validacoes.validar_cliente já verificava (módulo reaberto pontualmente; as restantes entidades não foram tocadas)
+- `Pseudocodigo_Modulos v1.3 → v1.4`: capítulo 12 (módulo responsaveis.py) e capítulo 13 (os seus testes); secção 11.8 reescrita, por a limitação "não há validação cruzada com responsaveis.py" ter deixado de se aplicar
+Campos obrigatórios do cliente: o nome passa a constar como campo que bloqueia a criação, a par do tipo e do número de documento. Corrige a decisão inicial ao confrontá-la com validacoes.py já fechado
+
+### [0.3.0] — 2026-08-17
+
+Grupo "Estrutura física". Versão ímpar: os edifícios e o que neles se contrata.
 
 ### Adicionado
 
 - `propriedades.py` com criação, procura, listagem, atualização, desativação e reposição
-- 28 testes da gestão de propriedades
-
-- `unidades.py`: unidades, quartos e lugares — criar, procurar, listar, atualizar, desativar/reativar e marcar/desmarcar manutenção, com 74 testes e pseudocódigo documentado.
-
-- `clientes.py`: registo de clientes, listagem de registos incompletos (decisão 11) e anonimização RGPD (decisão 8) — criar, procurar, listar, atualizar, desativar/reativar e anonimizar, com 51 testes e pseudocódigo documentado.
-
-### Alterado
-
-- `modelos.py`: acrescentado o campo `morada` à dataclass `Cliente`, para corresponder ao que `validacoes.validar_cliente` já verificava (módulo reaberto pontualmente; as restantes entidades não foram tocadas)
+28 testes da gestão de propriedades
+-`unidades.py`: unidades, quartos e lugares — criar, procurar, listar, atualizar, desativar/reativar e marcar/desmarcar manutenção, com 74 testes e pseudocódigo documentado
 
 
 ### [0.2.0] — 2026-08-11
