@@ -159,6 +159,9 @@ class OcupacaoMensal:
     motivo_alteracao_renda: str = ""
     motivo_alteracao_caucao: str = ""
     dia_vencimento: int = 5
+    motivo_encerramento: str = ""
+    duracao_abaixo_minima: bool = False
+    aviso_previo_insuficiente: bool = False
 
 
 @dataclass
@@ -181,6 +184,7 @@ class OcupacaoAirbnb:
     multa_calculada: Decimal = Decimal("0.00")
     multa_praticada: Decimal = Decimal("0.00")
     motivo_alteracao_multa: str = ""
+    motivo_cancelamento: str = ""
 
 @dataclass
 class Produto:
@@ -290,3 +294,19 @@ class ConfiguracaoHistorico:
     data: date
     responsavel_id: str
     motivo: str = ""
+
+@dataclass
+class Ocupacao:
+    """Base comum a contratos mensais e reservas Airbnb.
+    ...
+    """
+
+    id: str
+    unidade_id: str
+    cliente_id: str
+    tipo: str
+    data_inicio: date
+    data_fim: date | None = None
+    lugar_id: str = ""
+    aviso_documento: bool = False
+    ativo: bool = True
