@@ -4,7 +4,34 @@ Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
 ### [Não lançado]
-Nada a registar. Próxima versão: 0.5.0 — Ocupação (contratos.py).
+
+
+
+### [0.5.0] - 2026-08-19
+
+
+### Adicionado 
+
+- `contratos.py`: gestão das ocupações de uma unidade — contratos de
+  arrendamento mensal e reservas Airbnb, com uma base comum
+  (`Ocupacao`) e tabelas específicas por regime (`OcupacaoMensal`,
+  `OcupacaoAirbnb`). 16 funções: 7 auxiliares privadas,
+  `procurar`/`listar`/`reativar` unificadas para os dois regimes, e
+  `criar_mensal`/`atualizar_mensal`/`encerrar_mensal` (contrato) +
+  `registar_airbnb`/`atualizar_airbnb`/`cancelar_airbnb` (reserva)
+  divididas por regime.
+- `testes/teste_contratos.py`: 68 testes unitários (336 no total do
+  projeto).
+- Pseudocódigo de `contratos.py` e dos seus testes — capítulos 14 e
+  15 do `Pseudocodigo_Modulos` (agora na v1.5).
+
+### Alterado 
+
+- `modelos.py`: `Ocupacao` ganha o campo `aviso_documento`;
+  `OcupacaoMensal` ganha `motivo_encerramento`,
+  `duracao_abaixo_minima` e `aviso_previo_insuficiente`;
+  `OcupacaoAirbnb` ganha `motivo_cancelamento`.
+
 
 
 ### [0.4.0] — 2026-08-18
@@ -43,7 +70,7 @@ Grupo "Estrutura física". Versão ímpar: os edifícios e o que neles se contra
 - `validacoes.py` com verificação de NIF, campos obrigatórios por regime e regras de negócio
 - 40 testes das validações em `testes/teste_validacoes.py`
 
-## [0.1.0] — 2026-08-07
+### [0.1.0] — 2026-08-07
 
 Fase de análise e desenho. Sem código.
 
