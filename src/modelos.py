@@ -123,7 +123,7 @@ class Responsavel:
 
 
 @dataclass
-class Ocupacao:
+class Ocupacao: # type: ignore
     """Base comum a contratos mensais e reservas Airbnb.
 
     Existe para a validação de sobreposição consulte um unido sitio (decisão 5). Os dados especificos de cada regime vivem em 'OcupacaoMensal' e 'OcupacaoAirbnb', ligados por este ID.
@@ -226,6 +226,7 @@ class Requisicao:
 
     id: str
     responsavel_id: str
+    produto_id: str
     quantidade_pedida: int
     estado: str = "pendente"  
     quantidade_enviada: int = 0
@@ -234,6 +235,8 @@ class Requisicao:
     data_envio: date | None = None
     data_rececao: date | None = None
     data_fecho: date | None = None
+    data_devolucao: date | None = None
+    responsavel_rejeicao_id: str = ""
     motivo_rejeicao: str = ""
     observacoes: str = ""
 
@@ -310,3 +313,4 @@ class Ocupacao:
     lugar_id: str = ""
     aviso_documento: bool = False
     ativo: bool = True
+
