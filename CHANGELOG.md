@@ -3,7 +3,49 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
-### [Não lançado]
+
+
+## [0.6.0] — 2026-08-20
+
+### Adicionado
+- `estoque.py`: módulo de gestão de stock, com três entidades —
+  Produto, Movimento e Requisição — implementando a decisão 9
+  (armazém único e central).
+  - Produto: `criar_produto`, `procurar_produto`, `listar_produtos`,
+    `atualizar_produto`, `desativar_produto`, `reativar_produto`.
+  - Movimento: `registar_movimento`, `saldo_produto`. Movimentos são
+    imutáveis — correções fazem-se sempre com um novo movimento de
+    tipo `"ajuste"` e motivo obrigatório, nunca por alteração de um
+    movimento existente.
+  - Requisição: `criar_requisicao`, `procurar_requisicao`,
+    `listar_requisicoes`, `enviar_requisicao`, `rejeitar_requisicao`,
+    `confirmar_rececao_requisicao`, `devolver_requisicao`,
+    `fechar_requisicao` — implementam o fluxo de cinco estados
+    pendente → enviada → recebida → devolução pendente → fechada,
+    com `rejeitada` como saída alternativa a partir de pendente.
+  - Prefixos de identificador: `PRD` (produto), `MOV` (movimento),
+    `REQ` (requisição) — decisão 2.
+- `testes/teste_estoque.py`: 99 casos, 14 classes de teste,
+  cobrindo as 16 funções do módulo.
+- `Pseudocodigo_Modulos.docx`: capítulos 16 (Módulo estoque.py) e
+  17 (Testes do módulo estoque.py) — documento sobe para a versão
+  1.6.
+
+### Alterado
+- `modelos.py`: dataclass `Requisicao` — acrescentados os campos
+  `produto_id` (obrigatório), `responsavel_rejeicao_id` (por
+  omissão `""`) e `data_devolucao` (por omissão `None`),
+  identificados como necessários durante o desenvolvimento de
+  `estoque.py`.
+
+### Decisões registadas
+- Validação de saldo em `enviar_requisicao` (a quantidade enviada
+  não pode exceder `saldo_produto`) — regra acrescentada durante o
+  desenvolvimento, fora das 17 decisões originais do projeto.
+- `registar_movimento` valida `responsavel_id` por
+  `responsaveis.validar_autoria` apenas quando o campo é indicado,
+  para permitir o registo inicial de stock antes de existirem
+  responsáveis identificados.
 
 
 
