@@ -3,6 +3,52 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+### [0.7.0] — 2026-08-23
+
+
+### Adicionado
+- `cli.py`: interface de linha de comando, único módulo autorizado a
+  usar `input()`/`print()` (decisão 7). 83 funções:
+  - Leitoras de base: `ler_texto`, `ler_inteiro`, `ler_decimal`,
+    `ler_data`, `confirmar`.
+  - `mostrar_menu`: menu numerado com saída/voltar sempre em "0",
+    sempre na última linha, aceitando tanto o número como o texto
+    exato da opção.
+  - Formatadoras: `formatar_data`, `formatar_valor` — inversas de
+    `ler_data`/`ler_decimal`, formato de apresentação PT-PT.
+  - Leitoras de atualização: `ler_atualizacao`,
+    `ler_booleano_atualizacao`, `ler_escolha_atualizacao` — Enter em
+    branco mantém, hífen sozinho apaga (só onde `permite_limpar` é
+    verdadeiro).
+  - Ecrãs de propriedades, unidades/quartos/lugares, responsáveis,
+    clientes (incluindo anonimização, decisão 8), contratos mensais
+    e reservas Airbnb, e estoque (produtos, movimentos e
+    requisições) — cada um com `menu_X` a amarrar as suas ações.
+  - `menu_principal`: liga os seis submenus de módulo.
+- `Pseudocodigo_Modulos.docx`: capítulos 18 (Módulo cli.py) e 19
+  (Testes do módulo cli.py) — documento sobe para a versão 1.7.
+
+
+### Alterado
+
+- (nenhuma alteração a módulos de negócio já fechados nesta sessão)
+
+### Decisões registadas
+- Gravação imediata: cada ecrã que altera `dados` chama
+  `repositorio.gravar(dados)` logo a seguir a um sucesso, nunca em
+  lote nem só no fim do programa.
+- Testes de `cli.py`: decisão de teste MANUAL via `main.py`, não
+  `unittest` com mock de `input()` — única exceção às suites
+  automáticas dos restantes módulos, por ser este o único módulo
+  com interação direta (decisão 7).
+- Quatro lacunas de arquitetura identificadas e documentadas para
+  correção em ramos `fix/` após o fecho da v0.7.0 (ver
+  `claude/Pendencias_Correcoes_pos_0.7.0.txt`): `clientes.atualizar`
+  não recusa clientes anonimizados (severidade alta, RGPD);
+  `contratos.criar_mensal`/`atualizar_mensal` descartam o booleano
+  de `validacoes.validar_caucao`; `dia_vencimento` só é validado em
+  `atualizar_mensal`, não em `criar_mensal`; e não existe função
+  pública de pré-visualização do preço Airbnb.
 
 
 ## [0.6.0] — 2026-08-20
