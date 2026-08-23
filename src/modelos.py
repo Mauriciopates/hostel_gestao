@@ -173,18 +173,26 @@ class OcupacaoAirbnb:
 
     A multa de check-in tardio só existe quando 'check_in_tardio' é True(decisão 15).
 
+    Quando 'preco_praticado' fica abaixo de 'preco_calculado' (ou
+    'multa_praticada' abaixo de 'multa_calculada'), é um desconto —
+    exige um responsável que o autorize (decisão 18, por analogia
+    com a decisão 8: quem assume a exceção fica identificado, não
+    só descrito em texto livre). 'responsavel_desconto_preco_id' e
+    'responsavel_desconto_multa_id' ficam em branco quando não há
+    desconto nesse valor.
     """
 
     ocupacao_id: str
     preco_calculado: Decimal
     preco_praticado: Decimal
-    motivo_alteracao_preco: str = ""
+    responsavel_desconto_preco_id: str = ""
     check_in_tardio: bool = False
     hora_chegada: str = ""
     multa_calculada: Decimal = Decimal("0.00")
     multa_praticada: Decimal = Decimal("0.00")
-    motivo_alteracao_multa: str = ""
+    responsavel_desconto_multa_id: str = ""
     motivo_cancelamento: str = ""
+
 
 @dataclass
 class Produto:

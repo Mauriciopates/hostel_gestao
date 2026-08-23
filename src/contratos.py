@@ -16,10 +16,12 @@ from decimal import Decimal
 import config
 import clientes
 import repositorio
+import responsaveis
 import unidades
 import validacoes
 
-PREFIXO = "OCU"
+PREFIXO_MENSAL = "CNT"
+PREFIXO_AIRBNB = "RSV"
 
 def _capacidade_unidade(dados, unidade_id):
     """Soma a capacidade de todos os lugares ativos da unidade.
@@ -151,7 +153,7 @@ def criar_mensal(
     if dia_vencimento is None:
         dia_vencimento = config.DIA_VENCIMENTO
 
-    ocupacao_id = repositorio.proximo_id(PREFIXO)
+    ocupacao_id = repositorio.proximo_id(PREFIXO_MENSAL)
 
     ocupacao = {
         "id": ocupacao_id,
@@ -388,6 +390,12 @@ def reativar(dados, ocupacao_id):
     (inverte exatamente o que 'encerrar_mensal' fez); uma reserva
     Airbnb não mexe em 'data_fim', porque o cancelamento nunca lhe
     tocou.
+
+    Numa reserva Airbnb, verifica sobreposição antes de reativar —
+    sem isto, reativar contornaria a regra de exclusividade que a
+    própria criação impõe (registar_airbnb já recusa duas reservas
+    Airbnb sobrepostas na mesma unidade; reativar tinha ficado de
+    fora dessa regra por descuido).
     """
     ocupacao = procurar(dados, ocupacao_id)
 
@@ -396,6 +404,19 @@ def reativar(dados, ocupacao_id):
 
     if ocupacao["ativo"]:
         raise ValueError(f"A ocupação {ocupacao_id} já está ativa.")
+
+    if ocupacao["tipo"] == "airbnb":
+        if _existe_sobreposicao(
+            dados,
+            ocupacao["unidade_id"],
+            ocupacao["data_inicio"],
+            ocupacao["data_fim"],
+        ):
+            raise ValueError(
+                f"A unidade {ocupacao['unidade_id']} já tem uma "
+                f"reserva ativa nesse período — não é possível "
+                f"reativar {ocupacao_id}."
+            )
 
     if ocupacao["tipo"] == "mensal":
         ocupacao["data_fim"] = None
@@ -448,7 +469,7 @@ def _existe_sobreposicao(
             data_inicio, data_fim, ocupacao["data_inicio"],
             ocupacao["data_fim"]
             ):
-            
+
             return True
 
     return False
@@ -483,6 +504,21 @@ def _preco_calculado_airbnb(unidade, data_inicio, data_fim):
 
     return total
 
+def calcular_preco_airbnb(unidade, data_inicio, data_fim):
+    """Calcula o preço total de uma estadia Airbnb, sem registar
+    nada — versão pública de '_preco_calculado_airbnb' (mesma
+    lógica, chamada por ela).
+
+    Existe para o cli.py poder mostrar "Preço calculado: ..." ANTES
+    de pedir o preço praticado, e assim decidir se há desconto a
+    confirmar (decisão 18) antes mesmo de a pessoa escrever um
+    valor — sem esta função pública, isso só era possível depois de
+    a reserva já estar registada, porque a única forma de calcular
+    o preço era a função privada '_preco_calculado_airbnb', que o
+    cli.py não devia chamar diretamente.
+    """
+    return _preco_calculado_airbnb(unidade, data_inicio, data_fim)
+
 def registar_airbnb(
     dados,
     unidade_id,
@@ -490,11 +526,11 @@ def registar_airbnb(
     data_inicio,
     data_fim,
     preco_praticado,
-    motivo_alteracao_preco="",
+    responsavel_desconto_preco_id="",
     check_in_tardio=False,
     hora_chegada="",
     multa_praticada=None,
-    motivo_alteracao_multa="",
+    responsavel_desconto_multa_id="",
 ):
     """Regista uma reserva Airbnb.
 
@@ -504,6 +540,13 @@ def registar_airbnb(
     Acrescenta um registo a 'ocupacoes' (base) e outro a
     'ocupacoes_airbnb' (específico), ligados pelo mesmo id.
     Devolve os dois, em tuplo — mesma convenção da criar_mensal.
+
+    Quando 'preco_praticado' fica abaixo do calculado, ou
+    'multa_praticada' abaixo da calculada, exige um responsável que
+    autorize o desconto (decisão 18) — validado com
+    responsaveis.validar_autoria (tem de existir e estar ativo).
+    Sem desconto, os dois campos de responsável ficam sempre em
+    branco, mesmo que algo tenha sido passado neles.
     """
     unidade = unidades.procurar(dados, unidade_id)
 
@@ -541,6 +584,12 @@ def registar_airbnb(
 
     preco_calculado = _preco_calculado_airbnb(unidade, data_inicio, data_fim)
 
+    if preco_praticado < preco_calculado:
+        responsaveis.validar_autoria(dados, responsavel_desconto_preco_id)
+        responsavel_desconto_preco_id = responsavel_desconto_preco_id.strip()
+    else:
+        responsavel_desconto_preco_id = ""
+
     if check_in_tardio:
         hora_chegada = hora_chegada.strip()
 
@@ -559,7 +608,13 @@ def registar_airbnb(
         multa_calculada = Decimal("0.00")
         multa_praticada = Decimal("0.00")
 
-    ocupacao_id = repositorio.proximo_id(PREFIXO)
+    if multa_praticada < multa_calculada:
+        responsaveis.validar_autoria(dados, responsavel_desconto_multa_id)
+        responsavel_desconto_multa_id = responsavel_desconto_multa_id.strip()
+    else:
+        responsavel_desconto_multa_id = ""
+
+    ocupacao_id = repositorio.proximo_id(PREFIXO_AIRBNB)
 
     ocupacao = {
         "id": ocupacao_id,
@@ -577,12 +632,12 @@ def registar_airbnb(
         "ocupacao_id": ocupacao_id,
         "preco_calculado": preco_calculado,
         "preco_praticado": preco_praticado,
-        "motivo_alteracao_preco": motivo_alteracao_preco.strip(),
+        "responsavel_desconto_preco_id": responsavel_desconto_preco_id,
         "check_in_tardio": check_in_tardio,
         "hora_chegada": hora_chegada,
         "multa_calculada": multa_calculada,
         "multa_praticada": multa_praticada,
-        "motivo_alteracao_multa": motivo_alteracao_multa.strip(),
+        "responsavel_desconto_multa_id": responsavel_desconto_multa_id,
         "motivo_cancelamento": "",
     }
 
@@ -679,9 +734,9 @@ def atualizar_airbnb(
     dados,
     ocupacao_id,
     preco_praticado=None,
-    motivo_alteracao_preco=None,
+    responsavel_desconto_preco_id="",
     multa_praticada=None,
-    motivo_alteracao_multa=None,
+    responsavel_desconto_multa_id="",
 ):
     """Altera o preço praticado ou a multa de check-in tardio de
     uma reserva Airbnb já existente.
@@ -691,6 +746,12 @@ def atualizar_airbnb(
     check-in tardio depois de a reserva já estar registada é uma
     decisão diferente de uma simples edição de valor, e fica fora
     do âmbito desta função.
+
+    Mesma regra de desconto de registar_airbnb (decisão 18):
+    quando o novo valor fica abaixo do calculado gravado na
+    criação, exige responsável validado; quando não fica, limpa
+    qualquer autorização anterior — deixar de haver desconto
+    também deixa de precisar de responsável associado.
     """
     ocupacao = procurar(dados, ocupacao_id)
 
@@ -719,10 +780,17 @@ def atualizar_airbnb(
         if preco_praticado <= 0:
             raise ValueError("O preço praticado tem de ser positivo.")
 
-        airbnb["preco_praticado"] = preco_praticado
+        if preco_praticado < airbnb["preco_calculado"]:
+            responsaveis.validar_autoria(
+                dados, responsavel_desconto_preco_id
+            )
+            airbnb["responsavel_desconto_preco_id"] = (
+                responsavel_desconto_preco_id.strip()
+            )
+        else:
+            airbnb["responsavel_desconto_preco_id"] = ""
 
-    if motivo_alteracao_preco is not None:
-        airbnb["motivo_alteracao_preco"] = motivo_alteracao_preco.strip()
+        airbnb["preco_praticado"] = preco_praticado
 
     if multa_praticada is not None:
         if not airbnb["check_in_tardio"]:
@@ -734,9 +802,16 @@ def atualizar_airbnb(
         if multa_praticada < 0:
             raise ValueError("A multa praticada não pode ser negativa.")
 
-        airbnb["multa_praticada"] = multa_praticada
+        if multa_praticada < airbnb["multa_calculada"]:
+            responsaveis.validar_autoria(
+                dados, responsavel_desconto_multa_id
+            )
+            airbnb["responsavel_desconto_multa_id"] = (
+                responsavel_desconto_multa_id.strip()
+            )
+        else:
+            airbnb["responsavel_desconto_multa_id"] = ""
 
-    if motivo_alteracao_multa is not None:
-        airbnb["motivo_alteracao_multa"] = motivo_alteracao_multa.strip()
+        airbnb["multa_praticada"] = multa_praticada
 
     return ocupacao, airbnb

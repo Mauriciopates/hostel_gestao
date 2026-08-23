@@ -1823,10 +1823,14 @@ def _criar_contrato_mensal(dados):
 def _criar_reserva_airbnb(dados):
     """Ecrã de registo de uma reserva Airbnb.
 
-    Não mostra o preço calculado ANTES de registar — só depois,
-    com o valor que contratos.registar_airbnb devolve. Ver
-    explicação: calcular isso antes exigiria chamar a função
-    privada contratos._preco_calculado_airbnb.
+    Mostra o preço calculado ANTES de pedir o praticado, através de
+    contratos.calcular_preco_airbnb — a função pública que resolve
+    a pendência que existia aqui (antes, só dava para saber o
+    calculado depois de a reserva já estar registada).
+
+    Quando o praticado (preço ou multa) fica abaixo do calculado, é
+    um desconto: pede confirmação e o ID de um responsável que o
+    autorize (decisão 18), antes de chamar contratos.registar_airbnb.
     """
     print("\n--- Nova reserva Airbnb ---")
 
@@ -1841,37 +1845,62 @@ def _criar_reserva_airbnb(dados):
     data_inicio = ler_data("Data de check-in: ")
     data_fim = ler_data("Data de check-out: ")
 
+    preco_calculado = contratos.calcular_preco_airbnb(
+        unidade, data_inicio, data_fim
+    )
+    print(f"Preço calculado: {formatar_valor(preco_calculado)}")
+
     check_in_tardio = confirmar("Check-in tardio?")
     hora_chegada = ""
     multa_praticada = None
-    motivo_alteracao_multa = ""
+    responsavel_desconto_multa_id = ""
 
     if check_in_tardio:
         hora_chegada = ler_texto("Hora de chegada (HH:MM): ")
+        multa_calculada = unidade["multa_check_in_tardio"]
         print(
             "Multa calculada (configuração da unidade): "
-            f"{formatar_valor(unidade['multa_check_in_tardio'])}"
+            f"{formatar_valor(multa_calculada)}"
         )
         multa_praticada = ler_decimal(
             "Multa praticada [Enter para "
-            f"{formatar_valor(unidade['multa_check_in_tardio'])}]: ",
+            f"{formatar_valor(multa_calculada)}]: ",
             obrigatorio=False,
             minimo=Decimal("0"),
         )
 
-        if (
-            multa_praticada is not None
-            and multa_praticada != unidade["multa_check_in_tardio"]
-        ):
-            motivo_alteracao_multa = ler_texto(
-                "Motivo (opcional): ", obrigatorio=False
+        if multa_praticada is None:
+            multa_praticada = multa_calculada
+
+        if multa_praticada < multa_calculada:
+            if not confirmar(
+                f"A multa praticada ({formatar_valor(multa_praticada)}) "
+                f"é inferior à calculada "
+                f"({formatar_valor(multa_calculada)}) — confirmas o "
+                f"perdão?"
+            ):
+                print("Criação cancelada.")
+                return
+
+            responsavel_desconto_multa_id = ler_texto(
+                "ID do responsável que autoriza este perdão: "
             )
 
     preco_praticado = ler_decimal("Preço praticado (total da estadia): ")
-    motivo_alteracao_preco = ler_texto(
-        "Motivo de alteração do preço, se aplicável (opcional): ",
-        obrigatorio=False,
-    )
+    responsavel_desconto_preco_id = ""
+
+    if preco_praticado is not None and preco_praticado < preco_calculado:
+        if not confirmar(
+            f"O preço praticado ({formatar_valor(preco_praticado)}) é "
+            f"inferior ao calculado ({formatar_valor(preco_calculado)}) "
+            f"— confirmas o desconto?"
+        ):
+            print("Criação cancelada.")
+            return
+
+        responsavel_desconto_preco_id = ler_texto(
+            "ID do responsável que autoriza este desconto: "
+        )
 
     try:
         ocupacao, airbnb = contratos.registar_airbnb(
@@ -1881,11 +1910,11 @@ def _criar_reserva_airbnb(dados):
             data_inicio,
             data_fim,
             preco_praticado,
-            motivo_alteracao_preco=motivo_alteracao_preco,
+            responsavel_desconto_preco_id=responsavel_desconto_preco_id,
             check_in_tardio=check_in_tardio,
             hora_chegada=hora_chegada,
             multa_praticada=multa_praticada,
-            motivo_alteracao_multa=motivo_alteracao_multa,
+            responsavel_desconto_multa_id=responsavel_desconto_multa_id,
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
@@ -1898,10 +1927,17 @@ def _criar_reserva_airbnb(dados):
         if ocupacao["aviso_documento"]
         else ""
     )
+    desconto_preco = (
+        f"  [desconto autorizado por "
+        f"{airbnb['responsavel_desconto_preco_id']}]"
+        if airbnb["responsavel_desconto_preco_id"]
+        else ""
+    )
     print(f"Reserva registada: {ocupacao['id']}{aviso}")
     print(
         f"    calculado: {formatar_valor(airbnb['preco_calculado'])}  "
         f"praticado: {formatar_valor(airbnb['preco_praticado'])}"
+        f"{desconto_preco}"
     )
 
 
@@ -2051,6 +2087,17 @@ def _atualizar_contrato_mensal(dados):
 
 
 def _atualizar_reserva_airbnb(dados):
+    """Ecrã de atualização de uma reserva Airbnb.
+
+    'preco_calculado' e 'multa_calculada' já vêm gravados na
+    reserva desde a criação (não recalcula nada) — por isso, ao
+    contrário do ecrã de criação, não precisa de chamar
+    contratos.calcular_preco_airbnb.
+
+    Mesma regra de desconto do ecrã de criação (decisão 18): pede
+    confirmação e um responsável sempre que o novo valor fique
+    abaixo do calculado.
+    """
     print("\n--- Atualizar reserva Airbnb ---")
 
     ocupacao_id = ler_texto("ID da reserva: ")
@@ -2079,14 +2126,24 @@ def _atualizar_reserva_airbnb(dados):
         obrigatorio=False,
     )
 
-    motivo_alteracao_preco = None
+    responsavel_desconto_preco_id = ""
     if preco_praticado is not None:
-        motivo_alteracao_preco = ler_texto(
-            "Motivo da alteração do preço (opcional): ", obrigatorio=False
-        )
+        if preco_praticado < airbnb["preco_calculado"]:
+            if not confirmar(
+                f"O preço praticado ({formatar_valor(preco_praticado)}) "
+                f"é inferior ao calculado "
+                f"({formatar_valor(airbnb['preco_calculado'])}) — "
+                f"confirmas o desconto?"
+            ):
+                print("Atualização cancelada.")
+                return
+
+            responsavel_desconto_preco_id = ler_texto(
+                "ID do responsável que autoriza este desconto: "
+            )
 
     multa_praticada = None
-    motivo_alteracao_multa = None
+    responsavel_desconto_multa_id = ""
 
     if airbnb["check_in_tardio"]:
         multa_praticada = ler_decimal(
@@ -2097,10 +2154,21 @@ def _atualizar_reserva_airbnb(dados):
             minimo=Decimal("0"),
         )
 
-        if multa_praticada is not None:
-            motivo_alteracao_multa = ler_texto(
-                "Motivo da alteração da multa (opcional): ",
-                obrigatorio=False,
+        if (
+            multa_praticada is not None
+            and multa_praticada < airbnb["multa_calculada"]
+        ):
+            if not confirmar(
+                f"A multa praticada ({formatar_valor(multa_praticada)}) "
+                f"é inferior à calculada "
+                f"({formatar_valor(airbnb['multa_calculada'])}) — "
+                f"confirmas o perdão?"
+            ):
+                print("Atualização cancelada.")
+                return
+
+            responsavel_desconto_multa_id = ler_texto(
+                "ID do responsável que autoriza este perdão: "
             )
     else:
         print(
@@ -2113,9 +2181,9 @@ def _atualizar_reserva_airbnb(dados):
             dados,
             ocupacao_id,
             preco_praticado=preco_praticado,
-            motivo_alteracao_preco=motivo_alteracao_preco,
+            responsavel_desconto_preco_id=responsavel_desconto_preco_id,
             multa_praticada=multa_praticada,
-            motivo_alteracao_multa=motivo_alteracao_multa,
+            responsavel_desconto_multa_id=responsavel_desconto_multa_id,
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
