@@ -96,12 +96,20 @@ def _reconstituir_tipos(dados):
         )
         for r in dados["requisicoes"]
     ]
+    # itens_requisicao não tem campos Decimal nem date — não precisa
+    # de _desserializar, só de existir mesmo em ficheiros antigos
+    # (decisão 20, mesma cautela retrocompatível da decisão 19 para
+    # "devolucoes").
+    dados["itens_requisicao"] = dados.get("itens_requisicao", [])
     dados["devolucoes"] = [
         _desserializar(
             d, campos_data=("data_reportada", "data_fecho")
         )
         for d in dados.get("devolucoes", [])
     ]
+    # mesma cautela de itens_requisicao: itens_devolucao também não
+    # tem campos Decimal nem date.
+    dados["itens_devolucao"] = dados.get("itens_devolucao", [])
     dados["movimentos"] = [
         _desserializar(m, campos_data=("data",))
         for m in dados["movimentos"]
@@ -271,7 +279,9 @@ def _estrutura_vazia():
         "ocupacoes_airbnb": [],
         "produtos": [],
         "requisicoes": [],
+        "itens_requisicao": [],
         "devolucoes": [],
+        "itens_devolucao": [],
         "movimentos": [],
         "configuracoes": [],
         "configuracoes_historico": [],

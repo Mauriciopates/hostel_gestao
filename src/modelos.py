@@ -215,15 +215,25 @@ class Produto:
 class Requisicao:
     """Pedido de material do responsavel ao armazém central.
 
+    É um cabeçalho — não carrega produto nem quantidade. Uma
+    requisição pode pedir vários produtos de uma vez, cada um numa
+    linha própria em 'ItemRequisicao', ligada por este ID (decisão
+    20, que separou o que era um único registo em cabeçalho +
+    itens, tal como 'Ocupacao' já separava dados comuns dos
+    especificos de cada regime).
+
     Percorre quatro estados: pendente -> enviada -> fechada, com
     'rejeitada' como saida alternativa a partir de pendente
-    (decisão 9, revista na decisão 19).
+    (decisão 9, revista na decisão 19). Os estados são sempre da
+    requisição inteira, nunca de um item isolado: não há aprovação
+    nem receção item a item — envia-se e recebe-se a requisição
+    toda de uma vez (decisão 20).
 
     pendente — o responsável registou o pedido. Nada saiu do armazém
     ainda.
 
-    enviada — o admin aprovou e enviou. Gera movimento de saída, dá
-    baixa no saldo.
+    enviada — o admin aprovou e enviou. Gera um movimento de saída
+    por item, dá baixa no saldo de cada produto.
 
     fechada — o responsável confirma que o material chegou. Esta
     confirmação é dele, não do admin: quem pede é quem sabe se
@@ -236,14 +246,16 @@ class Requisicao:
     Sobra de material devolvida ao armazém é tratada à parte, pela
     entidade 'Devolucao' — nem toda requisição gera sobra, por isso
     deixou de ser um passo obrigatório desta.
+
+    Uma requisição fechada ou rejeitada nunca se edita: um erro
+    detetado depois corrige-se com um movimento de ajuste, não com
+    uma alteração a este registo (decisão 20, por analogia com a
+    imutabilidade dos movimentos da decisão 9).
     """
 
     id: str
     responsavel_id: str
-    produto_id: str
-    quantidade_pedida: int
     estado: str = "pendente"
-    quantidade_enviada: int = 0
     data_pedido: date | None = None
     data_envio: date | None = None
     data_fecho: date | None = None
@@ -253,29 +265,77 @@ class Requisicao:
 
 
 @dataclass
+class ItemRequisicao:
+    """Uma linha de uma requisição: um produto e uma quantidade.
+
+    Ligado a 'Requisicao' por 'requisicao_id'. Não tem estado
+    próprio — o estado é sempre o da requisição a que pertence
+    (decisão 20). Não pode haver dois itens do mesmo produto na
+    mesma requisição; pedir mais desse produto é aumentar a
+    quantidade do item existente, não duplicar a linha.
+
+    'quantidade_enviada' fica a 0 até a requisição ser enviada.
+    Regra geral vai ser igual a 'quantidade_pedida', mas pode ficar
+    abaixo dela num envio parcial — o saldo do armazém manda no que
+    é possível enviar, não o que foi pedido.
+    """
+
+    id: str
+    requisicao_id: str
+    produto_id: str
+    quantidade_pedida: int
+    quantidade_enviada: int = 0
+
+
+@dataclass
 class Devolucao:
     """Sobra de material devolvida ao armazém central.
 
-    Associada a uma requisição já fechada — não é um passo dela,
-    é um evento à parte que só existe quando sobra material por
-    usar (decisão 19). Uma quantidade a zero não faz sentido aqui:
-    se não sobrou nada, não há devolução nenhuma a reportar.
+    É um cabeçalho — não carrega produto nem quantidade. Associada
+    a uma requisição já fechada — não é um passo dela, é um evento
+    à parte que só existe quando sobra material por usar (decisão
+    19). Pode juntar vários produtos devolvidos de uma vez, cada um
+    numa linha própria em 'ItemDevolucao', ligada por este ID —
+    simétrico à separação cabeçalho/itens da requisição (decisão
+    20).
 
     Segue um mini-fluxo de dois estados: pendente (o responsável
     reportou a sobra) -> fechada (o admin aceitou e o material
-    voltou a contar no saldo, gerando um movimento de entrada). Só
-    depois de fechada é que a quantidade entra no saldo do produto
-    — o mesmo princípio de dupla confirmação que já existia na
-    requisição.
+    voltou a contar no saldo, gerando um movimento de entrada por
+    item). Só depois de fechada é que as quantidades entram no
+    saldo dos produtos — o mesmo princípio de dupla confirmação que
+    já existia na requisição. Tal como na requisição, aceita-se ou
+    fecha-se a devolução toda de uma vez, nunca item a item.
+
+    Uma devolução fechada nunca se edita: um erro detetado depois
+    corrige-se com um movimento de ajuste, não com uma alteração a
+    este registo (decisão 20).
     """
 
     id: str
     requisicao_id: str
     responsavel_id: str
-    quantidade: int
     estado: str = "pendente"
     data_reportada: date | None = None
     data_fecho: date | None = None
+
+
+@dataclass
+class ItemDevolucao:
+    """Uma linha de uma devolução: um produto e uma quantidade.
+
+    Ligado a 'Devolucao' por 'devolucao_id'. Não tem estado próprio
+    — o estado é sempre o da devolução a que pertence (decisão 20).
+    A quantidade nunca pode ser zero ou negativa: se não sobrou
+    nada desse produto, não há linha nenhuma a criar para ele — o
+    mesmo raciocínio que já existia na 'Devolucao' da decisão 19,
+    agora aplicado a cada item.
+    """
+
+    id: str
+    devolucao_id: str
+    produto_id: str
+    quantidade: int
 
 
 @dataclass

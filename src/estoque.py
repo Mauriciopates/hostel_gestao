@@ -1,10 +1,16 @@
 """Gestão do stock — o armazém central que serve os responsáveis.
 
-Quatro entidades neste módulo: Produto (catálogo), Requisicao
-(pedido do responsável, com quatro estados), Devolucao (sobra
-devolvida ao armazém, entidade própria desde a decisão 19) e
-Movimento (registo imutável de entrada ou saída) — decisão 9.
-Armazém central único, não distribuído: não há stock por unidade.
+Seis entidades neste módulo: Produto (catálogo), Requisicao (pedido
+do responsável, cabeçalho com quatro estados) e ItemRequisicao (um
+produto e uma quantidade dentro dela), Devolucao (sobra devolvida
+ao armazém, cabeçalho, entidade própria desde a decisão 19) e
+ItemDevolucao (um produto e uma quantidade dentro dela), e
+Movimento (registo imutável de entrada ou saída) — decisão 9. A
+divisão cabeçalho/itens em Requisicao e Devolucao é da decisão 20:
+uma requisição ou devolução pode juntar vários produtos de uma vez,
+mas envia-se, recebe-se ou aceita-se sempre de uma só vez — nunca
+item a item. Armazém central único, não distribuído: não há stock
+por unidade.
 
 Não acede a ficheiros nem à interface: recebe a estrutura de dados,
 devolve resultado e sinaliza erro com `raise ValueError`. Quem
@@ -17,7 +23,9 @@ import responsaveis
 PREFIXO = "PRD"
 PREFIXO_MOVIMENTO = "MOV"
 PREFIXO_REQUISICAO = "REQ"
+PREFIXO_ITEM_REQUISICAO = "ITR"
 PREFIXO_DEVOLUCAO = "DEV"
+PREFIXO_ITEM_DEVOLUCAO = "ITD"
 
 
 def criar_produto(dados, nome, unidade_medida, stock_minimo=0):
@@ -308,60 +316,94 @@ def saldo_produto(dados, produto_id):
     return total
 
 
+def _validar_inteiro(valor, nome):
+    """Valida que 'valor' é um número inteiro (não bool) não nulo.
+
+    Repete-se sempre que uma quantidade é lida de um item de
+    requisição ou de devolução — 'nome' entra na frase do erro
+    ("pedida", "enviada", "devolvida") para a mensagem continuar
+    específica apesar de a verificação estar centralizada (decisão
+    20). Não valida o sinal: cada ponto de chamada decide se aceita
+    zero ou exige positivo.
+    """
+    if valor is None:
+        raise ValueError(f"A quantidade {nome} é obrigatória.")
+
+    if not isinstance(valor, int) or isinstance(valor, bool):
+        raise ValueError(
+            f"A quantidade {nome} tem de ser um número inteiro: "
+            f"{valor}"
+        )
+
+    return valor
+
+
 def criar_requisicao(
     dados,
     responsavel_id,
-    produto_id,
-    quantidade_pedida,
+    itens,
     data_pedido,
     observacoes="",
 ):
     """Cria uma requisição de material, no estado inicial "pendente".
 
-    Primeiro dos quatro estados do fluxo (decisão 9, revista na
-    decisão 19): pendente → enviada → fechada, com "rejeitada" como
-    saída alternativa a partir de pendente. Nada sai do armazém
-    ainda — só quando `enviar_requisicao` aprovar o pedido é que se
-    gera o primeiro movimento.
+    Primeiro dos quatro estados do fluxo (decisão 9, revista nas
+    decisões 19 e 20): pendente → enviada → fechada, com "rejeitada"
+    como saída alternativa a partir de pendente. Nada sai do
+    armazém ainda — só quando `enviar_requisicao` aprovar o pedido
+    é que se gera o primeiro movimento.
+
+    'itens' é uma lista de dicionários no formato
+    {"produto_id": ..., "quantidade_pedida": ...} — uma requisição
+    pode pedir vários produtos de uma vez (decisão 20). Não pode
+    vir vazia nem repetir o mesmo produto duas vezes: pedir mais
+    desse produto é aumentar a quantidade no item existente, não
+    criar um segundo.
 
     'responsavel_id' passa por `responsaveis.validar_autoria`: tem
     de existir e estar ativo, porque é ele quem assume a autoria do
     pedido (decisão 10) — mesma verificação que a anonimização de
     um cliente já exige a quem a regista.
 
-    Não valida se há saldo suficiente do produto: o envio parcial é
-    permitido (decisão 9), por isso pedir mais do que o stock atual
-    não é, por si só, um erro nesta fase — só se torna relevante
-    quando a requisição for enviada.
+    Não valida se há saldo suficiente dos produtos: o envio parcial
+    é permitido (decisão 9), por isso pedir mais do que o stock
+    atual não é, por si só, um erro nesta fase — só se torna
+    relevante quando a requisição for enviada.
 
     Não grava: a gravação é decidida pelo `main.py` (mesma
     convenção dos outros módulos de negócio).
     """
     responsavel = responsaveis.validar_autoria(dados, responsavel_id)
 
-    produto = procurar_produto(dados, produto_id)
+    if not itens:
+        raise ValueError("A requisição tem de ter pelo menos um item.")
 
-    if produto is None:
-        raise ValueError(f"O produto {produto_id} não existe.")
+    produtos_vistos = set()
 
-    if not produto["ativo"]:
-        raise ValueError(f"O produto {produto_id} não está ativo.")
+    for item in itens:
+        produto_id = item.get("produto_id")
+        produto = procurar_produto(dados, produto_id)
 
-    if quantidade_pedida is None:
-        raise ValueError("A quantidade pedida é obrigatória.")
+        if produto is None:
+            raise ValueError(f"O produto {produto_id} não existe.")
 
-    if (
-        not isinstance(quantidade_pedida, int) 
-        or isinstance(quantidade_pedida, bool)
-    ):
-        
-        raise ValueError(
-            f"A quantidade pedida tem de ser um número inteiro: "
-            f"{quantidade_pedida}"
+        if not produto["ativo"]:
+            raise ValueError(f"O produto {produto_id} não está ativo.")
+
+        if produto_id in produtos_vistos:
+            raise ValueError(
+                f"O produto {produto_id} está repetido na "
+                f"requisição — some as quantidades num único item."
+            )
+
+        produtos_vistos.add(produto_id)
+
+        quantidade_pedida = _validar_inteiro(
+            item.get("quantidade_pedida"), "pedida"
         )
 
-    if quantidade_pedida <= 0:
-        raise ValueError("A quantidade pedida tem de ser positiva.")
+        if quantidade_pedida <= 0:
+            raise ValueError("A quantidade pedida tem de ser positiva.")
 
     if data_pedido is None:
         raise ValueError("A data do pedido é obrigatória.")
@@ -369,10 +411,7 @@ def criar_requisicao(
     requisicao = {
         "id": repositorio.proximo_id(PREFIXO_REQUISICAO),
         "responsavel_id": responsavel["id"],
-        "produto_id": produto_id,
-        "quantidade_pedida": quantidade_pedida,
         "estado": "pendente",
-        "quantidade_enviada": 0,
         "data_pedido": data_pedido,
         "data_envio": None,
         "data_fecho": None,
@@ -381,7 +420,62 @@ def criar_requisicao(
     }
 
     dados["requisicoes"].append(requisicao)
+
+    for item in itens:
+        dados["itens_requisicao"].append(
+            {
+                "id": repositorio.proximo_id(PREFIXO_ITEM_REQUISICAO),
+                "requisicao_id": requisicao["id"],
+                "produto_id": item["produto_id"],
+                "quantidade_pedida": item["quantidade_pedida"],
+                "quantidade_enviada": 0,
+            }
+        )
+
     return requisicao
+
+
+def listar_itens_requisicao(dados, requisicao_id=None, produto_id=None):
+    """Devolve os itens de requisição, filtráveis por requisição e
+    produto.
+
+    'requisicao_id' e 'produto_id' filtram por um valor exato
+    quando indicados; None (omisso) não filtra nesse campo.
+
+    Devolve lista nova, para que alterá-la depois não afete a
+    estrutura de dados (mesma convenção dos `listar` dos outros
+    módulos).
+    """
+    resultado = []
+
+    for item in dados["itens_requisicao"]:
+        if (
+            requisicao_id is not None
+            and item["requisicao_id"] != requisicao_id
+        ):
+            continue
+
+        if produto_id is not None and item["produto_id"] != produto_id:
+            continue
+
+        resultado.append(item)
+
+    return resultado
+
+
+def procurar_item_requisicao(dados, item_id):
+    """Devolve o item de requisição com o identificador indicado, ou
+    None.
+
+    A ausência não é erro: quem chama decide se ela impede a
+    operação (mesma convenção de procurar_requisicao).
+    """
+    for item in dados["itens_requisicao"]:
+        if item["id"] == item_id:
+            return item
+
+    return None
+
 
 def procurar_requisicao(dados, requisicao_id):
     """Devolve a requisição com o identificador indicado, ou None.
@@ -404,23 +498,30 @@ def enviar_requisicao(
     requisicao_id,
     enviado_por_id,
     data_envio,
-    quantidade_enviada=None,
+    quantidades_enviadas=None,
 ):
     """Aprova e envia uma requisição pendente — pendente → enviada.
 
-    Gera o primeiro movimento de stock do fluxo: uma saída, que dá
-    baixa no saldo do produto (decisão 9). 'enviado_por_id' é quem
+    Gera um movimento de saída por item (decisão 9), cada um a dar
+    baixa no saldo do respetivo produto. 'enviado_por_id' é quem
     aprova e envia — não é necessariamente o mesmo responsável que
     pediu (esse é o 'responsavel_id' guardado em
     `criar_requisicao`); a Fase 1 não distingue papéis (decisão
     10), por isso os dois passam por `responsaveis.validar_autoria`,
     mas são parâmetros distintos.
 
-    'quantidade_enviada' pode ser menor do que a quantidade pedida
-    — envio parcial é permitido (decisão 9) e fecha logo neste
-    estado com a quantidade que foi mesmo enviada, sem deixar
-    pendência aberta para o resto. Omissa, envia-se a quantidade
-    pedida na totalidade.
+    Envia-se a requisição toda de uma só vez — não há aprovação
+    item a item (decisão 20). 'quantidades_enviadas', quando
+    indicado, é um dicionário {produto_id: quantidade} para envio
+    parcial de itens específicos; os produtos omissos nele são
+    enviados na totalidade pedida. Omisso por completo, envia-se
+    tudo na totalidade — o mesmo comportamento por omissão que já
+    existia por item antes da decisão 20.
+
+    Valida o saldo de todos os itens antes de gerar qualquer
+    movimento: uma requisição não fica enviada a meio — ou há saldo
+    para todos os itens nas quantidades pedidas para este envio, ou
+    nenhum movimento é gerado e a requisição continua pendente.
 
     Não grava: a gravação é decidida pelo `main.py` (mesma
     convenção dos outros módulos de negócio).
@@ -438,50 +539,67 @@ def enviar_requisicao(
 
     quem_envia = responsaveis.validar_autoria(dados, enviado_por_id)
 
-    if quantidade_enviada is None:
-        quantidade_enviada = requisicao["quantidade_pedida"]
+    itens = listar_itens_requisicao(dados, requisicao_id=requisicao_id)
 
-    if (
-        not isinstance(quantidade_enviada, int)
-        or isinstance(quantidade_enviada, bool)
-    ):
-        raise ValueError(
-            f"A quantidade enviada tem de ser um número inteiro: "
-            f"{quantidade_enviada}"
-        )
+    if quantidades_enviadas is not None:
+        produtos_da_requisicao = {i["produto_id"] for i in itens}
 
-    if quantidade_enviada <= 0:
-        raise ValueError("A quantidade enviada tem de ser positiva.")
+        for produto_id in quantidades_enviadas:
+            if produto_id not in produtos_da_requisicao:
+                raise ValueError(
+                    f"O produto {produto_id} não faz parte desta "
+                    f"requisição."
+                )
 
-    if quantidade_enviada > requisicao["quantidade_pedida"]:
-        raise ValueError(
-            "A quantidade enviada não pode exceder a quantidade "
-            "pedida."
-        )
+    a_enviar = []
 
-    saldo = saldo_produto(dados, requisicao["produto_id"])
+    for item in itens:
+        if quantidades_enviadas is not None:
+            quantidade = quantidades_enviadas.get(
+                item["produto_id"], item["quantidade_pedida"]
+            )
+        else:
+            quantidade = item["quantidade_pedida"]
 
-    if quantidade_enviada > saldo:
-        raise ValueError(
-            f"Saldo insuficiente do produto "
-            f"{requisicao['produto_id']}: {saldo} disponível, "
-            f"{quantidade_enviada} pedido para envio."
-        )
+        _validar_inteiro(quantidade, "enviada")
+
+        if quantidade <= 0:
+            raise ValueError(
+                "A quantidade enviada tem de ser positiva."
+            )
+
+        if quantidade > item["quantidade_pedida"]:
+            raise ValueError(
+                f"A quantidade enviada do produto "
+                f"{item['produto_id']} não pode exceder a "
+                f"quantidade pedida."
+            )
+
+        saldo = saldo_produto(dados, item["produto_id"])
+
+        if quantidade > saldo:
+            raise ValueError(
+                f"Saldo insuficiente do produto {item['produto_id']}: "
+                f"{saldo} disponível, {quantidade} pedido para envio."
+            )
+
+        a_enviar.append((item, quantidade))
 
     if data_envio is None:
         raise ValueError("A data de envio é obrigatória.")
 
-    registar_movimento(
-        dados,
-        produto_id=requisicao["produto_id"],
-        tipo="saida",
-        quantidade=quantidade_enviada,
-        data=data_envio,
-        responsavel_id=quem_envia["id"],
-        requisicao_id=requisicao["id"],
-    )
+    for item, quantidade in a_enviar:
+        registar_movimento(
+            dados,
+            produto_id=item["produto_id"],
+            tipo="saida",
+            quantidade=quantidade,
+            data=data_envio,
+            responsavel_id=quem_envia["id"],
+            requisicao_id=requisicao["id"],
+        )
+        item["quantidade_enviada"] = quantidade
 
-    requisicao["quantidade_enviada"] = quantidade_enviada
     requisicao["data_envio"] = data_envio
     requisicao["estado"] = "enviada"
 
@@ -590,26 +708,34 @@ def reportar_devolucao(
     dados,
     requisicao_id,
     responsavel_id,
-    quantidade,
+    itens,
     data_reportada,
 ):
     """Reporta sobra de material de uma requisição já fechada.
 
     Entidade própria desde a decisão 19 — não é mais um passo da
     requisição, é um evento à parte que só existe quando sobra
-    material por usar. Por isso 'quantidade' tem de ser positiva:
-    não sobrou nada não é uma devolução, é simplesmente não haver
-    devolução nenhuma a reportar (era isto que aceitar zero, na
-    versão anterior, obrigava a fingir que era).
+    material por usar. Pode juntar vários produtos devolvidos de
+    uma vez, cada um com a sua quantidade (decisão 20), simétrico a
+    `criar_requisicao`.
+
+    'itens' é uma lista de dicionários no formato
+    {"produto_id": ..., "quantidade": ...}. Não pode vir vazia nem
+    repetir o mesmo produto duas vezes. Cada quantidade tem de ser
+    positiva: não sobrou nada não é uma devolução, é simplesmente
+    não haver linha nenhuma a reportar para esse produto (era isto
+    que aceitar zero, antes da decisão 19, obrigava a fingir que
+    era).
 
     Mesma regra de identidade da versão anterior: só o responsável
     que pediu (e recebeu) pode reportar a sobra — é ele quem sabe o
     que sobrou.
 
-    'quantidade' não pode exceder o que ainda falta devolver desta
-    requisição — a quantidade enviada, descontadas as devoluções já
-    reportadas antes (pendentes ou fechadas), para impedir reportar
-    sobra a mais do que o que foi mesmo enviado.
+    Cada produto devolvido tem de fazer parte da requisição
+    original, e a sua quantidade não pode exceder o que ainda falta
+    devolver dele — a quantidade enviada desse item, descontadas as
+    devoluções já reportadas antes (pendentes ou fechadas), para
+    impedir reportar sobra a mais do que o que foi mesmo enviado.
 
     O material devolvido ainda não conta no saldo (decisão 9): é
     trânsito real — saiu das mãos do responsável mas ainda não
@@ -639,29 +765,68 @@ def reportar_devolucao(
             f"sobra desta requisição."
         )
 
-    if not isinstance(quantidade, int) or isinstance(quantidade, bool):
-        raise ValueError(
-            f"A quantidade devolvida tem de ser um número inteiro: "
-            f"{quantidade}"
-        )
+    if not itens:
+        raise ValueError("A devolução tem de ter pelo menos um item.")
 
-    if quantidade <= 0:
-        raise ValueError(
-            "A quantidade devolvida tem de ser positiva — sem "
-            "sobra não há devolução a reportar."
-        )
+    itens_requisicao = listar_itens_requisicao(
+        dados, requisicao_id=requisicao_id
+    )
+    itens_por_produto = {i["produto_id"]: i for i in itens_requisicao}
 
-    ja_reportado = sum(
-        d["quantidade"]
+    devolucao_ids_existentes = {
+        d["id"]
         for d in dados["devolucoes"]
         if d["requisicao_id"] == requisicao_id
-    )
+    }
 
-    if ja_reportado + quantidade > requisicao["quantidade_enviada"]:
-        raise ValueError(
-            "A quantidade devolvida não pode exceder a quantidade "
-            "enviada."
+    ja_reportado_por_produto = {}
+
+    for it in dados["itens_devolucao"]:
+        if it["devolucao_id"] not in devolucao_ids_existentes:
+            continue
+
+        ja_reportado_por_produto[it["produto_id"]] = (
+            ja_reportado_por_produto.get(it["produto_id"], 0)
+            + it["quantidade"]
         )
+
+    produtos_vistos = set()
+
+    for item in itens:
+        produto_id = item.get("produto_id")
+
+        if produto_id not in itens_por_produto:
+            raise ValueError(
+                f"O produto {produto_id} não faz parte da "
+                f"requisição {requisicao_id}."
+            )
+
+        if produto_id in produtos_vistos:
+            raise ValueError(
+                f"O produto {produto_id} está repetido na "
+                f"devolução — some as quantidades num único item."
+            )
+
+        produtos_vistos.add(produto_id)
+
+        quantidade = _validar_inteiro(item.get("quantidade"), "devolvida")
+
+        if quantidade <= 0:
+            raise ValueError(
+                "A quantidade devolvida tem de ser positiva — sem "
+                "sobra não há devolução a reportar."
+            )
+
+        ja_reportado = ja_reportado_por_produto.get(produto_id, 0)
+        quantidade_enviada = itens_por_produto[produto_id][
+            "quantidade_enviada"
+        ]
+
+        if ja_reportado + quantidade > quantidade_enviada:
+            raise ValueError(
+                f"A quantidade devolvida do produto {produto_id} "
+                f"não pode exceder a quantidade enviada."
+            )
 
     if data_reportada is None:
         raise ValueError("A data de devolução é obrigatória.")
@@ -670,14 +835,67 @@ def reportar_devolucao(
         "id": repositorio.proximo_id(PREFIXO_DEVOLUCAO),
         "requisicao_id": requisicao_id,
         "responsavel_id": responsavel["id"],
-        "quantidade": quantidade,
         "estado": "pendente",
         "data_reportada": data_reportada,
         "data_fecho": None,
     }
 
     dados["devolucoes"].append(devolucao)
+
+    for item in itens:
+        dados["itens_devolucao"].append(
+            {
+                "id": repositorio.proximo_id(PREFIXO_ITEM_DEVOLUCAO),
+                "devolucao_id": devolucao["id"],
+                "produto_id": item["produto_id"],
+                "quantidade": item["quantidade"],
+            }
+        )
+
     return devolucao
+
+
+def listar_itens_devolucao(dados, devolucao_id=None, produto_id=None):
+    """Devolve os itens de devolução, filtráveis por devolução e
+    produto.
+
+    'devolucao_id' e 'produto_id' filtram por um valor exato quando
+    indicados; None (omisso) não filtra nesse campo.
+
+    Devolve lista nova, para que alterá-la depois não afete a
+    estrutura de dados (mesma convenção dos `listar` dos outros
+    módulos).
+    """
+    resultado = []
+
+    for item in dados["itens_devolucao"]:
+        if (
+            devolucao_id is not None
+            and item["devolucao_id"] != devolucao_id
+        ):
+            continue
+
+        if produto_id is not None and item["produto_id"] != produto_id:
+            continue
+
+        resultado.append(item)
+
+    return resultado
+
+
+def procurar_item_devolucao(dados, item_id):
+    """Devolve o item de devolução com o identificador indicado, ou
+    None.
+
+    A ausência não é erro: quem chama decide se ela impede a
+    operação (mesma convenção de procurar_devolucao).
+    """
+    for item in dados["itens_devolucao"]:
+        if item["id"] == item_id:
+            return item
+
+    return None
+
 
 def procurar_devolucao(dados, devolucao_id):
     """Devolve a devolução com o identificador indicado, ou None.
@@ -733,10 +951,13 @@ def listar_devolucoes(
 def fechar_devolucao(dados, devolucao_id, aceite_por_id, data_fecho):
     """Aceita uma devolução — pendente → fechada.
 
-    Só agora se gera o movimento de entrada que repõe o saldo —
-    enquanto a devolução estava pendente, o material estava em
-    trânsito, fora do armazém e fora do saldo (ver
-    `reportar_devolucao`).
+    Gera um movimento de entrada por item (decisão 9, decisão 20) —
+    só agora se repõe o saldo de cada produto: enquanto a devolução
+    estava pendente, o material estava em trânsito, fora do armazém
+    e fora do saldo (ver `reportar_devolucao`).
+
+    Aceita-se a devolução toda de uma só vez — não há aceitação
+    item a item (decisão 20), simétrico ao envio da requisição.
 
     'aceite_por_id' é quem aceita a devolução no armazém — como em
     `enviar_requisicao`, não tem de ser o mesmo responsável que
@@ -761,23 +982,18 @@ def fechar_devolucao(dados, devolucao_id, aceite_por_id, data_fecho):
     if data_fecho is None:
         raise ValueError("A data de fecho é obrigatória.")
 
-    requisicao = procurar_requisicao(dados, devolucao["requisicao_id"])
+    itens = listar_itens_devolucao(dados, devolucao_id=devolucao_id)
 
-    if requisicao is None:
-        raise ValueError(
-            f"A requisição {devolucao['requisicao_id']} associada a "
-            f"esta devolução não existe."
+    for item in itens:
+        registar_movimento(
+            dados,
+            produto_id=item["produto_id"],
+            tipo="entrada",
+            quantidade=item["quantidade"],
+            data=data_fecho,
+            responsavel_id=aceite["id"],
+            requisicao_id=devolucao["requisicao_id"],
         )
-
-    registar_movimento(
-        dados,
-        produto_id=requisicao["produto_id"],
-        tipo="entrada",
-        quantidade=devolucao["quantidade"],
-        data=data_fecho,
-        responsavel_id=aceite["id"],
-        requisicao_id=requisicao["id"],
-    )
 
     devolucao["estado"] = "fechada"
     devolucao["data_fecho"] = data_fecho
@@ -793,14 +1009,28 @@ def listar_requisicoes(
     Não tem filtro de "incluir_inativos" — Requisicao não tem campo
     'ativo' (decisão 8 não se aplica aqui): o ciclo de vida é o
     estado, um dos quatro valores do fluxo, nunca uma requisição
-    "desativada". 'estado' filtra por um valor exato quando
-    indicado; None (omisso) não filtra — mesma convenção do
-    'incompleto' em clientes.listar e do 'tipo' em contratos.listar.
+    "desativada". 'estado' e 'responsavel_id' filtram por um valor
+    exato quando indicados; None (omisso) não filtra — mesma
+    convenção do 'incompleto' em clientes.listar e do 'tipo' em
+    contratos.listar.
+
+    'produto_id', desde a decisão 20, já não é um campo da
+    requisição — filtra pelas requisições que têm pelo menos um
+    item desse produto, através de `listar_itens_requisicao`.
 
     Devolve lista nova, para que alterá-la depois não afete a
     estrutura de dados (mesma convenção de listar_produtos e dos
     `listar` dos outros módulos).
     """
+    requisicoes_com_produto = None
+
+    if produto_id is not None:
+        requisicoes_com_produto = {
+            item["requisicao_id"]
+            for item in listar_itens_requisicao(
+                dados, produto_id=produto_id
+            )
+        }
 
     resultado = []
 
@@ -814,7 +1044,10 @@ def listar_requisicoes(
         ):
             continue
 
-        if produto_id is not None and r["produto_id"] != produto_id:
+        if (
+            requisicoes_com_produto is not None
+            and r["id"] not in requisicoes_com_produto
+        ):
             continue
 
         resultado.append(r)
