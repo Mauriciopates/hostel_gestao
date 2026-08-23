@@ -2524,12 +2524,60 @@ def _menu_movimentos(dados):
 
         acoes[escolha](dados)
 
+def _ler_itens_requisicao(dados):
+    """Lê a lista de itens (produto + quantidade pedida) de uma
+    requisição, um de cada vez, até o utilizador dizer que não quer
+    pedir mais nenhum produto — uma requisição pode juntar vários
+    produtos numa só vez (decisão 20).
+
+    Devolve sempre pelo menos um item: o primeiro é sempre pedido,
+    só os seguintes são opcionais.
+    """
+    itens = []
+
+    while True:
+        produto_id = ler_texto(
+            f"ID do produto (item {len(itens) + 1}): "
+        )
+        quantidade_pedida = ler_inteiro("Quantidade pedida: ", minimo=1)
+
+        itens.append(
+            {
+                "produto_id": produto_id,
+                "quantidade_pedida": quantidade_pedida,
+            }
+        )
+
+        if not confirmar("Adicionar outro produto a esta requisição?"):
+            break
+
+    return itens
+
+
+def _imprimir_itens_requisicao(dados, requisicao_id):
+    """Mostra cada item de uma requisição, uma linha por produto —
+    reutilizado por todos os ecrãs que apresentam o resultado de
+    uma operação sobre a requisição (decisão 20: os itens deixaram
+    de estar no cabeçalho, por isso já não aparecem sozinhos no
+    print da requisição).
+    """
+    for item in estoque.listar_itens_requisicao(
+        dados, requisicao_id=requisicao_id
+    ):
+        produto = estoque.procurar_produto(dados, item["produto_id"])
+        nome = produto["nome"] if produto else item["produto_id"]
+        print(
+            f"    {nome} ({item['produto_id']}) — pedida: "
+            f"{item['quantidade_pedida']}  enviada: "
+            f"{item['quantidade_enviada']}"
+        )
+
+
 def _criar_requisicao(dados):
     print("\n--- Nova requisição ---")
 
     responsavel_id = ler_texto("ID do responsável: ")
-    produto_id = ler_texto("ID do produto: ")
-    quantidade_pedida = ler_inteiro("Quantidade pedida: ", minimo=1)
+    itens = _ler_itens_requisicao(dados)
     data_pedido = ler_data(
         "Data do pedido [Enter para hoje]: ", obrigatorio=False
     )
@@ -2543,8 +2591,7 @@ def _criar_requisicao(dados):
         requisicao = estoque.criar_requisicao(
             dados,
             responsavel_id,
-            produto_id,
-            quantidade_pedida,
+            itens,
             data_pedido,
             observacoes=observacoes,
         )
@@ -2555,6 +2602,7 @@ def _criar_requisicao(dados):
     repositorio.gravar(dados)
 
     print(f"Requisição criada: {requisicao['id']} (pendente)")
+    _imprimir_itens_requisicao(dados, requisicao["id"])
 
 
 def _listar_requisicoes(dados):
@@ -2577,7 +2625,7 @@ def _listar_requisicoes(dados):
     ) or None
 
     lista = estoque.listar_requisicoes(
-        dados, estado=estado, responsavel_id=responsavel_id, 
+        dados, estado=estado, responsavel_id=responsavel_id,
         produto_id=produto_id
     )
 
@@ -2589,16 +2637,19 @@ def _listar_requisicoes(dados):
 
     for r in lista:
         print(
-            f"{r['id']} — produto {r['produto_id']}, responsável "
-            f"{r['responsavel_id']} ({r['estado']})"
+            f"{r['id']} — responsável {r['responsavel_id']} "
+            f"({r['estado']})"
         )
-        print(
-            f"    pedida: {r['quantidade_pedida']}  "
-            f"enviada: {r['quantidade_enviada']}"
-        )
+        _imprimir_itens_requisicao(dados, r["id"])
 
 
 def _enviar_requisicao(dados):
+    """Envia a requisição toda de uma só vez — não há aprovação
+    item a item (decisão 20). Por omissão envia-se cada item na
+    quantidade pedida; o ajuste por item só aparece se for pedido
+    explicitamente, para não obrigar quem envia a confirmar produto
+    a produto no caso comum, que é enviar tudo.
+    """
     print("\n--- Enviar requisição ---")
 
     requisicao_id = ler_texto("ID da requisição: ")
@@ -2610,11 +2661,32 @@ def _enviar_requisicao(dados):
     if data_envio is None:
         data_envio = date.today()
 
-    quantidade_enviada = ler_inteiro(
-        "Quantidade enviada (Enter para a totalidade pedida): ",
-        obrigatorio=False,
-        minimo=1,
+    itens_pedidos = estoque.listar_itens_requisicao(
+        dados, requisicao_id=requisicao_id
     )
+
+    quantidades_enviadas = None
+
+    if itens_pedidos and confirmar(
+        "Ajustar a quantidade enviada de algum item (envio parcial)?"
+    ):
+        quantidades_enviadas = {}
+
+        for item in itens_pedidos:
+            produto = estoque.procurar_produto(
+                dados, item["produto_id"]
+            )
+            nome = produto["nome"] if produto else item["produto_id"]
+            quantidade = ler_inteiro(
+                f"Quantidade enviada de {nome} "
+                f"[pedida: {item['quantidade_pedida']}, "
+                f"Enter mantém]: ",
+                obrigatorio=False,
+                minimo=1,
+            )
+
+            if quantidade is not None:
+                quantidades_enviadas[item["produto_id"]] = quantidade
 
     try:
         requisicao = estoque.enviar_requisicao(
@@ -2622,7 +2694,7 @@ def _enviar_requisicao(dados):
             requisicao_id,
             enviado_por_id,
             data_envio,
-            quantidade_enviada=quantidade_enviada,
+            quantidades_enviadas=quantidades_enviadas,
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
@@ -2630,12 +2702,8 @@ def _enviar_requisicao(dados):
 
     repositorio.gravar(dados)
 
-    parcial = (
-        " (envio parcial)"
-        if requisicao["quantidade_enviada"] < requisicao["quantidade_pedida"]
-        else ""
-    )
-    print(f"Requisição enviada: {requisicao['id']}{parcial}")
+    print(f"Requisição enviada: {requisicao['id']}")
+    _imprimir_itens_requisicao(dados, requisicao["id"])
 
 
 def _rejeitar_requisicao(dados):
@@ -2683,6 +2751,50 @@ def _confirmar_rececao(dados):
     print(
         f"Receção confirmada — requisição fechada: {requisicao['id']}"
     )
+    _imprimir_itens_requisicao(dados, requisicao["id"])
+
+
+def _ler_itens_devolucao(dados):
+    """Lê a lista de itens (produto + quantidade) de uma devolução,
+    um de cada vez, até o utilizador dizer que não sobrou mais
+    nenhum produto — simétrico a `_ler_itens_requisicao` (decisão
+    20: uma devolução pode juntar vários produtos de uma vez).
+
+    Devolve sempre pelo menos um item: o primeiro é sempre pedido,
+    só os seguintes são opcionais.
+    """
+    itens = []
+
+    while True:
+        produto_id = ler_texto(
+            f"ID do produto que sobrou (item {len(itens) + 1}): "
+        )
+        quantidade = ler_inteiro(
+            "Quantidade que sobrou (não usada): ", minimo=1
+        )
+
+        itens.append(
+            {"produto_id": produto_id, "quantidade": quantidade}
+        )
+
+        if not confirmar("Sobrou mais algum produto?"):
+            break
+
+    return itens
+
+
+def _imprimir_itens_devolucao(dados, devolucao_id):
+    """Mostra cada item de uma devolução, uma linha por produto —
+    reutilizado pelos ecrãs que apresentam o resultado de uma
+    operação sobre a devolução (decisão 20: os itens deixaram de
+    estar no cabeçalho).
+    """
+    for item in estoque.listar_itens_devolucao(
+        dados, devolucao_id=devolucao_id
+    ):
+        produto = estoque.procurar_produto(dados, item["produto_id"])
+        nome = produto["nome"] if produto else item["produto_id"]
+        print(f"    {nome} ({item['produto_id']}) — {item['quantidade']}")
 
 
 def _reportar_devolucao(dados):
@@ -2690,9 +2802,7 @@ def _reportar_devolucao(dados):
 
     requisicao_id = ler_texto("ID da requisição (já fechada): ")
     responsavel_id = ler_texto("ID do responsável que devolve: ")
-    quantidade = ler_inteiro(
-        "Quantidade que sobrou (não usada): ", minimo=1
-    )
+    itens = _ler_itens_devolucao(dados)
     data_reportada = ler_data(
         "Data de devolução [Enter para hoje]: ", obrigatorio=False
     )
@@ -2705,7 +2815,7 @@ def _reportar_devolucao(dados):
             dados,
             requisicao_id,
             responsavel_id,
-            quantidade,
+            itens,
             data_reportada,
         )
     except ValueError as erro:
@@ -2718,6 +2828,7 @@ def _reportar_devolucao(dados):
         f"Devolução registada: {devolucao['id']} "
         f"(requisição {devolucao['requisicao_id']})"
     )
+    _imprimir_itens_devolucao(dados, devolucao["id"])
 
 
 def _fechar_devolucao(dados):
@@ -2743,6 +2854,70 @@ def _fechar_devolucao(dados):
     repositorio.gravar(dados)
 
     print(f"Devolução aceite: {devolucao['id']}")
+    _imprimir_itens_devolucao(dados, devolucao["id"])
+
+
+def _enviar_rol_lavanderia(dados):
+    """Envia stock a um responsável sem que ele o tenha pedido antes
+    — o caso típico de reposição do rol de lavanderia (decisão 20):
+    o admin decide o que enviar, sem depender de uma requisição
+    prévia do responsável.
+
+    Por baixo não é uma funcionalidade nova: encadeia
+    `criar_requisicao` e `enviar_requisicao`, as mesmas duas funções
+    do fluxo normal — cria a requisição já em nome de quem vai
+    receber e envia-a de imediato, na mesma operação. O responsável
+    só entra depois, a confirmar a receção pelo ecrã normal (decisão
+    9: quem recebe é quem confirma, nunca o admin em nome dele).
+    """
+    print("\n--- Enviar rol de lavanderia ---")
+
+    responsavel_id = ler_texto("ID do responsável que vai receber: ")
+    enviado_por_id = ler_texto("ID de quem envia (admin): ")
+    data = ler_data("Data de envio [Enter para hoje]: ", obrigatorio=False)
+
+    if data is None:
+        data = date.today()
+
+    itens = _ler_itens_requisicao(dados)
+
+    try:
+        requisicao = estoque.criar_requisicao(
+            dados,
+            responsavel_id,
+            itens,
+            data,
+            observacoes=(
+                "Enviado sem requisição prévia (rol de lavanderia)."
+            ),
+        )
+    except ValueError as erro:
+        print(f"Erro: {erro}")
+        return
+
+    try:
+        requisicao = estoque.enviar_requisicao(
+            dados, requisicao["id"], enviado_por_id, data
+        )
+    except ValueError as erro:
+        repositorio.gravar(dados)
+        print(
+            f"Requisição {requisicao['id']} criada, mas não foi "
+            f"possível enviar: {erro}"
+        )
+        print(
+            "Fica pendente — usa 'Enviar requisição' no menu para "
+            "tentar de novo."
+        )
+        return
+
+    repositorio.gravar(dados)
+
+    print(
+        f"Rol enviado: {requisicao['id']} "
+        f"(estado: {requisicao['estado']})"
+    )
+    _imprimir_itens_requisicao(dados, requisicao["id"])
 
 
 def _menu_requisicoes(dados):
@@ -2754,6 +2929,7 @@ def _menu_requisicoes(dados):
         _confirmar_rececao,
         _reportar_devolucao,
         _fechar_devolucao,
+        _enviar_rol_lavanderia,
     )
 
     rotulos = [
@@ -2764,6 +2940,7 @@ def _menu_requisicoes(dados):
         "Confirmar receção",
         "Reportar sobra (devolução)",
         "Aceitar devolução",
+        "Enviar rol de lavanderia",
     ]
 
     while True:
