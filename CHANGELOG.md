@@ -5,10 +5,9 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
 
 ### [0.7.0] — 2026-08-23
 
-
 ### Adicionado
 - `cli.py`: interface de linha de comando, único módulo autorizado a
-  usar `input()`/`print()` (decisão 7). 83 funções:
+  usar `input()`/`print()` (decisão 7). 84 funções:
   - Leitoras de base: `ler_texto`, `ler_inteiro`, `ler_decimal`,
     `ler_data`, `confirmar`.
   - `mostrar_menu`: menu numerado com saída/voltar sempre em "0",
@@ -24,32 +23,87 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
     clientes (incluindo anonimização, decisão 8), contratos mensais
     e reservas Airbnb, e estoque (produtos, movimentos e
     requisições) — cada um com `menu_X` a amarrar as suas ações.
+  - `mostrar_erro_arranque`: mostra um erro fatal de arranque, antes
+    de o sistema chegar ao menu principal — chamada pelo `main.py`
+    quando `repositorio.carregar()` levanta `ValueError`; é o único
+    ponto do sistema em que uma exceção é apanhada fora de um ecrã
+    propriamente dito, mas continua a preservar a decisão 7 (nunca
+    um `print()` direto no `main.py`).
   - `menu_principal`: liga os seis submenus de módulo.
+- `main.py`: ponto de entrada do sistema — cria a cópia de
+  segurança, limpa cópias antigas (`config.DIAS_BACKUP`), carrega os
+  dados e entrega ao `cli.menu_principal`. Não tem `input()`/
+  `print()` próprio: até o erro de arranque é delegado a
+  `cli.mostrar_erro_arranque` (decisão 7).
+- `teste_manual_cli.md`: roteiro de teste manual de `cli.py` e
+  `main.py`, 9 grupos — substitui `unittest` para estes dois módulos
+  (ver decisão registada abaixo).
 - `Pseudocodigo_Modulos.docx`: capítulos 18 (Módulo cli.py) e 19
   (Testes do módulo cli.py) — documento sobe para a versão 1.7.
 
-
 ### Alterado
-
-- (nenhuma alteração a módulos de negócio já fechados nesta sessão)
+- `repositorio.py` (v0.2.0, fechado) — `carregar()` nunca chamava
+  `_desserializar()` depois do `json.load()`: campos `Decimal` e
+  `date` voltavam do disco como texto, e só rebentava num
+  `formatar_valor` já dentro do `cli.py`, sem relação aparente com a
+  causa. Corrigido com uma função nova, `_reconstituir_tipos(dados)`,
+  chamada logo a seguir ao `json.load()`. Invisível aos testes
+  automáticos existentes, porque nenhum deles grava e volta a
+  carregar de um ficheiro real — só apareceu no primeiro arranque
+  real via `main.py`.
+- `contratos.py` (v0.5.0, fechado):
+  - Prefixo de ID único `PREFIXO = "OCU"` desmembrado em
+    `PREFIXO_MENSAL = "CNT"` e `PREFIXO_AIRBNB = "RSV"` — um
+    contrato mensal gera documento, uma reserva é só controlo
+    interno; o prefixo partilhado confundia os dois.
+  - Nova função pública `calcular_preco_airbnb(unidade,
+    data_inicio, data_fim)` — resolve a lacuna nº4 da lista de
+    pendências (sem forma de pré-visualizar o preço calculado antes
+    de registar a reserva).
+  - `registar_airbnb`/`atualizar_airbnb`: os campos de texto livre
+    `motivo_alteracao_preco`/`motivo_alteracao_multa` foram
+    substituídos por `responsavel_desconto_preco_id`/
+    `responsavel_desconto_multa_id` (decisão 18, nova — ver abaixo).
+  - `reativar()`: reservas Airbnb passam a verificar sobreposição
+    antes de reativar, com a mesma `_existe_sobreposicao` já usada
+    em `registar_airbnb` — sem isto, dava para reativar uma reserva
+    cancelada mesmo já existindo outra reserva ativa a cobrir as
+    mesmas datas na mesma unidade (bug encontrado durante o Grupo 6
+    do roteiro manual).
+- `modelos.py` — dataclass `OcupacaoAirbnb`: mesma troca de campos
+  de `contratos.py` acima.
+- `teste_contratos.py`: testes atualizados para os novos prefixos
+  (`test_id_gerado_com_prefixo_cnt`, `test_id_gerado_com_prefixo_rsv`
+  novo) e os três placeholders `"OCU-999"` trocados por
+  `"CNT-999"`; 69 testes, todos verdes.
 
 ### Decisões registadas
 - Gravação imediata: cada ecrã que altera `dados` chama
   `repositorio.gravar(dados)` logo a seguir a um sucesso, nunca em
   lote nem só no fim do programa.
-- Testes de `cli.py`: decisão de teste MANUAL via `main.py`, não
-  `unittest` com mock de `input()` — única exceção às suites
-  automáticas dos restantes módulos, por ser este o único módulo
-  com interação direta (decisão 7).
-- Quatro lacunas de arquitetura identificadas e documentadas para
-  correção em ramos `fix/` após o fecho da v0.7.0 (ver
+- Testes de `cli.py`/`main.py`: decisão de teste MANUAL via
+  `main.py`, não `unittest` com mock de `input()` — única exceção às
+  suites automáticas dos restantes módulos, por serem os únicos com
+  interação direta (decisão 7).
+- Tratamento do erro de arranque: `main.py` apanha o `ValueError` de
+  `repositorio.carregar()` e delega a mensagem a
+  `cli.mostrar_erro_arranque`, preservando a decisão 7. Infraestrutura
+  de `logging` a sério fica deliberadamente fora da Fase 1.
+- **Decisão 18 (nova):** quando o preço ou a multa praticados de uma
+  reserva Airbnb ficam abaixo do calculado, é um desconto — exige
+  confirmação explícita e o ID de um responsável que o autorize
+  (`responsaveis.validar_autoria`, tem de existir e estar ativo),
+  tanto na criação como na atualização. Substitui o antigo campo de
+  motivo em texto livre, que nunca era obrigatório.
+- Três lacunas de arquitetura continuam identificadas e documentadas
+  para correção em ramos `fix/` após o fecho da v0.7.0 (ver
   `claude/Pendencias_Correcoes_pos_0.7.0.txt`): `clientes.atualizar`
   não recusa clientes anonimizados (severidade alta, RGPD);
   `contratos.criar_mensal`/`atualizar_mensal` descartam o booleano
   de `validacoes.validar_caucao`; `dia_vencimento` só é validado em
-  `atualizar_mensal`, não em `criar_mensal`; e não existe função
-  pública de pré-visualização do preço Airbnb.
-
+  `atualizar_mensal`, não em `criar_mensal`. (A quarta lacuna original
+  — pré-visualização do preço Airbnb — foi resolvida nesta sessão,
+  ver `contratos.calcular_preco_airbnb` acima.)
 
 ## [0.6.0] — 2026-08-20
 
