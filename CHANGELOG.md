@@ -40,6 +40,8 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
   (ver decisão registada abaixo).
 - `Pseudocodigo_Modulos.docx`: capítulos 18 (Módulo cli.py) e 19
   (Testes do módulo cli.py) — documento sobe para a versão 1.7.
+
+
 - Entidade `Devolucao` em `modelos.py` (decisão 19) — sobra de material
   devolvida ao armazém passa a ser um registo próprio (`DEV-0xx`),
   associado a uma requisição já fechada, com fluxo próprio de dois
@@ -50,6 +52,16 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
 - `cli.py`: ecrãs "Reportar sobra (devolução)" e "Aceitar devolução"
   no menu de Requisições, no lugar de "Devolver material"/"Fechar
   requisição".
+
+  - `ItemRequisicao` e `ItemDevolucao` (modelos.py) — linha de produto
+  + quantidade dentro de uma requisição/devolução (decisão 20).
+- `estoque.listar_itens_requisicao`, `estoque.procurar_item_requisicao`,
+  `estoque.listar_itens_devolucao`, `estoque.procurar_item_devolucao`.
+- Ecrã "Enviar rol de lavanderia" no cli.py — o admin envia stock a
+  um responsável sem requisição prévia (encadeia criar_requisicao +
+  enviar_requisicao).
+- Coleções `itens_requisicao` e `itens_devolucao` em repositorio.py,
+  retrocompatíveis com ficheiros antigos (`.get(..., [])`).
 
 
 ### Alterado
@@ -103,6 +115,23 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
   `TestProcurarListarDevolucao`/`TestFecharDevolucao` (108 testes,
   todos verdes).
 
+- `Requisicao` e `Devolucao` (modelos.py) passam a ser cabeçalhos —
+  perderam `produto_id`/`quantidade_pedida`/`quantidade_enviada` e
+  `quantidade`, respetivamente; os produtos ficam em
+  `ItemRequisicao`/`ItemDevolucao`.
+- `estoque.criar_requisicao` e `estoque.reportar_devolucao` passam a
+  receber uma lista de itens em vez de um único produto/quantidade.
+- `estoque.enviar_requisicao` envia todos os itens de uma requisição
+  numa só chamada (`quantidades_enviadas`, opcional, substitui
+  `quantidade_enviada`); valida o saldo de todos os itens antes de
+  gerar qualquer movimento — tudo ou nada.
+- `estoque.fechar_devolucao` gera um movimento de entrada por item,
+  numa só aceitação.
+- cli.py: ecrãs de criar requisição e reportar devolução passam a
+  fazer um loop "adicionar mais um produto?"; ecrã de enviar
+  requisição só pergunta por ajuste de quantidade por item quando
+  pedido — por omissão envia tudo na totalidade pedida.
+
 ### Decisões registadas
 - Gravação imediata: cada ecrã que altera `dados` chama
   `repositorio.gravar(dados)` logo a seguir a um sucesso, nunca em
@@ -140,6 +169,14 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
   fechar a requisição automaticamente, por analogia com o mundo
   real: "confirmo receção já fecha automaticamente, reportar sobra
   é um evento à parte, só quando existir sobra".
+
+  - Decisão 20: requisições e devoluções passam de um único produto
+  por registo para cabeçalho + lista de itens, para suportar pedidos
+  com vários produtos de uma vez. Envio, receção e aceitação de
+  devolução continuam a ser uma ação única sobre o registo inteiro —
+  nunca item a item. Sem funções de edição de requisição/devolução:
+  qualquer correção a um registo já fechado passa por
+  `registar_movimento(tipo="ajuste")` (decisão 9).
 
 ## [0.6.0] — 2026-08-20
 
