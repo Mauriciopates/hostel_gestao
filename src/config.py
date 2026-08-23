@@ -36,7 +36,7 @@ AVISO_PREVIO_DIAS = 15
 DURACAO_MINIMA_MESES = 3
 
 # --- Regime Airbnb --------------------------------------------------------
-ESTADIA_MINIMA_NOITES = 2
+ESTADIA_MINIMA_NOITES = 1
 ESTADIA_MAXIMA_NOITES = 28
 
 # --- Horários -------------------------------------------------------------
