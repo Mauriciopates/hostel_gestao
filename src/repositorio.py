@@ -38,6 +38,78 @@ FICHEIRO_DADOS = PASTA_DADOS / "dados.json"
 FICHEIRO_CONTADORES = PASTA_DADOS / "contadores.json"
 
 
+def _reconstituir_tipos(dados):
+    """Converte para Decimal e date os campos de cada coleção,
+    logo a seguir ao json.load() os trazer como texto — inversa de
+    _serializar, aplicada registo a registo através de
+    _desserializar (que já existia, mas nunca era chamada).
+    """
+
+
+    dados["unidades"] = [
+        _desserializar(
+            u,
+            campos_decimal=(
+                "preco_base", "preco_epoca_alta",
+                "multa_check_in_tardio",
+            ),
+        )
+        for u in dados["unidades"]
+    ]
+    dados["clientes"] = [
+        _desserializar(
+            c,
+            campos_data=(
+                "data_nascimento", "validade_documento",
+                "data_anonimizado",
+            ),
+        )
+        for c in dados["clientes"]
+    ]
+    dados["ocupacoes"] = [
+        _desserializar(o, campos_data=("data_inicio", "data_fim"))
+        for o in dados["ocupacoes"]
+    ]
+    dados["ocupacoes_mensal"] = [
+        _desserializar(
+            m,
+            campos_decimal=(
+                "renda_calculada", "renda_praticada", "caucao",
+            ),
+        )
+        for m in dados["ocupacoes_mensal"]
+    ]
+    dados["ocupacoes_airbnb"] = [
+        _desserializar(
+            a,
+            campos_decimal=(
+                "preco_calculado", "preco_praticado",
+                "multa_calculada", "multa_praticada",
+            ),
+        )
+        for a in dados["ocupacoes_airbnb"]
+    ]
+    dados["requisicoes"] = [
+        _desserializar(
+            r,
+            campos_data=(
+                "data_pedido", "data_envio", "data_rececao",
+                "data_fecho", "data_devolucao",
+            ),
+        )
+        for r in dados["requisicoes"]
+    ]
+    dados["movimentos"] = [
+        _desserializar(m, campos_data=("data",))
+        for m in dados["movimentos"]
+    ]
+    dados["configuracoes_historico"] = [
+        _desserializar(c, campos_data=("data",))
+        for c in dados["configuracoes_historico"]
+    ]
+    return dados
+
+
 def _serializar(valor):
     """Converte tipos Python para tipos aceites pelo JSON.
 
@@ -164,8 +236,8 @@ def carregar():
 
     with open(FICHEIRO_DADOS, encoding="utf-8") as f:
         dados = json.load(f)
-
-    versao = dados.get("versao_dados", 1)
+        dados = _reconstituir_tipos(dados)
+        versao = dados.get("versao_dados", 1)
 
     if versao > config.VERSAO_DADOS:
         raise ValueError(
