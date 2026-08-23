@@ -90,7 +90,7 @@ class TesteCriarMensal(BaseContratosTest):
         self.assertIn(ocupacao, self.dados["ocupacoes"])
         self.assertIn(mensal, self.dados["ocupacoes_mensal"])
 
-    def test_id_gerado_com_prefixo_ocu(self):
+    def test_id_gerado_com_prefixo_cnt(self):
         ocupacao, _ = contratos.criar_mensal(
             self.dados,
             self.unidade_mensal["id"],
@@ -99,7 +99,9 @@ class TesteCriarMensal(BaseContratosTest):
             Decimal("250.00"),
             Decimal("250.00"),
         )
-        self.assertTrue(ocupacao["id"].startswith("OCU-"))
+        self.assertTrue(ocupacao["id"].startswith("CNT-"))
+
+    
 
     def test_unidade_inexistente_gera_erro(self):
         with self.assertRaises(ValueError):
@@ -347,7 +349,7 @@ class TesteAtualizarMensal(BaseContratosTest):
 
     def test_ocupacao_inexistente_gera_erro(self):
         with self.assertRaises(ValueError):
-            contratos.atualizar_mensal(self.dados, "OCU-999")
+            contratos.atualizar_mensal(self.dados, "CNT-999")
 
 
 class TesteEncerrarMensal(BaseContratosTest):
@@ -447,7 +449,7 @@ class TesteReativar(BaseContratosTest):
 
     def test_inexistente_gera_erro(self):
         with self.assertRaises(ValueError):
-            contratos.reativar(self.dados, "OCU-999")
+            contratos.reativar(self.dados, "CNT-999")
 
 
 class TesteRegistarAirbnb(BaseContratosTest):
@@ -575,6 +577,18 @@ class TesteRegistarAirbnb(BaseContratosTest):
         self.assertEqual(airbnb["multa_praticada"], Decimal("0.00"))
         self.assertEqual(airbnb["hora_chegada"], "")
 
+    def test_id_gerado_com_prefixo_rsv(self):
+        ocupacao, _ = contratos.registar_airbnb(
+            self.dados,
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 2, 10),
+            date(2026, 2, 15),
+            Decimal("300.00"),
+        )
+        self.assertTrue(ocupacao["id"].startswith("RSV-"))
+    
+
 
 class TesteAtualizarAirbnb(BaseContratosTest):
 
@@ -690,7 +704,7 @@ class TesteProcurarListar(BaseContratosTest):
         self.assertEqual(encontrada["id"], self.mensal["id"]) # type: ignore
 
     def test_procurar_inexistente_devolve_none(self):
-        self.assertIsNone(contratos.procurar(self.dados, "OCU-999"))
+        self.assertIsNone(contratos.procurar(self.dados, "CNT-999"))
 
     def test_listar_sem_filtro_devolve_todas_ativas(self):
         resultado = contratos.listar(self.dados)
