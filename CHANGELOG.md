@@ -40,6 +40,17 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
   (ver decisão registada abaixo).
 - `Pseudocodigo_Modulos.docx`: capítulos 18 (Módulo cli.py) e 19
   (Testes do módulo cli.py) — documento sobe para a versão 1.7.
+- Entidade `Devolucao` em `modelos.py` (decisão 19) — sobra de material
+  devolvida ao armazém passa a ser um registo próprio (`DEV-0xx`),
+  associado a uma requisição já fechada, com fluxo próprio de dois
+  estados (pendente → fechada).
+- `estoque.py`: `reportar_devolucao`, `procurar_devolucao`,
+  `listar_devolucoes`, `fechar_devolucao` — substituem
+  `devolver_requisicao`/`fechar_requisicao`.
+- `cli.py`: ecrãs "Reportar sobra (devolução)" e "Aceitar devolução"
+  no menu de Requisições, no lugar de "Devolver material"/"Fechar
+  requisição".
+
 
 ### Alterado
 - `repositorio.py` (v0.2.0, fechado) — `carregar()` nunca chamava
@@ -76,6 +87,21 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
   (`test_id_gerado_com_prefixo_cnt`, `test_id_gerado_com_prefixo_rsv`
   novo) e os três placeholders `"OCU-999"` trocados por
   `"CNT-999"`; 69 testes, todos verdes.
+- `Requisicao` (modelos.py) simplificada de cinco para quatro
+  estados: pendente → enviada → fechada, com rejeitada a partir de
+  pendente. Removidos os campos `quantidade_devolvida`,
+  `data_rececao` e `data_devolucao` — a sobra devolvida deixou de
+  ser um passo da requisição.
+- `estoque.confirmar_rececao_requisicao` fecha a requisição
+  automaticamente no momento da confirmação (antes só passava a
+  "recebida", à espera de devolução).
+- `repositorio.py`: `_estrutura_vazia` e `_reconstituir_tipos`
+  ajustados para a nova coleção `dados["devolucoes"]` e para os
+  campos de data revistos em `requisicoes`.
+- `teste_estoque.py`: `TestDevolverRequisicao`/`TestFecharRequisicao`
+  substituídos por `TestReportarDevolucao`/
+  `TestProcurarListarDevolucao`/`TestFecharDevolucao` (108 testes,
+  todos verdes).
 
 ### Decisões registadas
 - Gravação imediata: cada ecrã que altera `dados` chama
@@ -104,6 +130,16 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
   `atualizar_mensal`, não em `criar_mensal`. (A quarta lacuna original
   — pré-visualização do preço Airbnb — foi resolvida nesta sessão,
   ver `contratos.calcular_preco_airbnb` acima.)
+- **Decisão 19** — a devolução de sobra de material deixou de ser um
+  passo obrigatório da requisição, o que antes obrigava a aceitar
+  `quantidade_devolvida = 0` como valor válido sem sentido de
+  negócio real ("0" não é uma devolução, é a ausência de uma).
+  Passa a ser uma entidade própria (`Devolucao`), associada a uma
+  requisição já fechada, só existindo quando há mesmo sobra
+  (`quantidade > 0`, validado). A confirmação de receção passa a
+  fechar a requisição automaticamente, por analogia com o mundo
+  real: "confirmo receção já fecha automaticamente, reportar sobra
+  é um evento à parte, só quando existir sobra".
 
 ## [0.6.0] — 2026-08-20
 
