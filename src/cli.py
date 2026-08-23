@@ -2563,8 +2563,6 @@ def _listar_requisicoes(dados):
         (
             "pendente",
             "enviada",
-            "recebida",
-            "devolucao_pendente",
             "fechada",
             "rejeitada",
         ),
@@ -2596,8 +2594,7 @@ def _listar_requisicoes(dados):
         )
         print(
             f"    pedida: {r['quantidade_pedida']}  "
-            f"enviada: {r['quantidade_enviada']}  "
-            f"devolvida: {r['quantidade_devolvida']}"
+            f"enviada: {r['quantidade_enviada']}"
         )
 
 
@@ -2683,29 +2680,33 @@ def _confirmar_rececao(dados):
 
     repositorio.gravar(dados)
 
-    print(f"Receção confirmada: {requisicao['id']}")
+    print(
+        f"Receção confirmada — requisição fechada: {requisicao['id']}"
+    )
 
 
-def _devolver_requisicao(dados):
-    print("\n--- Devolver requisição ---")
+def _reportar_devolucao(dados):
+    print("\n--- Reportar sobra (devolução) ---")
 
-    requisicao_id = ler_texto("ID da requisição: ")
+    requisicao_id = ler_texto("ID da requisição (já fechada): ")
     responsavel_id = ler_texto("ID do responsável que devolve: ")
-    quantidade_devolvida = ler_inteiro("Quantidade devolvida: ", minimo=0)
-    data_devolucao = ler_data(
+    quantidade = ler_inteiro(
+        "Quantidade que sobrou (não usada): ", minimo=1
+    )
+    data_reportada = ler_data(
         "Data de devolução [Enter para hoje]: ", obrigatorio=False
     )
 
-    if data_devolucao is None:
-        data_devolucao = date.today()
+    if data_reportada is None:
+        data_reportada = date.today()
 
     try:
-        requisicao = estoque.devolver_requisicao(
+        devolucao = estoque.reportar_devolucao(
             dados,
             requisicao_id,
             responsavel_id,
-            quantidade_devolvida,
-            data_devolucao,
+            quantidade,
+            data_reportada,
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
@@ -2713,13 +2714,16 @@ def _devolver_requisicao(dados):
 
     repositorio.gravar(dados)
 
-    print(f"Devolução registada: {requisicao['id']}")
+    print(
+        f"Devolução registada: {devolucao['id']} "
+        f"(requisição {devolucao['requisicao_id']})"
+    )
 
 
-def _fechar_requisicao(dados):
-    print("\n--- Fechar requisição ---")
+def _fechar_devolucao(dados):
+    print("\n--- Aceitar devolução ---")
 
-    requisicao_id = ler_texto("ID da requisição: ")
+    devolucao_id = ler_texto("ID da devolução: ")
     aceite_por_id = ler_texto("ID de quem aceita a devolução: ")
     data_fecho = ler_data(
         "Data de fecho [Enter para hoje]: ", obrigatorio=False
@@ -2729,8 +2733,8 @@ def _fechar_requisicao(dados):
         data_fecho = date.today()
 
     try:
-        requisicao = estoque.fechar_requisicao(
-            dados, requisicao_id, aceite_por_id, data_fecho
+        devolucao = estoque.fechar_devolucao(
+            dados, devolucao_id, aceite_por_id, data_fecho
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
@@ -2738,7 +2742,7 @@ def _fechar_requisicao(dados):
 
     repositorio.gravar(dados)
 
-    print(f"Requisição fechada: {requisicao['id']}")
+    print(f"Devolução aceite: {devolucao['id']}")
 
 
 def _menu_requisicoes(dados):
@@ -2748,8 +2752,8 @@ def _menu_requisicoes(dados):
         _enviar_requisicao,
         _rejeitar_requisicao,
         _confirmar_rececao,
-        _devolver_requisicao,
-        _fechar_requisicao,
+        _reportar_devolucao,
+        _fechar_devolucao,
     )
 
     rotulos = [
@@ -2758,8 +2762,8 @@ def _menu_requisicoes(dados):
         "Enviar requisição",
         "Rejeitar requisição",
         "Confirmar receção",
-        "Devolver material",
-        "Fechar requisição",
+        "Reportar sobra (devolução)",
+        "Aceitar devolução",
     ]
 
     while True:

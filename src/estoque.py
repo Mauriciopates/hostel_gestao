@@ -1,9 +1,10 @@
 """Gestão do stock — o armazém central que serve os responsáveis.
 
-Três entidades neste módulo: Produto (catálogo), Requisicao (pedido
-do responsável, com cinco estados) e Movimento (registo imutável de
-entrada ou saída) — decisão 9. Armazém central único, não
-distribuído: não há stock por unidade.
+Quatro entidades neste módulo: Produto (catálogo), Requisicao
+(pedido do responsável, com quatro estados), Devolucao (sobra
+devolvida ao armazém, entidade própria desde a decisão 19) e
+Movimento (registo imutável de entrada ou saída) — decisão 9.
+Armazém central único, não distribuído: não há stock por unidade.
 
 Não acede a ficheiros nem à interface: recebe a estrutura de dados,
 devolve resultado e sinaliza erro com `raise ValueError`. Quem
@@ -16,6 +17,7 @@ import responsaveis
 PREFIXO = "PRD"
 PREFIXO_MOVIMENTO = "MOV"
 PREFIXO_REQUISICAO = "REQ"
+PREFIXO_DEVOLUCAO = "DEV"
 
 
 def criar_produto(dados, nome, unidade_medida, stock_minimo=0):
@@ -316,11 +318,11 @@ def criar_requisicao(
 ):
     """Cria uma requisição de material, no estado inicial "pendente".
 
-    Primeiro dos cinco estados do fluxo (decisão 9): pendente →
-    enviada → recebida → devolução pendente → fechada, com
-    "rejeitada" como saída alternativa a partir de pendente. Nada
-    sai do armazém ainda — só quando `enviar_requisicao` aprovar o
-    pedido é que se gera o primeiro movimento.
+    Primeiro dos quatro estados do fluxo (decisão 9, revista na
+    decisão 19): pendente → enviada → fechada, com "rejeitada" como
+    saída alternativa a partir de pendente. Nada sai do armazém
+    ainda — só quando `enviar_requisicao` aprovar o pedido é que se
+    gera o primeiro movimento.
 
     'responsavel_id' passa por `responsaveis.validar_autoria`: tem
     de existir e estar ativo, porque é ele quem assume a autoria do
@@ -371,10 +373,8 @@ def criar_requisicao(
         "quantidade_pedida": quantidade_pedida,
         "estado": "pendente",
         "quantidade_enviada": 0,
-        "quantidade_devolvida": 0,
         "data_pedido": data_pedido,
         "data_envio": None,
-        "data_rececao": None,
         "data_fecho": None,
         "motivo_rejeicao": "",
         "observacoes": observacoes.strip(),
@@ -534,9 +534,9 @@ def rejeitar_requisicao(dados, requisicao_id, responsavel_id, motivo):
     return requisicao
 
 def confirmar_rececao_requisicao(
-    dados, requisicao_id, responsavel_id, data_rececao
+    dados, requisicao_id, responsavel_id, data_fecho
 ):
-    """Confirma a receção de uma requisição — enviada → recebida.
+    """Confirma a receção de uma requisição — enviada → fechada.
 
     Só o responsável que pediu confirma a receção (decisão 9,
     reforçada no docstring de `Requisicao` em modelos.py): "esta
@@ -545,6 +545,11 @@ def confirmar_rececao_requisicao(
     'responsavel_id' gravado em `criar_requisicao`, não a qualquer
     responsável ativo — ao contrário de `enviar_requisicao`, em que
     'enviado_por_id' podia ser qualquer um.
+
+    O fecho é automático nesse momento (decisão 19): a requisição
+    deixa de ficar à espera de devolução. Se sobrar material, isso
+    passa a ser reportado à parte, com `reportar_devolucao`, sem
+    bloquear o fecho desta.
 
     Não gera movimento: a saída já foi registada em
     `enviar_requisicao`. Confirmar a receção não altera o saldo, só
@@ -573,35 +578,43 @@ def confirmar_rececao_requisicao(
             f"receção desta requisição."
         )
 
-    if data_rececao is None:
+    if data_fecho is None:
         raise ValueError("A data de receção é obrigatória.")
 
-    requisicao["estado"] = "recebida"
-    requisicao["data_rececao"] = data_rececao
+    requisicao["estado"] = "fechada"
+    requisicao["data_fecho"] = data_fecho
 
     return requisicao
 
-def devolver_requisicao(
+def reportar_devolucao(
     dados,
     requisicao_id,
     responsavel_id,
-    quantidade_devolvida,
-    data_devolucao,
+    quantidade,
+    data_reportada,
 ):
-    """Regista a devolução de sobras — recebida → devolução pendente.
+    """Reporta sobra de material de uma requisição já fechada.
+
+    Entidade própria desde a decisão 19 — não é mais um passo da
+    requisição, é um evento à parte que só existe quando sobra
+    material por usar. Por isso 'quantidade' tem de ser positiva:
+    não sobrou nada não é uma devolução, é simplesmente não haver
+    devolução nenhuma a reportar (era isto que aceitar zero, na
+    versão anterior, obrigava a fingir que era).
+
+    Mesma regra de identidade da versão anterior: só o responsável
+    que pediu (e recebeu) pode reportar a sobra — é ele quem sabe o
+    que sobrou.
+
+    'quantidade' não pode exceder o que ainda falta devolver desta
+    requisição — a quantidade enviada, descontadas as devoluções já
+    reportadas antes (pendentes ou fechadas), para impedir reportar
+    sobra a mais do que o que foi mesmo enviado.
 
     O material devolvido ainda não conta no saldo (decisão 9): é
     trânsito real — saiu das mãos do responsável mas ainda não
     voltou fisicamente ao armazém. O movimento de entrada só é
-    gerado em `fechar_requisicao`, quando o admin aceitar a
-    devolução.
-
-    Mesma regra de identidade de `confirmar_rececao_requisicao`: só
-    o responsável que recebeu pode devolver — é ele quem sabe o que
-    sobrou.
-
-    'quantidade_devolvida' não pode exceder a quantidade que foi
-    mesmo enviada — não é possível devolver mais do que se recebeu.
+    gerado em `fechar_devolucao`, quando o admin aceitar.
 
     Não grava: a gravação é decidida pelo `main.py` (mesma
     convenção dos outros módulos de negócio).
@@ -611,9 +624,9 @@ def devolver_requisicao(
     if requisicao is None:
         raise ValueError(f"A requisição {requisicao_id} não existe.")
 
-    if requisicao["estado"] != "recebida":
+    if requisicao["estado"] != "fechada":
         raise ValueError(
-            f"A requisição {requisicao_id} não está recebida "
+            f"A requisição {requisicao_id} não está fechada "
             f"(estado atual: {requisicao['estado']})."
         )
 
@@ -621,50 +634,109 @@ def devolver_requisicao(
 
     if responsavel["id"] != requisicao["responsavel_id"]:
         raise ValueError(
-            f"Só o responsável que recebeu "
-            f"({requisicao['responsavel_id']}) pode devolver "
-            f"material desta requisição."
+            f"Só o responsável que pediu "
+            f"({requisicao['responsavel_id']}) pode reportar "
+            f"sobra desta requisição."
         )
 
-    if (
-        not isinstance(quantidade_devolvida, int)
-        or isinstance(quantidade_devolvida, bool)
-    ):
+    if not isinstance(quantidade, int) or isinstance(quantidade, bool):
         raise ValueError(
             f"A quantidade devolvida tem de ser um número inteiro: "
-            f"{quantidade_devolvida}"
+            f"{quantidade}"
         )
 
-    if quantidade_devolvida < 0:
-        raise ValueError("A quantidade devolvida tem de ser positiva.")
+    if quantidade <= 0:
+        raise ValueError(
+            "A quantidade devolvida tem de ser positiva — sem "
+            "sobra não há devolução a reportar."
+        )
 
-    if quantidade_devolvida > requisicao["quantidade_enviada"]:
+    ja_reportado = sum(
+        d["quantidade"]
+        for d in dados["devolucoes"]
+        if d["requisicao_id"] == requisicao_id
+    )
+
+    if ja_reportado + quantidade > requisicao["quantidade_enviada"]:
         raise ValueError(
             "A quantidade devolvida não pode exceder a quantidade "
             "enviada."
         )
 
-    if data_devolucao is None:
+    if data_reportada is None:
         raise ValueError("A data de devolução é obrigatória.")
 
-    requisicao["estado"] = "devolucao_pendente"
-    requisicao["quantidade_devolvida"] = quantidade_devolvida
-    requisicao["data_devolucao"] = data_devolucao
+    devolucao = {
+        "id": repositorio.proximo_id(PREFIXO_DEVOLUCAO),
+        "requisicao_id": requisicao_id,
+        "responsavel_id": responsavel["id"],
+        "quantidade": quantidade,
+        "estado": "pendente",
+        "data_reportada": data_reportada,
+        "data_fecho": None,
+    }
 
-    return requisicao
+    dados["devolucoes"].append(devolucao)
+    return devolucao
 
-def fechar_requisicao(dados, requisicao_id, aceite_por_id, data_fecho):
-    """Fecha uma requisição — devolução pendente → fechada.
+def procurar_devolucao(dados, devolucao_id):
+    """Devolve a devolução com o identificador indicado, ou None.
 
-    Último dos cinco estados do fluxo (decisão 9). Só agora, se
-    houver quantidade devolvida, é que se gera o movimento de
-    entrada que repõe o saldo — enquanto a devolução estava
-    pendente, o material estava em trânsito, fora do armazém e
-    fora do saldo (ver `devolver_requisicao`).
+    A ausência não é erro: quem chama decide se ela impede a
+    operação. Não filtra por estado — procura, não decide (mesma
+    convenção de procurar_requisicao e dos `procurar` dos outros
+    módulos).
+    """
 
-    Se 'quantidade_devolvida' for 0 (nada sobrou), não há nenhum
-    movimento a gerar — fechar é só a confirmação administrativa
-    de que a requisição está resolvida.
+    for d in dados["devolucoes"]:
+        if d["id"] == devolucao_id:
+            return d
+
+    return None
+
+def listar_devolucoes(
+    dados, estado=None, requisicao_id=None, responsavel_id=None
+):
+    """Devolve as devoluções, filtráveis por estado, requisição e
+    responsável.
+
+    'estado' filtra por um valor exato quando indicado; None
+    (omisso) não filtra — mesma convenção de listar_requisicoes.
+
+    Devolve lista nova, para que alterá-la depois não afete a
+    estrutura de dados (mesma convenção dos `listar` dos outros
+    módulos).
+    """
+
+    resultado = []
+
+    for d in dados["devolucoes"]:
+        if estado is not None and d["estado"] != estado:
+            continue
+
+        if (
+            requisicao_id is not None
+            and d["requisicao_id"] != requisicao_id
+        ):
+            continue
+
+        if (
+            responsavel_id is not None
+            and d["responsavel_id"] != responsavel_id
+        ):
+            continue
+
+        resultado.append(d)
+
+    return resultado
+
+def fechar_devolucao(dados, devolucao_id, aceite_por_id, data_fecho):
+    """Aceita uma devolução — pendente → fechada.
+
+    Só agora se gera o movimento de entrada que repõe o saldo —
+    enquanto a devolução estava pendente, o material estava em
+    trânsito, fora do armazém e fora do saldo (ver
+    `reportar_devolucao`).
 
     'aceite_por_id' é quem aceita a devolução no armazém — como em
     `enviar_requisicao`, não tem de ser o mesmo responsável que
@@ -673,15 +745,15 @@ def fechar_requisicao(dados, requisicao_id, aceite_por_id, data_fecho):
     Não grava: a gravação é decidida pelo `main.py` (mesma
     convenção dos outros módulos de negócio).
     """
-    requisicao = procurar_requisicao(dados, requisicao_id)
+    devolucao = procurar_devolucao(dados, devolucao_id)
 
-    if requisicao is None:
-        raise ValueError(f"A requisição {requisicao_id} não existe.")
+    if devolucao is None:
+        raise ValueError(f"A devolução {devolucao_id} não existe.")
 
-    if requisicao["estado"] != "devolucao_pendente":
+    if devolucao["estado"] != "pendente":
         raise ValueError(
-            f"A requisição {requisicao_id} não está com devolução "
-            f"pendente (estado atual: {requisicao['estado']})."
+            f"A devolução {devolucao_id} não está pendente "
+            f"(estado atual: {devolucao['estado']})."
         )
 
     aceite = responsaveis.validar_autoria(dados, aceite_por_id)
@@ -689,21 +761,28 @@ def fechar_requisicao(dados, requisicao_id, aceite_por_id, data_fecho):
     if data_fecho is None:
         raise ValueError("A data de fecho é obrigatória.")
 
-    if requisicao["quantidade_devolvida"] > 0:
-        registar_movimento(
-            dados,
-            produto_id=requisicao["produto_id"],
-            tipo="entrada",
-            quantidade=requisicao["quantidade_devolvida"],
-            data=data_fecho,
-            responsavel_id=aceite["id"],
-            requisicao_id=requisicao["id"],
+    requisicao = procurar_requisicao(dados, devolucao["requisicao_id"])
+
+    if requisicao is None:
+        raise ValueError(
+            f"A requisição {devolucao['requisicao_id']} associada a "
+            f"esta devolução não existe."
         )
 
-    requisicao["estado"] = "fechada"
-    requisicao["data_fecho"] = data_fecho
+    registar_movimento(
+        dados,
+        produto_id=requisicao["produto_id"],
+        tipo="entrada",
+        quantidade=devolucao["quantidade"],
+        data=data_fecho,
+        responsavel_id=aceite["id"],
+        requisicao_id=requisicao["id"],
+    )
 
-    return requisicao
+    devolucao["estado"] = "fechada"
+    devolucao["data_fecho"] = data_fecho
+
+    return devolucao
 
 def listar_requisicoes(
     dados, estado=None, responsavel_id=None, produto_id=None
@@ -713,7 +792,7 @@ def listar_requisicoes(
 
     Não tem filtro de "incluir_inativos" — Requisicao não tem campo
     'ativo' (decisão 8 não se aplica aqui): o ciclo de vida é o
-    estado, um dos cinco valores do fluxo, nunca uma requisição
+    estado, um dos quatro valores do fluxo, nunca uma requisição
     "desativada". 'estado' filtra por um valor exato quando
     indicado; None (omisso) não filtra — mesma convenção do
     'incompleto' em clientes.listar e do 'tipo' em contratos.listar.

@@ -214,39 +214,69 @@ class Produto:
 @dataclass
 class Requisicao:
     """Pedido de material do responsavel ao armazém central.
-    
-    Percorre cinco estados: pendnete -> enviada -> recebida -> devolução pendente -> fechada, com 'rejeitada' como saida alternativa a partir de pendente(decisão 9).
 
-    pendente — o responsável registou o pedido. Nada saiu do armazém ainda.
+    Percorre quatro estados: pendente -> enviada -> fechada, com
+    'rejeitada' como saida alternativa a partir de pendente
+    (decisão 9, revista na decisão 19).
 
-    enviada — o admin aprovou e enviou. Gera movimento de saída, dá baixa no saldo.
+    pendente — o responsável registou o pedido. Nada saiu do armazém
+    ainda.
 
-    recebida — o responsável confirma que o material chegou. Esta confirmação é dele, não do admin: quem pede é quem sabe se recebeu.
+    enviada — o admin aprovou e enviou. Gera movimento de saída, dá
+    baixa no saldo.
 
-    devolução pendente — o responsável devolveu material que sobrou. Ainda não conta no saldo. É trânsito real: o material saiu das mãos do responsável mas ainda não está no armazém.
+    fechada — o responsável confirma que o material chegou. Esta
+    confirmação é dele, não do admin: quem pede é quem sabe se
+    recebeu. O fecho é automático nesse momento — não espera por
+    nenhuma devolução (decisão 19).
 
-    fechada — o admin aceitou a devolução. Só agora gera movimento de entrada.
+    rejeitada — saída alternativa a partir de pendente. O admin
+    recusou o pedido, com motivo.
 
-    rejeitada — saída alternativa a partir de pendente. O admin recusou o pedido, com motivo.
-
-
+    Sobra de material devolvida ao armazém é tratada à parte, pela
+    entidade 'Devolucao' — nem toda requisição gera sobra, por isso
+    deixou de ser um passo obrigatório desta.
     """
 
     id: str
     responsavel_id: str
     produto_id: str
     quantidade_pedida: int
-    estado: str = "pendente"  
+    estado: str = "pendente"
     quantidade_enviada: int = 0
-    quantidade_devolvida: int = 0
     data_pedido: date | None = None
     data_envio: date | None = None
-    data_rececao: date | None = None
     data_fecho: date | None = None
-    data_devolucao: date | None = None
     responsavel_rejeicao_id: str = ""
     motivo_rejeicao: str = ""
     observacoes: str = ""
+
+
+@dataclass
+class Devolucao:
+    """Sobra de material devolvida ao armazém central.
+
+    Associada a uma requisição já fechada — não é um passo dela,
+    é um evento à parte que só existe quando sobra material por
+    usar (decisão 19). Uma quantidade a zero não faz sentido aqui:
+    se não sobrou nada, não há devolução nenhuma a reportar.
+
+    Segue um mini-fluxo de dois estados: pendente (o responsável
+    reportou a sobra) -> fechada (o admin aceitou e o material
+    voltou a contar no saldo, gerando um movimento de entrada). Só
+    depois de fechada é que a quantidade entra no saldo do produto
+    — o mesmo princípio de dupla confirmação que já existia na
+    requisição.
+    """
+
+    id: str
+    requisicao_id: str
+    responsavel_id: str
+    quantidade: int
+    estado: str = "pendente"
+    data_reportada: date | None = None
+    data_fecho: date | None = None
+
 
 @dataclass
 class Movimento:
@@ -321,4 +351,3 @@ class Ocupacao:
     lugar_id: str = ""
     aviso_documento: bool = False
     ativo: bool = True
-

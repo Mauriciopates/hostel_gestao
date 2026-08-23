@@ -92,12 +92,15 @@ def _reconstituir_tipos(dados):
     dados["requisicoes"] = [
         _desserializar(
             r,
-            campos_data=(
-                "data_pedido", "data_envio", "data_rececao",
-                "data_fecho", "data_devolucao",
-            ),
+            campos_data=("data_pedido", "data_envio", "data_fecho"),
         )
         for r in dados["requisicoes"]
+    ]
+    dados["devolucoes"] = [
+        _desserializar(
+            d, campos_data=("data_reportada", "data_fecho")
+        )
+        for d in dados.get("devolucoes", [])
     ]
     dados["movimentos"] = [
         _desserializar(m, campos_data=("data",))
@@ -268,6 +271,7 @@ def _estrutura_vazia():
         "ocupacoes_airbnb": [],
         "produtos": [],
         "requisicoes": [],
+        "devolucoes": [],
         "movimentos": [],
         "configuracoes": [],
         "configuracoes_historico": [],
