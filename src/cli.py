@@ -28,6 +28,14 @@ import unidades
 import validacoes
 
 
+def mostrar_erro_arranque(mensagem):
+    """Mostra um erro fatal de arranque, antes de o sistema chegar
+    ao menu principal.
+    """
+    print(f"\nErro fatal: {mensagem}")
+    print("O sistema não pode continuar.")
+
+
 def ler_texto(mensagem, obrigatorio=True):
     """Lê uma linha de texto do teclado, validando obrigatoriedade.
 
