@@ -2303,7 +2303,9 @@ def _criar_produto(dados):
     print("\n--- Novo produto ---")
 
     nome = ler_texto("Nome: ")
-    unidade_medida = ler_texto("Unidade de medida: ")
+    unidade_medida = ler_texto(
+        "Unidade de medida (ex: un, kg, L, cx, par): "
+    )
     stock_minimo = ler_inteiro(
         "Stock mínimo [Enter para 0]: ", obrigatorio=False, minimo=0
     )
@@ -2363,7 +2365,8 @@ def _atualizar_produto(dados):
 
     nome = ler_atualizacao("Nome", produto["nome"])
     unidade_medida = ler_atualizacao(
-        "Unidade de medida", produto["unidade_medida"]
+        "Unidade de medida (ex: un, kg, L, cx, par)", 
+        produto["unidade_medida"]
     )
     stock_minimo = ler_inteiro(
         f"Stock mínimo [atual: {produto['stock_minimo']}, "
