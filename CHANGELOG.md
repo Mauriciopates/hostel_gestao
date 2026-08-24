@@ -3,6 +3,17 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+
+### [0.7.1] — 2026-08-24
+
+### Corrigido
+- `clientes.atualizar` recusa agora clientes já anonimizados
+  (severidade ALTA, RGPD — decisão 8) — antes só o `cli.py` tinha
+  essa guarda; uma chamada direta à função de negócio (testes, ou
+  um futuro `gui.py`) conseguia reintroduzir dados pessoais já
+  apagados. Ver `claude/Pendencias_Correcoes_pos_0.7.0.txt`, ponto 1.
+
+
 ### [0.7.0] — 2026-08-23
 
 ### Adicionado
