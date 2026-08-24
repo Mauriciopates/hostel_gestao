@@ -416,7 +416,7 @@ anonimizado.
 
 ---
 
-## Grupo 6 — Contratos mensais e reservas Airbnb (12 passos)
+## Grupo 6 — Contratos mensais e reservas Airbnb (13 passos)
 
 ```
 
@@ -544,7 +544,7 @@ Nota sobre o passo 11: aviso_previo_insuficiente fica True sempre que a data de 
 
 ---
 
-## Grupo 7 — Estoque: produtos, movimentos e requisições (14 passos)
+## Grupo 7 — Estoque: produtos, movimentos, requisições e devoluções (18 passos)
 
 ```
 ROTEIRO estoque
@@ -556,100 +556,159 @@ PASSO 1 — criar_produto_com_minimo
     RESULTADO ESPERADO: "Produto criado: PRD-0xx — Toalhas"
 FIM PASSO
 
-PASSO 2 — listar_produtos_sem_movimentos
-    Caminho: Stock → Produtos → Listar → "n"
-    RESULTADO ESPERADO: linha do produto com a marca "[abaixo do
-    mínimo]"; linha seguinte "saldo: 0  mínimo: 10"
+PASSO 2 — criar_segundo_produto
+    Caminho: Stock → Produtos → Criar
+    Entrada: nome "Sabonetes", unidade de medida "unidade", stock
+    mínimo "5"
+    RESULTADO ESPERADO: "Produto criado: PRD-0yy — Sabonetes"
 FIM PASSO
 
-PASSO 3 — registar_entrada
+PASSO 3 — listar_produtos_sem_movimentos
+    Caminho: Stock → Produtos → Listar → "n"
+    RESULTADO ESPERADO: as duas linhas, ambas marcadas
+    "[abaixo do mínimo]" (saldo 0 nas duas)
+FIM PASSO
+
+PASSO 4 — registar_entrada_toalhas
     Caminho: Stock → Movimentos → Registar movimento
     Entrada: produto do passo 1, tipo "entrada", quantidade "5", data
     de hoje, responsável em branco
     RESULTADO ESPERADO: "Movimento registado: MOV-0xx (entrada, 5)"
 FIM PASSO
 
-PASSO 4 — ver_saldo_ainda_abaixo_do_minimo
-    Caminho: Stock → Movimentos → Ver saldo de um produto → ID do
-    passo 1
-    RESULTADO ESPERADO: "Saldo de Toalhas (PRD-0xx): 5 unidade"; uma
-    nova listagem de produtos ainda mostra "[abaixo do mínimo]" (5 <
-    10)
+PASSO 5 — registar_entrada_sabonetes
+    Caminho: Stock → Movimentos → Registar movimento
+    Entrada: produto do passo 2, tipo "entrada", quantidade "20",
+    data de hoje, responsável em branco
+    RESULTADO ESPERADO: "Movimento registado: MOV-0yy (entrada, 20)"
 FIM PASSO
 
-PASSO 5 — saldo_de_produto_inexistente
+PASSO 6 — ver_saldo_ainda_abaixo_do_minimo
+    Caminho: Stock → Movimentos → Ver saldo de um produto → ID do
+    passo 1
+    RESULTADO ESPERADO: "Saldo de Toalhas (PRD-0xx): 5 unidade" —
+    ainda abaixo do mínimo (10)
+FIM PASSO
+
+PASSO 7 — saldo_de_produto_inexistente
     Caminho: Ver saldo de um produto → "PRD-999"
     RESULTADO ESPERADO: "Erro: O produto PRD-999 não existe."
 FIM PASSO
 
-PASSO 6 — ajuste_sem_motivo_insiste
+PASSO 8 — ajuste_sem_motivo_insiste
     Caminho: Registar movimento → tipo "ajuste" → deixar "Motivo do
     ajuste" em branco
-    RESULTADO ESPERADO: "Este campo é obrigatório."; insiste no motivo
-    antes de aceitar o ajuste
+    RESULTADO ESPERADO: "Este campo é obrigatório."; insiste no
+    motivo antes de aceitar o ajuste
 FIM PASSO
 
-PASSO 7 — criar_requisicao_acima_do_saldo
+PASSO 9 — criar_requisicao_com_dois_itens
     Caminho: Stock → Requisições → Criar requisição
-    Entrada: responsável RES-0xx (Ana Ferreira), produto do passo 1,
-    quantidade "1000", data em branco (hoje)
-    RESULTADO ESPERADO: "Requisição criada: REQ-0xx (pendente)" — o
-    pedido é aceite mesmo excedendo o saldo disponível
+    Entrada: responsável RES-0xx (Ana Ferreira); item 1 = produto do
+    passo 1, quantidade "1000" (acima do saldo, de propósito);
+    responder "s" a "Adicionar outro produto?"; item 2 = produto do
+    passo 2, quantidade "5"; responder "n"; data em branco
+    RESULTADO ESPERADO: "Requisição criada: REQ-0xx (pendente)",
+    mostrando as DUAS linhas de item (Toalhas — pedida: 1000
+    enviada: 0 / Sabonetes — pedida: 5 enviada: 0) — criar_requisicao
+    não valida saldo, só o envio valida (decisão 20)
 FIM PASSO
 
-PASSO 8 — enviar_acima_do_saldo_e_erro
-    Caminho: Requisições → Enviar requisição → ID do passo 7
-    Entrada: enviado por RES-0xx, data em branco, quantidade enviada
-    em branco (totalidade pedida, 1000)
-    RESULTADO ESPERADO: "Erro: Saldo insuficiente do produto PRD-0xx:
-    5 disponível, 1000 pedido para envio."
+PASSO 10 — enviar_tudo_falha_por_saldo_insuficiente_num_item
+    Caminho: Requisições → Enviar requisição → ID do passo 9
+    Entrada: enviado por RES-0yy, data em branco, responder "n" a
+    "Ajustar a quantidade enviada de algum item?" (envio total)
+    RESULTADO ESPERADO: "Erro: Saldo insuficiente do produto
+    PRD-0xx: 5 disponível, 1000 pedido para envio." A requisição
+    continua pendente — inclusive o item de Sabonetes, que tinha
+    saldo de sobra, também não é enviado: é tudo ou nada (decisão
+    20, sem envio parcial "automático" por item)
 FIM PASSO
 
-PASSO 9 — envio_parcial_bem_sucedido
-    Caminho: Enviar requisição → mesmo ID
-    Entrada: quantidade enviada "5"
-    RESULTADO ESPERADO: "Requisição enviada: REQ-0xx (envio parcial)"
+PASSO 11 — enviar_com_ajuste_parcial_bem_sucedido
+    Caminho: Enviar requisição → mesma requisição do passo 9
+    Entrada: enviado por RES-0yy, data em branco, responder "s" a
+    "Ajustar a quantidade enviada de algum item?"; para Toalhas
+    informar "5"; para Sabonetes deixar em branco (mantém a
+    quantidade pedida, 5)
+    RESULTADO ESPERADO: "Requisição enviada: REQ-0xx" com as duas
+    linhas (Toalhas — pedida: 1000 enviada: 5 / Sabonetes — pedida: 5
+    enviada: 5); dois movimentos de saída gerados, um por produto
 FIM PASSO
 
-PASSO 10 — confirmar_rececao_com_responsavel_errado
-    Caminho: Requisições → Confirmar receção → mesmo ID, indicando
-    RES-0yy (Bruno Costa, o segundo responsável do Grupo 4)
-    RESULTADO ESPERADO: "Erro: Só o responsável que pediu (RES-0xx)
-    pode confirmar a receção desta requisição."
+PASSO 12 — confirmar_rececao_com_responsavel_errado
+    Caminho: Requisições → Confirmar receção → mesma requisição,
+    indicando RES-0yy (Bruno Costa) em vez de quem pediu
+    RESULTADO ESPERADO: "Erro: Só o responsável que pediu
+    (RES-0xx) pode confirmar a receção desta requisição."
 FIM PASSO
 
-PASSO 11 — confirmar_rececao_correta
-    Caminho: Confirmar receção → mesmo ID, com RES-0xx (quem pediu)
-    RESULTADO ESPERADO: "Receção confirmada: REQ-0xx"
+PASSO 13 — confirmar_rececao_correta
+    Caminho: Confirmar receção → mesma requisição, com RES-0xx
+    RESULTADO ESPERADO: "Receção confirmada — requisição fechada:
+    REQ-0xx". O fecho é automático nesta confirmação (decisão 19) —
+    já não existe um passo separado de "Fechar requisição" como
+    havia antes
 FIM PASSO
 
-PASSO 12 — devolver_zero
-    Caminho: Requisições → Devolver material → mesmo ID, com RES-0xx
-    Entrada: quantidade devolvida "0", data em branco
-    RESULTADO ESPERADO: "Devolução registada: REQ-0xx" — o zero é
-    aceite, não bloqueia a requisição
+PASSO 14 — reportar_devolucao_quantidade_zero_e_bloqueada_no_ecra
+    Caminho: Requisições → Reportar sobra (devolução) → mesma
+    requisição, RES-0xx, produto Toalhas, quantidade "0"
+    RESULTADO ESPERADO: "O valor tem de ser pelo menos 1." — o ecrã
+    insiste e nem chega a submeter ao estoque.py. Isto fecha em
+    definitivo o antigo Passo 12 (o do quantidade_devolvida = 0):
+    zero deixou de ser um valor aceite em qualquer camada, começando
+    já no próprio ler_inteiro(minimo=1) do ecrã (decisão 19)
 FIM PASSO
 
-PASSO 13 — fechar_sem_gerar_movimento
-    Caminho: Requisições → Fechar requisição → mesmo ID, com RES-0xx
-    ou RES-0yy (qualquer um ativo)
-    RESULTADO ESPERADO: "Requisição fechada: REQ-0xx"; uma nova
-    consulta ao saldo do produto confirma que não subiu, porque a
-    devolução foi de zero unidades
+PASSO 15 — reportar_devolucao_com_dois_itens
+    Caminho: Reportar sobra (devolução) → mesma requisição, RES-0xx;
+    item 1 = Toalhas, quantidade "3", responder "s" a "Sobrou mais
+    algum produto?"; item 2 = Sabonetes, quantidade "1"; responder
+    "n"; data em branco
+    RESULTADO ESPERADO: "Devolução registada: DEV-0xx (requisição
+    REQ-0xx)" com as duas linhas de item — uma devolução só, não
+    duas
 FIM PASSO
 
-PASSO 14 — rejeitar_requisicao_ja_enviada
-    Caminho: Requisições → Rejeitar requisição → mesmo ID (já
+PASSO 16 — devolver_produto_fora_da_requisicao_e_erro
+    Caminho: Reportar sobra (devolução) → mesma requisição, RES-0xx,
+    indicando um produto que não fazia parte dela (ex.: um terceiro
+    produto criado à parte), quantidade "1"
+    RESULTADO ESPERADO: "Erro: O produto PRD-0zz não faz parte da
+    requisição REQ-0xx." Nenhuma devolução é gravada
+FIM PASSO
+
+PASSO 17 — aceitar_devolucao
+    Caminho: Requisições → Aceitar devolução → DEV-0xx do passo 15,
+    aceite por RES-0yy, data em branco
+    RESULTADO ESPERADO: "Devolução aceite: DEV-0xx" com as duas
+    linhas; saldo de Toalhas sobe 3 (0 → 3), saldo de Sabonetes sobe
+    1 (15 → 16) — dois movimentos de entrada, um por produto
+FIM PASSO
+
+PASSO 18 — rejeitar_requisicao_ja_fechada
+    Caminho: Requisições → Rejeitar requisição → mesma REQ-0xx (já
     fechada)
-    RESULTADO ESPERADO: "Erro: A requisição REQ-0xx não está pendente
-    (estado atual: fechada)."
+    RESULTADO ESPERADO: "Erro: A requisição REQ-0xx não está
+    pendente (estado atual: fechada)."
 FIM PASSO
 
 FIM ROTEIRO
-```
 
-O passo 8 é a verificação mais importante do grupo: confirma que a
-mensagem de erro de saldo insuficiente chega intacta ao ecrã.
+```
+O passo 10 é o mais importante do grupo novo: prova que o envio é
+tudo-ou-nada por requisição, mesmo tendo vários produtos — um item
+sem saldo trava a requisição inteira, não só o item problemático. O
+passo 14 é o que fecha definitivamente a razão de ser desta sessão
+inteira: o zero, que antes só era rejeitado dentro de
+devolver_requisicao, agora nem sai do ecrã.
+
+(Deixei de fora, de propósito, o "Enviar rol de lavanderia" — é
+funcionalidade nova da decisão 20 mas fica melhor como um roteiro à
+parte, já que ele testa uma combinação de duas funções em vez de uma
+função isolada, como todos os passos acima. Se quiser, escrevo esse
+roteiro à parte também, aqui na tela.)
 
 ---
 
