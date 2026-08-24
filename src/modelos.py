@@ -156,6 +156,7 @@ class OcupacaoMensal:
     renda_calculada: Decimal
     renda_praticada: Decimal
     caucao: Decimal
+    caucao_exige_confirmacao: bool = False
     motivo_alteracao_renda: str = ""
     motivo_alteracao_caucao: str = ""
     dia_vencimento: int = 5
