@@ -304,6 +304,13 @@ class TesteAtualizar(unittest.TestCase):
         )
         self.assertEqual(cliente["data_nascimento"], date(1990, 5, 20))
 
+    def test_recusa_atualizar_cliente_anonimizado(self):
+        dados = dados_base()
+        cliente = criar_cliente_mensal(dados)
+        clientes.anonimizar(dados, cliente["id"], "RES-001", date.today())
+        with self.assertRaises(ValueError):
+            clientes.atualizar(dados, cliente["id"], nome="Novo Nome")
+
 
 class TesteDesativarReativar(unittest.TestCase):
 

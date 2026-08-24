@@ -144,6 +144,12 @@ def atualizar(
     'tipo_documento' e 'numero_documento' não podem ficar vazios —
     são obrigatórios, tal como em criar().
 
+    Recusa atualizar um cliente já anonimizado — a anonimização
+    (decisão 8, RGPD, secção 6) é irreversível e apaga dados
+    pessoais; sem esta guarda, esta função reintroduziria dados que
+    a decisão 8 exige apagados. Mesma proteção que `reativar` já
+    tem para o mesmo caso.
+
     'regime' não é guardado (não é campo do cliente, ver criar()).
     Serve só, nesta chamada, para reforçar que o NIF é obrigatório
     quando regime="mensal". Omisso, o NIF só é validado no formato
@@ -159,6 +165,12 @@ def atualizar(
 
     if cliente is None:
         raise ValueError(f"O cliente {cliente_id} não existe.")
+
+    if cliente["anonimizado"]:
+        raise ValueError(
+            f"O cliente {cliente_id} está anonimizado e não pode "
+            f"ser atualizado."
+        )
 
     candidato = {
         "nome": (
@@ -223,6 +235,7 @@ def atualizar(
         cliente["contacto_emergencia"] = contacto_emergencia.strip()
 
     return cliente
+
 
 def desativar(dados, cliente_id):
     """Marca o cliente como inativo, sem o eliminar.
