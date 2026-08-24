@@ -4,6 +4,30 @@ Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
 
+### [0.7.2] — 2026-08-24
+
+### Corrigido
+- `contratos.criar_mensal` recusa agora `dia_vencimento` fora do
+  intervalo 1–28 ou não inteiro, tal como `atualizar_mensal` já
+  fazia — a validação foi extraída para `_validar_dia_vencimento`,
+  chamada pelas duas funções (severidade baixa — ver
+  `claude/Pendencias_Correcoes_pos_0.7.0.txt`, ponto 3).
+- `contratos.criar_mensal` e `atualizar_mensal` passam a devolver
+  o resultado de `validacoes.validar_caucao` no novo campo
+  `caucao_exige_confirmacao`, em vez de o descartar — a decisão 14
+  (confirmação explícita quando a caução é nula ou acima da renda)
+  fica agora representada nos dados, não só no remendo do cli.py
+  (severidade média — ver mesmo ficheiro, ponto 2).
+
+Testes: `teste_contratos.py`, classes `TesteCriarMensal` e
+`TesteAtualizarMensal` — todos verdes (7 testes novos + os já
+existentes). A corrida completa do ficheiro revelou, em paralelo,
+27 erros e 1 falha em testes de reservas Airbnb — sem relação com
+este fix (não tocam em contratos mensais, caução ou
+dia_vencimento). Ficam registados como nova pendência (ver ponto 5
+do ficheiro de pendências) para investigação em fix/ separado.
+
+
 ### [0.7.1] — 2026-08-24
 
 ### Corrigido
