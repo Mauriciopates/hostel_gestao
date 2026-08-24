@@ -12,6 +12,7 @@ from decimal import Decimal
 sys.path.insert(0, "src")
 
 import clientes
+import config
 import contratos
 import propriedades
 import repositorio
@@ -297,6 +298,57 @@ class TesteCriarMensal(BaseContratosTest):
         )
         self.assertFalse(ocupacao["aviso_documento"])
 
+    def test_dia_vencimento_omisso_usa_valor_por_omissao(self):
+        _, mensal = contratos.criar_mensal(
+            self.dados, self.unidade_mensal["id"],
+            self.cliente_mensal["id"], date(2026, 1, 10),
+            Decimal("250.00"), Decimal("250.00"),
+        )
+        self.assertEqual(mensal["dia_vencimento"], config.DIA_VENCIMENTO)
+
+    def test_dia_vencimento_personalizado_e_aceite(self):
+        _, mensal = contratos.criar_mensal(
+            self.dados, self.unidade_mensal["id"],
+            self.cliente_mensal["id"], date(2026, 1, 10),
+            Decimal("250.00"), Decimal("250.00"),
+            dia_vencimento=15,
+        )
+        self.assertEqual(mensal["dia_vencimento"], 15)
+
+    def test_dia_vencimento_fora_do_intervalo_gera_erro(self):
+        with self.assertRaises(ValueError):
+            contratos.criar_mensal(
+                self.dados, self.unidade_mensal["id"],
+                self.cliente_mensal["id"], date(2026, 1, 10),
+                Decimal("250.00"), Decimal("250.00"),
+                dia_vencimento=31,
+            )
+
+    def test_dia_vencimento_nao_inteiro_gera_erro(self):
+        with self.assertRaises(ValueError):
+            contratos.criar_mensal(
+                self.dados, self.unidade_mensal["id"],
+                self.cliente_mensal["id"], date(2026, 1, 10),
+                Decimal("250.00"), Decimal("250.00"),
+                dia_vencimento="dez",
+            )
+
+    def test_caucao_igual_a_renda_nao_exige_confirmacao(self):
+        _, mensal = contratos.criar_mensal(
+            self.dados, self.unidade_mensal["id"],
+            self.cliente_mensal["id"], date(2026, 1, 10),
+            Decimal("250.00"), Decimal("250.00"),
+        )
+        self.assertFalse(mensal["caucao_exige_confirmacao"])
+
+    def test_caucao_acima_da_renda_exige_confirmacao(self):
+        _, mensal = contratos.criar_mensal(
+            self.dados, self.unidade_mensal["id"],
+            self.cliente_mensal["id"], date(2026, 1, 10),
+            Decimal("250.00"), Decimal("400.00"),
+        )
+        self.assertTrue(mensal["caucao_exige_confirmacao"])
+
 
 class TesteAtualizarMensal(BaseContratosTest):
 
@@ -336,6 +388,12 @@ class TesteAtualizarMensal(BaseContratosTest):
             self.dados, self.ocupacao["id"], dia_vencimento=10
         )
         self.assertEqual(mensal["dia_vencimento"], 10)
+
+    def test_caucao_exige_confirmacao_atualizado_ao_mudar_caucao(self):
+        _, mensal = contratos.atualizar_mensal(
+            self.dados, self.ocupacao["id"], caucao=Decimal("400.00")
+        )
+        self.assertTrue(mensal["caucao_exige_confirmacao"])
 
     def test_contrato_encerrado_nao_pode_ser_alterado(self):
         contratos.encerrar_mensal(

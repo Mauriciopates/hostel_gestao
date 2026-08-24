@@ -61,6 +61,29 @@ def _ocupantes_mensal(dados, unidade_id, lugar_id=None):
 
     return total
 
+def _validar_dia_vencimento(dia_vencimento):
+    """Valida que 'dia_vencimento' é um inteiro entre 1 e 28.
+
+    Extraída de atualizar_mensal (correção pós-0.7.0, ponto 3): só
+    ela validava; criar_mensal aceitava qualquer inteiro sem erro, e
+    um dia_vencimento fora do intervalo só rebentava mais tarde,
+    numa atualização. Chamada agora pelas duas, para nunca mais
+    divergirem.
+    """
+    if (
+        not isinstance(dia_vencimento, int)
+        or isinstance(dia_vencimento, bool)
+    ):
+        raise ValueError(
+            "O dia de vencimento tem de ser um número inteiro."
+        )
+
+    if not 1 <= dia_vencimento <= 28:
+        raise ValueError(
+            "O dia de vencimento tem de estar entre 1 e 28."
+        )
+    
+    
 def criar_mensal(
     dados,
     unidade_id,
@@ -146,12 +169,14 @@ def criar_mensal(
 
     renda_calculada = unidade["preco_base"]
 
-    validacoes.validar_caucao(
+    caucao_exige_confirmacao = validacoes.validar_caucao(
         caucao, renda_praticada, config.MULTIPLICADOR_MAXIMO_CAUCAO
     )
 
     if dia_vencimento is None:
         dia_vencimento = config.DIA_VENCIMENTO
+    else:
+        _validar_dia_vencimento(dia_vencimento)
 
     ocupacao_id = repositorio.proximo_id(PREFIXO_MENSAL)
 
@@ -172,6 +197,7 @@ def criar_mensal(
         "renda_calculada": renda_calculada,
         "renda_praticada": renda_praticada,
         "caucao": caucao,
+        "caucao_exige_confirmacao": caucao_exige_confirmacao,
         "motivo_alteracao_renda": motivo_alteracao_renda.strip(),
         "motivo_alteracao_caucao": motivo_alteracao_caucao.strip(),
         "dia_vencimento": dia_vencimento,
@@ -696,12 +722,13 @@ def atualizar_mensal(
 
     nova_caucao = caucao if caucao is not None else mensal["caucao"]
 
-    validacoes.validar_caucao(
+    caucao_exige_confirmacao = validacoes.validar_caucao(
         nova_caucao, nova_renda, config.MULTIPLICADOR_MAXIMO_CAUCAO
     )
 
     mensal["renda_praticada"] = nova_renda
     mensal["caucao"] = nova_caucao
+    mensal["caucao_exige_confirmacao"] = caucao_exige_confirmacao
 
     if motivo_alteracao_renda is not None:
         mensal["motivo_alteracao_renda"] = motivo_alteracao_renda.strip()
@@ -712,19 +739,7 @@ def atualizar_mensal(
         )
 
     if dia_vencimento is not None:
-        if (
-            not isinstance(dia_vencimento, int)
-            or isinstance(dia_vencimento, bool)
-        ):
-            raise ValueError(
-                "O dia de vencimento tem de ser um número inteiro."
-            )
-
-        if not 1 <= dia_vencimento <= 28:
-            raise ValueError(
-                "O dia de vencimento tem de estar entre 1 e 28."
-            )
-
+        _validar_dia_vencimento(dia_vencimento)
         mensal["dia_vencimento"] = dia_vencimento
 
     return ocupacao, mensal
