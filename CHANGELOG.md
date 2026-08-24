@@ -7,7 +7,7 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
 
 ### Adicionado
 - `cli.py`: interface de linha de comando, único módulo autorizado a
-  usar `input()`/`print()` (decisão 7). 84 funções:
+  usar `input()`/`print()` (decisão 7). 89 funções:
   - Leitoras de base: `ler_texto`, `ler_inteiro`, `ler_decimal`,
     `ler_data`, `confirmar`.
   - `mostrar_menu`: menu numerado com saída/voltar sempre em "0",
@@ -36,8 +36,10 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
   `print()` próprio: até o erro de arranque é delegado a
   `cli.mostrar_erro_arranque` (decisão 7).
 - `teste_manual_cli.md`: roteiro de teste manual de `cli.py` e
-  `main.py`, 9 grupos — substitui `unittest` para estes dois módulos
-  (ver decisão registada abaixo).
+  `main.py`, 9 grupos (90 passos) — substitui `unittest` para estes
+  dois módulos (ver decisão registada abaixo). Todos os 90 passos
+  correram manualmente e bateram com o resultado esperado antes do
+  fecho desta versão.
 - `Pseudocodigo_Modulos.docx`: capítulos 18 (Módulo cli.py) e 19
   (Testes do módulo cli.py) — documento sobe para a versão 1.7.
 
