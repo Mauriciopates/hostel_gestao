@@ -16,6 +16,7 @@ import config
 import contratos
 import propriedades
 import repositorio
+import responsaveis
 import unidades
 
 
@@ -102,7 +103,7 @@ class TesteCriarMensal(BaseContratosTest):
         )
         self.assertTrue(ocupacao["id"].startswith("CNT-"))
 
-    
+
 
     def test_unidade_inexistente_gera_erro(self):
         with self.assertRaises(ValueError):
@@ -451,7 +452,7 @@ class TesteEncerrarMensal(BaseContratosTest):
     def test_reserva_airbnb_recusada(self):
         oa, _ = contratos.registar_airbnb(
             self.dados, self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("50.00"),
+            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
         )
         with self.assertRaises(ValueError):
             contratos.encerrar_mensal(self.dados, oa["id"], date(2026, 2, 1))
@@ -489,7 +490,7 @@ class TesteReativar(BaseContratosTest):
     def test_reativa_reserva_airbnb_mantem_data_fim(self):
         oa, _ = contratos.registar_airbnb(
             self.dados, self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("50.00"),
+            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
         )
         contratos.cancelar_airbnb(self.dados, oa["id"])
         reativada = contratos.reativar(self.dados, oa["id"])
@@ -515,12 +516,12 @@ class TesteRegistarAirbnb(BaseContratosTest):
     def test_regista_com_sucesso(self):
         ocupacao, airbnb = contratos.registar_airbnb(
             self.dados, self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("50.00"),
+            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
         )
         self.assertEqual(ocupacao["tipo"], "airbnb")
         self.assertEqual(ocupacao["lugar_id"], "")
         self.assertEqual(ocupacao["data_fim"], date(2026, 1, 15))
-        self.assertEqual(airbnb["preco_praticado"], Decimal("50.00"))
+        self.assertEqual(airbnb["preco_praticado"], Decimal("225.00"))
 
     def test_unidade_mensal_recusada(self):
         with self.assertRaises(ValueError):
@@ -530,13 +531,16 @@ class TesteRegistarAirbnb(BaseContratosTest):
                 date(2026, 1, 15), Decimal("50.00"),
             )
 
-    def test_estadia_abaixo_do_minimo_gera_erro(self):
-        with self.assertRaises(ValueError):
-            contratos.registar_airbnb(
-                self.dados, self.unidade_airbnb["id"],
-                self.cliente_airbnb["id"], date(2026, 1, 10),
-                date(2026, 1, 11), Decimal("50.00"),
-            )
+    def test_estadia_de_uma_noite_aceite(self):
+        # ESTADIA_MINIMA_NOITES = 1: uma reserva de 1 noite passou a
+        # ser o caso-limite válido, não um caso abaixo do mínimo.
+        ocupacao, airbnb = contratos.registar_airbnb(
+            self.dados, self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"], date(2026, 1, 10),
+            date(2026, 1, 11), Decimal("50.00"),
+        )
+        self.assertEqual(ocupacao["data_fim"], date(2026, 1, 11))
+        self.assertEqual(airbnb["preco_praticado"], Decimal("50.00"))
 
     def test_estadia_acima_do_maximo_gera_erro(self):
         with self.assertRaises(ValueError):
@@ -549,7 +553,7 @@ class TesteRegistarAirbnb(BaseContratosTest):
     def test_sobreposicao_recusada(self):
         contratos.registar_airbnb(
             self.dados, self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("50.00"),
+            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
         )
         with self.assertRaises(ValueError):
             contratos.registar_airbnb(
@@ -561,12 +565,12 @@ class TesteRegistarAirbnb(BaseContratosTest):
     def test_reservas_consecutivas_nao_sobrepoem(self):
         contratos.registar_airbnb(
             self.dados, self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("50.00"),
+            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
         )
         # entra exatamente no dia em que a outra sai — não é conflito
         ocupacao, _ = contratos.registar_airbnb(
             self.dados, self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 15), date(2026, 1, 20), Decimal("50.00"),
+            date(2026, 1, 15), date(2026, 1, 20), Decimal("225.00"),
         )
         self.assertEqual(ocupacao["data_inicio"], date(2026, 1, 15))
 
@@ -603,33 +607,40 @@ class TesteRegistarAirbnb(BaseContratosTest):
             contratos.registar_airbnb(
                 self.dados, self.unidade_airbnb["id"],
                 self.cliente_airbnb["id"], date(2026, 1, 10),
-                date(2026, 1, 15), Decimal("50.00"),
+                date(2026, 1, 15), Decimal("225.00"),
                 check_in_tardio=True,
             )
 
     def test_check_in_tardio_usa_multa_da_unidade(self):
         _, airbnb = contratos.registar_airbnb(
             self.dados, self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("50.00"),
+            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
             check_in_tardio=True, hora_chegada="18:00",
         )
         self.assertEqual(airbnb["multa_calculada"], Decimal("20.00"))
         self.assertEqual(airbnb["multa_praticada"], Decimal("20.00"))
 
     def test_check_in_tardio_multa_praticada_editavel(self):
+        # perdão total (0.00) continua a exigir responsável, tal como
+        # um desconto parcial — decisão do aluno, 25/08/2026.
+        responsavel = responsaveis.criar(self.dados, "Gestor de Turno")
         _, airbnb = contratos.registar_airbnb(
             self.dados, self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("50.00"),
+            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
             check_in_tardio=True, hora_chegada="18:00",
             multa_praticada=Decimal("0.00"),
+            responsavel_desconto_multa_id=responsavel["id"],
         )
         self.assertEqual(airbnb["multa_calculada"], Decimal("20.00"))
         self.assertEqual(airbnb["multa_praticada"], Decimal("0.00"))
+        self.assertEqual(
+            airbnb["responsavel_desconto_multa_id"], responsavel["id"]
+        )
 
     def test_sem_check_in_tardio_multa_fica_zero(self):
         _, airbnb = contratos.registar_airbnb(
             self.dados, self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("50.00"),
+            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
         )
         self.assertEqual(airbnb["multa_calculada"], Decimal("0.00"))
         self.assertEqual(airbnb["multa_praticada"], Decimal("0.00"))
@@ -645,7 +656,7 @@ class TesteRegistarAirbnb(BaseContratosTest):
             Decimal("300.00"),
         )
         self.assertTrue(ocupacao["id"].startswith("RSV-"))
-    
+
 
 
 class TesteAtualizarAirbnb(BaseContratosTest):
@@ -654,14 +665,14 @@ class TesteAtualizarAirbnb(BaseContratosTest):
         super().setUp()
         self.ocupacao, self.airbnb = contratos.registar_airbnb(
             self.dados, self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("50.00"),
+            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
         )
 
     def test_altera_preco_praticado(self):
         _, airbnb = contratos.atualizar_airbnb(
-            self.dados, self.ocupacao["id"], preco_praticado=Decimal("55.00")
+            self.dados, self.ocupacao["id"], preco_praticado=Decimal("230.00")
         )
-        self.assertEqual(airbnb["preco_praticado"], Decimal("55.00"))
+        self.assertEqual(airbnb["preco_praticado"], Decimal("230.00"))
 
     def test_multa_sem_check_in_tardio_gera_erro(self):
         with self.assertRaises(ValueError):
@@ -673,7 +684,7 @@ class TesteAtualizarAirbnb(BaseContratosTest):
     def test_multa_negativa_gera_erro(self):
         ocupacao, _ = contratos.registar_airbnb(
             self.dados, self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 2, 1), date(2026, 2, 5), Decimal("50.00"),
+            date(2026, 2, 1), date(2026, 2, 5), Decimal("180.00"),
             check_in_tardio=True, hora_chegada="18:00",
         )
         with self.assertRaises(ValueError):
@@ -684,13 +695,20 @@ class TesteAtualizarAirbnb(BaseContratosTest):
     def test_multa_zero_admitida_como_perdao(self):
         ocupacao, _ = contratos.registar_airbnb(
             self.dados, self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 2, 1), date(2026, 2, 5), Decimal("50.00"),
+            date(2026, 2, 1), date(2026, 2, 5), Decimal("180.00"),
             check_in_tardio=True, hora_chegada="18:00",
         )
+        # perdão total (0.00) continua a exigir responsável, tal como
+        # um desconto parcial — decisão do aluno, 25/08/2026.
+        responsavel = responsaveis.criar(self.dados, "Gestor de Turno")
         _, airbnb = contratos.atualizar_airbnb(
-            self.dados, ocupacao["id"], multa_praticada=Decimal("0.00")
+            self.dados, ocupacao["id"], multa_praticada=Decimal("0.00"),
+            responsavel_desconto_multa_id=responsavel["id"],
         )
         self.assertEqual(airbnb["multa_praticada"], Decimal("0.00"))
+        self.assertEqual(
+            airbnb["responsavel_desconto_multa_id"], responsavel["id"]
+        )
 
     def test_reserva_cancelada_nao_pode_ser_alterada(self):
         contratos.cancelar_airbnb(self.dados, self.ocupacao["id"])
@@ -707,7 +725,7 @@ class TesteCancelarAirbnb(BaseContratosTest):
         super().setUp()
         self.ocupacao, self.airbnb = contratos.registar_airbnb(
             self.dados, self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("50.00"),
+            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
         )
 
     def test_cancela_com_sucesso(self):
@@ -738,7 +756,7 @@ class TesteCancelarAirbnb(BaseContratosTest):
         # as mesmas datas, agora livres, têm de ser aceites
         ocupacao, _ = contratos.registar_airbnb(
             self.dados, self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("50.00"),
+            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
         )
         self.assertTrue(ocupacao["ativo"])
 
@@ -754,7 +772,7 @@ class TesteProcurarListar(BaseContratosTest):
         )
         self.airbnb, _ = contratos.registar_airbnb(
             self.dados, self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("50.00"),
+            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
         )
 
     def test_procurar_encontra_por_id(self):
@@ -801,7 +819,7 @@ class TesteProcurarListar(BaseContratosTest):
         )
         contratos.registar_airbnb(
             self.dados, self.unidade_airbnb["id"], cliente_expirado["id"],
-            date(2026, 3, 1), date(2026, 3, 5), Decimal("50.00"),
+            date(2026, 3, 1), date(2026, 3, 5), Decimal("180.00"),
         )
         resultado = contratos.listar(self.dados, aviso_documento=True)
         self.assertEqual(len(resultado), 1)
