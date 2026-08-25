@@ -120,9 +120,7 @@ class TestePersistencia(BaseRepositorio):
         repositorio.gravar(dados)
 
         lido = repositorio.carregar()
-        unidade = repositorio._desserializar(
-            lido["unidades"][0], campos_decimal=("preco_base",)
-        )
+        unidade = lido["unidades"][0]
 
         self.assertEqual(Decimal("45.00"), unidade["preco_base"])
         self.assertIsInstance(unidade["preco_base"], Decimal)
@@ -136,17 +134,15 @@ class TestePersistencia(BaseRepositorio):
         """
         dados = repositorio.carregar()
         dados["ocupacoes"].append(
-            {
-                "id": "OCU-001",
-                "data_inicio": date(2026, 3, 15),
-            }
-        )
+        {
+            "id": "OCU-001",
+            "data_inicio": date(2026, 3, 15),
+        }
+    )
         repositorio.gravar(dados)
 
         lido = repositorio.carregar()
-        ocupacao = repositorio._desserializar(
-            lido["ocupacoes"][0], campos_data=("data_inicio",)
-        )
+        ocupacao = lido["ocupacoes"][0]
 
         self.assertEqual(date(2026, 3, 15), ocupacao["data_inicio"])
         self.assertIsInstance(ocupacao["data_inicio"], date)

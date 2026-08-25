@@ -247,8 +247,8 @@ def carregar():
 
     with open(FICHEIRO_DADOS, encoding="utf-8") as f:
         dados = json.load(f)
-        dados = _reconstituir_tipos(dados)
-        versao = dados.get("versao_dados", 1)
+
+    versao = dados.get("versao_dados", 1)
 
     if versao > config.VERSAO_DADOS:
         raise ValueError(
@@ -256,6 +256,8 @@ def carregar():
             f"posterior à versão {config.VERSAO_DADOS} deste programa. "
             f"Atualize o programa antes de continuar."
         )
+
+    dados = _reconstituir_tipos(dados)
 
     if versao < config.VERSAO_DADOS:
         dados = _migrar(dados, versao)

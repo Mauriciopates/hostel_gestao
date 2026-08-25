@@ -4,6 +4,29 @@ Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
 
+### [0.7.4] — 2026-08-25
+
+### Corrigido
+- No módulo `repositorio.py` em `repositorio.carregar` verifica agora a versão dos dados gravados
+  antes de reconstituir os tipos (Decimal e date) dos registos —
+  antes fazia o inverso, e dados gravados por uma versão mais
+  recente do formato rebentavam com um `KeyError` confuso em vez do
+  `ValueError` claro já previsto para esse caso (severidade média)
+
+### Testes
+- `teste_gravar_e_carregar_preserva_data` deixou de chamar
+  `_desserializar` uma segunda vez sobre um valor que
+  `repositorio.carregar` já reconstitui internamente — o `date`
+  devolvido não passa por `date.fromisoformat` outra vez, que não
+  aceita receber um `date` já convertido (ponto 6a; não havia bug,
+  só um teste com uma conversão a mais, mascarada até agora por
+  `Decimal()` tolerar o mesmo padrão no teste irmão).
+
+Testes: `teste_repositorio.py` completo, 15 testes, todos verdes.
+Suite completa do projeto (472 testes) confirmou não haver efeitos
+colaterais no resto do código.
+
+
 ### [0.7.3] — 2026-08-25
 
 ### Testes
@@ -57,8 +80,7 @@ Testes: `teste_contratos.py`, classes `TesteCriarMensal` e
 existentes). A corrida completa do ficheiro revelou, em paralelo,
 27 erros e 1 falha em testes de reservas Airbnb — sem relação com
 este fix (não tocam em contratos mensais, caução ou
-dia_vencimento). Ficam registados como nova pendência (ver ponto 5
-do ficheiro de pendências) para investigação em fix/ separado.
+dia_vencimento). Ficam registados como nova pendência para investigação em fix/ separado.
 
 
 ### [0.7.1] — 2026-08-24
@@ -68,7 +90,7 @@ do ficheiro de pendências) para investigação em fix/ separado.
   (severidade ALTA, RGPD — decisão 8) — antes só o `cli.py` tinha
   essa guarda; uma chamada direta à função de negócio (testes, ou
   um futuro `gui.py`) conseguia reintroduzir dados pessoais já
-  apagados. Ver `claude/Pendencias_Correcoes_pos_0.7.0.txt`, ponto 1.
+  apagados. 
 
 
 ### [0.7.0] — 2026-08-23
