@@ -4,6 +4,55 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+### [0.7.5] — 2026-08-25
+
+### Corrigido
+- Em `modelos.py`, removida a definição duplicada da classe
+  `Ocupacao` (existiam duas: uma incompleta, sem o atributo
+  `aviso_documento`, e uma completa mais abaixo). A versão
+  incompleta era ofuscada em runtime pela segunda definição (Python
+  mantém apenas a última), mas o código morto criava risco de
+  edição errada no futuro. Sem impacto funcional — suite completa
+  confirmou.
+
+### Adicionado
+- Implementada `unidades.estado(dados, unidade_id, data=None)`,
+  pendente desde a Fase 2 (aguardava `contratos.py`). Calcula o
+  estado de uma unidade numa data:
+  - Unidades em manutenção (`em_manutencao=True`) devolvem sempre
+    "Em manutenção", independentemente de ocupações.
+  - Unidades com regime mensal devolvem a proporção de lugares
+    ocupados face à capacidade total (`X/Y`), considerando apenas
+    ocupações mensais ativas cuja `data_inicio` já decorreu e sem
+    `data_fim` anterior à data pedida.
+  - Unidades Airbnb devolvem "Livre", "Ocupado" ou "Reservado"
+    consoante a sobreposição de reservas ativas com a data pedida
+    (fórmula da secção 4: `inicio_A < fim_B E inicio_B < fim_A`,
+    contagem por noites — dia de check-out não conflita com
+    check-in do mesmo dia).
+  - Ligado o cálculo à listagem de unidades em `cli.py`
+    (`_listar_unidades`): novo prompt "Data para calcular o estado"
+    (Enter = hoje) e nova linha de saída por unidade.
+
+### Testes
+- Novos testes em `teste_unidades.py`, classe `TesteEstado`: 19
+  testes (recusa de ID inexistente; 7 cenários de regime mensal —
+  proporção, encerramento, ocupações futuras/inativas, isolamento
+  entre unidades; 8 cenários de regime Airbnb — Livre/Ocupado/
+  Reservado, sobreposição na fronteira, cancelamentos; 3 cenários
+  de manutenção). Antes só existia `test_nao_implementada`, a
+  testar o `NotImplementedError` do placeholder.
+- `dados_base()` passou a incluir a chave `"ocupacoes": []`;
+  adicionados os helpers `criar_ocupacao(...)` e
+  `dar_lugares(...)` para montar cenários de teste sem depender de
+  `contratos.py`.
+
+Testes: `teste_unidades.py` completo, 92 testes, todos verdes.
+Suite completa do projeto (490 testes) confirmou não haver efeitos
+colaterais — à parte de 4 erros conhecidos e sem relação (falso
+positivo do Windows em `repositorio._gravar_contadores`, já
+documentado, não reprodutível).
+
 
 ### [0.7.4] — 2026-08-25
 
