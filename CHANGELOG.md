@@ -4,6 +4,39 @@ Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
 
+### [0.7.3] — 2026-08-25
+
+### Testes
+- Investigado o ponto 5 das pendências pós-0.7.0 (27 erros + 1
+  falha em testes de reservas Airbnb): A correção
+  ficou toda em `teste_contratos.py`:
+  - `ESTADIA_MINIMA_NOITES` foi alterado intencionalmente para 1
+    (aceitar reservas de 1 noite, dado o regime de check-in às
+    15h / check-out às 11h). O teste
+    `test_estadia_abaixo_do_minimo_gera_erro` testava um cenário
+    que deixou de ser inválido — substituído por
+    `test_estadia_de_uma_noite_aceite`.
+  - `preco_praticado` estava desatualizado em 17 testes (6
+    classes), com um valor fixo (50.00) que caía sempre abaixo do
+    `preco_calculado` real da estadia completa (soma de
+    `preco_base` por noite), acionando sem intenção o ramo de
+    desconto da decisão 18 e a exigência de responsável. Valores
+    corrigidos para refletirem preços sem desconto.
+  - Decisão tomada com o aluno: perdão total da multa
+    (`multa_praticada=0.00`) continua a exigir responsável
+    validado, tal como um desconto parcial — sem exceção. Os dois
+    testes que exercitam esse caso
+    (`test_check_in_tardio_multa_praticada_editavel`,
+    `test_multa_zero_admitida_como_perdao`) passam agora um
+    responsável criado com `responsaveis.criar`.
+
+Testes: `teste_contratos.py` completo, 76 testes, todos verdes.
+Suite completa do projeto (472 testes) confirmou não haver efeitos
+colaterais no resto do código — à parte de 2 erros novos e sem
+relação, em `teste_repositorio.py` (persistência), registados como
+pendência separada; não bloqueiam este fix.
+
+
 ### [0.7.2] — 2026-08-24
 
 ### Corrigido
