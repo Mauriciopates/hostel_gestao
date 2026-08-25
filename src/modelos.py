@@ -123,26 +123,6 @@ class Responsavel:
 
 
 @dataclass
-class Ocupacao: # type: ignore
-    """Base comum a contratos mensais e reservas Airbnb.
-
-    Existe para a validação de sobreposição consulte um unido sitio (decisão 5). Os dados especificos de cada regime vivem em 'OcupacaoMensal' e 'OcupacaoAirbnb', ligados por este ID.
-
-    'data_fim' a None significa contrato mensal em vigor sem termo previsto - nunca se preenche com a data da proxima renovação.
-
-    """
-
-    id: str
-    unidade_id: str
-    cliente_id: str
-    tipo: str  # "mensal" ou "airbnb"
-    data_inicio: date
-    data_fim: date | None = None
-    lugar_id: str = ""
-    ativo: bool = True
-
-
-@dataclass
 class OcupacaoMensal:
     """Dados especificos de um contrato de arrendamento mensal.
 
