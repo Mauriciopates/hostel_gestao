@@ -25,9 +25,41 @@ def dados_base():
         "unidades": [],
         "quartos": [],
         "lugares": [],
+        "ocupacoes": [],
     }
     propriedades.criar(dados, "Foz Velha", "Rua de Exemplo, 1")
     return dados
+
+
+def criar_ocupacao(dados, unidade_id, tipo, data_inicio, data_fim=None, ativo=True):
+    """Acrescenta uma ocupação em dados['ocupacoes'], só com os
+    campos que unidades.estado() lê.
+    """
+    ocupacao = {
+        "id": f"OCU-{len(dados['ocupacoes']) + 1:03d}",
+        "unidade_id": unidade_id,
+        "cliente_id": "CLI-001",
+        "tipo": tipo,
+        "data_inicio": data_inicio,
+        "data_fim": data_fim,
+        "lugar_id": "",
+        "aviso_documento": False,
+        "ativo": ativo,
+    }
+    dados["ocupacoes"].append(ocupacao)
+    return ocupacao
+
+
+def dar_lugares(dados, unidade_id, capacidades):
+    """Cria um quarto com um lugar por capacidade indicada, devolve
+    a soma — a capacidade total esperada da unidade.
+    """
+    quarto = unidades.criar_quarto(dados, unidade_id, "Quarto de teste")
+    for capacidade in capacidades:
+        unidades.criar_lugar(
+            dados, quarto["id"], f"Lugar {capacidade}", capacidade=capacidade
+        )
+    return sum(capacidades)
 
 
 def criar_unidade_mensal(dados, propriedade_id=None):
@@ -662,11 +694,193 @@ class TesteDesativarReativarLugar(unittest.TestCase):
 
 class TesteEstado(unittest.TestCase):
 
-    def test_nao_implementada(self):
+    def test_recusa_id_inexistente(self):
+        dados = dados_base()
+        with self.assertRaises(ValueError):
+            unidades.estado(dados, "UNI-999", date(2026, 9, 5))
+
+    # --- Mensal: proporção ---
+
+    def test_mensal_sem_ocupacoes_e_zero_sobre_capacidade(self):
         dados = dados_base()
         unidade = criar_unidade_mensal(dados)
-        with self.assertRaises(NotImplementedError):
-            unidades.estado(dados, unidade["id"], date(2026, 8, 16))
+        dar_lugares(dados, unidade["id"], [1, 1])
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 5))
+        self.assertEqual(resultado, "0/2")
+
+    def test_mensal_proporcao_com_ocupacao_ativa(self):
+        dados = dados_base()
+        unidade = criar_unidade_mensal(dados)
+        dar_lugares(dados, unidade["id"], [1, 1])
+        criar_ocupacao(dados, unidade["id"], "mensal", date(2026, 9, 1))
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 5))
+        self.assertEqual(resultado, "1/2")
+
+    def test_mensal_ocupacao_futura_nao_conta(self):
+        dados = dados_base()
+        unidade = criar_unidade_mensal(dados)
+        dar_lugares(dados, unidade["id"], [1, 1])
+        criar_ocupacao(dados, unidade["id"], "mensal", date(2026, 9, 10))
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 5))
+        self.assertEqual(resultado, "0/2")
+
+    def test_mensal_ocupacao_encerrada_nao_conta(self):
+        dados = dados_base()
+        unidade = criar_unidade_mensal(dados)
+        dar_lugares(dados, unidade["id"], [1, 1])
+        criar_ocupacao(
+            dados, unidade["id"], "mensal",
+            date(2026, 9, 1), data_fim=date(2026, 9, 10),
+        )
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 15))
+        self.assertEqual(resultado, "0/2")
+
+    def test_mensal_ocupacao_ativa_ate_ao_dia_anterior_ao_encerramento(self):
+        dados = dados_base()
+        unidade = criar_unidade_mensal(dados)
+        dar_lugares(dados, unidade["id"], [1, 1])
+        criar_ocupacao(
+            dados, unidade["id"], "mensal",
+            date(2026, 9, 1), data_fim=date(2026, 9, 10),
+        )
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 9))
+        self.assertEqual(resultado, "1/2")
+
+    def test_mensal_ocupacao_inativa_nao_conta(self):
+        dados = dados_base()
+        unidade = criar_unidade_mensal(dados)
+        dar_lugares(dados, unidade["id"], [1, 1])
+        criar_ocupacao(
+            dados, unidade["id"], "mensal", date(2026, 9, 1), ativo=False
+        )
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 5))
+        self.assertEqual(resultado, "0/2")
+
+    def test_mensal_nao_conta_ocupacoes_de_outra_unidade(self):
+        dados = dados_base()
+        unidade = criar_unidade_mensal(dados)
+        outra = criar_unidade_mensal(dados)
+        dar_lugares(dados, unidade["id"], [1, 1])
+        criar_ocupacao(dados, outra["id"], "mensal", date(2026, 9, 1))
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 5))
+        self.assertEqual(resultado, "0/2")
+
+    # --- Airbnb: Livre / Ocupado / Reservado ---
+
+    def test_airbnb_livre_sem_ocupacoes(self):
+        dados = dados_base()
+        unidade = criar_unidade_airbnb(dados)
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 5))
+        self.assertEqual(resultado, "Livre")
+
+    def test_airbnb_ocupado_na_noite_de_entrada(self):
+        dados = dados_base()
+        unidade = criar_unidade_airbnb(dados)
+        criar_ocupacao(
+            dados, unidade["id"], "airbnb",
+            date(2026, 9, 10), data_fim=date(2026, 9, 15),
+        )
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 10))
+        self.assertEqual(resultado, "Ocupado")
+
+    def test_airbnb_ocupado_a_meio_da_estadia(self):
+        dados = dados_base()
+        unidade = criar_unidade_airbnb(dados)
+        criar_ocupacao(
+            dados, unidade["id"], "airbnb",
+            date(2026, 9, 10), data_fim=date(2026, 9, 15),
+        )
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 12))
+        self.assertEqual(resultado, "Ocupado")
+
+    def test_airbnb_ocupado_na_ultima_noite(self):
+        dados = dados_base()
+        unidade = criar_unidade_airbnb(dados)
+        criar_ocupacao(
+            dados, unidade["id"], "airbnb",
+            date(2026, 9, 10), data_fim=date(2026, 9, 15),
+        )
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 14))
+        self.assertEqual(resultado, "Ocupado")
+
+    def test_airbnb_livre_no_dia_de_saida(self):
+        dados = dados_base()
+        unidade = criar_unidade_airbnb(dados)
+        criar_ocupacao(
+            dados, unidade["id"], "airbnb",
+            date(2026, 9, 10), data_fim=date(2026, 9, 15),
+        )
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 15))
+        self.assertEqual(resultado, "Livre")
+
+    def test_airbnb_reservado_ocupacao_futura(self):
+        dados = dados_base()
+        unidade = criar_unidade_airbnb(dados)
+        criar_ocupacao(
+            dados, unidade["id"], "airbnb",
+            date(2026, 9, 10), data_fim=date(2026, 9, 15),
+        )
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 5))
+        self.assertEqual(resultado, "Reservado")
+
+    def test_airbnb_entrada_e_saida_no_mesmo_dia_nao_e_conflito(self):
+        """Réplica, ao nível do estado(), do caso já coberto na
+        validação de sobreposição: a saída de uma reserva no mesmo
+        dia da entrada da seguinte não é conflito — a noite desse
+        dia fica com a segunda reserva.
+        """
+        dados = dados_base()
+        unidade = criar_unidade_airbnb(dados)
+        criar_ocupacao(
+            dados, unidade["id"], "airbnb",
+            date(2026, 9, 10), data_fim=date(2026, 9, 15),
+        )
+        criar_ocupacao(
+            dados, unidade["id"], "airbnb",
+            date(2026, 9, 15), data_fim=date(2026, 9, 18),
+        )
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 15))
+        self.assertEqual(resultado, "Ocupado")
+
+    def test_airbnb_reserva_cancelada_nao_conta(self):
+        dados = dados_base()
+        unidade = criar_unidade_airbnb(dados)
+        criar_ocupacao(
+            dados, unidade["id"], "airbnb",
+            date(2026, 9, 10), data_fim=date(2026, 9, 15),
+            ativo=False,
+        )
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 12))
+        self.assertEqual(resultado, "Livre")
+
+    # --- Manutenção sobrepõe-se a tudo ---
+
+    def test_manutencao_sobrepoe_se_sem_ocupacoes(self):
+        dados = dados_base()
+        unidade = criar_unidade_airbnb(dados)
+        unidades.marcar_manutencao(dados, unidade["id"])
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 5))
+        self.assertEqual(resultado, "Em manutenção")
+
+    def test_manutencao_sobrepoe_se_com_ocupacao_ativa(self):
+        dados = dados_base()
+        unidade = criar_unidade_airbnb(dados)
+        criar_ocupacao(
+            dados, unidade["id"], "airbnb",
+            date(2026, 9, 10), data_fim=date(2026, 9, 15),
+        )
+        unidades.marcar_manutencao(dados, unidade["id"])
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 12))
+        self.assertEqual(resultado, "Em manutenção")
+
+    def test_manutencao_sobrepoe_se_no_mensal(self):
+        dados = dados_base()
+        unidade = criar_unidade_mensal(dados)
+        dar_lugares(dados, unidade["id"], [1, 1])
+        criar_ocupacao(dados, unidade["id"], "mensal", date(2026, 9, 1))
+        unidades.marcar_manutencao(dados, unidade["id"])
+        resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 5))
+        self.assertEqual(resultado, "Em manutenção")
 
 
 if __name__ == "__main__":
