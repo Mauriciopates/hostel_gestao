@@ -12,8 +12,10 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 
-# bool é um tipo com apenas dois valores possíveis: True ou False. Sim ou não. Ligado ou desligado. Não há meio-termo.
-# Todas as classes do modelos.py são do mesmo tipo: guardam campos, não decidem nada. É por isso do uso de dataclass
+# bool é um tipo com apenas dois valores possíveis: True ou False.
+# Sim ou não. Ligado ou desligado. Não há meio-termo.
+# Todas as classes do modelos.py são do mesmo tipo: guardam campos,
+# não decidem nada. É por isso do uso de dataclass
 
 
 @dataclass
@@ -29,9 +31,10 @@ class Propriedade:
 @dataclass
 class Unidade:
     """Alojamento contratável. Pertence a uma propriedade.
-
     O tipo é restrição rígida: mensal não aceita reserva Airbnb e vice-versa.
-    Livre, ocupado e Reservado não são guardados - calculam-se a partir dos contratos para uma data(decisão 3). Só 'em_manutencao' persiste, pois é uma decisão da gestão da unidade.
+    Livre, ocupado e Reservado não são guardados - calculam-se a partir dos 
+    contratos para uma data(decisão 3). Só 'em_manutencao' persiste, 
+    pois é uma decisão da gestão da unidade.
 
     """
 
@@ -49,8 +52,10 @@ class Unidade:
 @dataclass
 class Quarto:
     """Divisão de uma unidade que agrupa lugares.
-
-    Os dois indicadores são independentes: 'privativo' restringe quem ocupar, 'limpeza_incluida' deterrmina se o quarto entra no calculo da roupa de cama e enviar (decisão 17).
+    Os dois indicadores são independentes: 'privativo' 
+    restringe quem ocupar, 'limpeza_incluida' deterrmina
+    se o quarto entra no calculo da roupa de cama e enviar 
+    (decisão 17).
 
     """
 
@@ -66,8 +71,10 @@ class Quarto:
 class Lugar:
     """Cama ou posição contratável dentro de um quarto.
 
-    É a unidade minima de ocupação. A capacidade é guardada aqui, não
-    derivada do tipo de cama - permite configurações fora do par solteiro/casal. Um beliche são dois lugares de capacidade 1, nunca um lugar de capacidade 2 (decisão 17).
+    É a unidade minima de ocupação. A capacidade é guardada aqui,
+    não derivada do tipo de cama - permite configurações fora do par 
+    solteiro/casal. Um beliche são dois lugares de capacidade 1, 
+    nunca um lugar de capacidade 2 (decisão 17).
 
     """
 
@@ -81,8 +88,10 @@ class Lugar:
 @dataclass
 class Cliente:
     """Pessoa que contrata alojamento.
-
-    Concentra os dados pessoais do sistema e é alvo da anonimização prevista no RGPD (decisão 8). A nacionalidade é conservada na anonimização por não identificar e ter valor estatistico.
+    Concentra os dados pessoais do sistema e é alvo da 
+    anonimização prevista no RGPD (decisão 8). A nacionalidade
+    é conservada na anonimização por não identificar e 
+    ter valor estatistico.
 
     """
 
@@ -103,7 +112,9 @@ class Cliente:
     data_anonimizado: date | None = None
     responsavel_anonimizado_id: str = ""
     ativo: bool = (
-        True  # bool = True se o cliente está ativo no sistema, False se foi desativado (ex: por pedido de anonimização).
+        True  
+        # bool = True se o cliente está ativo no sistema, 
+        #False se foi desativado (ex: por pedido de anonimização).
     )
 
 
@@ -111,8 +122,10 @@ class Cliente:
 class Responsavel:
     """PEssoa que opera o sistema.
 
-    Antecipado para a Fase 1 sem credenciais  (decisão 10): serve para atribuir
-    autoria a operações - requisições de stock, anonimizações, alterações de configuração. Login e permissões chegam na Fase 2.
+    Antecipado para a Fase 1 sem credenciais  (decisão 10): 
+    serve para atribuir autoria a operações - requisições de stock,
+    anonimizações, alterações de configuração. Login e permissões
+    chegam na Fase 2.
 
     """
 
@@ -125,10 +138,12 @@ class Responsavel:
 @dataclass
 class OcupacaoMensal:
     """Dados especificos de um contrato de arrendamento mensal.
+    Liga-se a 'Ocupacao' pelo mesmo ID. A caução é calculada a partir
+    da renda praticda, não é montante fixo (decisão 14).: 
+    O sistema sugere uma renda, aceita até duas, recusa acima.
 
-    Liga-se a 'Ocupacao' pelo mesmo ID. A caução é calculada a partir da renda praticda, não é montante fixo (decisão 14).: O sistema sugere uma renda, aceita até duas, recusa acima.
-
-    Conserva 'renda_calculada' e 'renda_praticada' para que a diferença fique visivel - nunca se guarda um total.
+    Conserva 'renda_calculada' e 'renda_praticada' para que a 
+    diferença fique visivel - nunca se guarda um total.
 
     """
 
@@ -150,9 +165,11 @@ class OcupacaoAirbnb:
     """Dados especificos de uma reserva de estadia curtam.
 
     Liga-se á 'Ocupacao' pelo mesmo ID. O preço é por noite, calculado
-    a partir da unidade: 'preco_epoca_alta' só se aplica quando o indicador manual da unidade esta ativo E a data cai no periodo da época alta.
-
-    A multa de check-in tardio só existe quando 'check_in_tardio' é True(decisão 15).
+    a partir da unidade: 'preco_epoca_alta' só se aplica quando o 
+    indicador manual da unidade esta ativo E a data cai no periodo 
+    da época alta.
+    A multa de check-in tardio só existe quando 'check_in_tardio' 
+    é True(decisão 15).
 
     Quando 'preco_praticado' fica abaixo de 'preco_calculado' (ou
     'multa_praticada' abaixo de 'multa_calculada'), é um desconto —
@@ -182,7 +199,8 @@ class Produto:
     Definifo uma unica vez: o nome, a unidade de medida e stock minimo
     vivem aqui, não se repetem em cada movimento (decisão 9).
     
-    Não tem campo de quantidade. O saldo é a soma de movimentos, nunca um valor guardado.
+    Não tem campo de quantidade. O saldo é a soma de movimentos,
+    nunca um valor guardado.
     
     """
 
@@ -350,8 +368,9 @@ class Configuracao:
 
     Os valores iniciais estão em `config.py`; esta classe é o que fica
     gravado depois de alguém os alterar.
-
-    É a única classe do modelo sem id. Uma chave de configuração é um identificador técnico, escolhido por quem programa, não um nome de negócio.
+    É a única classe do modelo sem id. Uma chave de configuração é um 
+    identificador técnico, escolhido por quem programa, 
+    não um nome de negócio.
     """
 
     chave: str

@@ -612,7 +612,10 @@ def _estado_airbnb(dados, unidade_id, data):
         if not ocupacao["ativo"]:
             continue
 
-        if ocupacao["data_inicio"] < fim_janela and data < ocupacao["data_fim"]:
+        if (
+            ocupacao["data_inicio"] < fim_janela
+            and data < ocupacao["data_fim"]
+        ):
             return "Ocupado"
 
         if ocupacao["data_inicio"] > data:
