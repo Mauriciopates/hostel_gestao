@@ -13,6 +13,7 @@ carrega e grava é o `main.py`, através do repositório.
 """
 
 from decimal import Decimal
+from datetime import timedelta
 
 import repositorio
 import validacoes
@@ -532,41 +533,89 @@ def reativar_lugar(dados, lugar_id):
 
 
 
-# --- Pendente: estado calculado da unidade (decisão 3) --------------------
-
-
 def estado(dados, unidade_id, data):
     """Calcula o estado da unidade numa data: Livre, Ocupado,
     Reservado ou, no regime mensal, a proporção ocupada.
 
-    NÃO IMPLEMENTADA. Fica pendente até o `contratos.py` existir e
-    gerar ocupações reais em `dados["ocupacoes"]` — escrever esta
-    função antes disso seria código sem forma de testar contra
-    dados verdadeiros.
-
-    Especificação para quando for escrita (decisões 3, 4 e 17, e a
-    regra central do modelo de ocupação, secção 4 das orientações):
-
-    - Mensal: soma a capacidade de todos os lugares dos quartos da
-      unidade (decisão 17); conta as ocupações mensais ativas com
-      `data_inicio <= data` e (`data_fim` nulo ou `data_fim >
-      data`); devolve a proporção "ocupados/capacidade" (ex.:
-      "8/15"), nunca só Livre/Ocupado.
-    - Airbnb: usa a fórmula de sobreposição da secção 4 —
-      `inicio_A < fim_B E inicio_B < fim_A` — nunca "data dentro
-      do intervalo". A unidade de contagem é a noite: saída e
-      entrada no mesmo dia não é conflito. Devolve Livre, Ocupado
-      ou Reservado (reservado = ocupação futura, início > data).
-    - `em_manutencao` a True sobrepõe-se ao cálculo: uma unidade em
-      manutenção não está livre, independentemente das ocupações.
-    - Lê `dados["ocupacoes"]` (base comum, decisão 5) filtrando
-      por `unidade_id`; dados específicos do regime, se precisos,
-      vêm de `ocupacoes_mensal`/`ocupacoes_airbnb` pelo mesmo id.
-
-    Levanta NotImplementedError enquanto não houver `contratos.py`
-    para testar contra dados reais.
+    'em_manutencao' sobrepõe-se ao cálculo (decisão 3): uma unidade
+    em manutenção nunca está livre, independentemente das ocupações.
     """
-    raise NotImplementedError(
-        "Pendente: implementar depois de 'contratos.py'."
-    )
+    unidade = procurar(dados, unidade_id)
 
+    if unidade is None:
+        raise ValueError(f"A unidade {unidade_id} não existe.")
+
+    if unidade["em_manutencao"]:
+        return "Em manutenção"
+
+    if unidade["tipo"] == "mensal":
+        return _estado_mensal(dados, unidade_id, data)
+
+    return _estado_airbnb(dados, unidade_id, data)
+
+
+def _estado_mensal(dados, unidade_id, data):
+    """Proporção "ocupados/capacidade" de uma unidade mensal numa
+    data (decisão 17: capacidade é a soma dos lugares dos quartos
+    ativos; um contrato sem lugar_id conta na mesma, ver secção 4).
+
+    Conta as ocupações mensais ativas cuja vigência cobre 'data':
+    data_inicio <= data e (data_fim nulo ou data_fim > data).
+    """
+    capacidade = 0
+
+    for quarto in listar_quartos(dados, unidade_id=unidade_id):
+        for lugar in listar_lugares(dados, quarto_id=quarto["id"]):
+            capacidade += lugar["capacidade"]
+
+    ocupados = 0
+
+    for ocupacao in dados["ocupacoes"]:
+        if ocupacao["unidade_id"] != unidade_id:
+            continue
+
+        if ocupacao["tipo"] != "mensal":
+            continue
+
+        if not ocupacao["ativo"]:
+            continue
+
+        if ocupacao["data_inicio"] > data:
+            continue
+
+        if ocupacao["data_fim"] is not None and ocupacao["data_fim"] <= data:
+            continue
+
+        ocupados += 1
+
+    return f"{ocupados}/{capacidade}"
+
+
+def _estado_airbnb(dados, unidade_id, data):
+    """Livre, Ocupado ou Reservado de uma unidade Airbnb numa data.
+
+    Fórmula de sobreposição da secção 4 — inicio_A < fim_B E
+    inicio_B < fim_A — tratando 'data' como a noite [data, data + 1
+    dia). Reservado é uma ocupação futura ainda não iniciada
+    (início > data), quando a noite pedida está livre.
+    """
+    fim_janela = data + timedelta(days=1)
+    tem_futura = False
+
+    for ocupacao in dados["ocupacoes"]:
+        if ocupacao["unidade_id"] != unidade_id:
+            continue
+
+        if ocupacao["tipo"] != "airbnb":
+            continue
+
+        if not ocupacao["ativo"]:
+            continue
+
+        if ocupacao["data_inicio"] < fim_janela and data < ocupacao["data_fim"]:
+            return "Ocupado"
+
+        if ocupacao["data_inicio"] > data:
+            tem_futura = True
+
+    return "Reservado" if tem_futura else "Livre"

@@ -673,6 +673,13 @@ def _listar_unidades(dados):
         print("\nNenhuma unidade encontrada.")
         return
 
+    data = ler_data(
+        "Data para calcular o estado (Enter para hoje): ", obrigatorio=False
+    )
+
+    if data is None:
+        data = date.today()
+
     print(f"\n--- Unidades ({len(lista)}) ---")
 
     for u in lista:
@@ -687,7 +694,10 @@ def _listar_unidades(dados):
             f"época alta: {formatar_valor(u['preco_epoca_alta'])}  "
             f"multa: {formatar_valor(u['multa_check_in_tardio'])}"
         )
-
+        print(
+            f"    estado em {formatar_data(data)}: "
+            f"{unidades.estado(dados, u['id'], data)}"
+        )
 
 def _atualizar_unidade(dados):
     """Ecrã de atualização de uma unidade.
