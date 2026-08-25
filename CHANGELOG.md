@@ -1,3 +1,4 @@
+-- Active: 1786462065571@@3xr.ddns.net@3306
 # Registo de alterações
 
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
