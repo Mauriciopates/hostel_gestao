@@ -40,6 +40,7 @@ class Unidade:
 
     id: str
     propriedade_id: str
+    nome: str
     tipo: str  # "mensal" ou "airbnb"
     preco_base: Decimal
     preco_epoca_alta: Decimal

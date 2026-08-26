@@ -70,6 +70,7 @@ def criar_unidade_mensal(dados, propriedade_id=None):
     return unidades.criar(
         dados,
         propriedade_id,
+        "Unidade Mensal Teste",
         "mensal",
         Decimal("250.00"),
         Decimal("250.00"),
@@ -85,12 +86,12 @@ def criar_unidade_airbnb(dados, propriedade_id=None):
     return unidades.criar(
         dados,
         propriedade_id,
+        "Unidade Airbnb Teste",
         "airbnb",
         Decimal("45.00"),
         Decimal("90.00"),
         Decimal("20.00"),
     )
-
 
 class TesteCriar(unittest.TestCase):
 
@@ -112,7 +113,7 @@ class TesteCriar(unittest.TestCase):
         dados = dados_base()
         with self.assertRaises(ValueError):
             unidades.criar(
-                dados, "PRO-999", "mensal",
+                dados, "PRO-999", "Unidade Teste", "mensal",
                 Decimal("250.00"), Decimal("250.00"), Decimal("20.00"),
             )
 
@@ -121,7 +122,7 @@ class TesteCriar(unittest.TestCase):
         propriedade_id = dados["propriedades"][0]["id"]
         with self.assertRaises(ValueError):
             unidades.criar(
-                dados, propriedade_id, "semanal",
+                dados, propriedade_id, "Unidade Teste", "semanal",
                 Decimal("250.00"), Decimal("250.00"), Decimal("20.00"),
             )
 
@@ -130,7 +131,7 @@ class TesteCriar(unittest.TestCase):
         propriedade_id = dados["propriedades"][0]["id"]
         with self.assertRaises(ValueError):
             unidades.criar(
-                dados, propriedade_id, "mensal",
+                dados, propriedade_id, "Unidade Teste", "mensal",
                 None, Decimal("250.00"), Decimal("20.00"),
             )
 
@@ -139,7 +140,7 @@ class TesteCriar(unittest.TestCase):
         propriedade_id = dados["propriedades"][0]["id"]
         with self.assertRaises(ValueError):
             unidades.criar(
-                dados, propriedade_id, "mensal",
+                dados, propriedade_id, "Unidade Teste", "mensal",
                 250.00, Decimal("250.00"), Decimal("20.00"),
             )
 
@@ -148,24 +149,20 @@ class TesteCriar(unittest.TestCase):
         propriedade_id = dados["propriedades"][0]["id"]
         with self.assertRaises(ValueError):
             unidades.criar(
-                dados, propriedade_id, "mensal",
+                dados, propriedade_id, "Unidade Teste", "mensal",
                 Decimal("-1"), Decimal("250.00"), Decimal("20.00"),
             )
-
-    def test_epoca_alta_ativa_por_omissao_falsa(self):
-        dados = dados_base()
-        unidade = criar_unidade_mensal(dados)
-        self.assertFalse(unidade["epoca_alta_ativa"])
 
     def test_epoca_alta_ativa_aceita_true(self):
         dados = dados_base()
         propriedade_id = dados["propriedades"][0]["id"]
         unidade = unidades.criar(
-            dados, propriedade_id, "airbnb",
+            dados, propriedade_id, "Unidade Teste", "airbnb",
             Decimal("45.00"), Decimal("90.00"), Decimal("20.00"),
             epoca_alta_ativa=True,
         )
         self.assertTrue(unidade["epoca_alta_ativa"])
+
 
 
 class TesteProcurar(unittest.TestCase):

@@ -27,6 +27,7 @@ PREFIXO_LUGAR = "LUG"
 def criar(
     dados,
     propriedade_id,
+    nome,
     tipo,
     preco_base,
     preco_epoca_alta,
@@ -41,6 +42,11 @@ def criar(
     if propriedade is None:
         raise ValueError(f"A propriedade {propriedade_id} não existe.")
 
+    nome = nome.strip()
+
+    if not nome:
+        raise ValueError("O nome da unidade é obrigatório.")
+
     if tipo not in validacoes.TIPOS_UNIDADE:
         raise ValueError(f"Tipo de unidade desconhecido: {tipo}")
 
@@ -50,21 +56,23 @@ def criar(
         ("multa de check-in tardio", multa_check_in_tardio),
     )
 
-    for nome, valor in precos:
+    for nome_preco, valor in precos:
         if valor is None:
-            raise ValueError(f"{nome} é obrigatório.")
+            raise ValueError(f"{nome_preco} é obrigatório.")
 
         if not isinstance(valor, Decimal):
             raise ValueError(
-                f"{nome} tem de ser Decimal, não" f" {type(valor).__name__}."
+                f"{nome_preco} tem de ser Decimal, não"
+                f" {type(valor).__name__}."
             )
 
         if valor < 0:
-            raise ValueError(f"{nome} não pode ser negativo: {valor}.")
+            raise ValueError(f"{nome_preco} não pode ser negativo: {valor}.")
 
     unidade = {
         "id": repositorio.proximo_id(PREFIXO),
         "propriedade_id": propriedade_id,
+        "nome": nome,
         "tipo": tipo,
         "preco_base": preco_base,
         "preco_epoca_alta": preco_epoca_alta,
@@ -124,15 +132,18 @@ def listar(dados, incluir_inativas=False, propriedade_id=None, tipo=None):
 def atualizar(
     dados,
     unidade_id,
+    nome=None,
     preco_base=None,
     preco_epoca_alta=None,
     multa_check_in_tardio=None,
     epoca_alta_ativa=None,
 ):
-    """Altera os preços e o indicador de época alta de uma unidade.
+    """Altera o nome, os preços e o indicador de época alta de uma
+    unidade.
 
     Um parâmetro a None significa não alterar (mesma convenção de
-    `propriedades.atualizar`). Os três preços não podem ficar vazios
+    `propriedades.atualizar`). O nome não pode ficar vazio, mesma regra
+    de `atualizar_quarto`. Os três preços não podem ficar vazios
     nem negativos: são obrigatórios no cadastro (decisão 6) e essa
     obrigatoriedade mantém-se na alteração.
 
@@ -147,23 +158,32 @@ def atualizar(
     if unidade is None:
         raise ValueError(f"A unidade {unidade_id} não existe.")
 
+    if nome is not None:
+        nome = nome.strip()
+
+        if not nome:
+            raise ValueError("O nome da unidade é obrigatório.")
+
+        unidade["nome"] = nome
+
     precos = (
         ("preço base", preco_base),
         ("preço de época alta", preco_epoca_alta),
         ("multa de check-in tardio", multa_check_in_tardio),
     )
 
-    for nome, valor in precos:
+    for nome_preco, valor in precos:
         if valor is None:
             continue
 
         if not isinstance(valor, Decimal):
             raise ValueError(
-                f"{nome} tem de ser Decimal, não" f" {type(valor).__name__}."
+                f"{nome_preco} tem de ser Decimal, não"
+                f" {type(valor).__name__}."
             )
 
         if valor < 0:
-            raise ValueError(f"{nome} não pode ser negativo: {valor}.")
+            raise ValueError(f"{nome_preco} não pode ser negativo: {valor}.")
 
     if preco_base is not None:
         unidade["preco_base"] = preco_base

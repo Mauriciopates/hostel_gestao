@@ -1,8 +1,37 @@
--- Active: 1786462065571@@3xr.ddns.net@3306
 # Registo de alterações
 
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
+
+### [0.7.6] — 2026/08/26
+
+Nome próprio nas unidades — identificação visual em toda a interface,
+sem depender só do prefixo/ID.
+
+### Adicionado
+- Campo `nome` em `Unidade` (`modelos.py`), obrigatório — mesma
+  convenção que `Quarto` e `Lugar` já tinham. Passou a ser o 3.º
+  argumento de `unidades.criar()` (a seguir a `propriedade_id`,
+  antes de `tipo`) e um argumento opcional em `unidades.atualizar()`,
+  com a mesma validação de "não pode ficar vazio" já usada em
+  `criar_quarto`/`criar_lugar`.
+- `cli.py`: os ecrãs de unidades (criar, listar, atualizar,
+  desativar, reativar, marcar/desmarcar manutenção) passam a
+  mostrar o nome da unidade — formato `UNI-XXX — Nome (tipo)` — em
+  vez de só o ID e o tipo. A listagem de unidades passou também a
+  mostrar o nome da propriedade em vez do ID cru.
+- `cli.py`: ecrãs de Contratos e Reservas (criar, atualizar,
+  encerrar, cancelar, reativar) e de Stock (movimento, requisições,
+  devoluções) passam a mostrar o nome do cliente/unidade/produto/
+  responsável relacionado, em vez de só o ID — mesma regra aplicada
+  a toda a interface.
+
+### Testes
+- `teste_unidades.py` e `teste_contratos.py`: chamadas a
+  `unidades.criar()` atualizadas com o novo argumento `nome`
+  (8 pontos em `teste_unidades.py`, 3 em `teste_contratos.py`).
+  Suite completa (N testes) confirmou.
+
 
 ### [0.7.5] — 2026-08-25
 

@@ -35,6 +35,7 @@ class BaseContratosTest(unittest.TestCase):
         self.unidade_mensal = unidades.criar(
             self.dados,
             self.propriedade["id"],
+            "Unidade Mensal Teste",
             "mensal",
             Decimal("250.00"),
             Decimal("250.00"),
@@ -50,6 +51,7 @@ class BaseContratosTest(unittest.TestCase):
         self.unidade_airbnb = unidades.criar(
             self.dados,
             self.propriedade["id"],
+            "Unidade Airbnb Teste",
             "airbnb",
             Decimal("45.00"),
             Decimal("90.00"),
@@ -188,7 +190,7 @@ class TesteCriarMensal(BaseContratosTest):
 
     def test_lugar_de_outra_unidade_recusado(self):
         outra_unidade = unidades.criar(
-            self.dados, self.propriedade["id"], "mensal",
+            self.dados, self.propriedade["id"], "Outra Unidade", "mensal",
             Decimal("250.00"), Decimal("250.00"), Decimal("20.00"),
         )
         outro_quarto = unidades.criar_quarto(

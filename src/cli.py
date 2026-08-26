@@ -620,6 +620,7 @@ def _criar_unidade(dados):
     print("\n--- Nova unidade ---")
 
     propriedade_id = ler_texto("ID da propriedade: ")
+    nome = ler_texto("Nome da unidade: ")
     tipo = ler_escolha("Tipo", validacoes.TIPOS_UNIDADE)
     preco_base = ler_decimal("Preço base: ", minimo=Decimal("0"))
     preco_epoca_alta = ler_decimal(
@@ -634,6 +635,7 @@ def _criar_unidade(dados):
         unidade = unidades.criar(
             dados,
             propriedade_id,
+            nome,
             tipo,
             preco_base,
             preco_epoca_alta,
@@ -646,7 +648,10 @@ def _criar_unidade(dados):
 
     repositorio.gravar(dados)
 
-    print(f"Unidade criada: {unidade['id']} ({unidade['tipo']})")
+    print(
+        f"Unidade criada: {unidade['id']} — {unidade['nome']} "
+        f"({unidade['tipo']})"
+    )
 
 
 def _listar_unidades(dados):
@@ -685,9 +690,13 @@ def _listar_unidades(dados):
     for u in lista:
         estado = "ativa" if u["ativo"] else "inativa"
         manutencao = " [em manutenção]" if u["em_manutencao"] else ""
+        propriedade = propriedades.procurar(dados, u["propriedade_id"])
+        nome_propriedade = (
+            propriedade["nome"] if propriedade else u["propriedade_id"]
+        )
         print(
-            f"{u['id']} — {u['tipo']}, propriedade "
-            f"{u['propriedade_id']} ({estado}){manutencao}"
+            f"{u['id']} — {u['nome']} ({u['tipo']}), propriedade "
+            f"{nome_propriedade} ({estado}){manutencao}"
         )
         print(
             f"    base: {formatar_valor(u['preco_base'])}  "
@@ -704,7 +713,7 @@ def _atualizar_unidade(dados):
 
     Tipo e propriedade não se alteram (unidades.atualizar não os
     aceita — mudar de tipo ou de propriedade não corresponde a
-    nenhuma operação real do negócio). Só os preços e a época alta.
+    nenhuma operação real do negócio). Nome, preços e época alta.
     """
     print("\n--- Atualizar unidade ---")
 
@@ -715,6 +724,7 @@ def _atualizar_unidade(dados):
         print(f"Erro: A unidade {unidade_id} não existe.")
         return
 
+    nome = ler_atualizacao("Nome", unidade["nome"])
     preco_base = ler_decimal(
         f"Preço base [atual: {formatar_valor(unidade['preco_base'])}, "
         f"Enter mantém]: ",
@@ -742,6 +752,7 @@ def _atualizar_unidade(dados):
         unidade = unidades.atualizar(
             dados,
             unidade_id,
+            nome=nome,
             preco_base=preco_base,
             preco_epoca_alta=preco_epoca_alta,
             multa_check_in_tardio=multa_check_in_tardio,
@@ -753,8 +764,7 @@ def _atualizar_unidade(dados):
 
     repositorio.gravar(dados)
 
-    print(f"Unidade atualizada: {unidade['id']}")
-
+    print(f"Unidade atualizada: {unidade['id']} — {unidade['nome']}")
 
 def _desativar_unidade(dados):
     print("\n--- Desativar unidade ---")
@@ -769,7 +779,7 @@ def _desativar_unidade(dados):
 
     repositorio.gravar(dados)
 
-    print(f"Unidade desativada: {unidade['id']}")
+    print(f"Unidade desativada: {unidade['id']} — {unidade['nome']}")
 
 
 def _reativar_unidade(dados):
@@ -785,7 +795,7 @@ def _reativar_unidade(dados):
 
     repositorio.gravar(dados)
 
-    print(f"Unidade reativada: {unidade['id']}")
+    print(f"Unidade reativada: {unidade['id']} — {unidade['nome']}")
 
 
 def _marcar_manutencao(dados):
@@ -804,7 +814,10 @@ def _marcar_manutencao(dados):
 
     repositorio.gravar(dados)
 
-    print(f"Unidade {unidade['id']} marcada em manutenção.")
+    print(
+        f"Unidade {unidade['id']} — {unidade['nome']}"
+        "marcada em manutenção."
+    )
 
 
 def _desmarcar_manutencao(dados):
@@ -820,7 +833,7 @@ def _desmarcar_manutencao(dados):
 
     repositorio.gravar(dados)
 
-    print(f"Unidade {unidade['id']} fora de manutenção.")
+    print(f"Unidade {unidade['id']} — {unidade['nome']} fora de manutenção.")
 
 
 def _gerir_quartos(dados):
@@ -1822,12 +1835,18 @@ def _criar_contrato_mensal(dados):
 
     repositorio.gravar(dados)
 
+    cliente = clientes.procurar(dados, cliente_id)
+    nome_cliente = cliente["nome"] if cliente else cliente_id
+
     aviso = (
         " [aviso: documento expira durante a estadia]"
         if ocupacao["aviso_documento"]
         else ""
     )
-    print(f"Contrato criado: {ocupacao['id']}{aviso}")
+    print(
+        f"Contrato criado: {ocupacao['id']} — {nome_cliente}, "
+        f"unidade {unidade['nome']}{aviso}"
+    )
 
 
 def _criar_reserva_airbnb(dados):
@@ -1932,6 +1951,9 @@ def _criar_reserva_airbnb(dados):
 
     repositorio.gravar(dados)
 
+    cliente = clientes.procurar(dados, cliente_id)
+    nome_cliente = cliente["nome"] if cliente else cliente_id
+
     aviso = (
         " [aviso: documento expira durante a estadia]"
         if ocupacao["aviso_documento"]
@@ -1943,7 +1965,10 @@ def _criar_reserva_airbnb(dados):
         if airbnb["responsavel_desconto_preco_id"]
         else ""
     )
-    print(f"Reserva registada: {ocupacao['id']}{aviso}")
+    print(
+        f"Reserva registada: {ocupacao['id']} — {nome_cliente}, "
+        f"unidade {unidade['nome']}{aviso}"
+    )
     print(
         f"    calculado: {formatar_valor(airbnb['preco_calculado'])}  "
         f"praticado: {formatar_valor(airbnb['preco_praticado'])}"
@@ -1990,9 +2015,13 @@ def _listar_ocupacoes(dados):
     for o in lista:
         estado = "ativa" if o["ativo"] else "encerrada/cancelada"
         aviso = " [aviso: documento]" if o["aviso_documento"] else ""
+        unidade = unidades.procurar(dados, o["unidade_id"])
+        cliente = clientes.procurar(dados, o["cliente_id"])
+        nome_unidade = unidade["nome"] if unidade else o["unidade_id"]
+        nome_cliente = cliente["nome"] if cliente else o["cliente_id"]
         print(
-            f"{o['id']} — {o['tipo']}, unidade {o['unidade_id']}, "
-            f"cliente {o['cliente_id']} ({estado}){aviso}"
+            f"{o['id']} — {o['tipo']}, unidade {nome_unidade}, "
+            f"cliente {nome_cliente} ({estado}){aviso}"
         )
         print(
             f"    {formatar_data(o['data_inicio'])} → "
@@ -2093,7 +2122,15 @@ def _atualizar_contrato_mensal(dados):
 
     repositorio.gravar(dados)
 
-    print(f"Contrato atualizado: {ocupacao['id']}")
+    unidade = unidades.procurar(dados, ocupacao["unidade_id"])
+    cliente = clientes.procurar(dados, ocupacao["cliente_id"])
+    nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
+    nome_cliente = cliente["nome"] if cliente else ocupacao["cliente_id"]
+
+    print(
+        f"Contrato atualizado: {ocupacao['id']} — {nome_cliente}, "
+        f"unidade {nome_unidade}"
+    )
 
 
 def _atualizar_reserva_airbnb(dados):
@@ -2201,7 +2238,15 @@ def _atualizar_reserva_airbnb(dados):
 
     repositorio.gravar(dados)
 
-    print(f"Reserva atualizada: {ocupacao['id']}")
+    unidade = unidades.procurar(dados, ocupacao["unidade_id"])
+    cliente = clientes.procurar(dados, ocupacao["cliente_id"])
+    nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
+    nome_cliente = cliente["nome"] if cliente else ocupacao["cliente_id"]
+
+    print(
+        f"Reserva atualizada: {ocupacao['id']} — {nome_cliente}, "
+        f"unidade {nome_unidade}"
+    )
 
 
 def _encerrar_contrato_mensal(dados):
@@ -2221,6 +2266,11 @@ def _encerrar_contrato_mensal(dados):
 
     repositorio.gravar(dados)
 
+    unidade = unidades.procurar(dados, ocupacao["unidade_id"])
+    cliente = clientes.procurar(dados, ocupacao["cliente_id"])
+    nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
+    nome_cliente = cliente["nome"] if cliente else ocupacao["cliente_id"]
+
     avisos = []
     if mensal["duracao_abaixo_minima"]:
         avisos.append("duração abaixo do mínimo")
@@ -2229,8 +2279,10 @@ def _encerrar_contrato_mensal(dados):
 
     texto_avisos = f" [{', '.join(avisos)}]" if avisos else ""
 
-    print(f"Contrato encerrado: {ocupacao['id']}{texto_avisos}")
-
+    print(
+        f"Contrato encerrado: {ocupacao['id']} — {nome_cliente}, "
+        f"unidade {nome_unidade}{texto_avisos}"
+    )
 
 def _cancelar_reserva_airbnb(dados):
     print("\n--- Cancelar reserva Airbnb ---")
@@ -2248,7 +2300,15 @@ def _cancelar_reserva_airbnb(dados):
 
     repositorio.gravar(dados)
 
-    print(f"Reserva cancelada: {ocupacao['id']}")
+    unidade = unidades.procurar(dados, ocupacao["unidade_id"])
+    cliente = clientes.procurar(dados, ocupacao["cliente_id"])
+    nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
+    nome_cliente = cliente["nome"] if cliente else ocupacao["cliente_id"]
+
+    print(
+        f"Reserva cancelada: {ocupacao['id']} — {nome_cliente}, "
+        f"unidade {nome_unidade}"
+    )
 
 
 def _reativar_ocupacao(dados):
@@ -2264,7 +2324,15 @@ def _reativar_ocupacao(dados):
 
     repositorio.gravar(dados)
 
-    print(f"Ocupação reativada: {ocupacao['id']}")
+    unidade = unidades.procurar(dados, ocupacao["unidade_id"])
+    cliente = clientes.procurar(dados, ocupacao["cliente_id"])
+    nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
+    nome_cliente = cliente["nome"] if cliente else ocupacao["cliente_id"]
+
+    print(
+        f"Ocupação reativada: {ocupacao['id']} — {nome_cliente}, "
+        f"unidade {nome_unidade}"
+    )
 
 
 def menu_contratos(dados):
@@ -2493,8 +2561,11 @@ def _registar_movimento(dados):
 
     repositorio.gravar(dados)
 
+    produto = estoque.procurar_produto(dados, produto_id)
+    nome_produto = produto["nome"] if produto else produto_id
+
     print(
-        f"Movimento registado: {movimento['id']} "
+        f"Movimento registado: {movimento['id']} — {nome_produto} "
         f"({movimento['tipo']}, {movimento['quantidade']})"
     )
 
@@ -2611,7 +2682,13 @@ def _criar_requisicao(dados):
 
     repositorio.gravar(dados)
 
-    print(f"Requisição criada: {requisicao['id']} (pendente)")
+    responsavel = responsaveis.procurar(dados, responsavel_id)
+    nome_responsavel = responsavel["nome"] if responsavel else responsavel_id
+
+    print(
+        f"Requisição criada: {requisicao['id']} — "
+        f"{nome_responsavel} (pendente)"
+    )
     _imprimir_itens_requisicao(dados, requisicao["id"])
 
 
@@ -2646,8 +2723,12 @@ def _listar_requisicoes(dados):
     print(f"\n--- Requisições ({len(lista)}) ---")
 
     for r in lista:
+        responsavel = responsaveis.procurar(dados, r["responsavel_id"])
+        nome_responsavel = (
+            responsavel["nome"] if responsavel else r["responsavel_id"]
+        )
         print(
-            f"{r['id']} — responsável {r['responsavel_id']} "
+            f"{r['id']} — responsável {nome_responsavel} "
             f"({r['estado']})"
         )
         _imprimir_itens_requisicao(dados, r["id"])
@@ -2710,9 +2791,14 @@ def _enviar_requisicao(dados):
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
+        repositorio.gravar(dados)
 
-    print(f"Requisição enviada: {requisicao['id']}")
+    responsavel = responsaveis.procurar(dados, requisicao["responsavel_id"])
+    nome_responsavel = (
+        responsavel["nome"] if responsavel else requisicao["responsavel_id"]
+    )
+
+    print(f"Requisição enviada: {requisicao['id']} — {nome_responsavel}")
     _imprimir_itens_requisicao(dados, requisicao["id"])
 
 
@@ -2733,7 +2819,12 @@ def _rejeitar_requisicao(dados):
 
     repositorio.gravar(dados)
 
-    print(f"Requisição rejeitada: {requisicao['id']}")
+    responsavel = responsaveis.procurar(dados, requisicao["responsavel_id"])
+    nome_responsavel = (
+        responsavel["nome"] if responsavel else requisicao["responsavel_id"]
+    )
+
+    print(f"Requisição rejeitada: {requisicao['id']} — {nome_responsavel}")
 
 
 def _confirmar_rececao(dados):
@@ -2758,8 +2849,14 @@ def _confirmar_rececao(dados):
 
     repositorio.gravar(dados)
 
+    responsavel = responsaveis.procurar(dados, requisicao["responsavel_id"])
+    nome_responsavel = (
+        responsavel["nome"] if responsavel else requisicao["responsavel_id"]
+    )
+
     print(
-        f"Receção confirmada — requisição fechada: {requisicao['id']}"
+        f"Receção confirmada — requisição fechada: {requisicao['id']} "
+        f"— {nome_responsavel}"
     )
     _imprimir_itens_requisicao(dados, requisicao["id"])
 
@@ -2834,8 +2931,13 @@ def _reportar_devolucao(dados):
 
     repositorio.gravar(dados)
 
+    responsavel = responsaveis.procurar(dados, devolucao["responsavel_id"])
+    nome_responsavel = (
+        responsavel["nome"] if responsavel else devolucao["responsavel_id"]
+    )
+
     print(
-        f"Devolução registada: {devolucao['id']} "
+        f"Devolução registada: {devolucao['id']} — {nome_responsavel} "
         f"(requisição {devolucao['requisicao_id']})"
     )
     _imprimir_itens_devolucao(dados, devolucao["id"])
@@ -2863,7 +2965,12 @@ def _fechar_devolucao(dados):
 
     repositorio.gravar(dados)
 
-    print(f"Devolução aceite: {devolucao['id']}")
+    responsavel = responsaveis.procurar(dados, devolucao["responsavel_id"])
+    nome_responsavel = (
+        responsavel["nome"] if responsavel else devolucao["responsavel_id"]
+    )
+
+    print(f"Devolução aceite: {devolucao['id']} — {nome_responsavel}")
     _imprimir_itens_devolucao(dados, devolucao["id"])
 
 
@@ -2923,8 +3030,11 @@ def _enviar_rol_lavanderia(dados):
 
     repositorio.gravar(dados)
 
+    responsavel = responsaveis.procurar(dados, responsavel_id)
+    nome_responsavel = responsavel["nome"] if responsavel else responsavel_id
+
     print(
-        f"Rol enviado: {requisicao['id']} "
+        f"Rol enviado: {requisicao['id']} — {nome_responsavel} "
         f"(estado: {requisicao['estado']})"
     )
     _imprimir_itens_requisicao(dados, requisicao["id"])
