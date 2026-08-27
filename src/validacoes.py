@@ -15,10 +15,18 @@ responsabilidade de quem chama.
 from datetime import date
 
 TIPOS_DOCUMENTO = (
-    "Cartão de Cidadão",
+    "Cartão Cidadão",
     "Passaporte",
     "Título de Residência",
     "Outro",
+)
+
+TIPOS_ESTADO_CIVIL = (
+    "Solteiro(a)",
+    "Casado(a)",
+    "Divorciado(a)",
+    "Viúvo(a)",
+    "União de facto",
 )
 
 TIPOS_UNIDADE = ("mensal", "airbnb")
@@ -58,9 +66,22 @@ ou 0 se o resto for 0 ou 1).
 def validar_cliente(dados, regime):
     """Valida os dados de um cliente para o regime indicado.
 
-    Aplica a decisão 11: o essencial bloqueia, o resto avisa. Devolve a
-    lista de campos em falta que não impedem a gravação — se não estiver
-    vazia, o registo é marcado como incompleto.
+    Aplica a decisão 11 (o essencial bloqueia, o resto avisa), mas
+    desde a decisão de 26/08 (ponto 2) o que conta como essencial
+    passa a depender do regime:
+
+    - Airbnb: nome, tipo de documento, número de documento,
+      validade do documento, data de nascimento e nacionalidade são
+      obrigatórios. NIF, email, telefone, morada e contacto de
+      emergência ficam opcionais (nunca marcam incompleto, exceto
+      email/telefone/morada).
+    - Mensal: nome, tipo de documento, número de documento,
+      validade do documento, data de nascimento, NIF, morada e
+      estado civil são obrigatórios. Email, telefone e
+      nacionalidade ficam opcionais.
+
+    Devolve a lista de campos em falta que não impedem a gravação —
+    se não estiver vazia, o registo é marcado como incompleto.
 
     Lança ValueError no primeiro campo obrigatório em falta.
     """
@@ -81,6 +102,12 @@ def validar_cliente(dados, regime):
     if not dados.get("numero_documento", "").strip():
         raise ValueError("O número do documento é obrigatório.")
 
+    if dados.get("validade_documento") is None:
+        raise ValueError("A validade do documento é obrigatória.")
+
+    if dados.get("data_nascimento") is None:
+        raise ValueError("A data de nascimento é obrigatória.")
+
     if regime == "mensal":
         nif = dados.get("nif", "").strip()
         if not nif:
@@ -88,13 +115,38 @@ def validar_cliente(dados, regime):
         if not nif_valido(nif):
             raise ValueError(f"NIF inválido: {nif}")
 
-    em_falta = []
-    for campo in ("email", "telefone", "morada", "nacionalidade"):
-        if not dados.get(campo, "").strip():
-            em_falta.append(campo)
+        if not dados.get("morada", "").strip():
+            raise ValueError(
+                "A morada de residência é obrigatória no regime "
+                "mensal."
+            )
+
+        estado_civil = dados.get("estado_civil", "").strip()
+
+        if not estado_civil:
+            raise ValueError(
+                "O estado civil é obrigatório no regime mensal."
+            )
+
+        if estado_civil not in TIPOS_ESTADO_CIVIL:
+            raise ValueError(f"Estado civil inválido: {estado_civil}")
+
+        em_falta = []
+        for campo in ("email", "telefone", "nacionalidade"):
+            if not dados.get(campo, "").strip():
+                em_falta.append(campo)
+    else:
+        if not dados.get("nacionalidade", "").strip():
+            raise ValueError(
+                "A nacionalidade é obrigatória no regime Airbnb."
+            )
+
+        em_falta = []
+        for campo in ("email", "telefone", "morada"):
+            if not dados.get(campo, "").strip():
+                em_falta.append(campo)
 
     return em_falta
-
 
 def documento_expira_durante_estadia(validade, data_inicio, data_fim):
     """Verifica se o documento caduca durante a permanência.

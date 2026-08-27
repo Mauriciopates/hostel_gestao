@@ -24,6 +24,7 @@ def criar(
     telefone="",
     morada="",
     nacionalidade="",
+    estado_civil="",
     data_nascimento=None,
     validade_documento=None,
     contacto_emergencia="",
@@ -31,14 +32,14 @@ def criar(
     """Cria um cliente e acrescenta-o à estrutura de dados.
 
     'regime' ("mensal" ou "airbnb") não fica guardado no registo:
-    serve só para validacoes.validar_cliente() saber se o NIF é
-    obrigatório (decisão 11 — NIF bloqueia só no regime mensal). O
-    regime pertence ao contrato, não ao cliente.
+    serve só para validacoes.validar_cliente() saber quais campos
+    são obrigatórios nesse regime (decisão 11, revista na decisão
+    de 26/08 — cada regime passou a ter o seu próprio conjunto de
+    obrigatórios, ver validar_cliente). O regime pertence ao
+    contrato, não ao cliente.
 
     Devolve o registo criado, com 'incompleto' a True se algum
-    campo não essencial (email, telefone, morada, nacionalidade)
-    ficou por preencher — decisão 11: bloqueia o essencial, avisa
-    no resto.
+    campo não essencial (por regime) ficou por preencher.
 
     Não grava: a gravação é decidida pelo `main.py` (mesma
     convenção de propriedades.criar e unidades.criar).
@@ -52,6 +53,9 @@ def criar(
         "telefone": telefone.strip(),
         "morada": morada.strip(),
         "nacionalidade": nacionalidade.strip(),
+        "estado_civil": estado_civil.strip(),
+        "data_nascimento": data_nascimento,
+        "validade_documento": validade_documento,
     }
 
     em_falta = validacoes.validar_cliente(candidato, regime)
@@ -66,6 +70,7 @@ def criar(
         "telefone": candidato["telefone"],
         "morada": candidato["morada"],
         "nacionalidade": candidato["nacionalidade"],
+        "estado_civil": candidato["estado_civil"],
         "data_nascimento": data_nascimento,
         "validade_documento": validade_documento,
         "contacto_emergencia": contacto_emergencia.strip(),
@@ -132,6 +137,7 @@ def atualizar(
     telefone=None,
     morada=None,
     nacionalidade=None,
+    estado_civil=None,
     data_nascimento=None,
     validade_documento=None,
     contacto_emergencia=None,
@@ -142,7 +148,11 @@ def atualizar(
     o conteúdo de um campo opcional (mesma convenção de
     propriedades.atualizar e unidades.atualizar). 'nome',
     'tipo_documento' e 'numero_documento' não podem ficar vazios —
-    são obrigatórios, tal como em criar().
+    são obrigatórios em qualquer regime, tal como em criar(). Os
+    restantes obrigatórios dependem do regime (ver validar_cliente)
+    — tentar limpar um deles quando o regime exige preenchido é
+    recusado por validar_cliente, antes de qualquer campo ser
+    gravado.
 
     Recusa atualizar um cliente já anonimizado — a anonimização
     (decisão 8, RGPD, secção 6) é irreversível e apaga dados
@@ -151,13 +161,17 @@ def atualizar(
     tem para o mesmo caso.
 
     'regime' não é guardado (não é campo do cliente, ver criar()).
-    Serve só, nesta chamada, para reforçar que o NIF é obrigatório
-    quando regime="mensal". Omisso, o NIF só é validado no formato
-    se for fornecido, sem ser exigido.
+    Serve só, nesta chamada, para reforçar quais campos são
+    obrigatórios (decisão de 26/08). Omisso, assume-se "airbnb" —
+    mesma convenção já usada abaixo para o NIF, agora estendida aos
+    outros campos que dependem do regime.
 
     'data_nascimento' e 'validade_documento' só mudam quando um
     valor novo é fornecido; não há, nesta versão, forma de os voltar
-    a limpar depois de preenchidos (limitação documentada).
+    a limpar depois de preenchidos (limitação documentada) — e como
+    os dois passaram a obrigatórios (decisão de 26/08), um cliente
+    antigo que ainda não os tenha preenchido só volta a poder ser
+    atualizado depois de os fornecer nesta mesma chamada.
 
     Devolve o registo atualizado.
     """
@@ -203,6 +217,21 @@ def atualizar(
             if nacionalidade is not None
             else cliente["nacionalidade"]
         ),
+        "estado_civil": (
+            estado_civil.strip()
+            if estado_civil is not None
+            else cliente["estado_civil"]
+        ),
+        "data_nascimento": (
+            data_nascimento
+            if data_nascimento is not None
+            else cliente["data_nascimento"]
+        ),
+        "validade_documento": (
+            validade_documento
+            if validade_documento is not None
+            else cliente["validade_documento"]
+        ),
     }
 
     regime_para_validar = regime if regime is not None else "airbnb"
@@ -223,6 +252,7 @@ def atualizar(
     cliente["telefone"] = candidato["telefone"]
     cliente["morada"] = candidato["morada"]
     cliente["nacionalidade"] = candidato["nacionalidade"]
+    cliente["estado_civil"] = candidato["estado_civil"]
     cliente["incompleto"] = bool(em_falta)
 
     if data_nascimento is not None:
@@ -235,7 +265,6 @@ def atualizar(
         cliente["contacto_emergencia"] = contacto_emergencia.strip()
 
     return cliente
-
 
 def desativar(dados, cliente_id):
     """Marca o cliente como inativo, sem o eliminar.

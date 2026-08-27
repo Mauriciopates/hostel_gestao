@@ -5,6 +5,17 @@ sem pasta temporária. repositorio.proximo_id() é a única exceção que
 toca em ficheiro (decisão 1). Os testes de validar_cliente() e
 nif_valido() já existem em teste_validacoes.py — aqui confirma-se só
 que clientes.py delega corretamente, sem repetir essa cobertura.
+
+Os dois construtores abaixo (criar_cliente_mensal/airbnb) devolvem,
+por omissão, um cliente COMPLETO nos dois regimes (nacionalidade,
+morada, estado_civil, data de nascimento e validade do documento
+todos preenchidos) — decisão de 26/08, ponto 2, tornou-os
+obrigatórios consoante o regime, e um cliente incompleto nalgum
+destes campos bloquearia `clientes.atualizar()` em qualquer chamada
+que não os toque (ver nota em Pendencias_Antes_v1.0.0.txt, item 2).
+Os testes que precisam de um cliente incompleto de propósito limpam
+o campo que querem testar, em vez de partir de um cliente incompleto
+por omissão.
 """
 
 import sys
@@ -22,25 +33,39 @@ def dados_base():
 
 
 def criar_cliente_mensal(dados, **overrides):
-    """Cria um cliente de teste válido para o regime mensal."""
+    """Cria um cliente de teste válido e completo para o regime
+    mensal (nif, morada e estado_civil obrigatórios pela decisão de
+    26/08 — ponto 2)."""
     campos = {
         "nome": "Ana Silva",
-        "tipo_documento": "Cartão de Cidadão",
+        "tipo_documento": "Cartão Cidadão",
         "numero_documento": "12345678",
         "regime": "mensal",
         "nif": "501442600",
+        "morada": "Rua do Porto, 12",
+        "nacionalidade": "Portuguesa",
+        "estado_civil": "Solteiro(a)",
+        "data_nascimento": date(1990, 5, 20),
+        "validade_documento": date(2030, 1, 1),
     }
     campos.update(overrides)
     return clientes.criar(dados, **campos)
 
 
 def criar_cliente_airbnb(dados, **overrides):
-    """Cria um cliente de teste válido para o regime Airbnb, sem NIF."""
+    """Cria um cliente de teste válido e completo para o regime
+    Airbnb, sem NIF (nacionalidade e data de nascimento obrigatórias
+    pela decisão de 26/08 — ponto 2)."""
     campos = {
         "nome": "John Smith",
         "tipo_documento": "Passaporte",
         "numero_documento": "X1234567",
         "regime": "airbnb",
+        "morada": "123 Main St",
+        "nacionalidade": "Americana",
+        "estado_civil": "Solteiro(a)",
+        "data_nascimento": date(1985, 3, 12),
+        "validade_documento": date(2030, 1, 1),
     }
     campos.update(overrides)
     return clientes.criar(dados, **campos)
@@ -117,6 +142,41 @@ class TesteCriar(unittest.TestCase):
         dados = dados_base()
         with self.assertRaises(ValueError):
             criar_cliente_mensal(dados, nif="501442601")
+
+    def test_recusa_validade_documento_em_falta(self):
+        """Novo (decisão de 26/08, ponto 2): obrigatória nos dois
+        regimes."""
+        dados = dados_base()
+        with self.assertRaises(ValueError):
+            criar_cliente_mensal(dados, validade_documento=None)
+
+    def test_recusa_data_nascimento_em_falta(self):
+        """Novo (decisão de 26/08, ponto 2, reforçada pelo aluno):
+        obrigatória nos dois regimes."""
+        dados = dados_base()
+        with self.assertRaises(ValueError):
+            criar_cliente_mensal(dados, data_nascimento=None)
+
+    def test_recusa_morada_em_falta_no_mensal(self):
+        """Novo (decisão de 26/08, ponto 2): morada obrigatória só
+        no mensal."""
+        dados = dados_base()
+        with self.assertRaises(ValueError):
+            criar_cliente_mensal(dados, morada="")
+
+    def test_recusa_estado_civil_em_falta_no_mensal(self):
+        """Campo novo (decisão de 26/08, ponto 2): obrigatório só no
+        mensal."""
+        dados = dados_base()
+        with self.assertRaises(ValueError):
+            criar_cliente_mensal(dados, estado_civil="")
+
+    def test_recusa_nacionalidade_em_falta_no_airbnb(self):
+        """Novo (decisão de 26/08, ponto 2): nacionalidade
+        obrigatória só no Airbnb."""
+        dados = dados_base()
+        with self.assertRaises(ValueError):
+            criar_cliente_airbnb(dados, nacionalidade="")
 
     def test_limpa_espacos_dos_campos_de_texto(self):
         dados = dados_base()
@@ -282,6 +342,36 @@ class TesteAtualizar(unittest.TestCase):
         )
         self.assertEqual(cliente["nif"], "501442600")
 
+    def test_recusa_apagar_morada_no_regime_mensal(self):
+        """Novo (decisão de 26/08, ponto 2): tentar limpar a morada
+        com regime="mensal" é recusado por validar_cliente."""
+        dados = dados_base()
+        cliente = criar_cliente_mensal(dados)
+        with self.assertRaises(ValueError):
+            clientes.atualizar(
+                dados, cliente["id"], regime="mensal", morada=""
+            )
+
+    def test_recusa_apagar_nacionalidade_no_regime_airbnb(self):
+        """Novo (decisão de 26/08, ponto 2): tentar limpar a
+        nacionalidade com regime="airbnb" é recusado por
+        validar_cliente."""
+        dados = dados_base()
+        cliente = criar_cliente_airbnb(dados)
+        with self.assertRaises(ValueError):
+            clientes.atualizar(
+                dados, cliente["id"], regime="airbnb", nacionalidade=""
+            )
+
+    def test_altera_estado_civil(self):
+        """Campo novo (decisão de 26/08, ponto 2)."""
+        dados = dados_base()
+        cliente = criar_cliente_mensal(dados)
+        clientes.atualizar(
+            dados, cliente["id"], estado_civil="Casado(a)"
+        )
+        self.assertEqual(cliente["estado_civil"], "Casado(a)")
+
     def test_atualiza_incompleto_ao_preencher_opcionais(self):
         dados = dados_base()
         cliente = criar_cliente_mensal(dados)
@@ -395,7 +485,7 @@ class TesteAnonimizar(unittest.TestCase):
         clientes.anonimizar(dados, cliente["id"], "RES-001", date.today())
 
         self.assertEqual(cliente["nacionalidade"], "Portuguesa")
-        self.assertEqual(cliente["tipo_documento"], "Cartão de Cidadão")
+        self.assertEqual(cliente["tipo_documento"], "Cartão Cidadão")
 
     def test_marca_anonimizado_e_regista_autoria(self):
         dados = dados_base()

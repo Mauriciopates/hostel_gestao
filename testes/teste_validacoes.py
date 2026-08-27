@@ -43,25 +43,46 @@ class TesteNIF(unittest.TestCase):
 
 
 class TesteValidarCliente(unittest.TestCase):
-    """Campos obrigatórios e campos que apenas marcam incompleto."""
+    """Campos obrigatórios e campos que apenas marcam incompleto.
+
+    Desde a decisão de 26/08 (ponto 2), o que é obrigatório passa a
+    depender do regime: 'cliente_valido()' devolve um dicionário
+    completo o suficiente para passar nos DOIS regimes ao mesmo
+    tempo — cada teste anula só o campo que quer examinar.
+    """
 
     def cliente_valido(self):
-        """Devolve um cliente com todos os campos preenchidos."""
+        """Devolve um cliente com todos os campos preenchidos —
+        válido para qualquer um dos dois regimes ao mesmo tempo, já
+        que reúne o que cada um exige (mensal: nif, morada,
+        estado_civil; Airbnb: nacionalidade).
+        """
         return {
             "nome": "Ana Silva",
-            "tipo_documento": "Cartão de Cidadão",
+            "tipo_documento": "Cartão Cidadão",
             "numero_documento": "12345678",
+            "validade_documento": date(2030, 1, 1),
+            "data_nascimento": date(1990, 5, 20),
             "nif": "501442600",
             "email": "ana@exemplo.pt",
             "telefone": "912345678",
             "morada": "Rua do Porto, 12",
             "nacionalidade": "Portuguesa",
+            "estado_civil": "Solteiro(a)",
         }
 
     def teste_cliente_completo_nao_tem_campos_em_falta(self):
-        """Com tudo preenchido, a lista devolvida é vazia."""
-        em_falta = validacoes.validar_cliente(self.cliente_valido(), "mensal")
-        self.assertEqual([], em_falta)
+        """Com tudo preenchido, a lista devolvida é vazia, nos dois
+        regimes."""
+        em_falta_mensal = validacoes.validar_cliente(
+            self.cliente_valido(), "mensal"
+        )
+        self.assertEqual([], em_falta_mensal)
+
+        em_falta_airbnb = validacoes.validar_cliente(
+            self.cliente_valido(), "airbnb"
+        )
+        self.assertEqual([], em_falta_airbnb)
 
     def teste_nome_em_falta_bloqueia(self):
         """Sem nome, a gravação é recusada nos dois regimes."""
@@ -97,8 +118,31 @@ class TesteValidarCliente(unittest.TestCase):
         with self.assertRaises(ValueError):
             validacoes.validar_cliente(dados, "mensal")
 
+    def teste_validade_documento_em_falta_bloqueia(self):
+        """A validade do documento é obrigatória nos dois regimes
+        (decisão de 26/08, ponto 2)."""
+        for regime in ("mensal", "airbnb"):
+            dados = self.cliente_valido()
+            dados["validade_documento"] = None
+
+            with self.assertRaises(ValueError):
+                validacoes.validar_cliente(dados, regime)
+
+    def teste_data_nascimento_em_falta_bloqueia(self):
+        """A data de nascimento é obrigatória nos dois regimes —
+        decisão de 26/08, ponto 2, reforçada pelo aluno para cobrir
+        também o mensal (necessidade do próprio contrato)."""
+        for regime in ("mensal", "airbnb"):
+            dados = self.cliente_valido()
+            dados["data_nascimento"] = None
+
+            with self.assertRaises(ValueError):
+                validacoes.validar_cliente(dados, regime)
+
     def teste_nif_obrigatorio_apenas_no_regime_mensal(self):
-        """O NIF bloqueia no mensal e é dispensável no Airbnb.
+        """O NIF bloqueia no mensal e é dispensável no Airbnb —
+        nunca entra na lista de incompletos no Airbnb (decisão de
+        26/08: mantido exatamente como já estava).
 
         O contrato de arrendamento gera obrigação fiscal; uma estadia de
         três noites não. Exigir NIF a um hóspede estrangeiro recusaria
@@ -121,17 +165,72 @@ class TesteValidarCliente(unittest.TestCase):
         with self.assertRaises(ValueError):
             validacoes.validar_cliente(dados, "mensal")
 
-    def teste_campos_opcionais_marcam_incompleto(self):
-        """Campos não essenciais não bloqueiam: são devolvidos na lista.
+    def teste_morada_obrigatoria_apenas_no_regime_mensal(self):
+        """A morada de residência bloqueia no mensal (decisão de
+        26/08, ponto 2); no Airbnb fica opcional, só marca
+        incompleto."""
+        dados = self.cliente_valido()
+        dados["morada"] = ""
 
-        É a decisão 11: bloqueia o essencial, avisa no resto. O aviso só
-        produz efeito porque existe a listagem de registos incompletos.
-        """
+        with self.assertRaises(ValueError):
+            validacoes.validar_cliente(dados, "mensal")
+
+        em_falta = validacoes.validar_cliente(dados, "airbnb")
+        self.assertEqual(["morada"], em_falta)
+
+    def teste_nacionalidade_obrigatoria_apenas_no_regime_airbnb(self):
+        """A nacionalidade bloqueia no Airbnb (decisão de 26/08,
+        ponto 2); no mensal fica opcional, só marca incompleto —
+        exatamente como já acontecia antes desta decisão."""
+        dados = self.cliente_valido()
+        dados["nacionalidade"] = ""
+
+        with self.assertRaises(ValueError):
+            validacoes.validar_cliente(dados, "airbnb")
+
+        em_falta = validacoes.validar_cliente(dados, "mensal")
+        self.assertEqual(["nacionalidade"], em_falta)
+
+    def teste_estado_civil_obrigatorio_apenas_no_regime_mensal(self):
+        """Campo novo (decisão de 26/08, ponto 2): bloqueia só no
+        mensal; no Airbnb nem é pedido, não entra em incompleto."""
+        dados = self.cliente_valido()
+        dados["estado_civil"] = ""
+
+        with self.assertRaises(ValueError):
+            validacoes.validar_cliente(dados, "mensal")
+
+        em_falta = validacoes.validar_cliente(dados, "airbnb")
+        self.assertEqual([], em_falta)
+
+    def teste_estado_civil_fora_da_lista_bloqueia_no_mensal(self):
+        """Só são aceites os valores de TIPOS_ESTADO_CIVIL."""
+        dados = self.cliente_valido()
+        dados["estado_civil"] = "Namorando"
+
+        with self.assertRaises(ValueError):
+            validacoes.validar_cliente(dados, "mensal")
+
+    def teste_campos_opcionais_marcam_incompleto_no_mensal(self):
+        """No mensal, email/telefone/nacionalidade em falta marcam
+        incompleto, sem bloquear — é a decisão 11: bloqueia o
+        essencial, avisa no resto."""
         dados = self.cliente_valido()
         dados["email"] = ""
         dados["telefone"] = ""
 
         em_falta = validacoes.validar_cliente(dados, "mensal")
+
+        self.assertEqual(["email", "telefone"], em_falta)
+
+    def teste_campos_opcionais_marcam_incompleto_no_airbnb(self):
+        """No Airbnb, email/telefone/morada em falta marcam
+        incompleto, sem bloquear."""
+        dados = self.cliente_valido()
+        dados["email"] = ""
+        dados["telefone"] = ""
+
+        em_falta = validacoes.validar_cliente(dados, "airbnb")
 
         self.assertEqual(["email", "telefone"], em_falta)
 
@@ -357,10 +456,10 @@ class TesteTipoUnidade(unittest.TestCase):
 
 
 class TesteEpocaAlta(unittest.TestCase):
-    """Época alta exige indicador manual E data no 
+    """Época alta exige indicador manual E data no
 
     período(nunca automática).
-    
+
     """
 
     def teste_data_no_periodo_com_indicador_ativo(self):

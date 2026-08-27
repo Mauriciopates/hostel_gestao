@@ -91,6 +91,7 @@ def criar_mensal(
     data_inicio,
     renda_praticada,
     caucao,
+    responsavel_desconto_renda_id="",
     lugar_id="",
     dia_vencimento=None,
     motivo_alteracao_renda="",
@@ -169,6 +170,12 @@ def criar_mensal(
 
     renda_calculada = unidade["preco_base"]
 
+    if renda_praticada < renda_calculada:
+        responsaveis.validar_autoria(dados, responsavel_desconto_renda_id)
+        responsavel_desconto_renda_id = responsavel_desconto_renda_id.strip()
+    else:
+        responsavel_desconto_renda_id = ""
+
     caucao_exige_confirmacao = validacoes.validar_caucao(
         caucao, renda_praticada, config.MULTIPLICADOR_MAXIMO_CAUCAO
     )
@@ -177,6 +184,8 @@ def criar_mensal(
         dia_vencimento = config.DIA_VENCIMENTO
     else:
         _validar_dia_vencimento(dia_vencimento)
+
+    
 
     ocupacao_id = repositorio.proximo_id(PREFIXO_MENSAL)
 
@@ -196,6 +205,7 @@ def criar_mensal(
         "ocupacao_id": ocupacao_id,
         "renda_calculada": renda_calculada,
         "renda_praticada": renda_praticada,
+        "responsavel_desconto_renda_id": responsavel_desconto_renda_id,
         "caucao": caucao,
         "caucao_exige_confirmacao": caucao_exige_confirmacao,
         "motivo_alteracao_renda": motivo_alteracao_renda.strip(),
@@ -676,6 +686,7 @@ def atualizar_mensal(
     dados,
     ocupacao_id,
     renda_praticada=None,
+    responsavel_desconto_renda_id="",
     caucao=None,
     motivo_alteracao_renda=None,
     motivo_alteracao_caucao=None,
@@ -719,6 +730,17 @@ def atualizar_mensal(
 
     if nova_renda <= 0:
         raise ValueError("A renda praticada tem de ser positiva.")
+
+    if renda_praticada is not None:
+        if renda_praticada < mensal["renda_calculada"]:
+            responsaveis.validar_autoria(
+                dados, responsavel_desconto_renda_id
+            )
+            mensal["responsavel_desconto_renda_id"] = (
+                responsavel_desconto_renda_id.strip()
+            )
+        else:
+            mensal["responsavel_desconto_renda_id"] = ""
 
     nova_caucao = caucao if caucao is not None else mensal["caucao"]
 

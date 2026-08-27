@@ -3,6 +3,47 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+### [0.7.7] — 2026/08/27
+
+Primeiro lote de pendências antes da v1.0.0 (itens 1 a 4 de
+Pendencias_Antes_v1.0.0.txt) — seleção numerada nos menus,
+obrigatoriedade de dados do cliente por regime, validação do NIF
+na digitação, e autorização de responsável para descontos também
+no regime mensal.
+
+### Adicionado
+- `cli.py`: `ler_escolha` e `ler_escolha_atualizacao` passam a
+  aceitar também a seleção por número da lista, mantendo a opção
+  de digitar o texto exato.
+- Novo campo `estado_civil` em `Cliente` (`modelos.py`).
+  `validacoes.validar_cliente` passa a aplicar obrigatoriedade por
+  regime: no mensal, NIF, morada e estado civil bloqueiam; no
+  Airbnb, nacionalidade bloqueia; validade do documento e data de
+  nascimento bloqueiam nos dois regimes. `clientes.py` (`criar`/
+  `atualizar`) e `cli.py` (`_criar_cliente`/`_atualizar_cliente`)
+  atualizados em conformidade.
+- `cli.py`: novas funções `ler_nif` e `ler_atualizacao_nif` —
+  validam o dígito de controlo do NIF assim que é digitado, com
+  novo pedido em caso de erro, em vez de só recusar ao gravar no
+  fim.
+- Novo campo `responsavel_desconto_renda_id` em `OcupacaoMensal`
+  (`modelos.py`). `contratos.criar_mensal` e `atualizar_mensal`
+  passam a exigir um responsável validado
+  (`responsaveis.validar_autoria`) sempre que a renda praticada
+  fica abaixo da calculada — replica para o regime mensal a mesma
+  regra que o Airbnb já tinha (decisão 18). `cli.py`
+  (`_criar_contrato_mensal`/`_atualizar_contrato_mensal`) pede
+  confirmação e o responsável quando há desconto, e mostra quem
+  autorizou no ecrã.
+
+### Testes
+- `teste_validacoes.py`, `teste_clientes.py`, `teste_contratos.py`
+  atualizados com os novos campos obrigatórios por regime. Suite
+  completa (504 testes) confirmada verde — à parte do
+  PermissionError transitório do Windows já conhecido (não
+  reprodutível, não relacionado com estas mudanças).
+
+
 ### [0.7.6] — 2026/08/26
 
 Nome próprio nas unidades — identificação visual em toda a interface,

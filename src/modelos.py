@@ -105,6 +105,7 @@ class Cliente:
     telefone: str = ""
     morada: str = ""
     nacionalidade: str = ""
+    estado_civil: str = ""
     data_nascimento: date | None = None
     validade_documento: date | None = None
     contacto_emergencia: str = ""
@@ -152,6 +153,7 @@ class OcupacaoMensal:
     renda_calculada: Decimal
     renda_praticada: Decimal
     caucao: Decimal
+    responsavel_desconto_renda_id: str = ""
     caucao_exige_confirmacao: bool = False
     motivo_alteracao_renda: str = ""
     motivo_alteracao_caucao: str = ""

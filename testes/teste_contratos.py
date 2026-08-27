@@ -2,6 +2,13 @@
 
 sys.path.insert(0, 'src') porque o unittest corre a partir da raiz
 do projeto, e sem isto não encontraria os módulos.
+
+Os clientes criados aqui (self.cliente_mensal/self.cliente_airbnb no
+setUp, e os avulsos em vários testes) passam sempre validade do
+documento, data de nascimento e — consoante o regime — morada/
+estado_civil ou nacionalidade: desde a decisão de 26/08 (ponto 2, ver
+claude/Pendencias_Antes_v1.0.0.txt), clientes.criar já não aceita um
+cliente sem esses campos, consoante o regime.
 """
 
 import sys
@@ -62,10 +69,14 @@ class BaseContratosTest(unittest.TestCase):
         self.cliente_mensal = clientes.criar(
             self.dados,
             "João Silva",
-            "Cartão de Cidadão",
+            "Cartão Cidadão",
             "11111111",
             "mensal",
             nif="123456789",
+            morada="Rua do Porto, 12",
+            estado_civil="Solteiro(a)",
+            data_nascimento=date(1990, 5, 20),
+            validade_documento=date(2030, 1, 1),
         )
         self.cliente_airbnb = clientes.criar(
             self.dados,
@@ -73,6 +84,9 @@ class BaseContratosTest(unittest.TestCase):
             "Passaporte",
             "X9999999",
             "airbnb",
+            nacionalidade="Americana",
+            data_nascimento=date(1985, 3, 12),
+            validade_documento=date(2030, 1, 1),
         )
 
 
@@ -155,12 +169,20 @@ class TesteCriarMensal(BaseContratosTest):
     def test_bloqueia_ao_atingir_capacidade(self):
         # capacidade da unidade = 2 (um único lugar, capacidade 2)
         cliente_2 = clientes.criar(
-            self.dados, "Maria", "Cartão de Cidadão", "222", "mensal",
+            self.dados, "Maria", "Cartão Cidadão", "222", "mensal",
             nif="222222220",
+            morada="Rua X, 1",
+            estado_civil="Solteiro(a)",
+            data_nascimento=date(1992, 4, 10),
+            validade_documento=date(2030, 1, 1),
         )
         cliente_3 = clientes.criar(
-            self.dados, "Pedro", "Cartão de Cidadão", "333", "mensal",
+            self.dados, "Pedro", "Cartão Cidadão", "333", "mensal",
             nif="333333330",
+            morada="Rua Y, 2",
+            estado_civil="Solteiro(a)",
+            data_nascimento=date(1988, 7, 1),
+            validade_documento=date(2030, 1, 1),
         )
         contratos.criar_mensal(
             self.dados, self.unidade_mensal["id"], self.cliente_mensal["id"],
@@ -212,8 +234,12 @@ class TesteCriarMensal(BaseContratosTest):
 
     def test_lugar_de_casal_admite_dois_contratos(self):
         cliente_2 = clientes.criar(
-            self.dados, "Maria", "Cartão de Cidadão", "222", "mensal",
+            self.dados, "Maria", "Cartão Cidadão", "222", "mensal",
             nif="222222220",
+            morada="Rua X, 1",
+            estado_civil="Solteiro(a)",
+            data_nascimento=date(1992, 4, 10),
+            validade_documento=date(2030, 1, 1),
         )
         contratos.criar_mensal(
             self.dados, self.unidade_mensal["id"], self.cliente_mensal["id"],
@@ -230,8 +256,12 @@ class TesteCriarMensal(BaseContratosTest):
 
     def test_lugar_esgotado_recusa_terceiro_contrato(self):
         cliente_2 = clientes.criar(
-            self.dados, "Maria", "Cartão de Cidadão", "222", "mensal",
+            self.dados, "Maria", "Cartão Cidadão", "222", "mensal",
             nif="222222220",
+            morada="Rua X, 1",
+            estado_civil="Solteiro(a)",
+            data_nascimento=date(1992, 4, 10),
+            validade_documento=date(2030, 1, 1),
         )
         # capacidade total da unidade sobe para 3, para isolar o teste
         # do lugar (capacidade 2) e não colidir com a capacidade total
@@ -241,8 +271,12 @@ class TesteCriarMensal(BaseContratosTest):
         unidades.criar_lugar(self.dados, outro_quarto["id"], "Cama 2")
 
         cliente_3 = clientes.criar(
-            self.dados, "Pedro", "Cartão de Cidadão", "333", "mensal",
+            self.dados, "Pedro", "Cartão Cidadão", "333", "mensal",
             nif="333333330",
+            morada="Rua Y, 2",
+            estado_civil="Solteiro(a)",
+            data_nascimento=date(1988, 7, 1),
+            validade_documento=date(2030, 1, 1),
         )
         contratos.criar_mensal(
             self.dados, self.unidade_mensal["id"], self.cliente_mensal["id"],
@@ -281,6 +315,9 @@ class TesteCriarMensal(BaseContratosTest):
         cliente = clientes.criar(
             self.dados, "Expirado", "Passaporte", "999", "mensal",
             nif="444444440",
+            morada="Rua Z, 3",
+            estado_civil="Solteiro(a)",
+            data_nascimento=date(1991, 2, 2),
             validade_documento=date(2025, 12, 31),
         )
         ocupacao, _ = contratos.criar_mensal(
@@ -293,6 +330,9 @@ class TesteCriarMensal(BaseContratosTest):
         cliente = clientes.criar(
             self.dados, "Válido", "Passaporte", "888", "mensal",
             nif="555555550",
+            morada="Rua W, 4",
+            estado_civil="Solteiro(a)",
+            data_nascimento=date(1993, 6, 15),
             validade_documento=date(2030, 1, 1),
         )
         ocupacao, _ = contratos.criar_mensal(
@@ -351,6 +391,49 @@ class TesteCriarMensal(BaseContratosTest):
             Decimal("250.00"), Decimal("400.00"),
         )
         self.assertTrue(mensal["caucao_exige_confirmacao"])
+
+    def test_renda_abaixo_da_calculada_sem_responsavel_e_recusada(self):
+        """Réplica da decisão 18 (Airbnb) para o mensal: renda abaixo
+        da calculada é um desconto e exige responsável validado."""
+        with self.assertRaises(ValueError):
+            contratos.criar_mensal(
+                self.dados, self.unidade_mensal["id"],
+                self.cliente_mensal["id"], date(2026, 1, 10),
+                Decimal("200.00"), Decimal("200.00"),
+            )
+
+    def test_renda_abaixo_da_calculada_com_responsavel_valido_grava(self):
+        responsavel = responsaveis.criar(self.dados, "Gestor de Turno")
+        _, mensal = contratos.criar_mensal(
+            self.dados, self.unidade_mensal["id"],
+            self.cliente_mensal["id"], date(2026, 1, 10),
+            Decimal("200.00"), Decimal("200.00"),
+            responsavel_desconto_renda_id=responsavel["id"],
+        )
+        self.assertEqual(mensal["renda_praticada"], Decimal("200.00"))
+        self.assertEqual(
+            mensal["responsavel_desconto_renda_id"], responsavel["id"]
+        )
+
+    def test_renda_igual_a_calculada_nao_exige_responsavel(self):
+        _, mensal = contratos.criar_mensal(
+            self.dados, self.unidade_mensal["id"],
+            self.cliente_mensal["id"], date(2026, 1, 10),
+            Decimal("250.00"), Decimal("250.00"),
+        )
+        self.assertEqual(mensal["responsavel_desconto_renda_id"], "")
+
+    def test_renda_acima_da_calculada_ignora_responsavel_passado(self):
+        # sem desconto, o campo fica sempre em branco — mesmo que
+        # algo tenha sido passado nele (mesma regra do Airbnb).
+        responsavel = responsaveis.criar(self.dados, "Gestor de Turno")
+        _, mensal = contratos.criar_mensal(
+            self.dados, self.unidade_mensal["id"],
+            self.cliente_mensal["id"], date(2026, 1, 10),
+            Decimal("300.00"), Decimal("300.00"),
+            responsavel_desconto_renda_id=responsavel["id"],
+        )
+        self.assertEqual(mensal["responsavel_desconto_renda_id"], "")
 
 
 class TesteAtualizarMensal(BaseContratosTest):
@@ -411,6 +494,52 @@ class TesteAtualizarMensal(BaseContratosTest):
     def test_ocupacao_inexistente_gera_erro(self):
         with self.assertRaises(ValueError):
             contratos.atualizar_mensal(self.dados, "CNT-999")
+
+    def test_renda_abaixo_da_calculada_sem_responsavel_e_recusada(self):
+        with self.assertRaises(ValueError):
+            contratos.atualizar_mensal(
+                self.dados, self.ocupacao["id"],
+                renda_praticada=Decimal("200.00"),
+            )
+
+    def test_renda_abaixo_da_calculada_com_responsavel_valido_atualiza(self):
+        responsavel = responsaveis.criar(self.dados, "Gestor de Turno")
+        _, mensal = contratos.atualizar_mensal(
+            self.dados, self.ocupacao["id"],
+            renda_praticada=Decimal("200.00"),
+            responsavel_desconto_renda_id=responsavel["id"],
+        )
+        self.assertEqual(mensal["renda_praticada"], Decimal("200.00"))
+        self.assertEqual(
+            mensal["responsavel_desconto_renda_id"], responsavel["id"]
+        )
+
+    def test_renda_de_volta_ao_valor_calculado_limpa_responsavel(self):
+        responsavel = responsaveis.criar(self.dados, "Gestor de Turno")
+        contratos.atualizar_mensal(
+            self.dados, self.ocupacao["id"],
+            renda_praticada=Decimal("200.00"),
+            responsavel_desconto_renda_id=responsavel["id"],
+        )
+        _, mensal = contratos.atualizar_mensal(
+            self.dados, self.ocupacao["id"],
+            renda_praticada=Decimal("250.00"),
+        )
+        self.assertEqual(mensal["responsavel_desconto_renda_id"], "")
+
+    def test_sem_alterar_renda_nao_mexe_no_responsavel(self):
+        responsavel = responsaveis.criar(self.dados, "Gestor de Turno")
+        contratos.atualizar_mensal(
+            self.dados, self.ocupacao["id"],
+            renda_praticada=Decimal("200.00"),
+            responsavel_desconto_renda_id=responsavel["id"],
+        )
+        _, mensal = contratos.atualizar_mensal(
+            self.dados, self.ocupacao["id"], dia_vencimento=10
+        )
+        self.assertEqual(
+            mensal["responsavel_desconto_renda_id"], responsavel["id"]
+        )
 
 
 class TesteEncerrarMensal(BaseContratosTest):
@@ -817,6 +946,8 @@ class TesteProcurarListar(BaseContratosTest):
         # compara só com o início)
         cliente_expirado = clientes.criar(
             self.dados, "Expirado", "Passaporte", "777", "airbnb",
+            nacionalidade="Britânica",
+            data_nascimento=date(1980, 11, 5),
             validade_documento=date(2026, 3, 3),
         )
         contratos.registar_airbnb(

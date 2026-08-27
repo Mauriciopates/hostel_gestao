@@ -62,6 +62,53 @@ def ler_texto(mensagem, obrigatorio=True):
 
         print("Este campo é obrigatório.")
 
+def ler_nif(mensagem, obrigatorio=True):
+    """Lê um NIF do teclado, validando o dígito de controlo na hora.
+
+    Reaproveita o ciclo de obrigatoriedade de `ler_texto` — não repete
+    aqui o "pede, valida vazio, repete" — e acrescenta um segundo
+    ciclo: se o valor vier preenchido mas o dígito de controlo estiver
+    errado, repete o pedido em vez de deixar o erro só aparecer dentro
+    de `validacoes.validar_cliente`, depois de já teres passado pelos
+    campos todos a seguir.
+
+    Um NIF opcional (regime Airbnb) que fica em branco não é validado
+    — está vazio, não errado.
+    """
+    while True:
+        valor = ler_texto(mensagem, obrigatorio=obrigatorio)
+
+        if not valor:
+            return valor
+
+        if not validacoes.nif_valido(valor):
+            print("NIF inválido — verifica os dígitos.")
+            continue
+
+        return valor
+
+def ler_atualizacao_nif(mensagem, atual):
+    """Versão de `ler_atualizacao` específica para o NIF.
+
+    Mantém a mesma convenção de teclado (Enter mantém, hífen apaga —
+    o NIF usa sempre `permite_limpar=True`, porque no regime Airbnb
+    pode ficar vazio) e acrescenta o mesmo ciclo de validação de
+    `ler_nif`: um valor novo com o dígito de controlo errado é
+    recusado ali mesmo, sem deixar passar para
+    `clientes.atualizar`.
+    """
+    while True:
+        valor = ler_atualizacao(mensagem, atual, permite_limpar=True)
+
+        if not valor:
+            return valor
+
+        if not validacoes.nif_valido(valor):
+            print("NIF inválido — verifica os dígitos.")
+            continue
+
+        return valor
+
 def ler_inteiro(mensagem, obrigatorio=True, minimo=None):
     """Lê um número inteiro do teclado, convertendo e validando.
 
@@ -551,19 +598,25 @@ def menu_propriedades(dados):
 
 def ler_escolha(mensagem, opcoes, obrigatorio=True):
     """Lê texto do teclado, aceitando só um valor de um conjunto
-    fixo (comparação sem distinguir maiúsculas/minúsculas),
+    fixo — por número da posição na lista ou pelo texto exato
+    (comparação sem distinguir maiúsculas de minúsculas) —,
     devolvendo o valor exato tal como está em 'opcoes'.
 
     Serve campos de texto restritos a um conjunto pequeno e fixo —
     aqui o tipo da unidade (validacoes.TIPOS_UNIDADE); mais à frente
     servirá o tipo de documento de um cliente ou o tipo de um
-    movimento de stock. Diferente de mostrar_menu: não numera nem
-    tem opção de saída embutida — não é navegação, é um campo de
-    formulário.
+    movimento de stock. Diferente de mostrar_menu: não é navegação,
+    é um campo de formulário — não tem opção de saída embutida, mas
+    passa a numerar as opções para quem preferir escolher pelo
+    número em vez de escrever o nome todo (mesmo princípio de
+    mostrar_menu, sem o "0" de saída).
 
     obrigatorio=False permite usá-la também como filtro opcional
     numa listagem (Enter em branco devolve None, "não filtrar").
     """
+    for posicao, opcao in enumerate(opcoes, start=1):
+        print(f"{posicao}. {opcao}")
+
     texto_opcoes = "/".join(opcoes)
 
     while True:
@@ -574,14 +627,22 @@ def ler_escolha(mensagem, opcoes, obrigatorio=True):
         if not resposta and not obrigatorio:
             return None
 
-        resposta_normalizada = resposta.lower()
+        resposta_normalizada = resposta.strip().lower()
+
+        if resposta_normalizada.isdigit():
+            numero = int(resposta_normalizada)
+
+            if 1 <= numero <= len(opcoes):
+                return opcoes[numero - 1]
+
+            print(f"Escolhe um número entre 1 e {len(opcoes)}.")
+            continue
 
         for opcao in opcoes:
             if resposta_normalizada == opcao.lower():
                 return opcao
 
         print(f"Valor inválido. Escolhe um de: {texto_opcoes}.")
-
 
 def ler_booleano_atualizacao(mensagem, atual):
     """Lê uma alteração para um campo booleano, permitindo manter o
@@ -1350,10 +1411,12 @@ def _criar_cliente(dados):
     """Ecrã de criação de um cliente.
 
     'regime' não fica gravado (não é campo do cliente — ver
-    clientes.criar) e serve só para saber se o NIF é obrigatório
-    (decisão 11: bloqueia só no mensal). Peço-o antes do NIF
-    precisamente para poder tornar o NIF obrigatório já no ecrã,
-    em vez de deixar a rejeição só acontecer dentro de
+    clientes.criar) e serve só para saber quais campos são
+    obrigatórios (decisão 11, revista na decisão de 26/08: cada
+    regime tem o seu próprio conjunto de obrigatórios — ver
+    validacoes.validar_cliente). Peço-o logo a seguir ao número de
+    documento precisamente para poder ajustar a obrigatoriedade já
+    no ecrã, em vez de deixar a rejeição só acontecer dentro de
     validacoes.validar_cliente depois de já teres preenchido tudo
     o resto.
     """
@@ -1367,18 +1430,20 @@ def _criar_cliente(dados):
     numero_documento = ler_texto("Número de documento: ")
     regime = ler_escolha("Regime", validacoes.TIPOS_UNIDADE)
 
-    nif = ler_texto("NIF: ", obrigatorio=(regime == "mensal"))
+    nif = ler_nif("NIF: ", obrigatorio=(regime == "mensal"))
     email = ler_texto("Email: ", obrigatorio=False)
     telefone = ler_texto("Telefone: ", obrigatorio=False)
-    morada = ler_texto("Morada: ", obrigatorio=False)
-    nacionalidade = ler_texto("Nacionalidade: ", obrigatorio=False)
-    data_nascimento = ler_data(
-        "Data de nascimento (Enter se desconhecida): ", obrigatorio=False
+    morada = ler_texto("Morada: ", obrigatorio=(regime == "mensal"))
+    nacionalidade = ler_texto(
+        "Nacionalidade: ", obrigatorio=(regime == "airbnb")
     )
-    validade_documento = ler_data(
-        "Validade do documento (Enter se não aplicável): ",
-        obrigatorio=False,
+    estado_civil = ler_escolha(
+        "Estado civil",
+        validacoes.TIPOS_ESTADO_CIVIL,
+        obrigatorio=(regime == "mensal"),
     )
+    data_nascimento = ler_data("Data de nascimento: ")
+    validade_documento = ler_data("Validade do documento: ")
     contacto_emergencia = ler_texto("Contacto de emergência: ", 
                                     obrigatorio=False
                                     )
@@ -1395,6 +1460,7 @@ def _criar_cliente(dados):
             telefone=telefone,
             morada=morada,
             nacionalidade=nacionalidade,
+            estado_civil=estado_civil or "",
             data_nascimento=data_nascimento,
             validade_documento=validade_documento,
             contacto_emergencia=contacto_emergencia,
@@ -1409,7 +1475,6 @@ def _criar_cliente(dados):
             if cliente["incompleto"] else ""
     )
     print(f"Cliente criado: {cliente['id']} — {cliente['nome']}{aviso}")
-
 
 def _listar_clientes(dados):
     """Inclui o filtro por 'incompleto' — decisão 11 exige que essa
@@ -1483,7 +1548,7 @@ def _atualizar_cliente(dados):
     numero_documento = ler_atualizacao(
         "Número de documento", cliente["numero_documento"]
     )
-    nif = ler_atualizacao("NIF", cliente["nif"], permite_limpar=True)
+    nif = ler_atualizacao_nif("NIF", cliente["nif"])
     email = ler_atualizacao("Email", cliente["email"], permite_limpar=True)
     telefone = ler_atualizacao(
         "Telefone", cliente["telefone"], permite_limpar=True
@@ -1493,8 +1558,15 @@ def _atualizar_cliente(dados):
         "Nacionalidade", cliente["nacionalidade"], permite_limpar=True
     )
 
+    estado_civil = ler_escolha_atualizacao(
+        "Estado civil", validacoes.TIPOS_ESTADO_CIVIL,
+        cliente["estado_civil"],
+    )
+
     exige_nif = confirmar(
-        "Cliente em regime mensal (torna o NIF obrigatório)?"
+        "Cliente em regime mensal (torna obrigatórios o NIF, a "
+        "morada e o estado civil; fora do mensal, obrigatório é a "
+        "nacionalidade)?"
     )
     regime = "mensal" if exige_nif else None
 
@@ -1514,6 +1586,8 @@ def _atualizar_cliente(dados):
         permite_limpar=True,
     )
 
+    
+
     try:
         cliente = clientes.atualizar(
             dados,
@@ -1527,6 +1601,7 @@ def _atualizar_cliente(dados):
             telefone=telefone,
             morada=morada,
             nacionalidade=nacionalidade,
+            estado_civil=estado_civil,
             data_nascimento=data_nascimento,
             validade_documento=validade_documento,
             contacto_emergencia=contacto_emergencia,
@@ -1698,8 +1773,12 @@ def ler_escolha_atualizacao(mensagem, opcoes, atual):
     """Lê uma alteração para um campo de escolha restrita, permitindo
     manter o valor atual — versão de `ler_atualizacao` para um
     conjunto fixo de valores (ex.: tipo de documento) em vez de
-    texto livre.
+    texto livre. Tal como `ler_escolha`, aceita tanto o número da
+    posição na lista como o texto exato da opção.
     """
+    for posicao, opcao in enumerate(opcoes, start=1):
+        print(f"{posicao}. {opcao}")
+
     texto_opcoes = "/".join(opcoes)
     resposta = ler_texto(
         f"{mensagem} [atual: {atual}] ({texto_opcoes}, Enter mantém): ",
@@ -1709,7 +1788,16 @@ def ler_escolha_atualizacao(mensagem, opcoes, atual):
     if not resposta:
         return None
 
-    resposta_normalizada = resposta.lower()
+    resposta_normalizada = resposta.strip().lower()
+
+    if resposta_normalizada.isdigit():
+        numero = int(resposta_normalizada)
+
+        if 1 <= numero <= len(opcoes):
+            return opcoes[numero - 1]
+
+        print(f"Valor inválido — mantido '{atual}'.")
+        return None
 
     for opcao in opcoes:
         if resposta_normalizada == opcao.lower():
@@ -1793,6 +1881,21 @@ def _criar_contrato_mensal(dados):
             obrigatorio=False,
         )
 
+    responsavel_desconto_renda_id = ""
+    if renda_praticada < unidade["preco_base"]:
+        if not confirmar(
+            f"A renda praticada ({formatar_valor(renda_praticada)}) é "
+            f"inferior à calculada "
+            f"({formatar_valor(unidade['preco_base'])}) — confirmas o "
+            f"desconto?"
+        ):
+            print("Criação cancelada.")
+            return
+
+        responsavel_desconto_renda_id = ler_texto(
+            "ID do responsável que autoriza este desconto: "
+        )
+
     caucao = ler_decimal("Caução: ", minimo=Decimal("0"))
 
     try:
@@ -1827,6 +1930,7 @@ def _criar_contrato_mensal(dados):
             lugar_id=lugar_id,
             dia_vencimento=dia_vencimento,
             motivo_alteracao_renda=motivo_alteracao_renda,
+            responsavel_desconto_renda_id=responsavel_desconto_renda_id,
             motivo_alteracao_caucao=motivo_alteracao_caucao,
         )
     except ValueError as erro:
@@ -1843,9 +1947,15 @@ def _criar_contrato_mensal(dados):
         if ocupacao["aviso_documento"]
         else ""
     )
+    desconto_renda = (
+        f"  [desconto autorizado por "
+        f"{mensal['responsavel_desconto_renda_id']}]"
+        if mensal["responsavel_desconto_renda_id"]
+        else ""
+    )
     print(
         f"Contrato criado: {ocupacao['id']} — {nome_cliente}, "
-        f"unidade {unidade['nome']}{aviso}"
+        f"unidade {unidade['nome']}{aviso}{desconto_renda}"
     )
 
 
