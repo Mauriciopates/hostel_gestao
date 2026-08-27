@@ -435,6 +435,83 @@ class TesteCriarMensal(BaseContratosTest):
         )
         self.assertEqual(mensal["responsavel_desconto_renda_id"], "")
 
+    def test_recusa_cliente_sem_nif_para_contrato_mensal(self):
+        # self.cliente_airbnb nunca preencheu NIF (regime airbnb não
+        # o exige) — um contrato mensal exige NIF, item 6.
+        with self.assertRaises(ValueError):
+            contratos.criar_mensal(
+                self.dados, self.unidade_mensal["id"],
+                self.cliente_airbnb["id"], date(2026, 1, 10),
+                Decimal("250.00"), Decimal("250.00"),
+            )
+
+    def test_recusa_segundo_contrato_mensal_ativo_mesmo_cliente(self):
+        contratos.criar_mensal(
+            self.dados, self.unidade_mensal["id"],
+            self.cliente_mensal["id"], date(2026, 1, 10),
+            Decimal("250.00"), Decimal("250.00"),
+        )
+        with self.assertRaises(ValueError):
+            contratos.criar_mensal(
+                self.dados, self.unidade_mensal["id"],
+                self.cliente_mensal["id"], date(2026, 2, 1),
+                Decimal("250.00"), Decimal("250.00"),
+            )
+
+    def test_permite_novo_contrato_apos_encerrar_o_anterior(self):
+        ocupacao, _ = contratos.criar_mensal(
+            self.dados, self.unidade_mensal["id"],
+            self.cliente_mensal["id"], date(2026, 1, 10),
+            Decimal("250.00"), Decimal("250.00"),
+        )
+        contratos.encerrar_mensal(
+            self.dados, ocupacao["id"], date(2026, 3, 1)
+        )
+        # o contrato anterior já não está ativo — o NIF fica livre
+        # para um novo contrato, mesmo cliente ou não.
+        novo_ocupacao, _ = contratos.criar_mensal(
+            self.dados, self.unidade_mensal["id"],
+            self.cliente_mensal["id"], date(2026, 3, 5),
+            Decimal("250.00"), Decimal("250.00"),
+        )
+        self.assertTrue(novo_ocupacao["ativo"])
+
+    def test_recusa_segundo_contrato_mensal_por_nif_entre_clientes_diferentes(
+        self,
+    ):
+        # Duas fichas de cliente ativas com o mesmo NIF não deviam
+        # ser alcançáveis pelas funções públicas de clientes.py
+        # (item 5, e agora também reativar) — mas os dados são um
+        # ficheiro JSON editável à mão, por isso o bloqueio do item 6
+        # cruza por NIF e não por cliente_id, como defesa extra.
+        # Aqui simula-se esse estado diretamente no dicionário, sem
+        # depender de nenhum "gap" nas funções de clientes.py.
+        cliente_b = clientes.criar(
+            self.dados,
+            "Maria Duplicada",
+            "Cartão Cidadão",
+            "22222222",
+            "mensal",
+            nif="222222220",
+            morada="Rua Nova, 5",
+            estado_civil="Solteiro(a)",
+            data_nascimento=date(1992, 4, 15),
+            validade_documento=date(2030, 1, 1),
+        )
+        cliente_b["nif"] = self.cliente_mensal["nif"]
+
+        contratos.criar_mensal(
+            self.dados, self.unidade_mensal["id"],
+            self.cliente_mensal["id"], date(2026, 1, 10),
+            Decimal("250.00"), Decimal("250.00"),
+        )
+        with self.assertRaises(ValueError):
+            contratos.criar_mensal(
+                self.dados, self.unidade_mensal["id"],
+                cliente_b["id"], date(2026, 2, 1),
+                Decimal("250.00"), Decimal("250.00"),
+            )
+
 
 class TesteAtualizarMensal(BaseContratosTest):
 

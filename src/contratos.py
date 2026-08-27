@@ -23,6 +23,7 @@ import validacoes
 PREFIXO_MENSAL = "CNT"
 PREFIXO_AIRBNB = "RSV"
 
+
 def _capacidade_unidade(dados, unidade_id):
     """Soma a capacidade de todos os lugares ativos da unidade.
 
@@ -37,6 +38,7 @@ def _capacidade_unidade(dados, unidade_id):
             total += lugar["capacidade"]
 
     return total
+
 
 def _ocupantes_mensal(dados, unidade_id, lugar_id=None):
     """Conta as ocupações mensais ativas de uma unidade (ou lugar).
@@ -61,6 +63,7 @@ def _ocupantes_mensal(dados, unidade_id, lugar_id=None):
 
     return total
 
+
 def _validar_dia_vencimento(dia_vencimento):
     """Valida que 'dia_vencimento' é um inteiro entre 1 e 28.
 
@@ -70,20 +73,38 @@ def _validar_dia_vencimento(dia_vencimento):
     numa atualização. Chamada agora pelas duas, para nunca mais
     divergirem.
     """
-    if (
-        not isinstance(dia_vencimento, int)
-        or isinstance(dia_vencimento, bool)
-    ):
-        raise ValueError(
-            "O dia de vencimento tem de ser um número inteiro."
-        )
+    if not isinstance(dia_vencimento, int) or isinstance(dia_vencimento, bool):
+        raise ValueError("O dia de vencimento tem de ser um número inteiro.")
 
     if not 1 <= dia_vencimento <= 28:
-        raise ValueError(
-            "O dia de vencimento tem de estar entre 1 e 28."
-        )
-    
-    
+        raise ValueError("O dia de vencimento tem de estar entre 1 e 28.")
+
+
+def _nif_tem_contrato_mensal_ativo(dados, nif):
+    """Verifica se o NIF já tem um contrato mensal ativo, em
+    qualquer unidade.
+
+    Cruza pelo NIF do cliente, não pelo cliente_id — duas fichas de
+    cliente com o mesmo NIF (por exemplo, uma reativada depois de
+    ter estado inativa) contam da mesma forma, porque é a mesma
+    pessoa que teria dois contratos mensais em vigor ao mesmo tempo.
+    Decisão de 26/08 (item 6): cruza só entre contratos mensais,
+    nunca com reservas Airbnb.
+    """
+    for ocupacao in dados["ocupacoes"]:
+        if not ocupacao["ativo"]:
+            continue
+        if ocupacao["tipo"] != "mensal":
+            continue
+
+        outro_cliente = clientes.procurar(dados, ocupacao["cliente_id"])
+
+        if outro_cliente is not None and outro_cliente["nif"] == nif:
+            return True
+
+    return False
+
+
 def criar_mensal(
     dados,
     unidade_id,
@@ -124,6 +145,15 @@ def criar_mensal(
     if not cliente["ativo"]:
         raise ValueError(f"O cliente {cliente_id} não está ativo.")
 
+    if not cliente["nif"]:
+        raise ValueError(
+            f"O cliente {cliente_id} não tem NIF preenchido — "
+            f"obrigatório para um contrato mensal."
+        )
+
+    if _nif_tem_contrato_mensal_ativo(dados, cliente["nif"]):
+        raise ValueError(f"O NIF {cliente['nif']} já tem um contrato mensal ativo.")
+
     aviso_documento = validacoes.documento_expira_durante_estadia(
         cliente["validade_documento"], data_inicio, None
     )
@@ -135,8 +165,7 @@ def criar_mensal(
 
     if ocupantes >= capacidade:
         raise ValueError(
-            f"A unidade {unidade_id} já está na capacidade máxima "
-            f"({capacidade})."
+            f"A unidade {unidade_id} já está na capacidade máxima " f"({capacidade})."
         )
 
     lugar_id = lugar_id.strip()
@@ -151,13 +180,10 @@ def criar_mensal(
 
         if quarto is None or quarto["unidade_id"] != unidade_id:
             raise ValueError(
-                f"O lugar {lugar_id} não pertence à unidade "
-                f"{unidade_id}."
+                f"O lugar {lugar_id} não pertence à unidade " f"{unidade_id}."
             )
 
-        ocupantes_lugar = _ocupantes_mensal(
-            dados, unidade_id, lugar_id=lugar_id
-        )
+        ocupantes_lugar = _ocupantes_mensal(dados, unidade_id, lugar_id=lugar_id)
 
         if ocupantes_lugar >= lugar["capacidade"]:
             raise ValueError(
@@ -184,8 +210,6 @@ def criar_mensal(
         dia_vencimento = config.DIA_VENCIMENTO
     else:
         _validar_dia_vencimento(dia_vencimento)
-
-    
 
     ocupacao_id = repositorio.proximo_id(PREFIXO_MENSAL)
 
@@ -218,6 +242,7 @@ def criar_mensal(
 
     return ocupacao, ocupacao_mensal
 
+
 def procurar(dados, ocupacao_id):
     """Devolve a ocupação com o identificador indicado, ou None.
 
@@ -237,6 +262,7 @@ def procurar(dados, ocupacao_id):
             return ocupacao
 
     return None
+
 
 def listar(
     dados,
@@ -309,42 +335,36 @@ def encerrar_mensal(dados, ocupacao_id, data_fim, motivo=""):
         raise ValueError(f"A ocupação {ocupacao_id} não existe.")
 
     if ocupacao["tipo"] != "mensal":
-        raise ValueError(
-            f"A ocupação {ocupacao_id} não é um contrato mensal."
-        )
+        raise ValueError(f"A ocupação {ocupacao_id} não é um contrato mensal.")
 
     if not ocupacao["ativo"]:
         raise ValueError(f"O contrato {ocupacao_id} já está encerrado.")
 
     if data_fim is None:
-        raise ValueError(
-            "A data de fim é obrigatória para encerrar um contrato."
-        )
+        raise ValueError("A data de fim é obrigatória para encerrar um contrato.")
 
     validacoes.validar_intervalo(ocupacao["data_inicio"], data_fim)
 
     mensal = _dados_mensais(dados, ocupacao_id)
 
     if mensal is None:
-        raise ValueError(
-            f"Faltam os dados mensais da ocupação {ocupacao_id}."
-        )
+        raise ValueError(f"Faltam os dados mensais da ocupação {ocupacao_id}.")
 
-    meses = (
-        (data_fim.year - ocupacao["data_inicio"].year) * 12
-        + (data_fim.month - ocupacao["data_inicio"].month)
+    meses = (data_fim.year - ocupacao["data_inicio"].year) * 12 + (
+        data_fim.month - ocupacao["data_inicio"].month
     )
 
     mensal["duracao_abaixo_minima"] = meses < config.DURACAO_MINIMA_MESES
     mensal["aviso_previo_insuficiente"] = (
-        (data_fim - date.today()).days < config.AVISO_PREVIO_DIAS
-    )
+        data_fim - date.today()
+    ).days < config.AVISO_PREVIO_DIAS
     mensal["motivo_encerramento"] = motivo.strip()
 
     ocupacao["data_fim"] = data_fim
     ocupacao["ativo"] = False
 
     return ocupacao, mensal
+
 
 def _dados_mensais(dados, ocupacao_id):
     """Devolve o registo específico de um contrato mensal, ou None.
@@ -362,6 +382,7 @@ def _dados_mensais(dados, ocupacao_id):
 
     return None
 
+
 def _dados_airbnb(dados, ocupacao_id):
     """Devolve o registo específico de uma reserva Airbnb, ou None.
 
@@ -374,6 +395,7 @@ def _dados_airbnb(dados, ocupacao_id):
             return registo
 
     return None
+
 
 def cancelar_airbnb(dados, ocupacao_id, motivo=""):
     """Cancela uma reserva Airbnb.
@@ -392,9 +414,7 @@ def cancelar_airbnb(dados, ocupacao_id, motivo=""):
         raise ValueError(f"A ocupação {ocupacao_id} não existe.")
 
     if ocupacao["tipo"] != "airbnb":
-        raise ValueError(
-            f"A ocupação {ocupacao_id} não é uma reserva Airbnb."
-        )
+        raise ValueError(f"A ocupação {ocupacao_id} não é uma reserva Airbnb.")
 
     if not ocupacao["ativo"]:
         raise ValueError(f"A reserva {ocupacao_id} já está cancelada.")
@@ -402,14 +422,13 @@ def cancelar_airbnb(dados, ocupacao_id, motivo=""):
     airbnb = _dados_airbnb(dados, ocupacao_id)
 
     if airbnb is None:
-        raise ValueError(
-            f"Faltam os dados Airbnb da ocupação {ocupacao_id}."
-        )
+        raise ValueError(f"Faltam os dados Airbnb da ocupação {ocupacao_id}.")
 
     airbnb["motivo_cancelamento"] = motivo.strip()
     ocupacao["ativo"] = False
 
     return ocupacao, airbnb
+
 
 def reativar(dados, ocupacao_id):
     """Repõe uma ocupação encerrada ou cancelada como ativa.
@@ -461,6 +480,7 @@ def reativar(dados, ocupacao_id):
 
     return ocupacao
 
+
 def _sobrepoe(inicio_a, fim_a, inicio_b, fim_b):
     """Verifica se dois intervalos de datas se sobrepõem.
 
@@ -475,9 +495,8 @@ def _sobrepoe(inicio_a, fim_a, inicio_b, fim_b):
     """
     return inicio_a < fim_b and inicio_b < fim_a
 
-def _existe_sobreposicao(
-    dados, unidade_id, data_inicio, data_fim, ignorar_id=None
-):
+
+def _existe_sobreposicao(dados, unidade_id, data_inicio, data_fim, ignorar_id=None):
     """Verifica se alguma reserva Airbnb ativa da unidade se
     sobrepõe ao intervalo indicado.
 
@@ -502,13 +521,13 @@ def _existe_sobreposicao(
             continue
 
         if _sobrepoe(
-            data_inicio, data_fim, ocupacao["data_inicio"],
-            ocupacao["data_fim"]
-            ):
+            data_inicio, data_fim, ocupacao["data_inicio"], ocupacao["data_fim"]
+        ):
 
             return True
 
     return False
+
 
 def _preco_calculado_airbnb(unidade, data_inicio, data_fim):
     """Soma o preço de cada noite da estadia, aplicando o preço de
@@ -540,6 +559,7 @@ def _preco_calculado_airbnb(unidade, data_inicio, data_fim):
 
     return total
 
+
 def calcular_preco_airbnb(unidade, data_inicio, data_fim):
     """Calcula o preço total de uma estadia Airbnb, sem registar
     nada — versão pública de '_preco_calculado_airbnb' (mesma
@@ -554,6 +574,7 @@ def calcular_preco_airbnb(unidade, data_inicio, data_fim):
     cli.py não devia chamar diretamente.
     """
     return _preco_calculado_airbnb(unidade, data_inicio, data_fim)
+
 
 def registar_airbnb(
     dados,
@@ -607,9 +628,7 @@ def registar_airbnb(
     )
 
     if _existe_sobreposicao(dados, unidade_id, data_inicio, data_fim):
-        raise ValueError(
-            f"A unidade {unidade_id} já tem uma reserva nesse período."
-        )
+        raise ValueError(f"A unidade {unidade_id} já tem uma reserva nesse período.")
 
     aviso_documento = validacoes.documento_expira_durante_estadia(
         cliente["validade_documento"], data_inicio, data_fim
@@ -631,8 +650,7 @@ def registar_airbnb(
 
         if not hora_chegada:
             raise ValueError(
-                "A hora de chegada é obrigatória quando o check-in "
-                "é tardio."
+                "A hora de chegada é obrigatória quando o check-in " "é tardio."
             )
 
         multa_calculada = unidade["multa_check_in_tardio"]
@@ -682,6 +700,7 @@ def registar_airbnb(
 
     return ocupacao, ocupacao_airbnb
 
+
 def atualizar_mensal(
     dados,
     ocupacao_id,
@@ -705,27 +724,20 @@ def atualizar_mensal(
         raise ValueError(f"A ocupação {ocupacao_id} não existe.")
 
     if ocupacao["tipo"] != "mensal":
-        raise ValueError(
-            f"A ocupação {ocupacao_id} não é um contrato mensal."
-        )
+        raise ValueError(f"A ocupação {ocupacao_id} não é um contrato mensal.")
 
     if not ocupacao["ativo"]:
         raise ValueError(
-            f"O contrato {ocupacao_id} está encerrado e não pode "
-            f"ser alterado."
+            f"O contrato {ocupacao_id} está encerrado e não pode " f"ser alterado."
         )
 
     mensal = _dados_mensais(dados, ocupacao_id)
 
     if mensal is None:
-        raise ValueError(
-            f"Faltam os dados mensais da ocupação {ocupacao_id}."
-        )
+        raise ValueError(f"Faltam os dados mensais da ocupação {ocupacao_id}.")
 
     nova_renda = (
-        renda_praticada
-        if renda_praticada is not None
-        else mensal["renda_praticada"]
+        renda_praticada if renda_praticada is not None else mensal["renda_praticada"]
     )
 
     if nova_renda <= 0:
@@ -733,9 +745,7 @@ def atualizar_mensal(
 
     if renda_praticada is not None:
         if renda_praticada < mensal["renda_calculada"]:
-            responsaveis.validar_autoria(
-                dados, responsavel_desconto_renda_id
-            )
+            responsaveis.validar_autoria(dados, responsavel_desconto_renda_id)
             mensal["responsavel_desconto_renda_id"] = (
                 responsavel_desconto_renda_id.strip()
             )
@@ -756,9 +766,7 @@ def atualizar_mensal(
         mensal["motivo_alteracao_renda"] = motivo_alteracao_renda.strip()
 
     if motivo_alteracao_caucao is not None:
-        mensal["motivo_alteracao_caucao"] = (
-            motivo_alteracao_caucao.strip()
-        )
+        mensal["motivo_alteracao_caucao"] = motivo_alteracao_caucao.strip()
 
     if dia_vencimento is not None:
         _validar_dia_vencimento(dia_vencimento)
@@ -796,31 +804,24 @@ def atualizar_airbnb(
         raise ValueError(f"A ocupação {ocupacao_id} não existe.")
 
     if ocupacao["tipo"] != "airbnb":
-        raise ValueError(
-            f"A ocupação {ocupacao_id} não é uma reserva Airbnb."
-        )
+        raise ValueError(f"A ocupação {ocupacao_id} não é uma reserva Airbnb.")
 
     if not ocupacao["ativo"]:
         raise ValueError(
-            f"A reserva {ocupacao_id} está cancelada e não pode "
-            f"ser alterada."
+            f"A reserva {ocupacao_id} está cancelada e não pode " f"ser alterada."
         )
 
     airbnb = _dados_airbnb(dados, ocupacao_id)
 
     if airbnb is None:
-        raise ValueError(
-            f"Faltam os dados Airbnb da ocupação {ocupacao_id}."
-        )
+        raise ValueError(f"Faltam os dados Airbnb da ocupação {ocupacao_id}.")
 
     if preco_praticado is not None:
         if preco_praticado <= 0:
             raise ValueError("O preço praticado tem de ser positivo.")
 
         if preco_praticado < airbnb["preco_calculado"]:
-            responsaveis.validar_autoria(
-                dados, responsavel_desconto_preco_id
-            )
+            responsaveis.validar_autoria(dados, responsavel_desconto_preco_id)
             airbnb["responsavel_desconto_preco_id"] = (
                 responsavel_desconto_preco_id.strip()
             )
@@ -840,9 +841,7 @@ def atualizar_airbnb(
             raise ValueError("A multa praticada não pode ser negativa.")
 
         if multa_praticada < airbnb["multa_calculada"]:
-            responsaveis.validar_autoria(
-                dados, responsavel_desconto_multa_id
-            )
+            responsaveis.validar_autoria(dados, responsavel_desconto_multa_id)
             airbnb["responsavel_desconto_multa_id"] = (
                 responsavel_desconto_multa_id.strip()
             )

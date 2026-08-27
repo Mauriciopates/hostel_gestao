@@ -501,6 +501,30 @@ class TesteDesativarReativar(unittest.TestCase):
         with self.assertRaises(ValueError):
             clientes.reativar(dados, cliente["id"])
 
+    def test_recusa_reativar_quando_nif_pertence_a_outro_ativo(self):
+        """Novo (decisão de 26/08, item 6): fecha o "gap" que
+        deixava dois clientes ativos ficarem com o mesmo NIF —
+        cliente_1 desativado, cliente_2 criado entretanto com o
+        mesmo NIF (permitido, item 5, porque cliente_1 está
+        inativo), e só então se tenta reativar cliente_1."""
+        dados = dados_base()
+        cliente_1 = criar_cliente_mensal(dados, nif="501442600")
+        clientes.desativar(dados, cliente_1["id"])
+        criar_cliente_mensal(
+            dados, numero_documento="99999999", nif="501442600"
+        )
+        with self.assertRaises(ValueError):
+            clientes.reativar(dados, cliente_1["id"])
+
+    def test_permite_reativar_quando_nif_esta_livre(self):
+        """Confirma que a verificação nova não bloqueia o caso
+        normal: NIF que continua livre."""
+        dados = dados_base()
+        cliente = criar_cliente_mensal(dados, nif="501442600")
+        clientes.desativar(dados, cliente["id"])
+        clientes.reativar(dados, cliente["id"])
+        self.assertTrue(cliente["ativo"])
+
 
 class TesteAnonimizar(unittest.TestCase):
 

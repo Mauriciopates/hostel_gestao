@@ -12,6 +12,7 @@ import validacoes
 
 PREFIXO = "CLI"
 
+
 def _nif_pertence_a_outro_cliente(dados, nif, ignorar_id=None):
     """Verifica se o NIF já pertence a outro cliente ativo.
 
@@ -36,6 +37,7 @@ def _nif_pertence_a_outro_cliente(dados, nif, ignorar_id=None):
             return True
 
     return False
+
 
 def criar(
     dados,
@@ -85,9 +87,7 @@ def criar(
     em_falta = validacoes.validar_cliente(candidato, regime)
 
     if _nif_pertence_a_outro_cliente(dados, candidato["nif"]):
-        raise ValueError(
-            f"Já existe um cliente ativo com o NIF {candidato['nif']}."
-        )
+        raise ValueError(f"Já existe um cliente ativo com o NIF {candidato['nif']}.")
 
     cliente = {
         "id": repositorio.proximo_id(PREFIXO),
@@ -113,6 +113,7 @@ def criar(
     dados["clientes"].append(cliente)
     return cliente
 
+
 def procurar(dados, cliente_id):
     """Devolve o cliente com o identificador indicado, ou None.
 
@@ -127,6 +128,7 @@ def procurar(dados, cliente_id):
             return c
 
     return None
+
 
 def listar(dados, incluir_inativos=False, incompleto=None):
     """Devolve os clientes, filtráveis por estado e por incompletos.
@@ -153,6 +155,7 @@ def listar(dados, incluir_inativos=False, incompleto=None):
         resultado.append(c)
 
     return resultado
+
 
 def atualizar(
     dados,
@@ -211,14 +214,11 @@ def atualizar(
 
     if cliente["anonimizado"]:
         raise ValueError(
-            f"O cliente {cliente_id} está anonimizado e não pode "
-            f"ser atualizado."
+            f"O cliente {cliente_id} está anonimizado e não pode " f"ser atualizado."
         )
 
     candidato = {
-        "nome": (
-            nome.strip() if nome is not None else cliente["nome"]
-        ),
+        "nome": (nome.strip() if nome is not None else cliente["nome"]),
         "tipo_documento": (
             tipo_documento.strip()
             if tipo_documento is not None
@@ -230,17 +230,9 @@ def atualizar(
             else cliente["numero_documento"]
         ),
         "nif": nif.strip() if nif is not None else cliente["nif"],
-        "email": (
-            email.strip() if email is not None else cliente["email"]
-        ),
-        "telefone": (
-            telefone.strip()
-            if telefone is not None
-            else cliente["telefone"]
-        ),
-        "morada": (
-            morada.strip() if morada is not None else cliente["morada"]
-        ),
+        "email": (email.strip() if email is not None else cliente["email"]),
+        "telefone": (telefone.strip() if telefone is not None else cliente["telefone"]),
+        "morada": (morada.strip() if morada is not None else cliente["morada"]),
         "nacionalidade": (
             nacionalidade.strip()
             if nacionalidade is not None
@@ -273,12 +265,8 @@ def atualizar(
     ):
         raise ValueError(f"NIF inválido: {candidato['nif']}")
 
-    if _nif_pertence_a_outro_cliente(
-        dados, candidato["nif"], ignorar_id=cliente_id
-    ):
-        raise ValueError(
-            f"Já existe um cliente ativo com o NIF {candidato['nif']}."
-        )
+    if _nif_pertence_a_outro_cliente(dados, candidato["nif"], ignorar_id=cliente_id):
+        raise ValueError(f"Já existe um cliente ativo com o NIF {candidato['nif']}.")
 
     cliente["nome"] = candidato["nome"]
 
@@ -304,6 +292,7 @@ def atualizar(
 
     return cliente
 
+
 def desativar(dados, cliente_id):
     """Marca o cliente como inativo, sem o eliminar.
 
@@ -325,6 +314,7 @@ def desativar(dados, cliente_id):
     cliente["ativo"] = False
     return cliente
 
+
 def reativar(dados, cliente_id):
     """Repõe um cliente desativado como ativo.
 
@@ -333,6 +323,13 @@ def reativar(dados, cliente_id):
     simples: um cliente anonimizado (decisão 8, operação
     irreversível) não pode ser reativado por esta função, porque os
     dados pessoais já foram apagados e não há para onde voltar.
+
+        Recusa também reativar se o NIF do cliente já pertencer, agora,
+    a outro cliente ativo (item 6, 27/08) — sem esta verificação,
+    dois clientes ativos podiam acabar com o mesmo NIF: um
+    desativado, um novo criado entretanto com o mesmo NIF (permitido,
+    porque o primeiro estava inativo — item 5), e o primeiro depois
+    reativado sem que nada voltasse a cruzar os dois.
     """
 
     cliente = procurar(dados, cliente_id)
@@ -342,15 +339,23 @@ def reativar(dados, cliente_id):
 
     if cliente["anonimizado"]:
         raise ValueError(
-            f"O cliente {cliente_id} foi anonimizado e não pode ser "
-            f"reativado."
+            f"O cliente {cliente_id} foi anonimizado e não pode ser " f"reativado."
         )
 
     if cliente["ativo"]:
         raise ValueError(f"O cliente {cliente_id} já está ativo.")
 
+    if _nif_pertence_a_outro_cliente(
+        dados, cliente["nif"], ignorar_id=cliente_id
+    ):
+        raise ValueError(
+            f"Já existe um cliente ativo com o NIF {cliente['nif']} — "
+            f"não é possível reativar."
+        )
+
     cliente["ativo"] = True
     return cliente
+
 
 def anonimizar(dados, cliente_id, responsavel_id, data):
     """Anonimiza um cliente, a pedido do titular ou por prazo excedido.
@@ -388,8 +393,8 @@ def anonimizar(dados, cliente_id, responsavel_id, data):
 
     if not responsavel_id:
         raise ValueError(
-            "O responsável pela anonimização é obrigatório."
-        )
+        "O responsável pela anonimização é obrigatório."
+    )
 
     if data is None:
         raise ValueError("A data da anonimização é obrigatória.")
