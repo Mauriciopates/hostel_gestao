@@ -95,12 +95,18 @@ def atualizar(dados, propriedade_id, nome=None, morada=None):
     return p
 
 
-def desativar(dados, propriedade_id):
+def desativar(dados, propriedade_id, forcar=False):
     """Marca a propriedade como inativa, sem a eliminar.
 
     Uma propriedade com unidades associadas não pode desaparecer: os
     contratos históricos referem essas unidades (decisão 8). Desativar
     mantém o registo e tira-o das listagens de escolha.
+
+    Recusa por omissão se existirem unidades ativas dependentes
+    (decisão de 27/08, item 9) — passa forcar=True para desativar
+    mesmo assim, conscientemente. A verificação vive aqui, não só no
+    cli.py, para que qualquer interface futura (a GUI da Fase 2, por
+    exemplo) herde esta proteção sem ter de a repetir.
     """
 
     p = procurar(dados, propriedade_id)
@@ -110,6 +116,19 @@ def desativar(dados, propriedade_id):
 
     if not p["ativo"]:
         raise ValueError(f"A propriedade {propriedade_id} já está inativa.")
+
+    if not forcar:
+        unidades_ativas = [
+            u for u in dados["unidades"]
+            if u["propriedade_id"] == propriedade_id and u["ativo"]
+        ]
+
+        if unidades_ativas:
+            raise ValueError(
+                f"A propriedade {propriedade_id} tem "
+                f"{len(unidades_ativas)} unidade(s) ativa(s) — "
+                f"forcar=True para desativar mesmo assim."
+            )
 
     p["ativo"] = False
     return p

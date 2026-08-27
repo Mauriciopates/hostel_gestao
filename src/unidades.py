@@ -200,13 +200,20 @@ def atualizar(
     return unidade
 
 
-def desativar(dados, unidade_id):
+def desativar(dados, unidade_id, forcar=False):
     """Marca a unidade como inativa, sem a eliminar.
 
     Uma unidade com ocupações associadas não pode desaparecer: os
     contratos históricos referem-se a ela (decisão 8). Desativar
     mantém o registo e tira-o das listagens de escolha, sem apagar
     o histórico.
+
+    Recusa por omissão se existirem ocupações ativas dependentes
+    (decisão de 27/08, item 9) — passa forcar=True para desativar
+    mesmo assim, conscientemente. Lê dados["ocupacoes"] diretamente
+    em vez de chamar contratos.py, para evitar import circular
+    (contratos.py já importa unidades.py) — mesmo padrão já usado
+    em `_estado_mensal`/`_estado_airbnb`, acima.
     """
 
     unidade = procurar(dados, unidade_id)
@@ -216,6 +223,19 @@ def desativar(dados, unidade_id):
 
     if not unidade["ativo"]:
         raise ValueError(f"A unidade {unidade_id} já está inativa.")
+
+    if not forcar:
+        ocupacoes_ativas = [
+            o for o in dados["ocupacoes"]
+            if o["unidade_id"] == unidade_id and o["ativo"]
+        ]
+
+        if ocupacoes_ativas:
+            raise ValueError(
+                f"A unidade {unidade_id} tem "
+                f"{len(ocupacoes_ativas)} ocupação(ões) ativa(s) — "
+                f"forcar=True para desativar mesmo assim."
+            )
 
     unidade["ativo"] = False
     return unidade

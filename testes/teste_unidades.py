@@ -317,6 +317,40 @@ class TesteDesativarReativar(unittest.TestCase):
         with self.assertRaises(ValueError):
             unidades.reativar(dados, "UNI-999")
 
+    def test_recusa_desativar_com_ocupacao_ativa_sem_forcar(self):
+        """Novo (decisão de 27/08, item 9): sem forcar=True, recusa
+        desativar se existir alguma ocupação ativa dependente."""
+        dados = dados_base()
+        unidade = criar_unidade_mensal(dados)
+        criar_ocupacao(dados, unidade["id"], "mensal", date(2026, 9, 1))
+
+        with self.assertRaises(ValueError):
+            unidades.desativar(dados, unidade["id"])
+
+    def test_desativar_com_forcar_ignora_ocupacoes_ativas(self):
+        """Com forcar=True, desativa mesmo com ocupações ativas
+        dependentes — decisão consciente de quem chama."""
+        dados = dados_base()
+        unidade = criar_unidade_mensal(dados)
+        criar_ocupacao(dados, unidade["id"], "mensal", date(2026, 9, 1))
+
+        resultado = unidades.desativar(dados, unidade["id"], forcar=True)
+
+        self.assertFalse(resultado["ativo"])
+
+    def test_desativar_ignora_ocupacao_ja_inativa(self):
+        """Uma ocupação já inativa não conta como dependência ativa
+        — não exige forcar."""
+        dados = dados_base()
+        unidade = criar_unidade_mensal(dados)
+        criar_ocupacao(
+            dados, unidade["id"], "mensal", date(2026, 9, 1), ativo=False
+        )
+
+        resultado = unidades.desativar(dados, unidade["id"])
+
+        self.assertFalse(resultado["ativo"])
+
 
 class TesteManutencao(unittest.TestCase):
 

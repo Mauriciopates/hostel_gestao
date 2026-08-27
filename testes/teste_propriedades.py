@@ -10,16 +10,25 @@ gravado em ficheiro e avança entre execuções; verifica-se o prefixo.
 
 import sys
 import unittest
+from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 import propriedades
+import unidades
 
 
 def estrutura(*nomes):
-    """Devolve uma estrutura com as propriedades indicadas já criadas."""
-    dados = {"propriedades": []}
+    """Devolve uma estrutura com as propriedades indicadas já criadas.
+
+    Inclui "unidades" e "ocupacoes" vazias mesmo que este ficheiro não
+    crie nada lá por omissão — desativar() passou a verificar
+    dependências ativas (decisão de 27/08, item 9), e alguns testes
+    abaixo criam (e desativam) unidades para exercitar essa
+    verificação.
+    """
+    dados = {"propriedades": [], "unidades": [], "ocupacoes": []}
     for nome in nomes:
         propriedades.criar(dados, nome)
     return dados
@@ -286,6 +295,48 @@ class TesteDesativarReativar(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             propriedades.reativar(dados, "PRO-999")
+
+    def teste_desativar_com_unidade_ativa_e_recusado_sem_forcar(self):
+        """Novo (decisão de 27/08, item 9): sem forcar=True, recusa
+        desativar se existir alguma unidade ativa dependente."""
+        dados = estrutura("Aldoar")
+        pro_id = dados["propriedades"][0]["id"]
+        unidades.criar(
+            dados, pro_id, "Unidade Teste", "mensal",
+            Decimal("250.00"), Decimal("250.00"), Decimal("20.00"),
+        )
+
+        with self.assertRaises(ValueError):
+            propriedades.desativar(dados, pro_id)
+
+    def teste_desativar_com_forcar_ignora_unidades_ativas(self):
+        """Com forcar=True, desativa mesmo com unidades ativas
+        dependentes — decisão consciente de quem chama."""
+        dados = estrutura("Aldoar")
+        pro_id = dados["propriedades"][0]["id"]
+        unidades.criar(
+            dados, pro_id, "Unidade Teste", "mensal",
+            Decimal("250.00"), Decimal("250.00"), Decimal("20.00"),
+        )
+
+        p = propriedades.desativar(dados, pro_id, forcar=True)
+
+        self.assertFalse(p["ativo"])
+
+    def teste_desativar_ignora_unidade_ja_inativa(self):
+        """Uma unidade já inativa não conta como dependência ativa —
+        não exige forcar."""
+        dados = estrutura("Aldoar")
+        pro_id = dados["propriedades"][0]["id"]
+        unidade = unidades.criar(
+            dados, pro_id, "Unidade Teste", "mensal",
+            Decimal("250.00"), Decimal("250.00"), Decimal("20.00"),
+        )
+        unidades.desativar(dados, unidade["id"])
+
+        p = propriedades.desativar(dados, pro_id)
+
+        self.assertFalse(p["ativo"])
 
 
 if __name__ == "__main__":

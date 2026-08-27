@@ -62,6 +62,7 @@ def ler_texto(mensagem, obrigatorio=True):
 
         print("Este campo é obrigatório.")
 
+
 def ler_nif(mensagem, obrigatorio=True):
     """Lê um NIF do teclado, validando o dígito de controlo na hora.
 
@@ -87,6 +88,7 @@ def ler_nif(mensagem, obrigatorio=True):
 
         return valor
 
+
 def ler_atualizacao_nif(mensagem, atual):
     """Versão de `ler_atualizacao` específica para o NIF.
 
@@ -108,6 +110,7 @@ def ler_atualizacao_nif(mensagem, atual):
             continue
 
         return valor
+
 
 def ler_inteiro(mensagem, obrigatorio=True, minimo=None):
     """Lê um número inteiro do teclado, convertendo e validando.
@@ -147,6 +150,7 @@ def ler_inteiro(mensagem, obrigatorio=True, minimo=None):
             continue
 
         return valor
+
 
 def ler_decimal(mensagem, obrigatorio=True, minimo=None):
     """Lê um valor monetário do teclado, convertendo para Decimal.
@@ -263,6 +267,7 @@ def confirmar(mensagem):
 
         print("Responde 's' ou 'n'.")
 
+
 def mostrar_menu(titulo, opcoes, texto_saida="Sair"):
     """Mostra um menu numerado com saída/voltar embutida em "0",
     aceitando tanto o número como o texto da opção.
@@ -296,10 +301,8 @@ def mostrar_menu(titulo, opcoes, texto_saida="Sair"):
 
     print(f"0. {texto_saida}")
 
-
     rotulos: dict[str, int | None] = {
-        opcao.strip().lower(): indice
-        for indice, opcao in enumerate(opcoes)
+        opcao.strip().lower(): indice for indice, opcao in enumerate(opcoes)
     }
     rotulos[texto_saida.strip().lower()] = None
 
@@ -323,6 +326,7 @@ def mostrar_menu(titulo, opcoes, texto_saida="Sair"):
 
         print("Opção não reconhecida — escreve o número ou o nome exato.")
 
+
 def formatar_data(data):
     """Converte uma data para o formato DD/MM/AAAA usado na
     apresentação.
@@ -343,6 +347,7 @@ def formatar_data(data):
         return "—"
 
     return data.strftime("%d/%m/%Y")
+
 
 def formatar_valor(valor):
     """Converte um Decimal monetário para texto em PT-PT, com euro.
@@ -380,6 +385,7 @@ def formatar_valor(valor):
 
     return f"{texto} €"
 
+
 def _criar_propriedade(dados):
     """Ecrã de criação de uma propriedade.
 
@@ -403,10 +409,8 @@ def _criar_propriedade(dados):
 
     repositorio.gravar(dados)
 
-    print(
-        f"Propriedade criada: {propriedade['id']} — "
-        f"{propriedade['nome']}"
-    )
+    print(f"Propriedade criada: {propriedade['id']} — " f"{propriedade['nome']}")
+
 
 def _listar_propriedades(dados):
     """Ecrã de listagem de propriedades.
@@ -435,6 +439,7 @@ def _listar_propriedades(dados):
 
         if p["morada"]:
             print(f"    morada: {p['morada']}")
+
 
 def ler_atualizacao(mensagem, atual, permite_limpar=False):
     """Lê um campo de texto para uma atualização, distinguindo "não
@@ -468,6 +473,7 @@ def ler_atualizacao(mensagem, atual, permite_limpar=False):
 
     return texto
 
+
 def _atualizar_propriedade(dados):
     """Ecrã de atualização de uma propriedade existente.
 
@@ -486,9 +492,7 @@ def _atualizar_propriedade(dados):
         return
 
     nome = ler_atualizacao("Nome", propriedade["nome"])
-    morada = ler_atualizacao(
-        "Morada", propriedade["morada"], permite_limpar=True
-    )
+    morada = ler_atualizacao("Morada", propriedade["morada"], permite_limpar=True)
 
     try:
         propriedade = propriedades.atualizar(
@@ -500,28 +504,36 @@ def _atualizar_propriedade(dados):
 
     repositorio.gravar(dados)
 
-    print(
-        f"Propriedade atualizada: {propriedade['id']} — "
-        f"{propriedade['nome']}"
-    )
+    print(f"Propriedade atualizada: {propriedade['id']} — " f"{propriedade['nome']}")
 
 
 def _desativar_propriedade(dados):
     """Ecrã de desativação de uma propriedade.
 
-    Pede o ID e chama propriedades.desativar. Sem confirmação extra
-    antes de desativar — decisão 8 já prevê o `reativar` para
-    corrigir um engano, e o próprio `desativar` recusa se a
-    propriedade já estiver inativa, o que já expõe o erro em vez de
-    o aceitar em silêncio. Uma confirmação aqui duplicaria essa
-    proteção sem necessidade.
+    Conta as unidades ativas dependentes só para decidir se pede
+    confirmação (decisão de 27/08, item 9) — quem efetivamente
+    bloqueia é propriedades.desativar(), com o parâmetro `forcar`.
     """
     print("\n--- Desativar propriedade ---")
 
     propriedade_id = ler_texto("ID da propriedade: ")
 
+    unidades_ativas = unidades.listar(dados, propriedade_id=propriedade_id)
+    forcar = False
+
+    if unidades_ativas:
+        if not confirmar(
+            f"Esta propriedade tem {len(unidades_ativas)} unidade(s) "
+            f"ativa(s) — confirmas a desativação mesmo assim?"
+        ):
+            print("Desativação cancelada.")
+            return
+        forcar = True
+
     try:
-        propriedade = propriedades.desativar(dados, propriedade_id)
+        propriedade = propriedades.desativar(
+            dados, propriedade_id, forcar=forcar
+        )
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
@@ -532,6 +544,7 @@ def _desativar_propriedade(dados):
         f"Propriedade desativada: {propriedade['id']} — "
         f"{propriedade['nome']}"
     )
+
 
 def _reativar_propriedade(dados):
     """Ecrã de reativação de uma propriedade desativada.
@@ -554,10 +567,8 @@ def _reativar_propriedade(dados):
 
     repositorio.gravar(dados)
 
-    print(
-        f"Propriedade reativada: {propriedade['id']} — "
-        f"{propriedade['nome']}"
-    )
+    print(f"Propriedade reativada: {propriedade['id']} — " f"{propriedade['nome']}")
+
 
 def menu_propriedades(dados):
     """Submenu de gestão de propriedades — o primeiro módulo de
@@ -587,14 +598,13 @@ def menu_propriedades(dados):
     rotulos = ["Criar", "Listar", "Atualizar", "Desativar", "Reativar"]
 
     while True:
-        escolha = mostrar_menu(
-            "Gestão de Propriedades", rotulos, texto_saida="Voltar"
-        )
+        escolha = mostrar_menu("Gestão de Propriedades", rotulos, texto_saida="Voltar")
 
         if escolha is None:
             return
 
         acoes[escolha](dados)
+
 
 def ler_escolha(mensagem, opcoes, obrigatorio=True):
     """Lê texto do teclado, aceitando só um valor de um conjunto
@@ -620,9 +630,7 @@ def ler_escolha(mensagem, opcoes, obrigatorio=True):
     texto_opcoes = "/".join(opcoes)
 
     while True:
-        resposta = ler_texto(
-            f"{mensagem} ({texto_opcoes}): ", obrigatorio=obrigatorio
-        )
+        resposta = ler_texto(f"{mensagem} ({texto_opcoes}): ", obrigatorio=obrigatorio)
 
         if not resposta and not obrigatorio:
             return None
@@ -643,6 +651,7 @@ def ler_escolha(mensagem, opcoes, obrigatorio=True):
                 return opcao
 
         print(f"Valor inválido. Escolhe um de: {texto_opcoes}.")
+
 
 def ler_booleano_atualizacao(mensagem, atual):
     """Lê uma alteração para um campo booleano, permitindo manter o
@@ -671,6 +680,7 @@ def ler_booleano_atualizacao(mensagem, atual):
     print("Resposta não reconhecida — valor mantido.")
     return None
 
+
 def _criar_unidade(dados):
     """Ecrã de criação de uma unidade.
 
@@ -684,9 +694,7 @@ def _criar_unidade(dados):
     nome = ler_texto("Nome da unidade: ")
     tipo = ler_escolha("Tipo", validacoes.TIPOS_UNIDADE)
     preco_base = ler_decimal("Preço base: ", minimo=Decimal("0"))
-    preco_epoca_alta = ler_decimal(
-        "Preço em época alta: ", minimo=Decimal("0")
-    )
+    preco_epoca_alta = ler_decimal("Preço em época alta: ", minimo=Decimal("0"))
     multa_check_in_tardio = ler_decimal(
         "Multa de check-in tardio: ", minimo=Decimal("0")
     )
@@ -710,8 +718,7 @@ def _criar_unidade(dados):
     repositorio.gravar(dados)
 
     print(
-        f"Unidade criada: {unidade['id']} — {unidade['nome']} "
-        f"({unidade['tipo']})"
+        f"Unidade criada: {unidade['id']} — {unidade['nome']} " f"({unidade['tipo']})"
     )
 
 
@@ -719,14 +726,15 @@ def _listar_unidades(dados):
     """Ecrã de listagem de unidades, filtrável por propriedade e tipo."""
     incluir_inativas = confirmar("Incluir unidades inativas?")
 
-    propriedade_id = ler_texto(
-        "Filtrar por propriedade (ID, Enter para todas): ",
-        obrigatorio=False,
-    ) or None
-
-    tipo = ler_escolha(
-        "Filtrar por tipo", validacoes.TIPOS_UNIDADE, obrigatorio=False
+    propriedade_id = (
+        ler_texto(
+            "Filtrar por propriedade (ID, Enter para todas): ",
+            obrigatorio=False,
+        )
+        or None
     )
+
+    tipo = ler_escolha("Filtrar por tipo", validacoes.TIPOS_UNIDADE, obrigatorio=False)
 
     lista = unidades.listar(
         dados,
@@ -752,9 +760,7 @@ def _listar_unidades(dados):
         estado = "ativa" if u["ativo"] else "inativa"
         manutencao = " [em manutenção]" if u["em_manutencao"] else ""
         propriedade = propriedades.procurar(dados, u["propriedade_id"])
-        nome_propriedade = (
-            propriedade["nome"] if propriedade else u["propriedade_id"]
-        )
+        nome_propriedade = propriedade["nome"] if propriedade else u["propriedade_id"]
         print(
             f"{u['id']} — {u['nome']} ({u['tipo']}), propriedade "
             f"{nome_propriedade} ({estado}){manutencao}"
@@ -768,6 +774,7 @@ def _listar_unidades(dados):
             f"    estado em {formatar_data(data)}: "
             f"{unidades.estado(dados, u['id'], data)}"
         )
+
 
 def _atualizar_unidade(dados):
     """Ecrã de atualização de uma unidade.
@@ -827,13 +834,32 @@ def _atualizar_unidade(dados):
 
     print(f"Unidade atualizada: {unidade['id']} — {unidade['nome']}")
 
+
 def _desativar_unidade(dados):
+    """Ecrã de desativação de uma unidade.
+
+    Mesma lógica de `_desativar_propriedade`, para ocupações ativas
+    (contratos mensais/reservas Airbnb) em vez de unidades.
+    """
     print("\n--- Desativar unidade ---")
 
     unidade_id = ler_texto("ID da unidade: ")
 
+    ocupacoes_ativas = contratos.listar(dados, unidade_id=unidade_id)
+    forcar = False
+
+    if ocupacoes_ativas:
+        if not confirmar(
+            f"Esta unidade tem {len(ocupacoes_ativas)} ocupação(ões) "
+            f"ativa(s) (contratos/reservas) — confirmas a desativação "
+            f"mesmo assim?"
+        ):
+            print("Desativação cancelada.")
+            return
+        forcar = True
+
     try:
-        unidade = unidades.desativar(dados, unidade_id)
+        unidade = unidades.desativar(dados, unidade_id, forcar=forcar)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
@@ -875,10 +901,7 @@ def _marcar_manutencao(dados):
 
     repositorio.gravar(dados)
 
-    print(
-        f"Unidade {unidade['id']} — {unidade['nome']}"
-        "marcada em manutenção."
-    )
+    print(f"Unidade {unidade['id']} — {unidade['nome']}" "marcada em manutenção.")
 
 
 def _desmarcar_manutencao(dados):
@@ -937,14 +960,13 @@ def menu_unidades(dados):
     ]
 
     while True:
-        escolha = mostrar_menu(
-            "Gestão de Unidades", rotulos, texto_saida="Voltar"
-        )
+        escolha = mostrar_menu("Gestão de Unidades", rotulos, texto_saida="Voltar")
 
         if escolha is None:
             return
 
         acoes[escolha](dados)
+
 
 def _criar_quarto(dados, unidade_id):
     """'privativo' e 'limpeza_incluida' são independentes entre si
@@ -991,9 +1013,7 @@ def _listar_quartos(dados, unidade_id):
         estado = "ativo" if q["ativo"] else "inativo"
         privativo = "privativo" if q["privativo"] else "partilhado"
         limpeza = "com limpeza" if q["limpeza_incluida"] else "sem limpeza"
-        print(
-            f"{q['id']} — {q['nome']} ({estado}, {privativo}, {limpeza})"
-        )
+        print(f"{q['id']} — {q['nome']} ({estado}, {privativo}, {limpeza})")
 
 
 def _atualizar_quarto(dados, unidade_id):
@@ -1007,10 +1027,7 @@ def _atualizar_quarto(dados, unidade_id):
         return
 
     if quarto["unidade_id"] != unidade_id:
-        print(
-            f"Erro: O quarto {quarto_id} não pertence à unidade "
-            f"{unidade_id}."
-        )
+        print(f"Erro: O quarto {quarto_id} não pertence à unidade " f"{unidade_id}.")
         return
 
     nome = ler_atualizacao("Nome", quarto["nome"])
@@ -1043,10 +1060,7 @@ def _desativar_quarto(dados, unidade_id):
     quarto = unidades.procurar_quarto(dados, quarto_id)
 
     if quarto is not None and quarto["unidade_id"] != unidade_id:
-        print(
-            f"Erro: O quarto {quarto_id} não pertence à unidade "
-            f"{unidade_id}."
-        )
+        print(f"Erro: O quarto {quarto_id} não pertence à unidade " f"{unidade_id}.")
         return
 
     try:
@@ -1067,10 +1081,7 @@ def _reativar_quarto(dados, unidade_id):
     quarto = unidades.procurar_quarto(dados, quarto_id)
 
     if quarto is not None and quarto["unidade_id"] != unidade_id:
-        print(
-            f"Erro: O quarto {quarto_id} não pertence à unidade "
-            f"{unidade_id}."
-        )
+        print(f"Erro: O quarto {quarto_id} não pertence à unidade " f"{unidade_id}.")
         return
 
     try:
@@ -1096,10 +1107,7 @@ def _gerir_lugares(dados, unidade_id):
         return
 
     if quarto["unidade_id"] != unidade_id:
-        print(
-            f"Erro: O quarto {quarto_id} não pertence à unidade "
-            f"{unidade_id}."
-        )
+        print(f"Erro: O quarto {quarto_id} não pertence à unidade " f"{unidade_id}.")
         return
 
     _menu_lugares(dados, quarto_id)
@@ -1139,6 +1147,7 @@ def _menu_quartos(dados, unidade_id):
 
         acoes[escolha](dados, unidade_id)
 
+
 def _criar_lugar(dados, quarto_id):
     """Capacidade por omissão 1 (decisão 17 — um beliche são dois
     lugares de capacidade 1, nunca um de capacidade 2).
@@ -1146,17 +1155,13 @@ def _criar_lugar(dados, quarto_id):
     print(f"\n--- Novo lugar em {quarto_id} ---")
 
     nome = ler_texto("Nome do lugar: ")
-    capacidade = ler_inteiro(
-        "Capacidade [Enter para 1]: ", obrigatorio=False, minimo=1
-    )
+    capacidade = ler_inteiro("Capacidade [Enter para 1]: ", obrigatorio=False, minimo=1)
 
     if capacidade is None:
         capacidade = 1
 
     try:
-        lugar = unidades.criar_lugar(
-            dados, quarto_id, nome, capacidade=capacidade
-        )
+        lugar = unidades.criar_lugar(dados, quarto_id, nome, capacidade=capacidade)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
@@ -1182,8 +1187,7 @@ def _listar_lugares(dados, quarto_id):
     for lg in lista:
         estado = "ativo" if lg["ativo"] else "inativo"
         print(
-            f"{lg['id']} — {lg['nome']} "
-            f"(capacidade {lg['capacidade']}, {estado})"
+            f"{lg['id']} — {lg['nome']} " f"(capacidade {lg['capacidade']}, {estado})"
         )
 
 
@@ -1198,10 +1202,7 @@ def _atualizar_lugar(dados, quarto_id):
         return
 
     if lugar["quarto_id"] != quarto_id:
-        print(
-            f"Erro: O lugar {lugar_id} não pertence ao quarto "
-            f"{quarto_id}."
-        )
+        print(f"Erro: O lugar {lugar_id} não pertence ao quarto " f"{quarto_id}.")
         return
 
     nome = ler_atualizacao("Nome", lugar["nome"])
@@ -1231,10 +1232,7 @@ def _desativar_lugar(dados, quarto_id):
     lugar = unidades.procurar_lugar(dados, lugar_id)
 
     if lugar is not None and lugar["quarto_id"] != quarto_id:
-        print(
-            f"Erro: O lugar {lugar_id} não pertence ao quarto "
-            f"{quarto_id}."
-        )
+        print(f"Erro: O lugar {lugar_id} não pertence ao quarto " f"{quarto_id}.")
         return
 
     try:
@@ -1255,10 +1253,7 @@ def _reativar_lugar(dados, quarto_id):
     lugar = unidades.procurar_lugar(dados, lugar_id)
 
     if lugar is not None and lugar["quarto_id"] != quarto_id:
-        print(
-            f"Erro: O lugar {lugar_id} não pertence ao quarto "
-            f"{quarto_id}."
-        )
+        print(f"Erro: O lugar {lugar_id} não pertence ao quarto " f"{quarto_id}.")
         return
 
     try:
@@ -1305,6 +1300,7 @@ def _menu_lugares(dados, quarto_id):
 
         acoes[escolha](dados, quarto_id)
 
+
 def _criar_responsavel(dados):
     print("\n--- Novo responsável ---")
 
@@ -1319,10 +1315,7 @@ def _criar_responsavel(dados):
 
     repositorio.gravar(dados)
 
-    print(
-        f"Responsável criado: {responsavel['id']} — "
-        f"{responsavel['nome']}"
-    )
+    print(f"Responsável criado: {responsavel['id']} — " f"{responsavel['nome']}")
 
 
 def _listar_responsaveis(dados):
@@ -1355,9 +1348,7 @@ def _atualizar_responsavel(dados):
         return
 
     nome = ler_atualizacao("Nome", responsavel["nome"])
-    contacto = ler_atualizacao(
-        "Contacto", responsavel["contacto"], permite_limpar=True
-    )
+    contacto = ler_atualizacao("Contacto", responsavel["contacto"], permite_limpar=True)
 
     try:
         responsavel = responsaveis.atualizar(
@@ -1369,10 +1360,7 @@ def _atualizar_responsavel(dados):
 
     repositorio.gravar(dados)
 
-    print(
-        f"Responsável atualizado: {responsavel['id']} — "
-        f"{responsavel['nome']}"
-    )
+    print(f"Responsável atualizado: {responsavel['id']} — " f"{responsavel['nome']}")
 
 
 def _desativar_responsavel(dados):
@@ -1423,10 +1411,8 @@ def _criar_cliente(dados):
     print("\n--- Novo cliente ---")
 
     nome = ler_texto("Nome: ")
-    tipo_documento = ler_escolha("Tipo de documento", 
-                                 validacoes.TIPOS_DOCUMENTO
-                                )
-    
+    tipo_documento = ler_escolha("Tipo de documento", validacoes.TIPOS_DOCUMENTO)
+
     numero_documento = ler_texto("Número de documento: ")
     regime = ler_escolha("Regime", validacoes.TIPOS_UNIDADE)
 
@@ -1434,9 +1420,7 @@ def _criar_cliente(dados):
     email = ler_texto("Email: ", obrigatorio=False)
     telefone = ler_texto("Telefone: ", obrigatorio=False)
     morada = ler_texto("Morada: ", obrigatorio=(regime == "mensal"))
-    nacionalidade = ler_texto(
-        "Nacionalidade: ", obrigatorio=(regime == "airbnb")
-    )
+    nacionalidade = ler_texto("Nacionalidade: ", obrigatorio=(regime == "airbnb"))
     estado_civil = ler_escolha(
         "Estado civil",
         validacoes.TIPOS_ESTADO_CIVIL,
@@ -1444,9 +1428,7 @@ def _criar_cliente(dados):
     )
     data_nascimento = ler_data("Data de nascimento: ")
     validade_documento = ler_data("Validade do documento: ")
-    contacto_emergencia = ler_texto("Contacto de emergência: ", 
-                                    obrigatorio=False
-                                    )
+    contacto_emergencia = ler_texto("Contacto de emergência: ", obrigatorio=False)
 
     try:
         cliente = clientes.criar(
@@ -1471,10 +1453,11 @@ def _criar_cliente(dados):
 
     repositorio.gravar(dados)
 
-    aviso = (" [incompleto — verifica os campos em falta]"
-            if cliente["incompleto"] else ""
+    aviso = (
+        " [incompleto — verifica os campos em falta]" if cliente["incompleto"] else ""
     )
     print(f"Cliente criado: {cliente['id']} — {cliente['nome']}{aviso}")
+
 
 def _listar_clientes(dados):
     """Inclui o filtro por 'incompleto' — decisão 11 exige que essa
@@ -1488,8 +1471,7 @@ def _listar_clientes(dados):
     )
     assert filtro is not None  # obrigatorio=True (omisso): nunca é None
 
-    incompleto = {"Todos": None, "Incompletos": True, 
-                  "Completos": False}[filtro]
+    incompleto = {"Todos": None, "Incompletos": True, "Completos": False}[filtro]
 
     lista = clientes.listar(
         dados, incluir_inativos=incluir_inativos, incompleto=incompleto
@@ -1550,16 +1532,15 @@ def _atualizar_cliente(dados):
     )
     nif = ler_atualizacao_nif("NIF", cliente["nif"])
     email = ler_atualizacao("Email", cliente["email"], permite_limpar=True)
-    telefone = ler_atualizacao(
-        "Telefone", cliente["telefone"], permite_limpar=True
-    )
+    telefone = ler_atualizacao("Telefone", cliente["telefone"], permite_limpar=True)
     morada = ler_atualizacao("Morada", cliente["morada"], permite_limpar=True)
     nacionalidade = ler_atualizacao(
         "Nacionalidade", cliente["nacionalidade"], permite_limpar=True
     )
 
     estado_civil = ler_escolha_atualizacao(
-        "Estado civil", validacoes.TIPOS_ESTADO_CIVIL,
+        "Estado civil",
+        validacoes.TIPOS_ESTADO_CIVIL,
         cliente["estado_civil"],
     )
 
@@ -1585,8 +1566,6 @@ def _atualizar_cliente(dados):
         cliente["contacto_emergencia"],
         permite_limpar=True,
     )
-
-    
 
     try:
         cliente = clientes.atualizar(
@@ -1676,9 +1655,7 @@ def _anonimizar_cliente(dados):
         f"({cliente['tipo_documento']} {cliente['numero_documento']})"
     )
 
-    if not confirmar(
-        f"Confirmas a anonimização IRREVERSÍVEL de {cliente['id']}?"
-    ):
+    if not confirmar(f"Confirmas a anonimização IRREVERSÍVEL de {cliente['id']}?"):
         print("Anonimização cancelada.")
         return
 
@@ -1690,9 +1667,7 @@ def _anonimizar_cliente(dados):
         print(f"Erro: {erro}")
         return
 
-    data = ler_data(
-        "Data da anonimização (Enter para hoje): ", obrigatorio=False
-    )
+    data = ler_data("Data da anonimização (Enter para hoje): ", obrigatorio=False)
 
     if data is None:
         data = date.today()
@@ -1715,7 +1690,7 @@ def menu_clientes(dados):
     sexta opção, ao lado das cinco ações habituais — é a única
     entidade do sistema com esta operação extra.
     """
-    
+
     acoes = (
         _criar_cliente,
         _listar_clientes,
@@ -1735,16 +1710,13 @@ def menu_clientes(dados):
     ]
 
     while True:
-        escolha = mostrar_menu(
-            "Gestão de Clientes", rotulos, texto_saida="Voltar"
-        )
+        escolha = mostrar_menu("Gestão de Clientes", rotulos, texto_saida="Voltar")
 
         if escolha is None:
             return
 
         acoes[escolha](dados)
 
-        
 
 def menu_responsaveis(dados):
     """Submenu de gestão de responsáveis. Chamada por menu_principal."""
@@ -1760,14 +1732,13 @@ def menu_responsaveis(dados):
     rotulos = ["Criar", "Listar", "Atualizar", "Desativar", "Reativar"]
 
     while True:
-        escolha = mostrar_menu(
-            "Gestão de Responsáveis", rotulos, texto_saida="Voltar"
-        )
+        escolha = mostrar_menu("Gestão de Responsáveis", rotulos, texto_saida="Voltar")
 
         if escolha is None:
             return
 
         acoes[escolha](dados)
+
 
 def ler_escolha_atualizacao(mensagem, opcoes, atual):
     """Lê uma alteração para um campo de escolha restrita, permitindo
@@ -1806,6 +1777,7 @@ def ler_escolha_atualizacao(mensagem, opcoes, atual):
     print(f"Valor inválido — mantido '{atual}'.")
     return None
 
+
 def _detalhes_mensal(dados, ocupacao_id):
     """Devolve o registo específico de um contrato mensal, ou None.
 
@@ -1831,6 +1803,7 @@ def _detalhes_airbnb(dados, ocupacao_id):
             return registo
 
     return None
+
 
 def _identificar_unidade(unidade, unidade_id):
     """Devolve "nome (ID)" para mostrar nos ecrãs de contratos e
@@ -1873,9 +1846,7 @@ def _criar_contrato_mensal(dados):
 
     cliente_id = ler_texto("ID do cliente: ")
     data_inicio = ler_data("Data de início: ")
-    lugar_id = ler_texto(
-        "ID do lugar (Enter se não aplicável): ", obrigatorio=False
-    )
+    lugar_id = ler_texto("ID do lugar (Enter se não aplicável): ", obrigatorio=False)
     dia_vencimento = ler_inteiro(
         f"Dia de vencimento [Enter para {config.DIA_VENCIMENTO}]: ",
         obrigatorio=False,
@@ -1934,9 +1905,7 @@ def _criar_contrato_mensal(dados):
             print("Criação cancelada.")
             return
 
-        motivo_alteracao_caucao = ler_texto(
-            "Motivo (opcional): ", obrigatorio=False
-        )
+        motivo_alteracao_caucao = ler_texto("Motivo (opcional): ", obrigatorio=False)
 
     try:
         ocupacao, mensal = contratos.criar_mensal(
@@ -1967,15 +1936,14 @@ def _criar_contrato_mensal(dados):
         else ""
     )
     desconto_renda = (
-        f"  [desconto autorizado por "
-        f"{mensal['responsavel_desconto_renda_id']}]"
+        f"  [desconto autorizado por " f"{mensal['responsavel_desconto_renda_id']}]"
         if mensal["responsavel_desconto_renda_id"]
         else ""
     )
     print(
-    f"Contrato criado: {ocupacao['id']} — {nome_cliente}, "
-    f"unidade {_identificar_unidade(unidade, unidade_id)}{aviso}{desconto_renda}"
-)
+        f"Contrato criado: {ocupacao['id']} — {nome_cliente}, "
+        f"unidade {_identificar_unidade(unidade, unidade_id)}{aviso}{desconto_renda}"
+    )
 
 
 def _criar_reserva_airbnb(dados):
@@ -2003,9 +1971,7 @@ def _criar_reserva_airbnb(dados):
     data_inicio = ler_data("Data de check-in: ")
     data_fim = ler_data("Data de check-out: ")
 
-    preco_calculado = contratos.calcular_preco_airbnb(
-        unidade, data_inicio, data_fim
-    )
+    preco_calculado = contratos.calcular_preco_airbnb(unidade, data_inicio, data_fim)
     print(f"Preço calculado: {formatar_valor(preco_calculado)}")
 
     check_in_tardio = confirmar("Check-in tardio?")
@@ -2021,8 +1987,7 @@ def _criar_reserva_airbnb(dados):
             f"{formatar_valor(multa_calculada)}"
         )
         multa_praticada = ler_decimal(
-            "Multa praticada [Enter para "
-            f"{formatar_valor(multa_calculada)}]: ",
+            "Multa praticada [Enter para " f"{formatar_valor(multa_calculada)}]: ",
             obrigatorio=False,
             minimo=Decimal("0"),
         )
@@ -2089,8 +2054,7 @@ def _criar_reserva_airbnb(dados):
         else ""
     )
     desconto_preco = (
-        f"  [desconto autorizado por "
-        f"{airbnb['responsavel_desconto_preco_id']}]"
+        f"  [desconto autorizado por " f"{airbnb['responsavel_desconto_preco_id']}]"
         if airbnb["responsavel_desconto_preco_id"]
         else ""
     )
@@ -2108,23 +2072,23 @@ def _criar_reserva_airbnb(dados):
 def _listar_ocupacoes(dados):
     incluir_inativas = confirmar("Incluir ocupações inativas/encerradas?")
 
-    unidade_id = ler_texto(
-        "Filtrar por unidade (ID, Enter para todas): ", obrigatorio=False
-    ) or None
-    cliente_id = ler_texto(
-        "Filtrar por cliente (ID, Enter para todos): ", obrigatorio=False
-    ) or None
-    tipo = ler_escolha(
-        "Filtrar por tipo", validacoes.TIPOS_UNIDADE, obrigatorio=False
+    unidade_id = (
+        ler_texto("Filtrar por unidade (ID, Enter para todas): ", obrigatorio=False)
+        or None
     )
+    cliente_id = (
+        ler_texto("Filtrar por cliente (ID, Enter para todos): ", obrigatorio=False)
+        or None
+    )
+    tipo = ler_escolha("Filtrar por tipo", validacoes.TIPOS_UNIDADE, obrigatorio=False)
     filtro_aviso = ler_escolha(
         "Filtrar por aviso de documento", ("Todos", "Com aviso", "Sem aviso")
     )
     assert filtro_aviso is not None  # obrigatorio=True (omisso): nunca é None
 
-    aviso_documento = {
-        "Todos": None, "Com aviso": True, "Sem aviso": False
-    }[filtro_aviso]
+    aviso_documento = {"Todos": None, "Com aviso": True, "Sem aviso": False}[
+        filtro_aviso
+    ]
 
     lista = contratos.listar(
         dados,
@@ -2187,8 +2151,7 @@ def _atualizar_contrato_mensal(dados):
         obrigatorio=False,
     )
     caucao = ler_decimal(
-        f"Caução [atual: {formatar_valor(mensal['caucao'])}, "
-        f"Enter mantém]: ",
+        f"Caução [atual: {formatar_valor(mensal['caucao'])}, " f"Enter mantém]: ",
         obrigatorio=False,
         minimo=Decimal("0"),
     )
@@ -2229,8 +2192,7 @@ def _atualizar_contrato_mensal(dados):
         )
 
     dia_vencimento = ler_inteiro(
-        f"Dia de vencimento [atual: {mensal['dia_vencimento']}, "
-        f"Enter mantém]: ",
+        f"Dia de vencimento [atual: {mensal['dia_vencimento']}, " f"Enter mantém]: ",
         obrigatorio=False,
         minimo=1,
     )
@@ -2330,10 +2292,7 @@ def _atualizar_reserva_airbnb(dados):
             minimo=Decimal("0"),
         )
 
-        if (
-            multa_praticada is not None
-            and multa_praticada < airbnb["multa_calculada"]
-        ):
+        if multa_praticada is not None and multa_praticada < airbnb["multa_calculada"]:
             if not confirmar(
                 f"A multa praticada ({formatar_valor(multa_praticada)}) "
                 f"é inferior à calculada "
@@ -2347,10 +2306,7 @@ def _atualizar_reserva_airbnb(dados):
                 "ID do responsável que autoriza este perdão: "
             )
     else:
-        print(
-            "(Esta reserva não teve check-in tardio — sem multa a "
-            "alterar.)"
-        )
+        print("(Esta reserva não teve check-in tardio — sem multa a " "alterar.)")
 
     try:
         ocupacao, airbnb = contratos.atualizar_airbnb(
@@ -2413,6 +2369,7 @@ def _encerrar_contrato_mensal(dados):
         f"unidade {nome_unidade}{texto_avisos}"
     )
 
+
 def _cancelar_reserva_airbnb(dados):
     print("\n--- Cancelar reserva Airbnb ---")
 
@@ -2420,9 +2377,7 @@ def _cancelar_reserva_airbnb(dados):
     motivo = ler_texto("Motivo (opcional): ", obrigatorio=False)
 
     try:
-        ocupacao, airbnb = contratos.cancelar_airbnb(
-            dados, ocupacao_id, motivo=motivo
-        )
+        ocupacao, airbnb = contratos.cancelar_airbnb(dados, ocupacao_id, motivo=motivo)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
@@ -2506,13 +2461,12 @@ def menu_contratos(dados):
 
         acoes[escolha](dados)
 
+
 def _criar_produto(dados):
     print("\n--- Novo produto ---")
 
     nome = ler_texto("Nome: ")
-    unidade_medida = ler_texto(
-        "Unidade de medida (ex: un, kg, L, cx, par): "
-    )
+    unidade_medida = ler_texto("Unidade de medida (ex: un, kg, L, cx, par): ")
     stock_minimo = ler_inteiro(
         "Stock mínimo [Enter para 0]: ", obrigatorio=False, minimo=0
     )
@@ -2553,10 +2507,7 @@ def _listar_produtos(dados):
         saldo = estoque.saldo_produto(dados, p["id"])
         alerta = " [abaixo do mínimo]" if saldo < p["stock_minimo"] else ""
 
-        print(
-            f"{p['id']} — {p['nome']} ({p['unidade_medida']}, "
-            f"{estado}){alerta}"
-        )
+        print(f"{p['id']} — {p['nome']} ({p['unidade_medida']}, " f"{estado}){alerta}")
         print(f"    saldo: {saldo}  mínimo: {p['stock_minimo']}")
 
 
@@ -2572,12 +2523,10 @@ def _atualizar_produto(dados):
 
     nome = ler_atualizacao("Nome", produto["nome"])
     unidade_medida = ler_atualizacao(
-        "Unidade de medida (ex: un, kg, L, cx, par)", 
-        produto["unidade_medida"]
+        "Unidade de medida (ex: un, kg, L, cx, par)", produto["unidade_medida"]
     )
     stock_minimo = ler_inteiro(
-        f"Stock mínimo [atual: {produto['stock_minimo']}, "
-        f"Enter mantém]: ",
+        f"Stock mínimo [atual: {produto['stock_minimo']}, " f"Enter mantém]: ",
         obrigatorio=False,
         minimo=0,
     )
@@ -2643,14 +2592,13 @@ def _menu_produtos(dados):
     rotulos = ["Criar", "Listar", "Atualizar", "Desativar", "Reativar"]
 
     while True:
-        escolha = mostrar_menu(
-            "Gestão de Produtos", rotulos, texto_saida="Voltar"
-        )
+        escolha = mostrar_menu("Gestão de Produtos", rotulos, texto_saida="Voltar")
 
         if escolha is None:
             return
 
         acoes[escolha](dados)
+
 
 def _registar_movimento(dados):
     """Movimentos são imutáveis (decisão 9) — não há ecrã de
@@ -2725,14 +2673,13 @@ def _menu_movimentos(dados):
     rotulos = ["Registar movimento", "Ver saldo de um produto"]
 
     while True:
-        escolha = mostrar_menu(
-            "Movimentos de Stock", rotulos, texto_saida="Voltar"
-        )
+        escolha = mostrar_menu("Movimentos de Stock", rotulos, texto_saida="Voltar")
 
         if escolha is None:
             return
 
         acoes[escolha](dados)
+
 
 def _ler_itens_requisicao(dados):
     """Lê a lista de itens (produto + quantidade pedida) de uma
@@ -2746,9 +2693,7 @@ def _ler_itens_requisicao(dados):
     itens = []
 
     while True:
-        produto_id = ler_texto(
-            f"ID do produto (item {len(itens) + 1}): "
-        )
+        produto_id = ler_texto(f"ID do produto (item {len(itens) + 1}): ")
         quantidade_pedida = ler_inteiro("Quantidade pedida: ", minimo=1)
 
         itens.append(
@@ -2771,9 +2716,7 @@ def _imprimir_itens_requisicao(dados, requisicao_id):
     de estar no cabeçalho, por isso já não aparecem sozinhos no
     print da requisição).
     """
-    for item in estoque.listar_itens_requisicao(
-        dados, requisicao_id=requisicao_id
-    ):
+    for item in estoque.listar_itens_requisicao(dados, requisicao_id=requisicao_id):
         produto = estoque.procurar_produto(dados, item["produto_id"])
         nome = produto["nome"] if produto else item["produto_id"]
         print(
@@ -2788,9 +2731,7 @@ def _criar_requisicao(dados):
 
     responsavel_id = ler_texto("ID do responsável: ")
     itens = _ler_itens_requisicao(dados)
-    data_pedido = ler_data(
-        "Data do pedido [Enter para hoje]: ", obrigatorio=False
-    )
+    data_pedido = ler_data("Data do pedido [Enter para hoje]: ", obrigatorio=False)
 
     if data_pedido is None:
         data_pedido = date.today()
@@ -2814,10 +2755,7 @@ def _criar_requisicao(dados):
     responsavel = responsaveis.procurar(dados, responsavel_id)
     nome_responsavel = responsavel["nome"] if responsavel else responsavel_id
 
-    print(
-        f"Requisição criada: {requisicao['id']} — "
-        f"{nome_responsavel} (pendente)"
-    )
+    print(f"Requisição criada: {requisicao['id']} — " f"{nome_responsavel} (pendente)")
     _imprimir_itens_requisicao(dados, requisicao["id"])
 
 
@@ -2832,17 +2770,20 @@ def _listar_requisicoes(dados):
         ),
         obrigatorio=False,
     )
-    responsavel_id = ler_texto(
-        "Filtrar por responsável (ID, Enter para todos): ",
-        obrigatorio=False,
-    ) or None
-    produto_id = ler_texto(
-        "Filtrar por produto (ID, Enter para todos): ", obrigatorio=False
-    ) or None
+    responsavel_id = (
+        ler_texto(
+            "Filtrar por responsável (ID, Enter para todos): ",
+            obrigatorio=False,
+        )
+        or None
+    )
+    produto_id = (
+        ler_texto("Filtrar por produto (ID, Enter para todos): ", obrigatorio=False)
+        or None
+    )
 
     lista = estoque.listar_requisicoes(
-        dados, estado=estado, responsavel_id=responsavel_id,
-        produto_id=produto_id
+        dados, estado=estado, responsavel_id=responsavel_id, produto_id=produto_id
     )
 
     if not lista:
@@ -2853,13 +2794,8 @@ def _listar_requisicoes(dados):
 
     for r in lista:
         responsavel = responsaveis.procurar(dados, r["responsavel_id"])
-        nome_responsavel = (
-            responsavel["nome"] if responsavel else r["responsavel_id"]
-        )
-        print(
-            f"{r['id']} — responsável {nome_responsavel} "
-            f"({r['estado']})"
-        )
+        nome_responsavel = responsavel["nome"] if responsavel else r["responsavel_id"]
+        print(f"{r['id']} — responsável {nome_responsavel} " f"({r['estado']})")
         _imprimir_itens_requisicao(dados, r["id"])
 
 
@@ -2874,16 +2810,12 @@ def _enviar_requisicao(dados):
 
     requisicao_id = ler_texto("ID da requisição: ")
     enviado_por_id = ler_texto("ID de quem envia: ")
-    data_envio = ler_data(
-        "Data de envio [Enter para hoje]: ", obrigatorio=False
-    )
+    data_envio = ler_data("Data de envio [Enter para hoje]: ", obrigatorio=False)
 
     if data_envio is None:
         data_envio = date.today()
 
-    itens_pedidos = estoque.listar_itens_requisicao(
-        dados, requisicao_id=requisicao_id
-    )
+    itens_pedidos = estoque.listar_itens_requisicao(dados, requisicao_id=requisicao_id)
 
     quantidades_enviadas = None
 
@@ -2893,9 +2825,7 @@ def _enviar_requisicao(dados):
         quantidades_enviadas = {}
 
         for item in itens_pedidos:
-            produto = estoque.procurar_produto(
-                dados, item["produto_id"]
-            )
+            produto = estoque.procurar_produto(dados, item["produto_id"])
             nome = produto["nome"] if produto else item["produto_id"]
             quantidade = ler_inteiro(
                 f"Quantidade enviada de {nome} "
@@ -2961,9 +2891,7 @@ def _confirmar_rececao(dados):
 
     requisicao_id = ler_texto("ID da requisição: ")
     responsavel_id = ler_texto("ID do responsável que confirma: ")
-    data_rececao = ler_data(
-        "Data de receção [Enter para hoje]: ", obrigatorio=False
-    )
+    data_rececao = ler_data("Data de receção [Enter para hoje]: ", obrigatorio=False)
 
     if data_rececao is None:
         data_rececao = date.today()
@@ -3002,16 +2930,10 @@ def _ler_itens_devolucao(dados):
     itens = []
 
     while True:
-        produto_id = ler_texto(
-            f"ID do produto que sobrou (item {len(itens) + 1}): "
-        )
-        quantidade = ler_inteiro(
-            "Quantidade que sobrou (não usada): ", minimo=1
-        )
+        produto_id = ler_texto(f"ID do produto que sobrou (item {len(itens) + 1}): ")
+        quantidade = ler_inteiro("Quantidade que sobrou (não usada): ", minimo=1)
 
-        itens.append(
-            {"produto_id": produto_id, "quantidade": quantidade}
-        )
+        itens.append({"produto_id": produto_id, "quantidade": quantidade})
 
         if not confirmar("Sobrou mais algum produto?"):
             break
@@ -3025,9 +2947,7 @@ def _imprimir_itens_devolucao(dados, devolucao_id):
     operação sobre a devolução (decisão 20: os itens deixaram de
     estar no cabeçalho).
     """
-    for item in estoque.listar_itens_devolucao(
-        dados, devolucao_id=devolucao_id
-    ):
+    for item in estoque.listar_itens_devolucao(dados, devolucao_id=devolucao_id):
         produto = estoque.procurar_produto(dados, item["produto_id"])
         nome = produto["nome"] if produto else item["produto_id"]
         print(f"    {nome} ({item['produto_id']}) — {item['quantidade']}")
@@ -3077,9 +2997,7 @@ def _fechar_devolucao(dados):
 
     devolucao_id = ler_texto("ID da devolução: ")
     aceite_por_id = ler_texto("ID de quem aceita a devolução: ")
-    data_fecho = ler_data(
-        "Data de fecho [Enter para hoje]: ", obrigatorio=False
-    )
+    data_fecho = ler_data("Data de fecho [Enter para hoje]: ", obrigatorio=False)
 
     if data_fecho is None:
         data_fecho = date.today()
@@ -3133,9 +3051,7 @@ def _enviar_rol_lavanderia(dados):
             responsavel_id,
             itens,
             data,
-            observacoes=(
-                "Enviado sem requisição prévia (rol de lavanderia)."
-            ),
+            observacoes=("Enviado sem requisição prévia (rol de lavanderia)."),
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
@@ -3151,10 +3067,7 @@ def _enviar_rol_lavanderia(dados):
             f"Requisição {requisicao['id']} criada, mas não foi "
             f"possível enviar: {erro}"
         )
-        print(
-            "Fica pendente — usa 'Enviar requisição' no menu para "
-            "tentar de novo."
-        )
+        print("Fica pendente — usa 'Enviar requisição' no menu para " "tentar de novo.")
         return
 
     repositorio.gravar(dados)
@@ -3193,9 +3106,7 @@ def _menu_requisicoes(dados):
     ]
 
     while True:
-        escolha = mostrar_menu(
-            "Requisições de Material", rotulos, texto_saida="Voltar"
-        )
+        escolha = mostrar_menu("Requisições de Material", rotulos, texto_saida="Voltar")
 
         if escolha is None:
             return
@@ -3214,14 +3125,13 @@ def menu_estoque(dados):
     rotulos = ["Produtos", "Movimentos", "Requisições"]
 
     while True:
-        escolha = mostrar_menu(
-            "Gestão de Stock", rotulos, texto_saida="Voltar"
-        )
+        escolha = mostrar_menu("Gestão de Stock", rotulos, texto_saida="Voltar")
 
         if escolha is None:
             return
 
         acoes[escolha](dados)
+
 
 def menu_principal(dados):
     """Menu principal — ponto de entrada do cli.py, chamado por
