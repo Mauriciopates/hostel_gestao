@@ -196,6 +196,34 @@ class TesteCriar(unittest.TestCase):
         self.assertEqual(cliente["data_nascimento"], date(1990, 5, 20))
         self.assertEqual(cliente["validade_documento"], date(2030, 1, 1))
 
+    def test_recusa_nif_duplicado_de_cliente_ativo(self):
+        """Novo (decisão de 26/08, item 5): o mesmo NIF não pode
+        pertencer a dois clientes ativos."""
+        dados = dados_base()
+        criar_cliente_mensal(dados, nif="501442600")
+        with self.assertRaises(ValueError):
+            criar_cliente_mensal(
+                dados, numero_documento="99999999", nif="501442600"
+            )
+
+    def test_permite_nif_vazio_repetido(self):
+        """Dois clientes Airbnb sem NIF nunca colidem entre si — o
+        NIF só é obrigatório no mensal."""
+        dados = dados_base()
+        criar_cliente_airbnb(dados)
+        cliente_2 = criar_cliente_airbnb(dados, numero_documento="X999")
+        self.assertEqual(cliente_2["nif"], "")
+
+    def test_permite_nif_repetido_de_cliente_inativo(self):
+        """Um cliente inativo não bloqueia a reutilização do NIF."""
+        dados = dados_base()
+        cliente_1 = criar_cliente_mensal(dados, nif="501442600")
+        clientes.desativar(dados, cliente_1["id"])
+        cliente_2 = criar_cliente_mensal(
+            dados, numero_documento="99999999", nif="501442600"
+        )
+        self.assertEqual(cliente_2["nif"], "501442600")
+
 
 class TesteProcurar(unittest.TestCase):
 
@@ -341,6 +369,32 @@ class TesteAtualizar(unittest.TestCase):
             dados, cliente["id"], regime="mensal", nif="501442600"
         )
         self.assertEqual(cliente["nif"], "501442600")
+
+    def test_recusa_atualizar_nif_para_valor_de_outro_cliente_ativo(self):
+        """Novo (decisão de 26/08, item 5)."""
+        dados = dados_base()
+        criar_cliente_mensal(dados, nif="501442600")
+        cliente_2 = criar_cliente_mensal(
+            dados, numero_documento="99999999", nif="222222220"
+        )
+        with self.assertRaises(ValueError):
+            clientes.atualizar(dados, cliente_2["id"], nif="501442600")
+
+    def test_atualizar_mantendo_o_proprio_nif_nao_e_recusado(self):
+        dados = dados_base()
+        cliente = criar_cliente_mensal(dados, nif="501442600")
+        clientes.atualizar(dados, cliente["id"], nif="501442600")
+        self.assertEqual(cliente["nif"], "501442600")
+
+    def test_permite_atualizar_nif_para_valor_de_cliente_inativo(self):
+        dados = dados_base()
+        cliente_1 = criar_cliente_mensal(dados, nif="501442600")
+        clientes.desativar(dados, cliente_1["id"])
+        cliente_2 = criar_cliente_mensal(
+            dados, numero_documento="99999999", nif="222222220"
+        )
+        clientes.atualizar(dados, cliente_2["id"], nif="501442600")
+        self.assertEqual(cliente_2["nif"], "501442600")
 
     def test_recusa_apagar_morada_no_regime_mensal(self):
         """Novo (decisão de 26/08, ponto 2): tentar limpar a morada

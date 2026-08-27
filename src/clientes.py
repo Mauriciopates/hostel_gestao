@@ -12,6 +12,30 @@ import validacoes
 
 PREFIXO = "CLI"
 
+def _nif_pertence_a_outro_cliente(dados, nif, ignorar_id=None):
+    """Verifica se o NIF já pertence a outro cliente ativo.
+
+    Só compara NIFs não vazios — um cliente Airbnb sem NIF nunca
+    colide com outro sem NIF (o NIF só é obrigatório no mensal,
+    decisão de 26/08). 'ignorar_id' exclui o próprio cliente da
+    comparação, para 'atualizar' não se recusar a si mesmo ao manter
+    o NIF que já tinha.
+
+    Só considera clientes ativos — um cliente inativo não bloqueia
+    a reutilização do NIF (decisão de 26/08, item 5).
+    """
+    if not nif:
+        return False
+
+    for c in dados["clientes"]:
+        if ignorar_id is not None and c["id"] == ignorar_id:
+            continue
+        if not c["ativo"]:
+            continue
+        if c["nif"] == nif:
+            return True
+
+    return False
 
 def criar(
     dados,
@@ -59,6 +83,11 @@ def criar(
     }
 
     em_falta = validacoes.validar_cliente(candidato, regime)
+
+    if _nif_pertence_a_outro_cliente(dados, candidato["nif"]):
+        raise ValueError(
+            f"Já existe um cliente ativo com o NIF {candidato['nif']}."
+        )
 
     cliente = {
         "id": repositorio.proximo_id(PREFIXO),
@@ -243,6 +272,15 @@ def atualizar(
         and not validacoes.nif_valido(candidato["nif"])
     ):
         raise ValueError(f"NIF inválido: {candidato['nif']}")
+
+    if _nif_pertence_a_outro_cliente(
+        dados, candidato["nif"], ignorar_id=cliente_id
+    ):
+        raise ValueError(
+            f"Já existe um cliente ativo com o NIF {candidato['nif']}."
+        )
+
+    cliente["nome"] = candidato["nome"]
 
     cliente["nome"] = candidato["nome"]
     cliente["tipo_documento"] = candidato["tipo_documento"]
