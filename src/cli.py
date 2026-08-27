@@ -1832,6 +1832,25 @@ def _detalhes_airbnb(dados, ocupacao_id):
 
     return None
 
+def _identificar_unidade(unidade, unidade_id):
+    """Devolve "nome (ID)" para mostrar nos ecrãs de contratos e
+    reservas, ou só o ID se a unidade não existir (procurar() não
+    garante o registo — não deveria acontecer, mas não se assume).
+    Item 8: as listagens/ecrãs precisam do código, não só do nome,
+    para permitir identificar/rastrear por identificador.
+    """
+    if unidade is None:
+        return unidade_id
+    return f"{unidade['nome']} ({unidade['id']})"
+
+
+def _identificar_cliente(cliente, cliente_id):
+    """Mesma ideia de `_identificar_unidade`, para clientes."""
+    if cliente is None:
+        return cliente_id
+    return f"{cliente['nome']} ({cliente['id']})"
+
+
 def _criar_contrato_mensal(dados):
     """Ecrã de criação de um contrato mensal.
 
@@ -1940,7 +1959,7 @@ def _criar_contrato_mensal(dados):
     repositorio.gravar(dados)
 
     cliente = clientes.procurar(dados, cliente_id)
-    nome_cliente = cliente["nome"] if cliente else cliente_id
+    nome_cliente = _identificar_cliente(cliente, cliente_id)
 
     aviso = (
         " [aviso: documento expira durante a estadia]"
@@ -1954,9 +1973,9 @@ def _criar_contrato_mensal(dados):
         else ""
     )
     print(
-        f"Contrato criado: {ocupacao['id']} — {nome_cliente}, "
-        f"unidade {unidade['nome']}{aviso}{desconto_renda}"
-    )
+    f"Contrato criado: {ocupacao['id']} — {nome_cliente}, "
+    f"unidade {_identificar_unidade(unidade, unidade_id)}{aviso}{desconto_renda}"
+)
 
 
 def _criar_reserva_airbnb(dados):
@@ -2062,7 +2081,7 @@ def _criar_reserva_airbnb(dados):
     repositorio.gravar(dados)
 
     cliente = clientes.procurar(dados, cliente_id)
-    nome_cliente = cliente["nome"] if cliente else cliente_id
+    nome_cliente = _identificar_cliente(cliente, cliente_id)
 
     aviso = (
         " [aviso: documento expira durante a estadia]"
@@ -2077,7 +2096,7 @@ def _criar_reserva_airbnb(dados):
     )
     print(
         f"Reserva registada: {ocupacao['id']} — {nome_cliente}, "
-        f"unidade {unidade['nome']}{aviso}"
+        f"unidade {_identificar_unidade(unidade, unidade_id)}{aviso}"
     )
     print(
         f"    calculado: {formatar_valor(airbnb['preco_calculado'])}  "
@@ -2127,8 +2146,8 @@ def _listar_ocupacoes(dados):
         aviso = " [aviso: documento]" if o["aviso_documento"] else ""
         unidade = unidades.procurar(dados, o["unidade_id"])
         cliente = clientes.procurar(dados, o["cliente_id"])
-        nome_unidade = unidade["nome"] if unidade else o["unidade_id"]
-        nome_cliente = cliente["nome"] if cliente else o["cliente_id"]
+        nome_unidade = _identificar_unidade(unidade, o["unidade_id"])
+        nome_cliente = _identificar_cliente(cliente, o["cliente_id"])
         print(
             f"{o['id']} — {o['tipo']}, unidade {nome_unidade}, "
             f"cliente {nome_cliente} ({estado}){aviso}"
@@ -2234,8 +2253,8 @@ def _atualizar_contrato_mensal(dados):
 
     unidade = unidades.procurar(dados, ocupacao["unidade_id"])
     cliente = clientes.procurar(dados, ocupacao["cliente_id"])
-    nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
-    nome_cliente = cliente["nome"] if cliente else ocupacao["cliente_id"]
+    nome_unidade = _identificar_unidade(unidade, ocupacao["unidade_id"])
+    nome_cliente = _identificar_cliente(cliente, ocupacao["cliente_id"])
 
     print(
         f"Contrato atualizado: {ocupacao['id']} — {nome_cliente}, "
@@ -2350,8 +2369,8 @@ def _atualizar_reserva_airbnb(dados):
 
     unidade = unidades.procurar(dados, ocupacao["unidade_id"])
     cliente = clientes.procurar(dados, ocupacao["cliente_id"])
-    nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
-    nome_cliente = cliente["nome"] if cliente else ocupacao["cliente_id"]
+    nome_unidade = _identificar_unidade(unidade, ocupacao["unidade_id"])
+    nome_cliente = _identificar_cliente(cliente, ocupacao["cliente_id"])
 
     print(
         f"Reserva atualizada: {ocupacao['id']} — {nome_cliente}, "
@@ -2378,8 +2397,8 @@ def _encerrar_contrato_mensal(dados):
 
     unidade = unidades.procurar(dados, ocupacao["unidade_id"])
     cliente = clientes.procurar(dados, ocupacao["cliente_id"])
-    nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
-    nome_cliente = cliente["nome"] if cliente else ocupacao["cliente_id"]
+    nome_unidade = _identificar_unidade(unidade, ocupacao["unidade_id"])
+    nome_cliente = _identificar_cliente(cliente, ocupacao["cliente_id"])
 
     avisos = []
     if mensal["duracao_abaixo_minima"]:
@@ -2412,8 +2431,8 @@ def _cancelar_reserva_airbnb(dados):
 
     unidade = unidades.procurar(dados, ocupacao["unidade_id"])
     cliente = clientes.procurar(dados, ocupacao["cliente_id"])
-    nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
-    nome_cliente = cliente["nome"] if cliente else ocupacao["cliente_id"]
+    nome_unidade = _identificar_unidade(unidade, ocupacao["unidade_id"])
+    nome_cliente = _identificar_cliente(cliente, ocupacao["cliente_id"])
 
     print(
         f"Reserva cancelada: {ocupacao['id']} — {nome_cliente}, "
@@ -2436,8 +2455,8 @@ def _reativar_ocupacao(dados):
 
     unidade = unidades.procurar(dados, ocupacao["unidade_id"])
     cliente = clientes.procurar(dados, ocupacao["cliente_id"])
-    nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
-    nome_cliente = cliente["nome"] if cliente else ocupacao["cliente_id"]
+    nome_unidade = _identificar_unidade(unidade, ocupacao["unidade_id"])
+    nome_cliente = _identificar_cliente(cliente, ocupacao["cliente_id"])
 
     print(
         f"Ocupação reativada: {ocupacao['id']} — {nome_cliente}, "
