@@ -5,43 +5,71 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
 
 ### [0.7.7] — 2026/08/27
 
-Primeiro lote de pendências antes da v1.0.0 (itens 1 a 4 de
-Pendencias_Antes_v1.0.0.txt) — seleção numerada nos menus,
-obrigatoriedade de dados do cliente por regime, validação do NIF
-na digitação, e autorização de responsável para descontos também
-no regime mensal.
+Fase 1 completa. Fecha as pendências finais levantadas pelo roteiro
+de teste da rotina diária (itens 5 a 10 de
+Pendencias_Antes_v1.0.0.txt — o item 7 foi dispensado, ver
+Documentação), mais um bug encontrado fora da lista original.
+Sistema funcional em linha de comando, com persistência em JSON.
+
+### Corrigido
+- `clientes.py`: `criar` e `atualizar` passam a recusar um NIF já
+  usado por outro cliente ativo (`_nif_pertence_a_outro_cliente`).
+  `reativar` ganhou a mesma verificação, fechando a mesma brecha por
+  outro caminho (evita dois clientes ativos com o mesmo NIF, um
+  reativado depois de o outro já ter sido criado com esse NIF).
+- `contratos.py`: `criar_mensal` passa a exigir NIF preenchido no
+  cliente e a recusar um segundo contrato mensal ativo para o
+  mesmo NIF (`_nif_tem_contrato_mensal_ativo`) — o cruzamento é só
+  mensal-com-mensal, não considera reservas Airbnb do mesmo NIF.
+- `repositorio.py`: `PASTA_DADOS` e `PASTA_BACKUPS` passam a ser
+  ancoradas na raiz do projeto
+  (`Path(__file__).resolve().parent.parent`), em vez de relativas
+  à pasta a partir de onde o programa é executado — antes, correr
+  a partir de `src/` fazia o sistema ler/gravar num `dados/` novo e
+  vazio, ignorando o `dados/` real na raiz.
+- `propriedades.py`: `desativar` ganhou o parâmetro `forcar=False`
+  e passa a recusar desativar uma propriedade com unidades ativas
+  associadas, salvo confirmação explícita (`forcar=True`).
+- `unidades.py`: `desativar` ganhou o mesmo parâmetro e a mesma
+  recusa, para ocupações ativas associadas à unidade.
+- `cli.py`: `_desativar_propriedade`/`_desativar_unidade` passam a
+  contar as dependências ativas e a pedir confirmação (s/n) antes
+  de chamar `desativar(..., forcar=True)`.
+- `contratos.py`: `criar_mensal` e `registar_airbnb` passam a
+  recusar criar um contrato ou reserva numa unidade que não esteja
+  ativa.
 
 ### Adicionado
-- `cli.py`: `ler_escolha` e `ler_escolha_atualizacao` passam a
-  aceitar também a seleção por número da lista, mantendo a opção
-  de digitar o texto exato.
-- Novo campo `estado_civil` em `Cliente` (`modelos.py`).
-  `validacoes.validar_cliente` passa a aplicar obrigatoriedade por
-  regime: no mensal, NIF, morada e estado civil bloqueiam; no
-  Airbnb, nacionalidade bloqueia; validade do documento e data de
-  nascimento bloqueiam nos dois regimes. `clientes.py` (`criar`/
-  `atualizar`) e `cli.py` (`_criar_cliente`/`_atualizar_cliente`)
-  atualizados em conformidade.
-- `cli.py`: novas funções `ler_nif` e `ler_atualizacao_nif` —
-  validam o dígito de controlo do NIF assim que é digitado, com
-  novo pedido em caso de erro, em vez de só recusar ao gravar no
-  fim.
-- Novo campo `responsavel_desconto_renda_id` em `OcupacaoMensal`
-  (`modelos.py`). `contratos.criar_mensal` e `atualizar_mensal`
-  passam a exigir um responsável validado
-  (`responsaveis.validar_autoria`) sempre que a renda praticada
-  fica abaixo da calculada — replica para o regime mensal a mesma
-  regra que o Airbnb já tinha (decisão 18). `cli.py`
-  (`_criar_contrato_mensal`/`_atualizar_contrato_mensal`) pede
-  confirmação e o responsável quando há desconto, e mostra quem
-  autorizou no ecrã.
+- `cli.py`: listagens e ecrãs de contratos/reservas passam a
+  mostrar sempre "nome (código)" da unidade e do cliente, em vez de
+  só o nome — dois helpers novos, `_identificar_unidade` e
+  `_identificar_cliente`, usados nos 8 pontos onde essa informação
+  aparece.
+- Criação de dois docs novos Pseudocodigo_Modulos e _Testes, sendo dois 
+documentos distintos melhores de ser tratados. 
+
+### Documentação
+- Item 7 das pendências (corrigir "OCU-[ID]" para CNT-/RSV- no
+  roteiro de teste da rotina diária) foi dispensado por decisão do
+  aluno — o roteiro já tinha cumprido o papel de levantar esta
+  lista de pendências e não ia ser reutilizado como está.
+- Inclusão do arquivo Roteiro_testes_rotina_v1.0 em Docs/3_testes
+- Exclusão do Documento Pseudocodigo_Modulos_v1.7, existe uma cópia no drive,
+mas foi gerado um desmembrando Modulos e Testes. 
+
 
 ### Testes
-- `teste_validacoes.py`, `teste_clientes.py`, `teste_contratos.py`
-  atualizados com os novos campos obrigatórios por regime. Suite
-  completa (504 testes) confirmada verde — à parte do
-  PermissionError transitório do Windows já conhecido (não
-  reprodutível, não relacionado com estas mudanças).
+- `teste_clientes.py`: +8 (6 do item 5, NIF duplicado; 2 do item 6,
+  reativação cruzada).
+- `teste_contratos.py`: +6 (4 do item 6; 2 do item 10, unidade
+  inativa).
+- `teste_propriedades.py` / `teste_unidades.py`: +3 cada (item 9,
+  dependências ativas ao desativar).
+- Marcos confirmados: 504 testes (fecho da 0.7.7) → 524 (depois do
+  fix do caminho de dados) → 530 (depois do item 9). O item 10
+  acrescentou mais 2, confirmados verdes em `teste_contratos.py`
+  (90 testes nesse ficheiro) — falta só correr a suite completa
+  uma última vez (esperado: 532) antes de fechar a tag.
 
 
 ### [0.7.6] — 2026/08/26
