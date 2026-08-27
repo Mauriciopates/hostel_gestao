@@ -143,6 +143,21 @@ class TesteCriarMensal(BaseContratosTest):
                 Decimal("250.00"),
             )
 
+    def test_unidade_inativa_recusada(self):
+        # Decisão de 27/08, item 10: uma unidade desativada não pode
+        # receber um novo contrato mensal.
+        unidades.desativar(self.dados, self.unidade_mensal["id"])
+
+        with self.assertRaises(ValueError):
+            contratos.criar_mensal(
+                self.dados,
+                self.unidade_mensal["id"],
+                self.cliente_mensal["id"],
+                date(2026, 1, 10),
+                Decimal("250.00"),
+                Decimal("250.00"),
+            )
+
     def test_cliente_inexistente_gera_erro(self):
         with self.assertRaises(ValueError):
             contratos.criar_mensal(
@@ -737,6 +752,18 @@ class TesteRegistarAirbnb(BaseContratosTest):
                 self.dados, self.unidade_mensal["id"],
                 self.cliente_airbnb["id"], date(2026, 1, 10),
                 date(2026, 1, 15), Decimal("50.00"),
+            )
+
+    def test_unidade_inativa_recusada(self):
+        # Decisão de 27/08, item 10: uma unidade desativada não pode
+        # receber uma nova reserva Airbnb.
+        unidades.desativar(self.dados, self.unidade_airbnb["id"])
+
+        with self.assertRaises(ValueError):
+            contratos.registar_airbnb(
+                self.dados, self.unidade_airbnb["id"],
+                self.cliente_airbnb["id"], date(2026, 1, 10),
+                date(2026, 1, 15), Decimal("225.00"),
             )
 
     def test_estadia_de_uma_noite_aceite(self):

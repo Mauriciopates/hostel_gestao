@@ -135,6 +135,9 @@ def criar_mensal(
     if unidade is None:
         raise ValueError(f"A unidade {unidade_id} não existe.")
 
+    if not unidade["ativo"]:
+        raise ValueError(f"A unidade {unidade_id} não está ativa.")
+
     validacoes.validar_tipo_unidade(unidade["tipo"], "mensal")
 
     cliente = clientes.procurar(dados, cliente_id)
@@ -609,6 +612,9 @@ def registar_airbnb(
 
     if unidade is None:
         raise ValueError(f"A unidade {unidade_id} não existe.")
+
+    if not unidade["ativo"]:
+        raise ValueError(f"A unidade {unidade_id} não está ativa.")
 
     validacoes.validar_tipo_unidade(unidade["tipo"], "airbnb")
 
