@@ -26,14 +26,20 @@ não encontraria nada.
 
 ## Funções de leitura e escrita de ficheiros
 
-PASTA_DADOS = Path(
-    "dados"
-)  
+# raiz do projeto = pasta que contém "src" e "testes" como irmãs;
+# ancora-se na localização deste ficheiro, não na pasta corrente,
+# para funcionar sempre da mesma forma seja qual for o sítio de
+# onde o programa é arrancado (terminal na raiz, IDE com cwd em
+# src/, etc.) — foi isto que causou a pasta "dados" duplicada
+# dentro de src/.
+RAIZ_PROJETO = Path(__file__).resolve().parent.parent
+
+PASTA_DADOS = RAIZ_PROJETO / "dados"
 
 # o path possibilita a leitura e escrita de ficheiros 
 # mesmo em sistemas operativos diferentes
 
-PASTA_BACKUPS = Path("backups")
+PASTA_BACKUPS = RAIZ_PROJETO / "backups"
 FICHEIRO_DADOS = PASTA_DADOS / "dados.json"
 FICHEIRO_CONTADORES = PASTA_DADOS / "contadores.json"
 
