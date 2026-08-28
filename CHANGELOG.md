@@ -3,6 +3,45 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+### [1.0.0] — 2026/08/28
+
+Fase 1 completa — CLI + persistência em JSON. Todos os módulos integrados
+e verificados pelas cinco condições, projeto inteiro (funciona, tem
+testes, PEP 8, documentado, separação de camadas).
+
+### Corrigido
+- PEP 8: linhas acima de 79 caracteres corrigidas em `cli.py`,
+  `clientes.py` e `contratos.py`, identificadas na verificação final da
+  Fase 1 (condição 3 do script de verificação, aplicado ao projeto
+  inteiro). Sem alteração de comportamento — suite completa confirmou.
+
+### Documentação
+- `Arquitetura_Sistema_v1.10.docx` → `v1.11.docx`: decisões 19 e 20
+  (revisão do fluxo de stock e separação cabeçalho/itens — já
+  implementadas e testadas desde a 0.7.0, ver `estoque.py`) documentadas
+  pela primeira vez, fechando uma lacuna entre o código e o documento de
+  referência identificada a 28/08/2026. Secção de estrutura de dados do
+  stock corrigida (exemplo desatualizado dos estados da Requisição;
+  acrescentadas as linhas `ItemRequisicao`, `Devolucao`,
+  `ItemDevolucao`).
+- `docs/4_Manual/Manual_Fase1_v1.0.0.docx`: manual da Fase 1 —
+  instalação, utilização por menu (uma secção por módulo, com tabela de
+  opções: Propriedades, Unidades, Clientes, Responsáveis, Contratos e
+  Reservas, Stock) e normas e regulamentos aplicáveis (RGPD — anonimização,
+  prazos de conservação, alerta automático; alojamento local — SIBA/AIMA,
+  a confirmar em fonte oficial antes da entrega de outubro). Ainda sem
+  capturas de ecrã — versão só de texto, a completar depois.
+
+### Testes
+- Verificação final da Fase 1 sobre os 12 módulos (as cinco condições
+  do script de verificação): todos os módulos carregam sem erro; suite
+  completa — **532 testes, todos verdes** (confirma o número esperado
+  registado em 0.7.7); zero linhas acima de 79 caracteres depois da
+  correção acima; módulos e funções públicas documentados; nenhuma
+  chamada real a `input()`/`print()` fora de `cli.py` (as únicas
+  ocorrências fora dele são menções em texto no docstring do
+  `main.py`, não chamadas).
+
 ### [0.7.7] — 2026/08/27
 
 Fase 1 completa. Fecha as pendências finais levantadas pelo roteiro
