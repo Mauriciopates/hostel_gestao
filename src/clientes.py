@@ -87,7 +87,9 @@ def criar(
     em_falta = validacoes.validar_cliente(candidato, regime)
 
     if _nif_pertence_a_outro_cliente(dados, candidato["nif"]):
-        raise ValueError(f"Já existe um cliente ativo com o NIF {candidato['nif']}.")
+        raise ValueError(
+            f"Já existe um cliente ativo com o NIF {candidato['nif']}."
+        )
 
     cliente = {
         "id": repositorio.proximo_id(PREFIXO),
@@ -214,7 +216,8 @@ def atualizar(
 
     if cliente["anonimizado"]:
         raise ValueError(
-            f"O cliente {cliente_id} está anonimizado e não pode " f"ser atualizado."
+            f"O cliente {cliente_id} está anonimizado e não pode "
+            f"ser atualizado."
         )
 
     candidato = {
@@ -231,8 +234,12 @@ def atualizar(
         ),
         "nif": nif.strip() if nif is not None else cliente["nif"],
         "email": (email.strip() if email is not None else cliente["email"]),
-        "telefone": (telefone.strip() if telefone is not None else cliente["telefone"]),
-        "morada": (morada.strip() if morada is not None else cliente["morada"]),
+        "telefone": (
+            telefone.strip() if telefone is not None else cliente["telefone"]
+        ),
+        "morada": (
+            morada.strip() if morada is not None else cliente["morada"]
+        ),
         "nacionalidade": (
             nacionalidade.strip()
             if nacionalidade is not None
@@ -265,8 +272,12 @@ def atualizar(
     ):
         raise ValueError(f"NIF inválido: {candidato['nif']}")
 
-    if _nif_pertence_a_outro_cliente(dados, candidato["nif"], ignorar_id=cliente_id):
-        raise ValueError(f"Já existe um cliente ativo com o NIF {candidato['nif']}.")
+    if _nif_pertence_a_outro_cliente(
+        dados, candidato["nif"], ignorar_id=cliente_id
+    ):
+        raise ValueError(
+            f"Já existe um cliente ativo com o NIF {candidato['nif']}."
+        )
 
     cliente["nome"] = candidato["nome"]
 
@@ -339,7 +350,8 @@ def reativar(dados, cliente_id):
 
     if cliente["anonimizado"]:
         raise ValueError(
-            f"O cliente {cliente_id} foi anonimizado e não pode ser " f"reativado."
+            f"O cliente {cliente_id} foi anonimizado e não pode ser "
+            f"reativado."
         )
 
     if cliente["ativo"]:
@@ -392,9 +404,7 @@ def anonimizar(dados, cliente_id, responsavel_id, data):
     responsavel_id = responsavel_id.strip()
 
     if not responsavel_id:
-        raise ValueError(
-        "O responsável pela anonimização é obrigatório."
-    )
+        raise ValueError("O responsável pela anonimização é obrigatório.")
 
     if data is None:
         raise ValueError("A data da anonimização é obrigatória.")

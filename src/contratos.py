@@ -155,7 +155,9 @@ def criar_mensal(
         )
 
     if _nif_tem_contrato_mensal_ativo(dados, cliente["nif"]):
-        raise ValueError(f"O NIF {cliente['nif']} já tem um contrato mensal ativo.")
+        raise ValueError(
+            f"O NIF {cliente['nif']} já tem um contrato mensal ativo."
+        )
 
     aviso_documento = validacoes.documento_expira_durante_estadia(
         cliente["validade_documento"], data_inicio, None
@@ -168,7 +170,8 @@ def criar_mensal(
 
     if ocupantes >= capacidade:
         raise ValueError(
-            f"A unidade {unidade_id} já está na capacidade máxima " f"({capacidade})."
+            f"A unidade {unidade_id} já está na capacidade máxima "
+            f"({capacidade})."
         )
 
     lugar_id = lugar_id.strip()
@@ -186,7 +189,9 @@ def criar_mensal(
                 f"O lugar {lugar_id} não pertence à unidade " f"{unidade_id}."
             )
 
-        ocupantes_lugar = _ocupantes_mensal(dados, unidade_id, lugar_id=lugar_id)
+        ocupantes_lugar = _ocupantes_mensal(
+            dados, unidade_id, lugar_id=lugar_id
+        )
 
         if ocupantes_lugar >= lugar["capacidade"]:
             raise ValueError(
@@ -344,7 +349,9 @@ def encerrar_mensal(dados, ocupacao_id, data_fim, motivo=""):
         raise ValueError(f"O contrato {ocupacao_id} já está encerrado.")
 
     if data_fim is None:
-        raise ValueError("A data de fim é obrigatória para encerrar um contrato.")
+        raise ValueError(
+            "A data de fim é obrigatória para encerrar um contrato."
+        )
 
     validacoes.validar_intervalo(ocupacao["data_inicio"], data_fim)
 
@@ -499,7 +506,9 @@ def _sobrepoe(inicio_a, fim_a, inicio_b, fim_b):
     return inicio_a < fim_b and inicio_b < fim_a
 
 
-def _existe_sobreposicao(dados, unidade_id, data_inicio, data_fim, ignorar_id=None):
+def _existe_sobreposicao(
+    dados, unidade_id, data_inicio, data_fim, ignorar_id=None
+):
     """Verifica se alguma reserva Airbnb ativa da unidade se
     sobrepõe ao intervalo indicado.
 
@@ -524,7 +533,10 @@ def _existe_sobreposicao(dados, unidade_id, data_inicio, data_fim, ignorar_id=No
             continue
 
         if _sobrepoe(
-            data_inicio, data_fim, ocupacao["data_inicio"], ocupacao["data_fim"]
+            data_inicio,
+            data_fim,
+            ocupacao["data_inicio"],
+            ocupacao["data_fim"],
         ):
 
             return True
@@ -634,7 +646,9 @@ def registar_airbnb(
     )
 
     if _existe_sobreposicao(dados, unidade_id, data_inicio, data_fim):
-        raise ValueError(f"A unidade {unidade_id} já tem uma reserva nesse período.")
+        raise ValueError(
+            f"A unidade {unidade_id} já tem uma reserva nesse período."
+        )
 
     aviso_documento = validacoes.documento_expira_durante_estadia(
         cliente["validade_documento"], data_inicio, data_fim
@@ -656,7 +670,8 @@ def registar_airbnb(
 
         if not hora_chegada:
             raise ValueError(
-                "A hora de chegada é obrigatória quando o check-in " "é tardio."
+                "A hora de chegada é obrigatória quando o check-in "
+                "é tardio."
             )
 
         multa_calculada = unidade["multa_check_in_tardio"]
@@ -734,7 +749,8 @@ def atualizar_mensal(
 
     if not ocupacao["ativo"]:
         raise ValueError(
-            f"O contrato {ocupacao_id} está encerrado e não pode " f"ser alterado."
+            f"O contrato {ocupacao_id} está encerrado e não pode "
+            f"ser alterado."
         )
 
     mensal = _dados_mensais(dados, ocupacao_id)
@@ -743,7 +759,9 @@ def atualizar_mensal(
         raise ValueError(f"Faltam os dados mensais da ocupação {ocupacao_id}.")
 
     nova_renda = (
-        renda_praticada if renda_praticada is not None else mensal["renda_praticada"]
+        renda_praticada
+        if renda_praticada is not None
+        else mensal["renda_praticada"]
     )
 
     if nova_renda <= 0:
@@ -814,7 +832,8 @@ def atualizar_airbnb(
 
     if not ocupacao["ativo"]:
         raise ValueError(
-            f"A reserva {ocupacao_id} está cancelada e não pode " f"ser alterada."
+            f"A reserva {ocupacao_id} está cancelada e não pode "
+            f"ser alterada."
         )
 
     airbnb = _dados_airbnb(dados, ocupacao_id)
