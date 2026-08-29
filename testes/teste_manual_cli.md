@@ -544,6 +544,103 @@ Nota sobre o passo 11: aviso_previo_insuficiente fica True sempre que a data de 
 
 ---
 
+## Grupo 6A — Confirmação de segundo ocupante em quarto privativo (7 passos)
+
+Corre depois do Grupo 6 — reaproveita a unidade mensal UNI-0xx do
+Grupo 3. Cria o seu próprio cliente, para não depender do estado de
+anonimização do Grupo 5 (CLI-0xx já foi anonimizado nesse grupo).
+
+Testa a pendência registada em `claude/Pendencias_Pos_v1.0.0.txt`:
+a confirmação explícita ao atribuir um segundo ocupante a um quarto
+privativo já ocupado — mesmo quando é um LUGAR DIFERENTE dentro do
+mesmo quarto (decisão 17: a restrição é do quarto, não do lugar
+isolado). Função testada: `_quarto_privativo_ja_ocupado` (cli.py).
+
+```
+ROTEIRO confirmacao_privativo
+
+PASSO 1 — criar_cliente_para_este_teste
+    Caminho: Clientes → Criar
+    Entrada: nome "Marta Sousa", tipo de documento "Cartão de
+    Cidadão", número "87654321", regime "mensal", e todos os campos
+    que o regime mensal torna obrigatórios (NIF, morada, estado
+    civil) — evita ficar "incompleto", sem interferir no resultado
+    deste teste
+    RESULTADO ESPERADO: "Cliente criado: CLI-0zz — Marta Sousa"
+FIM PASSO
+
+PASSO 2 — criar_quarto_privativo_para_este_teste
+    Caminho: Unidades → Gerir quartos de uma unidade → ID da unidade
+    mensal do Grupo 3 (UNI-0xx) → Criar quarto
+    Entrada: nome "Quarto Confirmação", privativo "s", limpeza
+    incluída "n"
+    RESULTADO ESPERADO: "Quarto criado: QRT-0zz — Quarto Confirmação"
+FIM PASSO
+
+PASSO 3 — criar_dois_lugares_no_quarto
+    Caminho: Gerir lugares de um quarto → ID do quarto do passo 2 →
+    Criar lugar (duas vezes)
+    Entrada: "Cama A", capacidade em branco; depois "Cama B",
+    capacidade em branco
+    RESULTADO ESPERADO: "Lugar criado: LUG-0zz — Cama A" seguido de
+    "Lugar criado: LUG-0ww — Cama B"
+FIM PASSO
+
+PASSO 4 — primeiro_contrato_sem_confirmacao
+    Caminho: Contratos e Reservas → Criar contrato mensal
+    Entrada: unidade UNI-0xx, cliente CLI-0zz, data de início =
+    HOJE, lugar = LUG-0zz (Cama A), dia de vencimento em branco,
+    renda praticada = preço base mostrado, caução = uma renda
+    RESULTADO ESPERADO: NÃO aparece nenhuma pergunta sobre o quarto
+    ser privativo — o quarto ainda não tinha ocupante nenhum;
+    termina com "Contrato criado: CNT-0zz"
+FIM PASSO
+
+PASSO 5 — segundo_contrato_lugar_diferente_recusado
+    Caminho: Criar contrato mensal → mesma unidade, cliente CLI-0zz
+    outra vez (tanto faz), data de início = HOJE, lugar = LUG-0ww
+    (Cama B — lugar DIFERENTE do passo 4, mas no MESMO quarto
+    privativo)
+    Entrada: na confirmação, responder "n"
+    RESULTADO ESPERADO: "O quarto deste lugar (LUG-0ww) é privativo
+    e já tem um ocupante mensal ativo — confirmas um segundo
+    ocupante?" seguido de "Criação cancelada."; nenhum contrato
+    novo é criado — confirma que a pergunta aparece mesmo sendo um
+    LUGAR diferente, porque a restrição é do quarto (decisão 17),
+    não do lugar isolado
+FIM PASSO
+
+PASSO 6 — segundo_contrato_lugar_diferente_confirmado
+    Caminho: repetir o passo 5, respondendo "s" desta vez
+    RESULTADO ESPERADO: "Contrato criado: CNT-0ww" — o contrato é
+    criado normalmente depois da confirmação; o quarto fica agora
+    com os dois lugares ocupados
+FIM PASSO
+
+PASSO 7 — quarto_partilhado_nao_pede_confirmacao
+    Caminho: Gerir quartos → Criar quarto na mesma unidade, com
+    privativo "n"; Gerir lugares desse quarto → Criar lugar "Cama C"
+    (capacidade em branco); voltar a Contratos e Reservas → Criar
+    contrato mensal → mesma unidade, outro cliente, lugar = o novo
+    "Cama C"
+    RESULTADO ESPERADO: NÃO aparece pergunta nenhuma sobre segundo
+    ocupante — o quarto não é privativo; termina normalmente com
+    "Contrato criado: CNT-0vv" — confirma que a pergunta só dispara
+    para quartos privativos, nunca para os partilhados
+FIM PASSO
+
+FIM ROTEIRO
+```
+
+O passo 5 é o mais importante do grupo: é o que prova que a regra é
+do quarto, não do lugar — sem ele, um teste que só usasse o mesmo
+lugar duas vezes deixaria passar despercebida a diferença entre as
+duas leituras possíveis da decisão 17. O passo 7 é o controlo
+negativo: garante que a confirmação não passou a aparecer também
+para quartos partilhados, por engano.
+
+---
+
 ## Grupo 7 — Estoque: produtos, movimentos, requisições e devoluções (18 passos)
 
 ```
@@ -827,7 +924,8 @@ a uma mensagem de erro num módulo de negócio pode, em teoria, quebrar
 um ecrã de `cli.py` que dependa dela, e nada apanha essa quebra
 automaticamente — só se descobre repetindo o roteiro correspondente.
 
-Não há também nenhum mecanismo que assinale quando um destes nove
-grupos fica desatualizado por uma alteração ao `cli.py` ou ao
-`main.py` — cabe a quem altera um ecrã notar isso e atualizar o
-roteiro correspondente, como qualquer outra parte deste documento.
+Não há também nenhum mecanismo que assinale quando um destes grupos
+(nove numerados, mais o 6A) fica desatualizado por uma alteração ao
+`cli.py` ou ao `main.py` — cabe a quem altera um ecrã notar isso e
+atualizar o roteiro correspondente, como qualquer outra parte deste
+documento.

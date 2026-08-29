@@ -3,6 +3,30 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+### [1.0.1] — 2026/08/29
+
+
+### Adicionado
+- Confirmação explícita ao atribuir um segundo ocupante a um quarto
+  privativo já ocupado (decisão 17) — fecha uma regra de negócio
+  documentada desde a Fase 1 mas nunca codificada (identificado no
+  roteiro de teste manual, secção de Unidades). Nova função
+  `_quarto_privativo_ja_ocupado` em `cli.py`, chamada dentro de
+  `_criar_contrato_mensal`, mesmo padrão já usado na confirmação da
+  caução. A regra é do quarto, não do lugar isolado: um segundo
+  ocupante em qualquer lugar do mesmo quarto privativo, mesmo que
+  diferente do primeiro, exige confirmação. Fica em `cli.py` e não em
+  `contratos.py` — confirmação de interface, não bloqueio de regra de
+  negócio (decisão 7).
+
+### Testes
+- `teste_manual_cli.md`: novo Grupo 6A (7 passos), a seguir ao Grupo 6
+  — cobre a ausência de confirmação quando o quarto ainda não tem
+  ocupante, a confirmação recusada e aceite num lugar diferente do
+  mesmo quarto privativo, e o controlo negativo de um quarto
+  partilhado (nunca pede confirmação). Validado em execução real
+  contra o repositório.
+
 ### [1.0.0] — 2026/08/28
 
 Fase 1 completa — CLI + persistência em JSON. Todos os módulos integrados
