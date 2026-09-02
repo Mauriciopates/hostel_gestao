@@ -3042,7 +3042,7 @@ def _enviar_requisicao(dados):
         print(f"Erro: {erro}")
         return
 
-        repositorio.gravar(dados)
+    repositorio.gravar(dados)
 
     responsavel = responsaveis.procurar(dados, requisicao["responsavel_id"])
     nome_responsavel = (
