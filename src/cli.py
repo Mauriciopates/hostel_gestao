@@ -2682,7 +2682,11 @@ def _listar_produtos(dados):
     for p in lista:
         estado = "ativo" if p["ativo"] else "inativo"
         saldo = estoque.saldo_produto(dados, p["id"])
-        alerta = " [abaixo do mínimo]" if saldo < p["stock_minimo"] else ""
+        alerta = (
+            " [abaixo do mínimo]"
+            if estoque.abaixo_do_minimo(dados, p["id"])
+            else ""
+        )
 
         print(
             f"{p['id']} — {p['nome']} ({p['unidade_medida']}, "

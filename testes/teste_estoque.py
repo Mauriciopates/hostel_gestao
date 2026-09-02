@@ -160,7 +160,7 @@ class TestCriarProduto(unittest.TestCase):
 
     def test_stock_minimo_nao_inteiro_e_erro(self):
         with self.assertRaises(ValueError):
-            estoque.criar_produto(self.dados, "Toalhas", "un", "5") # type: ignore
+            estoque.criar_produto(self.dados, "Toalhas", "un", "5")  # type: ignore
 
     def test_stock_minimo_booleano_e_erro(self):
         with self.assertRaises(ValueError):
@@ -178,15 +178,11 @@ class TestProcurarProduto(unittest.TestCase):
         self.produto = _produto_ativo(self.dados)
 
     def test_encontra_produto_existente(self):
-        encontrado = estoque.procurar_produto(
-            self.dados, self.produto["id"]
-        )
+        encontrado = estoque.procurar_produto(self.dados, self.produto["id"])
         self.assertEqual(encontrado, self.produto)
 
     def test_devolve_none_para_id_inexistente(self):
-        self.assertIsNone(
-            estoque.procurar_produto(self.dados, "PRD-999")
-        )
+        self.assertIsNone(estoque.procurar_produto(self.dados, "PRD-999"))
 
 
 class TestListarProdutos(unittest.TestCase):
@@ -202,9 +198,7 @@ class TestListarProdutos(unittest.TestCase):
         self.assertNotIn(self.inativo, resultado)
 
     def test_lista_todos_com_incluir_inativos(self):
-        resultado = estoque.listar_produtos(
-            self.dados, incluir_inativos=True
-        )
+        resultado = estoque.listar_produtos(self.dados, incluir_inativos=True)
         self.assertIn(self.ativo, resultado)
         self.assertIn(self.inativo, resultado)
 
@@ -239,9 +233,7 @@ class TestAtualizarProduto(unittest.TestCase):
         self.assertEqual(atualizado["stock_minimo"], 10)
 
     def test_none_nao_altera(self):
-        atualizado = estoque.atualizar_produto(
-            self.dados, self.produto["id"]
-        )
+        atualizado = estoque.atualizar_produto(self.dados, self.produto["id"])
         self.assertEqual(atualizado["nome"], "Toalhas")
         self.assertEqual(atualizado["unidade_medida"], "un")
 
@@ -371,14 +363,20 @@ class TestRegistarMovimento(unittest.TestCase):
     def test_quantidade_none_e_erro(self):
         with self.assertRaises(ValueError):
             estoque.registar_movimento(
-                self.dados, self.produto["id"], "entrada", None,
+                self.dados,
+                self.produto["id"],
+                "entrada",
+                None,
                 self.hoje,
             )
 
     def test_quantidade_nao_inteira_e_erro(self):
         with self.assertRaises(ValueError):
             estoque.registar_movimento(
-                self.dados, self.produto["id"], "entrada", "10",
+                self.dados,
+                self.produto["id"],
+                "entrada",
+                "10",
                 self.hoje,
             )
 
@@ -391,7 +389,10 @@ class TestRegistarMovimento(unittest.TestCase):
     def test_quantidade_negativa_em_entrada_e_erro(self):
         with self.assertRaises(ValueError):
             estoque.registar_movimento(
-                self.dados, self.produto["id"], "entrada", -5,
+                self.dados,
+                self.produto["id"],
+                "entrada",
+                -5,
                 self.hoje,
             )
 
@@ -510,6 +511,149 @@ class TestSaldoProduto(unittest.TestCase):
             estoque.saldo_produto(self.dados, "PRD-999")
 
 
+class TesteAlertasStock(unittest.TestCase):
+    """Limiar de reposição: comparação e listagem (decisão 9)."""
+
+    def setUp(self):
+        self.dados = {
+            "produtos": [
+                {
+                    "id": "PRD-001",
+                    "nome": "Lençol branco",
+                    "unidade_medida": "unidade",
+                    "stock_minimo": 10,
+                    "ativo": True,
+                },
+                {
+                    "id": "PRD-002",
+                    "nome": "Toalha de banho",
+                    "unidade_medida": "unidade",
+                    "stock_minimo": 5,
+                    "ativo": True,
+                },
+                {
+                    "id": "PRD-003",
+                    "nome": "Fronha",
+                    "unidade_medida": "unidade",
+                    "stock_minimo": 0,
+                    "ativo": True,
+                },
+                {
+                    "id": "PRD-004",
+                    "nome": "Cortina antiga",
+                    "unidade_medida": "unidade",
+                    "stock_minimo": 20,
+                    "ativo": False,
+                },
+            ],
+            "movimentos": [
+                # PRD-001: 3 em stock, mínimo 10 → falta 7
+                {
+                    "id": "MOV-001",
+                    "produto_id": "PRD-001",
+                    "tipo": "entrada",
+                    "quantidade": 3,
+                    "data": date(2026, 9, 1),
+                },
+                # PRD-002: 5 em stock, mínimo 5 → na fronteira
+                {
+                    "id": "MOV-002",
+                    "produto_id": "PRD-002",
+                    "tipo": "entrada",
+                    "quantidade": 5,
+                    "data": date(2026, 9, 1),
+                },
+                # PRD-003: 8 em stock, mínimo 0
+                {
+                    "id": "MOV-003",
+                    "produto_id": "PRD-003",
+                    "tipo": "entrada",
+                    "quantidade": 8,
+                    "data": date(2026, 9, 1),
+                },
+                # PRD-004: 1 em stock, mínimo 20, mas inativo
+                {
+                    "id": "MOV-004",
+                    "produto_id": "PRD-004",
+                    "tipo": "entrada",
+                    "quantidade": 1,
+                    "data": date(2026, 9, 1),
+                },
+            ],
+        }
+
+    def test_abaixo_do_minimo_deteta(self):
+        self.assertTrue(estoque.abaixo_do_minimo(self.dados, "PRD-001"))
+
+    def test_saldo_igual_ao_minimo_nao_alerta(self):
+        """A comparação é estrita: igual ao mínimo ainda chega."""
+        self.assertFalse(estoque.abaixo_do_minimo(self.dados, "PRD-002"))
+
+    def test_acima_do_minimo_nao_alerta(self):
+        self.assertFalse(estoque.abaixo_do_minimo(self.dados, "PRD-003"))
+
+    def test_minimo_zero_com_saldo_positivo_nao_alerta(self):
+        self.assertFalse(estoque.abaixo_do_minimo(self.dados, "PRD-003"))
+
+    def test_produto_inexistente_recusa(self):
+        with self.assertRaises(ValueError):
+            estoque.abaixo_do_minimo(self.dados, "PRD-999")
+
+    def test_saldo_negativo_alerta_mesmo_sem_minimo(self):
+        self.dados["movimentos"].append(
+            {
+                "id": "MOV-005",
+                "produto_id": "PRD-003",
+                "tipo": "saida",
+                "quantidade": 12,
+                "data": date(2026, 9, 2),
+            }
+        )
+        self.assertTrue(estoque.abaixo_do_minimo(self.dados, "PRD-003"))
+
+    def test_listagem_so_traz_os_que_faltam(self):
+        alertas = estoque.listar_alertas_stock(self.dados)
+        ids = [a["produto"]["id"] for a in alertas]
+        self.assertEqual(ids, ["PRD-001"])
+
+    def test_listagem_ignora_inativos(self):
+        """PRD-004 tem 1 para um mínimo de 20, mas está inativo."""
+        alertas = estoque.listar_alertas_stock(self.dados)
+        ids = [a["produto"]["id"] for a in alertas]
+        self.assertNotIn("PRD-004", ids)
+
+    def test_listagem_calcula_em_falta(self):
+        alertas = estoque.listar_alertas_stock(self.dados)
+        self.assertEqual(alertas[0]["saldo"], 3)
+        self.assertEqual(alertas[0]["em_falta"], 7)
+
+    def test_listagem_ordena_pelo_que_falta_mais(self):
+        self.dados["movimentos"].append(
+            {
+                "id": "MOV-006",
+                "produto_id": "PRD-002",
+                "tipo": "saida",
+                "quantidade": 4,
+                "data": date(2026, 9, 2),
+            }
+        )
+        alertas = estoque.listar_alertas_stock(self.dados)
+        ids = [a["produto"]["id"] for a in alertas]
+        self.assertEqual(ids, ["PRD-001", "PRD-002"])
+
+    def test_sem_alertas_devolve_lista_vazia(self):
+        self.dados["movimentos"].append(
+            {
+                "id": "MOV-007",
+                "produto_id": "PRD-001",
+                "tipo": "entrada",
+                "quantidade": 50,
+                "data": date(2026, 9, 2),
+            }
+        )
+        self.assertEqual(estoque.listar_alertas_stock(self.dados), [])
+
+
 # ---------------------------------------------------------------
 # Requisicao / ItemRequisicao
 # ---------------------------------------------------------------
@@ -525,7 +669,10 @@ class TestCriarRequisicao(unittest.TestCase):
 
     def test_cria_requisicao_pendente(self):
         r = _requisicao_pendente(
-            self.dados, self.responsavel["id"], self.produto["id"], 10,
+            self.dados,
+            self.responsavel["id"],
+            self.produto["id"],
+            10,
             self.hoje,
         )
         self.assertTrue(r["id"].startswith("REQ-"))
@@ -533,9 +680,7 @@ class TestCriarRequisicao(unittest.TestCase):
         self.assertIsNone(r["data_envio"])
         self.assertIn(r, self.dados["requisicoes"])
 
-        item = _item_da_requisicao(
-            self.dados, r["id"], self.produto["id"]
-        )
+        item = _item_da_requisicao(self.dados, r["id"], self.produto["id"])
         if item is None:
             self.fail("Item de requisição não encontrado.")
         self.assertTrue(item["id"].startswith("ITR-"))
@@ -596,7 +741,10 @@ class TestCriarRequisicao(unittest.TestCase):
     def test_responsavel_inexistente_e_erro(self):
         with self.assertRaises(ValueError):
             _requisicao_pendente(
-                self.dados, "RES-999", self.produto["id"], 10,
+                self.dados,
+                "RES-999",
+                self.produto["id"],
+                10,
                 self.hoje,
             )
 
@@ -604,14 +752,20 @@ class TestCriarRequisicao(unittest.TestCase):
         inativo = _responsavel_inativo(self.dados)
         with self.assertRaises(ValueError):
             _requisicao_pendente(
-                self.dados, inativo["id"], self.produto["id"], 10,
+                self.dados,
+                inativo["id"],
+                self.produto["id"],
+                10,
                 self.hoje,
             )
 
     def test_produto_inexistente_e_erro(self):
         with self.assertRaises(ValueError):
             _requisicao_pendente(
-                self.dados, self.responsavel["id"], "PRD-999", 10,
+                self.dados,
+                self.responsavel["id"],
+                "PRD-999",
+                10,
                 self.hoje,
             )
 
@@ -619,46 +773,62 @@ class TestCriarRequisicao(unittest.TestCase):
         inativo = _produto_inativo(self.dados)
         with self.assertRaises(ValueError):
             _requisicao_pendente(
-                self.dados, self.responsavel["id"], inativo["id"], 10,
+                self.dados,
+                self.responsavel["id"],
+                inativo["id"],
+                10,
                 self.hoje,
             )
 
     def test_quantidade_pedida_none_e_erro(self):
         with self.assertRaises(ValueError):
             _requisicao_pendente(
-                self.dados, self.responsavel["id"], self.produto["id"],
-                None, self.hoje,
+                self.dados,
+                self.responsavel["id"],
+                self.produto["id"],
+                None,
+                self.hoje,
             )
 
     def test_quantidade_pedida_nao_inteira_e_erro(self):
         with self.assertRaises(ValueError):
             _requisicao_pendente(
-                self.dados, self.responsavel["id"], self.produto["id"],
-                "10", self.hoje,
+                self.dados,
+                self.responsavel["id"],
+                self.produto["id"],
+                "10",
+                self.hoje,
             )
 
     def test_quantidade_pedida_zero_e_erro(self):
         with self.assertRaises(ValueError):
             _requisicao_pendente(
-                self.dados, self.responsavel["id"], self.produto["id"],
-                0, self.hoje,
+                self.dados,
+                self.responsavel["id"],
+                self.produto["id"],
+                0,
+                self.hoje,
             )
 
     def test_data_pedido_none_e_erro(self):
         with self.assertRaises(ValueError):
             _requisicao_pendente(
-                self.dados, self.responsavel["id"], self.produto["id"],
-                10, None,
+                self.dados,
+                self.responsavel["id"],
+                self.produto["id"],
+                10,
+                None,
             )
 
     def test_pode_pedir_mais_do_que_o_saldo(self):
         r = _requisicao_pendente(
-            self.dados, self.responsavel["id"], self.produto["id"],
-            1000, self.hoje,
+            self.dados,
+            self.responsavel["id"],
+            self.produto["id"],
+            1000,
+            self.hoje,
         )
-        item = _item_da_requisicao(
-            self.dados, r["id"], self.produto["id"]
-        )
+        item = _item_da_requisicao(self.dados, r["id"], self.produto["id"])
         if item is None:
             self.fail("Item de requisição não encontrado.")
         self.assertEqual(item["quantidade_pedida"], 1000)
@@ -707,9 +877,7 @@ class TestListarItensRequisicao(unittest.TestCase):
         )
         if item is None:
             self.fail("Item de requisição não encontrado.")
-        encontrado = estoque.procurar_item_requisicao(
-            self.dados, item["id"]
-        )
+        encontrado = estoque.procurar_item_requisicao(self.dados, item["id"])
         self.assertEqual(encontrado, item)
 
     def test_procurar_devolve_none_para_inexistente(self):
@@ -733,24 +901,26 @@ class TestProcurarListarRequisicao(unittest.TestCase):
         self.produto_b = _produto_ativo(self.dados, "Sabonetes")
         self.hoje = date.today()
         self.req_a = _requisicao_pendente(
-            self.dados, self.resp_a["id"], self.produto_a["id"], 10,
+            self.dados,
+            self.resp_a["id"],
+            self.produto_a["id"],
+            10,
             self.hoje,
         )
         self.req_b = _requisicao_pendente(
-            self.dados, self.resp_b["id"], self.produto_b["id"], 5,
+            self.dados,
+            self.resp_b["id"],
+            self.produto_b["id"],
+            5,
             self.hoje,
         )
 
     def test_procurar_encontra_requisicao_existente(self):
-        encontrada = estoque.procurar_requisicao(
-            self.dados, self.req_a["id"]
-        )
+        encontrada = estoque.procurar_requisicao(self.dados, self.req_a["id"])
         self.assertEqual(encontrada, self.req_a)
 
     def test_procurar_devolve_none_para_inexistente(self):
-        self.assertIsNone(
-            estoque.procurar_requisicao(self.dados, "REQ-999")
-        )
+        self.assertIsNone(estoque.procurar_requisicao(self.dados, "REQ-999"))
 
     def test_listar_sem_filtro_devolve_todas(self):
         resultado = estoque.listar_requisicoes(self.dados)
@@ -758,12 +928,12 @@ class TestProcurarListarRequisicao(unittest.TestCase):
 
     def test_listar_filtra_por_estado(self):
         estoque.rejeitar_requisicao(
-            self.dados, self.req_b["id"], self.resp_a["id"],
+            self.dados,
+            self.req_b["id"],
+            self.resp_a["id"],
             "Sem stock",
         )
-        pendentes = estoque.listar_requisicoes(
-            self.dados, estado="pendente"
-        )
+        pendentes = estoque.listar_requisicoes(self.dados, estado="pendente")
         self.assertEqual(pendentes, [self.req_a])
 
     def test_listar_filtra_por_responsavel(self):
@@ -817,18 +987,16 @@ class TestEnviarRequisicao(unittest.TestCase):
 
     def test_envia_quantidade_pedida_por_omissao(self):
         r = estoque.enviar_requisicao(
-            self.dados, self.requisicao["id"], self.admin["id"],
+            self.dados,
+            self.requisicao["id"],
+            self.admin["id"],
             self.hoje,
         )
         self.assertEqual(r["estado"], "enviada")
         self.assertEqual(r["data_envio"], self.hoje)
 
-        item_a = _item_da_requisicao(
-            self.dados, r["id"], self.produto_a["id"]
-        )
-        item_b = _item_da_requisicao(
-            self.dados, r["id"], self.produto_b["id"]
-        )
+        item_a = _item_da_requisicao(self.dados, r["id"], self.produto_a["id"])
+        item_b = _item_da_requisicao(self.dados, r["id"], self.produto_b["id"])
         if item_a is None or item_b is None:
             self.fail("Item de requisição não encontrado.")
         self.assertEqual(item_a["quantidade_enviada"], 10)
@@ -848,12 +1016,8 @@ class TestEnviarRequisicao(unittest.TestCase):
             self.hoje,
             quantidades_enviadas={self.produto_a["id"]: 4},
         )
-        item_a = _item_da_requisicao(
-            self.dados, r["id"], self.produto_a["id"]
-        )
-        item_b = _item_da_requisicao(
-            self.dados, r["id"], self.produto_b["id"]
-        )
+        item_a = _item_da_requisicao(self.dados, r["id"], self.produto_a["id"])
+        item_b = _item_da_requisicao(self.dados, r["id"], self.produto_b["id"])
         if item_a is None or item_b is None:
             self.fail("Item de requisição não encontrado.")
         self.assertEqual(item_a["quantidade_enviada"], 4)
@@ -861,7 +1025,9 @@ class TestEnviarRequisicao(unittest.TestCase):
 
     def test_gera_um_movimento_de_saida_por_item(self):
         estoque.enviar_requisicao(
-            self.dados, self.requisicao["id"], self.admin["id"],
+            self.dados,
+            self.requisicao["id"],
+            self.admin["id"],
             self.hoje,
         )
         movimentos = [
@@ -880,12 +1046,16 @@ class TestEnviarRequisicao(unittest.TestCase):
 
     def test_requisicao_nao_pendente_e_erro(self):
         estoque.enviar_requisicao(
-            self.dados, self.requisicao["id"], self.admin["id"],
+            self.dados,
+            self.requisicao["id"],
+            self.admin["id"],
             self.hoje,
         )
         with self.assertRaises(ValueError):
             estoque.enviar_requisicao(
-                self.dados, self.requisicao["id"], self.admin["id"],
+                self.dados,
+                self.requisicao["id"],
+                self.admin["id"],
                 self.hoje,
             )
 
@@ -928,8 +1098,11 @@ class TestEnviarRequisicao(unittest.TestCase):
 
     def test_saldo_insuficiente_e_erro(self):
         requisicao_grande = _requisicao_pendente(
-            self.dados, self.responsavel["id"], self.produto_a["id"],
-            1000, self.hoje,
+            self.dados,
+            self.responsavel["id"],
+            self.produto_a["id"],
+            1000,
+            self.hoje,
         )
         with self.assertRaises(ValueError):
             estoque.enviar_requisicao(
@@ -960,7 +1133,9 @@ class TestEnviarRequisicao(unittest.TestCase):
     def test_data_envio_none_e_erro(self):
         with self.assertRaises(ValueError):
             estoque.enviar_requisicao(
-                self.dados, self.requisicao["id"], self.admin["id"],
+                self.dados,
+                self.requisicao["id"],
+                self.admin["id"],
                 None,
             )
 
@@ -974,7 +1149,10 @@ class TestRejeitarRequisicao(unittest.TestCase):
         self.produto = _produto_ativo(self.dados)
         self.hoje = date.today()
         self.requisicao = _requisicao_pendente(
-            self.dados, self.responsavel["id"], self.produto["id"], 10,
+            self.dados,
+            self.responsavel["id"],
+            self.produto["id"],
+            10,
             self.hoje,
         )
 
@@ -987,39 +1165,47 @@ class TestRejeitarRequisicao(unittest.TestCase):
         )
         self.assertEqual(r["estado"], "rejeitada")
         self.assertEqual(r["motivo_rejeicao"], "Sem stock disponível")
-        self.assertEqual(
-            r["responsavel_rejeicao_id"], self.admin["id"]
-        )
+        self.assertEqual(r["responsavel_rejeicao_id"], self.admin["id"])
 
     def test_nao_gera_movimento(self):
         estoque.rejeitar_requisicao(
-            self.dados, self.requisicao["id"], self.admin["id"],
+            self.dados,
+            self.requisicao["id"],
+            self.admin["id"],
             "Sem stock",
         )
         self.assertEqual(len(self.dados["movimentos"]), 0)
 
     def test_requisicao_nao_pendente_e_erro(self):
         estoque.rejeitar_requisicao(
-            self.dados, self.requisicao["id"], self.admin["id"],
+            self.dados,
+            self.requisicao["id"],
+            self.admin["id"],
             "Sem stock",
         )
         with self.assertRaises(ValueError):
             estoque.rejeitar_requisicao(
-                self.dados, self.requisicao["id"], self.admin["id"],
+                self.dados,
+                self.requisicao["id"],
+                self.admin["id"],
                 "De novo",
             )
 
     def test_motivo_vazio_e_erro(self):
         with self.assertRaises(ValueError):
             estoque.rejeitar_requisicao(
-                self.dados, self.requisicao["id"], self.admin["id"],
+                self.dados,
+                self.requisicao["id"],
+                self.admin["id"],
                 "   ",
             )
 
     def test_responsavel_inexistente_e_erro(self):
         with self.assertRaises(ValueError):
             estoque.rejeitar_requisicao(
-                self.dados, self.requisicao["id"], "RES-999",
+                self.dados,
+                self.requisicao["id"],
+                "RES-999",
                 "Sem stock",
             )
 
@@ -1028,28 +1214,33 @@ class TestConfirmarRececaoRequisicao(unittest.TestCase):
 
     def setUp(self):
         self.dados = _dados()
-        self.responsavel = _responsavel_ativo(
-            self.dados, "Ana Ferreira"
-        )
+        self.responsavel = _responsavel_ativo(self.dados, "Ana Ferreira")
         self.outro = _responsavel_ativo(self.dados, "Bruno Alves")
         self.produto = _produto_ativo(self.dados)
         self.hoje = date.today()
         self.requisicao = _requisicao_pendente(
-            self.dados, self.responsavel["id"], self.produto["id"], 10,
+            self.dados,
+            self.responsavel["id"],
+            self.produto["id"],
+            10,
             self.hoje,
         )
         estoque.registar_movimento(
             self.dados, self.produto["id"], "entrada", 20, self.hoje
         )
         estoque.enviar_requisicao(
-            self.dados, self.requisicao["id"], self.outro["id"],
+            self.dados,
+            self.requisicao["id"],
+            self.outro["id"],
             self.hoje,
         )
 
     def test_confirma_rececao_fecha_a_requisicao(self):
         amanha = self.hoje + timedelta(days=1)
         r = estoque.confirmar_rececao_requisicao(
-            self.dados, self.requisicao["id"], self.responsavel["id"],
+            self.dados,
+            self.requisicao["id"],
+            self.responsavel["id"],
             amanha,
         )
         self.assertEqual(r["estado"], "fechada")
@@ -1057,19 +1248,26 @@ class TestConfirmarRececaoRequisicao(unittest.TestCase):
 
     def test_requisicao_nao_enviada_e_erro(self):
         pendente = _requisicao_pendente(
-            self.dados, self.responsavel["id"], self.produto["id"], 5,
+            self.dados,
+            self.responsavel["id"],
+            self.produto["id"],
+            5,
             self.hoje,
         )
         with self.assertRaises(ValueError):
             estoque.confirmar_rececao_requisicao(
-                self.dados, pendente["id"], self.responsavel["id"],
+                self.dados,
+                pendente["id"],
+                self.responsavel["id"],
                 self.hoje,
             )
 
     def test_responsavel_diferente_do_que_pediu_e_erro(self):
         with self.assertRaises(ValueError):
             estoque.confirmar_rececao_requisicao(
-                self.dados, self.requisicao["id"], self.outro["id"],
+                self.dados,
+                self.requisicao["id"],
+                self.outro["id"],
                 self.hoje,
             )
 
@@ -1098,9 +1296,7 @@ class TestReportarDevolucao(unittest.TestCase):
 
     def setUp(self):
         self.dados = _dados()
-        self.responsavel = _responsavel_ativo(
-            self.dados, "Ana Ferreira"
-        )
+        self.responsavel = _responsavel_ativo(self.dados, "Ana Ferreira")
         self.outro = _responsavel_ativo(self.dados, "Bruno Alves")
         self.produto_a = _produto_ativo(self.dados, "Toalhas")
         self.produto_b = _produto_ativo(self.dados, "Sabonetes")
@@ -1127,11 +1323,15 @@ class TestReportarDevolucao(unittest.TestCase):
             self.dados, self.produto_b["id"], "entrada", 20, self.hoje
         )
         estoque.enviar_requisicao(
-            self.dados, self.requisicao["id"], self.outro["id"],
+            self.dados,
+            self.requisicao["id"],
+            self.outro["id"],
             self.hoje,
         )
         estoque.confirmar_rececao_requisicao(
-            self.dados, self.requisicao["id"], self.responsavel["id"],
+            self.dados,
+            self.requisicao["id"],
+            self.responsavel["id"],
             self.hoje,
         )
 
@@ -1151,9 +1351,7 @@ class TestReportarDevolucao(unittest.TestCase):
         self.assertEqual(d["data_reportada"], self.hoje)
         self.assertIn(d, self.dados["devolucoes"])
 
-        item = _item_da_devolucao(
-            self.dados, d["id"], self.produto_a["id"]
-        )
+        item = _item_da_devolucao(self.dados, d["id"], self.produto_a["id"])
         if item is None:
             self.fail("Item de devolução não encontrado.")
         self.assertTrue(item["id"].startswith("ITD-"))
@@ -1293,20 +1491,31 @@ class TestReportarDevolucao(unittest.TestCase):
 
     def test_requisicao_nao_fechada_e_erro(self):
         outra = _requisicao_pendente(
-            self.dados, self.responsavel["id"], self.produto_a["id"],
-            5, self.hoje,
+            self.dados,
+            self.responsavel["id"],
+            self.produto_a["id"],
+            5,
+            self.hoje,
         )
         with self.assertRaises(ValueError):
             _reportar_devolucao_1_item(
-                self.dados, outra["id"], self.responsavel["id"],
-                self.produto_a["id"], 1, self.hoje,
+                self.dados,
+                outra["id"],
+                self.responsavel["id"],
+                self.produto_a["id"],
+                1,
+                self.hoje,
             )
 
     def test_responsavel_diferente_do_que_pediu_e_erro(self):
         with self.assertRaises(ValueError):
             _reportar_devolucao_1_item(
-                self.dados, self.requisicao["id"], self.outro["id"],
-                self.produto_a["id"], 1, self.hoje,
+                self.dados,
+                self.requisicao["id"],
+                self.outro["id"],
+                self.produto_a["id"],
+                1,
+                self.hoje,
             )
 
     def test_data_reportada_none_e_erro(self):
@@ -1352,11 +1561,15 @@ class TestListarItensDevolucao(unittest.TestCase):
             self.dados, self.produto_b["id"], "entrada", 20, self.hoje
         )
         estoque.enviar_requisicao(
-            self.dados, self.requisicao["id"], self.outro["id"],
+            self.dados,
+            self.requisicao["id"],
+            self.outro["id"],
             self.hoje,
         )
         estoque.confirmar_rececao_requisicao(
-            self.dados, self.requisicao["id"], self.responsavel["id"],
+            self.dados,
+            self.requisicao["id"],
+            self.responsavel["id"],
             self.hoje,
         )
         self.devolucao = estoque.reportar_devolucao(
@@ -1389,9 +1602,7 @@ class TestListarItensDevolucao(unittest.TestCase):
         )
         if item is None:
             self.fail("Item de devolução não encontrado.")
-        encontrado = estoque.procurar_item_devolucao(
-            self.dados, item["id"]
-        )
+        encontrado = estoque.procurar_item_devolucao(self.dados, item["id"])
         self.assertEqual(encontrado, item)
 
     def test_procurar_devolve_none_para_inexistente(self):
@@ -1414,47 +1625,69 @@ class TestProcurarListarDevolucao(unittest.TestCase):
         self.produto = _produto_ativo(self.dados)
         self.hoje = date.today()
         self.req_a = _requisicao_pendente(
-            self.dados, self.resp_a["id"], self.produto["id"], 10,
+            self.dados,
+            self.resp_a["id"],
+            self.produto["id"],
+            10,
             self.hoje,
         )
         self.req_b = _requisicao_pendente(
-            self.dados, self.resp_b["id"], self.produto["id"], 5,
+            self.dados,
+            self.resp_b["id"],
+            self.produto["id"],
+            5,
             self.hoje,
         )
         estoque.registar_movimento(
             self.dados, self.produto["id"], "entrada", 30, self.hoje
         )
         estoque.enviar_requisicao(
-            self.dados, self.req_a["id"], self.resp_b["id"], self.hoje,
+            self.dados,
+            self.req_a["id"],
+            self.resp_b["id"],
+            self.hoje,
         )
         estoque.enviar_requisicao(
-            self.dados, self.req_b["id"], self.resp_a["id"], self.hoje,
+            self.dados,
+            self.req_b["id"],
+            self.resp_a["id"],
+            self.hoje,
         )
         estoque.confirmar_rececao_requisicao(
-            self.dados, self.req_a["id"], self.resp_a["id"], self.hoje,
+            self.dados,
+            self.req_a["id"],
+            self.resp_a["id"],
+            self.hoje,
         )
         estoque.confirmar_rececao_requisicao(
-            self.dados, self.req_b["id"], self.resp_b["id"], self.hoje,
+            self.dados,
+            self.req_b["id"],
+            self.resp_b["id"],
+            self.hoje,
         )
         self.dev_a = _reportar_devolucao_1_item(
-            self.dados, self.req_a["id"], self.resp_a["id"],
-            self.produto["id"], 2, self.hoje,
+            self.dados,
+            self.req_a["id"],
+            self.resp_a["id"],
+            self.produto["id"],
+            2,
+            self.hoje,
         )
         self.dev_b = _reportar_devolucao_1_item(
-            self.dados, self.req_b["id"], self.resp_b["id"],
-            self.produto["id"], 1, self.hoje,
+            self.dados,
+            self.req_b["id"],
+            self.resp_b["id"],
+            self.produto["id"],
+            1,
+            self.hoje,
         )
 
     def test_procurar_encontra_devolucao_existente(self):
-        encontrada = estoque.procurar_devolucao(
-            self.dados, self.dev_a["id"]
-        )
+        encontrada = estoque.procurar_devolucao(self.dados, self.dev_a["id"])
         self.assertEqual(encontrada, self.dev_a)
 
     def test_procurar_devolve_none_para_inexistente(self):
-        self.assertIsNone(
-            estoque.procurar_devolucao(self.dados, "DEV-999")
-        )
+        self.assertIsNone(estoque.procurar_devolucao(self.dados, "DEV-999"))
 
     def test_listar_sem_filtro_devolve_todas(self):
         resultado = estoque.listar_devolucoes(self.dados)
@@ -1462,11 +1695,12 @@ class TestProcurarListarDevolucao(unittest.TestCase):
 
     def test_listar_filtra_por_estado(self):
         estoque.fechar_devolucao(
-            self.dados, self.dev_a["id"], self.resp_b["id"], self.hoje,
+            self.dados,
+            self.dev_a["id"],
+            self.resp_b["id"],
+            self.hoje,
         )
-        pendentes = estoque.listar_devolucoes(
-            self.dados, estado="pendente"
-        )
+        pendentes = estoque.listar_devolucoes(self.dados, estado="pendente")
         self.assertEqual(pendentes, [self.dev_b])
 
     def test_listar_filtra_por_requisicao(self):
@@ -1491,9 +1725,7 @@ class TestFecharDevolucao(unittest.TestCase):
 
     def setUp(self):
         self.dados = _dados()
-        self.responsavel = _responsavel_ativo(
-            self.dados, "Ana Ferreira"
-        )
+        self.responsavel = _responsavel_ativo(self.dados, "Ana Ferreira")
         self.admin = _responsavel_ativo(self.dados, "Bruno Alves")
         self.produto_a = _produto_ativo(self.dados, "Toalhas")
         self.produto_b = _produto_ativo(self.dados, "Sabonetes")
@@ -1520,11 +1752,15 @@ class TestFecharDevolucao(unittest.TestCase):
             self.dados, self.produto_b["id"], "entrada", 20, self.hoje
         )
         estoque.enviar_requisicao(
-            self.dados, self.requisicao["id"], self.admin["id"],
+            self.dados,
+            self.requisicao["id"],
+            self.admin["id"],
             self.hoje,
         )
         estoque.confirmar_rececao_requisicao(
-            self.dados, self.requisicao["id"], self.responsavel["id"],
+            self.dados,
+            self.requisicao["id"],
+            self.responsavel["id"],
             self.hoje,
         )
         self.devolucao = estoque.reportar_devolucao(
@@ -1539,14 +1775,12 @@ class TestFecharDevolucao(unittest.TestCase):
         )
 
     def test_fecha_gera_movimento_de_entrada_por_item(self):
-        saldo_a_antes = estoque.saldo_produto(
-            self.dados, self.produto_a["id"]
-        )
-        saldo_b_antes = estoque.saldo_produto(
-            self.dados, self.produto_b["id"]
-        )
+        saldo_a_antes = estoque.saldo_produto(self.dados, self.produto_a["id"])
+        saldo_b_antes = estoque.saldo_produto(self.dados, self.produto_b["id"])
         d = estoque.fechar_devolucao(
-            self.dados, self.devolucao["id"], self.admin["id"],
+            self.dados,
+            self.devolucao["id"],
+            self.admin["id"],
             self.hoje,
         )
         self.assertEqual(d["estado"], "fechada")
@@ -1576,12 +1810,16 @@ class TestFecharDevolucao(unittest.TestCase):
 
     def test_devolucao_nao_pendente_e_erro(self):
         estoque.fechar_devolucao(
-            self.dados, self.devolucao["id"], self.admin["id"],
+            self.dados,
+            self.devolucao["id"],
+            self.admin["id"],
             self.hoje,
         )
         with self.assertRaises(ValueError):
             estoque.fechar_devolucao(
-                self.dados, self.devolucao["id"], self.admin["id"],
+                self.dados,
+                self.devolucao["id"],
+                self.admin["id"],
                 self.hoje,
             )
 
@@ -1594,7 +1832,9 @@ class TestFecharDevolucao(unittest.TestCase):
     def test_data_fecho_none_e_erro(self):
         with self.assertRaises(ValueError):
             estoque.fechar_devolucao(
-                self.dados, self.devolucao["id"], self.admin["id"],
+                self.dados,
+                self.devolucao["id"],
+                self.admin["id"],
                 None,
             )
 

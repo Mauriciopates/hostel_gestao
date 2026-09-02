@@ -315,6 +315,70 @@ def saldo_produto(dados, produto_id):
 
     return total
 
+def abaixo_do_minimo(dados, produto_id):
+    """Indica se o saldo do produto está abaixo do limiar de reposição.
+
+    Dá uso ao 'stock_minimo' que criar_produto já guarda: até
+    agora o campo era gravado e validado, mas nunca comparado com
+    nada — a comparação vivia no cli.py, fora da camada de
+    negócio (decisão 7).
+
+    A comparação é estrita: um saldo igual ao mínimo ainda chega,
+    só abaixo dele é que alerta. Um produto com 'stock_minimo' a
+    zero nunca dispara, exceto com saldo negativo — que é sempre
+    um problema, haja limiar ou não.
+
+    Não filtra inativos: calcula, não decide. É a
+    listar_alertas_stock que os exclui, porque um produto
+    desativado não é para repor.
+
+    Levanta ValueError se o produto não existir, com a mesma
+    mensagem da saldo_produto.
+    """
+    produto = procurar_produto(dados, produto_id)
+
+    if produto is None:
+        raise ValueError(f"O produto {produto_id} não existe.")
+
+    return saldo_produto(dados, produto_id) < produto["stock_minimo"]
+
+
+def listar_alertas_stock(dados):
+    """Devolve os produtos ativos que estão abaixo do stock mínimo.
+
+    Cada elemento é um dicionário novo com o registo do produto, o
+    saldo e quanto falta para chegar ao mínimo. Nem 'saldo' nem
+    'em_falta' existem no ficheiro: são calculados a cada chamada,
+    como manda a decisão 9 — nunca se guarda um total.
+
+    Ordenada pelo que falta mais, do maior para o menor. A ordem é
+    decisão de negócio, não de apresentação: o que falta mais é o
+    que se repõe primeiro, e qualquer interface deve herdá-la sem
+    a repetir.
+
+    Só produtos ativos. Devolve lista vazia quando não há nada a
+    repor.
+    """
+    alertas = []
+
+    for produto in listar_produtos(dados):
+        saldo = saldo_produto(dados, produto["id"])
+
+        if saldo >= produto["stock_minimo"]:
+            continue
+
+        alertas.append(
+            {
+                "produto": produto,
+                "saldo": saldo,
+                "em_falta": produto["stock_minimo"] - saldo,
+            }
+        )
+
+    alertas.sort(key=lambda a: a["em_falta"], reverse=True)
+
+    return alertas
+
 
 def _validar_inteiro(valor, nome):
     """Valida que 'valor' é um número inteiro (não bool) não nulo.
