@@ -28,8 +28,22 @@ import clientes
 
 
 def dados_base():
-    """Devolve uma estrutura de dados nova, sem clientes."""
-    return {"clientes": []}
+    """Devolve uma estrutura de dados nova, sem clientes.
+
+    Inclui um responsável ativo (RES-001) porque a anonimização
+    passou a validar a autoria dentro do módulo, e não no cli.py.
+    """
+    return {
+        "clientes": [],
+        "responsaveis": [
+            {
+                "id": "RES-001",
+                "nome": "Responsável de teste",
+                "contacto": "",
+                "ativo": True,
+            }
+        ],
+    }
 
 
 def criar_cliente_mensal(dados, **overrides):

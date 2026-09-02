@@ -571,7 +571,62 @@ def reativar_lugar(dados, lugar_id):
     lugar["ativo"] = True
     return lugar
 
+def quarto_privativo_ocupado(dados, lugar_id):
+    """Verifica se o lugar indicado pertence a um quarto privativo
+    que já tem algum ocupante mensal ativo — em qualquer um dos
+    seus lugares, não só no lugar indicado (decisão 17: "privativo
+    restringe quem ocupar" é uma regra do QUARTO, não do lugar
+    isolado — atribuir um segundo ocupante a um quarto privativo já
+    ocupado exige confirmação explícita, mesmo que seja noutro
+    lugar do mesmo quarto).
 
+    Devolve False sempre que o lugar não existir, não pertencer a
+    um quarto privativo, ou o quarto não tiver ocupante ativo em
+    nenhum dos seus lugares — nesses casos não há nada a confirmar
+    aqui; a existência do próprio lugar continua a ser validada por
+    contratos.criar_mensal, como até agora.
+
+    lugar_id e ativo vivem os dois no registo BASE de dados["ocupacoes"]
+    (não em ocupacoes_mensal, que só guarda os campos específicos do
+    regime — renda, caução, dia de vencimento) — mesmo padrão já
+    usado em _estado_mensal e desativar. Por isso esta função nem
+    precisa de tocar em ocupacoes_mensal.
+
+    Vive aqui, e não em contratos.py, porque "privativo" é um
+    atributo do quarto e é este módulo que trata de unidades,
+    quartos e lugares; contratos.py continua sem saber que o
+    conceito existe (separação de camadas, decisão 7). Responde à
+    pergunta, não decide o que fazer com a resposta: a confirmação
+    de um segundo ocupante continua a ser da interface.
+    """
+    lugar = procurar_lugar(dados, lugar_id)
+
+    if lugar is None:
+        return False
+
+    quarto = procurar_quarto(dados, lugar["quarto_id"])
+
+    if quarto is None or not quarto["privativo"]:
+        return False
+
+    lugares_do_quarto = {
+        lg["id"]
+        for lg in listar_lugares(
+            dados, incluir_inativas=True, quarto_id=quarto["id"]
+        )
+    }
+
+    for ocupacao in dados["ocupacoes"]:
+        if ocupacao["tipo"] != "mensal":
+            continue
+
+        if not ocupacao["ativo"]:
+            continue
+
+        if ocupacao.get("lugar_id") in lugares_do_quarto:
+            return True
+
+    return False
 
 def estado(dados, unidade_id, data):
     """Calcula o estado da unidade numa data: Livre, Ocupado,

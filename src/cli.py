@@ -1893,60 +1893,6 @@ def _identificar_cliente(cliente, cliente_id):
     return f"{cliente['nome']} ({cliente['id']})"
 
 
-def _quarto_privativo_ja_ocupado(dados, lugar_id):
-    """Verifica se o lugar indicado pertence a um quarto privativo
-    que já tem algum ocupante mensal ativo — em qualquer um dos
-    seus lugares, não só no lugar indicado (decisão 17: "privativo
-    restringe quem ocupar" é uma regra do QUARTO, não do lugar
-    isolado — atribuir um segundo ocupante a um quarto privativo já
-    ocupado exige confirmação explícita, mesmo que seja noutro
-    lugar do mesmo quarto).
-
-    Devolve False sempre que o lugar não existir, não pertencer a
-    um quarto privativo, ou o quarto não tiver ocupante ativo em
-    nenhum dos seus lugares — nesses casos não há nada a confirmar
-    aqui; a existência do próprio lugar continua a ser validada por
-    contratos.criar_mensal, como até agora.
-
-    lugar_id e ativo vivem os dois no registo BASE de dados["ocupacoes"]
-    (não em ocupacoes_mensal, que só guarda os campos específicos do
-    regime — renda, caução, dia de vencimento) — mesmo padrão já
-    usado em unidades._estado_mensal e unidades.desativar. Por isso
-    esta função nem precisa de tocar em ocupacoes_mensal.
-
-    Fica em cli.py, não em contratos.py: é confirmação de interface,
-    não bloqueio de regra de negócio — contratos.py continua sem
-    saber que existe "privativo" (separação de camadas, decisão 7).
-    """
-    lugar = unidades.procurar_lugar(dados, lugar_id)
-
-    if lugar is None:
-        return False
-
-    quarto = unidades.procurar_quarto(dados, lugar["quarto_id"])
-
-    if quarto is None or not quarto["privativo"]:
-        return False
-
-    lugares_do_quarto = {
-        lg["id"]
-        for lg in unidades.listar_lugares(
-            dados, incluir_inativas=True, quarto_id=quarto["id"]
-        )
-    }
-
-    for ocupacao in dados["ocupacoes"]:
-        if ocupacao["tipo"] != "mensal":
-            continue
-
-        if not ocupacao["ativo"]:
-            continue
-
-        if ocupacao.get("lugar_id") in lugares_do_quarto:
-            return True
-
-    return False
-
 
 def _criar_contrato_mensal(dados):
     """Ecrã de criação de um contrato mensal.
@@ -1974,7 +1920,7 @@ def _criar_contrato_mensal(dados):
         "ID do lugar (Enter se não aplicável): ", obrigatorio=False
     )
 
-    if lugar_id and _quarto_privativo_ja_ocupado(dados, lugar_id):
+    if lugar_id and unidades.quarto_privativo_ocupado(dados, lugar_id):
         if not confirmar(
             f"O quarto deste lugar ({lugar_id}) é privativo e já "
             f"tem um ocupante mensal ativo — confirmas um segundo "

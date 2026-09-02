@@ -913,6 +913,137 @@ class TesteEstado(unittest.TestCase):
         resultado = unidades.estado(dados, unidade["id"], date(2026, 9, 5))
         self.assertEqual(resultado, "Em manutenção")
 
+class TesteQuartoPrivativoOcupado(unittest.TestCase):
+    """Segundo ocupante em quarto privativo (decisão 17)."""
+
+    def setUp(self):
+        self.dados = {
+            "quartos": [
+                {
+                    "id": "QUA-001",
+                    "unidade_id": "UNI-001",
+                    "nome": "Quarto privativo",
+                    "privativo": True,
+                    "limpeza_incluida": True,
+                    "ativo": True,
+                },
+                {
+                    "id": "QUA-002",
+                    "unidade_id": "UNI-001",
+                    "nome": "Quarto partilhado",
+                    "privativo": False,
+                    "limpeza_incluida": True,
+                    "ativo": True,
+                },
+            ],
+            "lugares": [
+                {
+                    "id": "LUG-001",
+                    "quarto_id": "QUA-001",
+                    "nome": "Cama A",
+                    "capacidade": 1,
+                    "ativo": True,
+                },
+                {
+                    "id": "LUG-002",
+                    "quarto_id": "QUA-001",
+                    "nome": "Cama B",
+                    "capacidade": 1,
+                    "ativo": True,
+                },
+                {
+                    "id": "LUG-003",
+                    "quarto_id": "QUA-002",
+                    "nome": "Beliche cima",
+                    "capacidade": 1,
+                    "ativo": True,
+                },
+                {
+                    "id": "LUG-004",
+                    "quarto_id": "QUA-002",
+                    "nome": "Beliche baixo",
+                    "capacidade": 1,
+                    "ativo": True,
+                },
+            ],
+            "ocupacoes": [],
+        }
+
+    def _ocupar(self, lugar_id, tipo="mensal", ativo=True):
+        """Acrescenta uma ocupação ao lugar indicado."""
+        self.dados["ocupacoes"].append(
+            {
+                "id": f"OCU-{len(self.dados['ocupacoes']) + 1:03d}",
+                "unidade_id": "UNI-001",
+                "cliente_id": "CLI-001",
+                "tipo": tipo,
+                "data_inicio": date(2026, 9, 1),
+                "data_fim": None,
+                "lugar_id": lugar_id,
+                "aviso_documento": False,
+                "ativo": ativo,
+            }
+        )
+
+    def test_quarto_privativo_vazio_nao_alerta(self):
+        self.assertFalse(
+            unidades.quarto_privativo_ocupado(self.dados, "LUG-001")
+        )
+
+    def test_mesmo_lugar_ja_ocupado_alerta(self):
+        self._ocupar("LUG-001")
+        self.assertTrue(
+            unidades.quarto_privativo_ocupado(self.dados, "LUG-001")
+        )
+
+    def test_outro_lugar_do_mesmo_quarto_alerta(self):
+        """O privativo é regra do quarto, não do lugar isolado."""
+        self._ocupar("LUG-001")
+        self.assertTrue(
+            unidades.quarto_privativo_ocupado(self.dados, "LUG-002")
+        )
+
+    def test_quarto_partilhado_nunca_alerta(self):
+        self._ocupar("LUG-003")
+        self.assertFalse(
+            unidades.quarto_privativo_ocupado(self.dados, "LUG-004")
+        )
+
+    def test_ocupacao_inativa_nao_alerta(self):
+        """Um contrato encerrado liberta o quarto."""
+        self._ocupar("LUG-001", ativo=False)
+        self.assertFalse(
+            unidades.quarto_privativo_ocupado(self.dados, "LUG-002")
+        )
+
+    def test_ocupacao_airbnb_nao_alerta(self):
+        """A regra é dos contratos mensais, por pessoa."""
+        self._ocupar("LUG-001", tipo="airbnb")
+        self.assertFalse(
+            unidades.quarto_privativo_ocupado(self.dados, "LUG-002")
+        )
+
+    def test_lugar_inexistente_devolve_falso(self):
+        """Não é erro: quem valida a existência é contratos.py."""
+        self.assertFalse(
+            unidades.quarto_privativo_ocupado(self.dados, "LUG-999")
+        )
+
+    def test_lugar_inativo_do_quarto_conta_na_verificacao(self):
+        """Desativar o lugar não apaga a ocupação que lá está."""
+        self.dados["lugares"][0]["ativo"] = False
+        self._ocupar("LUG-001")
+        self.assertTrue(
+            unidades.quarto_privativo_ocupado(self.dados, "LUG-002")
+        )
+
+    def test_ocupacao_sem_lugar_nao_alerta(self):
+        """Contrato de apartamento inteiro, sem lugar atribuído."""
+        self._ocupar("")
+        self.assertFalse(
+            unidades.quarto_privativo_ocupado(self.dados, "LUG-001")
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
