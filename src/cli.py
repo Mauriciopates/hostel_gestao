@@ -2306,6 +2306,23 @@ def _atualizar_contrato_mensal(dados):
         f"{formatar_valor(mensal['renda_praticada'])}, Enter mantém]: ",
         obrigatorio=False,
     )
+
+    responsavel_desconto_renda_id = ""
+    if renda_praticada is not None:
+        if renda_praticada < mensal["renda_calculada"]:
+            if not confirmar(
+                f"A renda praticada ({formatar_valor(renda_praticada)}) "
+                f"é inferior à calculada "
+                f"({formatar_valor(mensal['renda_calculada'])}) — "
+                f"confirmas o desconto?"
+            ):
+                print("Atualização cancelada.")
+                return
+
+            responsavel_desconto_renda_id = ler_texto(
+                "ID do responsável que autoriza este desconto: "
+            )
+
     caucao = ler_decimal(
         f"Caução [atual: {formatar_valor(mensal['caucao'])}, "
         f"Enter mantém]: ",
@@ -2360,6 +2377,7 @@ def _atualizar_contrato_mensal(dados):
             dados,
             ocupacao_id,
             renda_praticada=renda_praticada,
+            responsavel_desconto_renda_id=responsavel_desconto_renda_id,
             caucao=caucao,
             motivo_alteracao_renda=motivo_alteracao_renda,
             motivo_alteracao_caucao=motivo_alteracao_caucao,
