@@ -1730,12 +1730,6 @@ def _anonimizar_cliente(dados):
 
     responsavel_id = ler_texto("ID do responsável que autoriza: ")
 
-    try:
-        responsaveis.validar_autoria(dados, responsavel_id)
-    except ValueError as erro:
-        print(f"Erro: {erro}")
-        return
-
     data = ler_data(
         "Data da anonimização (Enter para hoje): ", obrigatorio=False
     )

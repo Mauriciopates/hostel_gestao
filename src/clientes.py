@@ -9,6 +9,7 @@ sinaliza erro com `raise ValueError`. Quem carrega e grava é o
 
 import repositorio
 import validacoes
+import responsaveis
 
 PREFIXO = "CLI"
 
@@ -387,10 +388,14 @@ def anonimizar(dados, cliente_id, responsavel_id, data):
     modelos.py). Um cliente anonimizado não pode ser reposto por
     'reativar()'.
 
-    'responsavel_id' não é verificado contra responsaveis.py — esse
-    módulo ainda não existe nesta fase do projeto. Fica a cargo de
-    quem chamar (cli.py) confirmar que o responsável existe, quando
-    esse módulo estiver escrito.
+    A autoria é validada aqui, por responsaveis.validar_autoria: o
+    responsável tem de existir e estar ativo, tal como já acontece
+    em contratos.py e estoque.py. Guarda o identificador devolvido
+    pela validação, não o texto recebido, para que o que fica
+    gravado seja sempre a forma canónica do ID.
+
+    Todas as verificações acontecem antes de qualquer campo ser
+    escrito: uma recusa nunca deixa o cliente meio-anonimizado.
     """
 
     cliente = procurar(dados, cliente_id)
@@ -401,11 +406,8 @@ def anonimizar(dados, cliente_id, responsavel_id, data):
     if cliente["anonimizado"]:
         raise ValueError(f"O cliente {cliente_id} já está anonimizado.")
 
-    responsavel_id = responsavel_id.strip()
-
-    if not responsavel_id:
-        raise ValueError("O responsável pela anonimização é obrigatório.")
-
+    responsavel = responsaveis.validar_autoria(dados, responsavel_id)
+ 
     if data is None:
         raise ValueError("A data da anonimização é obrigatória.")
 
@@ -424,5 +426,5 @@ def anonimizar(dados, cliente_id, responsavel_id, data):
     cliente["data_anonimizado"] = data
     cliente["responsavel_anonimizado_id"] = responsavel_id
     cliente["ativo"] = False
-
+    
     return cliente
