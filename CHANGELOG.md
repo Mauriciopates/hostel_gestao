@@ -3,6 +3,44 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [1.0.2] - 2026-09-02
+
+### Corrigido
+
+- Envio de requisições não era gravado: o `repositorio.gravar` estava
+  indentado dentro do bloco `except`, a seguir a um `return`, e nunca
+  chegava a correr. A baixa no stock só persistia se outra operação
+  gravasse a seguir (`cli.py`, `_enviar_requisicao`).
+- Baixar a renda de um contrato mensal pela interface falhava sempre
+  com "O responsável é obrigatório": o ecrã de atualização não pedia o
+  responsável do desconto, ao contrário do equivalente Airbnb, mas
+  `contratos.atualizar_mensal` já o exigia.
+
+### Alterado
+
+- A validação de autoria da anonimização passou do `cli.py` para dentro
+  de `clientes.anonimizar`, através de `responsaveis.validar_autoria`.
+  Antes, qualquer texto não vazio era aceite como responsável se a
+  função fosse chamada fora da interface. O identificador gravado passa
+  a ser o devolvido pela validação, não o texto recebido.
+- O alerta de stock mínimo saiu do `cli.py` para o `estoque.py`, nas
+  funções `abaixo_do_minimo` e `listar_alertas_stock`. Até aqui, o
+  campo `stock_minimo` era gravado e validado mas só comparado numa
+  linha de listagem.
+- A verificação de segundo ocupante em quarto privativo passou do
+  `cli.py` para `unidades.quarto_privativo_ocupado`. Eram 55 linhas de
+  lógica de domínio na camada de interação, contra a decisão 7.
+
+### Notas
+
+Nenhuma alteração à estrutura de dados: sem campos novos, sem migração.
+As três regras movidas mantêm o comportamento exato que tinham — muda
+o módulo onde vivem, para que a interface gráfica da Fase 2 as herde em
+vez de as repetir.
+
+Suite: 552 testes, com 19 novos (10 do stock mínimo, 9 do quarto
+privativo).
+
 ### [1.0.1] — 2026/08/29
 
 
