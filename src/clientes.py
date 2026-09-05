@@ -1,10 +1,14 @@
 """Gestão dos clientes — as pessoas que contratam alojamento.
 
 Concentra os dados pessoais do sistema (decisão 11) e é o alvo da
-anonimização prevista pelo RGPD (decisão 8). Não acede a ficheiros
-nem à interface: recebe a estrutura de dados, devolve resultado e
-sinaliza erro com `raise ValueError`. Quem carrega e grava é o
-`main.py`, através do repositório.
+anonimização prevista pelo RGPD (decisão 8).
+
+MIGRAÇÃO MySQL (Fase 2): tal como `propriedades.py`, `unidades.py` e
+`responsaveis.py`, este módulo já não recebe nem devolve `dados` —
+fala diretamente com o MySQL através do `repositorio.py`
+(inserir_cliente, procurar_cliente, listar_cliente, atualizar_cliente,
+cliente_com_nif_existe). Não acede a ficheiros nem à interface:
+devolve resultado e sinaliza erro com `raise ValueError`.
 """
 
 import repositorio
@@ -14,7 +18,7 @@ import responsaveis
 PREFIXO = "CLI"
 
 
-def _nif_pertence_a_outro_cliente(dados, nif, ignorar_id=None):
+def _nif_pertence_a_outro_cliente(nif, ignorar_id=None):
     """Verifica se o NIF já pertence a outro cliente ativo.
 
     Só compara NIFs não vazios — um cliente Airbnb sem NIF nunca
@@ -25,23 +29,18 @@ def _nif_pertence_a_outro_cliente(dados, nif, ignorar_id=None):
 
     Só considera clientes ativos — um cliente inativo não bloqueia
     a reutilização do NIF (decisão de 26/08, item 5).
+
+    A comparação passou a ser feita em SQL (repositorio.
+    cliente_com_nif_existe), em vez de percorrer dados["clientes"]
+    em memória, agora que a tabela vive no MySQL.
     """
     if not nif:
         return False
 
-    for c in dados["clientes"]:
-        if ignorar_id is not None and c["id"] == ignorar_id:
-            continue
-        if not c["ativo"]:
-            continue
-        if c["nif"] == nif:
-            return True
-
-    return False
+    return repositorio.cliente_com_nif_existe(nif, ignorar_id=ignorar_id)
 
 
 def criar(
-    dados,
     nome,
     tipo_documento,
     numero_documento,
@@ -56,7 +55,7 @@ def criar(
     validade_documento=None,
     contacto_emergencia="",
 ):
-    """Cria um cliente e acrescenta-o à estrutura de dados.
+    """Cria um cliente e grava-o imediatamente na base de dados.
 
     'regime' ("mensal" ou "airbnb") não fica guardado no registo:
     serve só para validacoes.validar_cliente() saber quais campos
@@ -68,8 +67,9 @@ def criar(
     Devolve o registo criado, com 'incompleto' a True se algum
     campo não essencial (por regime) ficou por preencher.
 
-    Não grava: a gravação é decidida pelo `main.py` (mesma
-    convenção de propriedades.criar e unidades.criar).
+    Grava de imediato via repositório — mesma convenção de
+    propriedades.criar, unidades.criar e responsaveis.criar, agora
+    todos em MySQL.
     """
     candidato = {
         "nome": nome.strip(),
@@ -87,7 +87,7 @@ def criar(
 
     em_falta = validacoes.validar_cliente(candidato, regime)
 
-    if _nif_pertence_a_outro_cliente(dados, candidato["nif"]):
+    if _nif_pertence_a_outro_cliente(candidato["nif"]):
         raise ValueError(
             f"Já existe um cliente ativo com o NIF {candidato['nif']}."
         )
@@ -113,11 +113,11 @@ def criar(
         "ativo": True,
     }
 
-    dados["clientes"].append(cliente)
+    repositorio.inserir_cliente(cliente)
     return cliente
 
 
-def procurar(dados, cliente_id):
+def procurar(cliente_id):
     """Devolve o cliente com o identificador indicado, ou None.
 
     A ausência não é erro: quem chama decide se ela impede a
@@ -125,43 +125,25 @@ def procurar(dados, cliente_id):
     decide (mesma convenção de propriedades.procurar e
     unidades.procurar).
     """
-
-    for c in dados["clientes"]:
-        if c["id"] == cliente_id:
-            return c
-
-    return None
+    return repositorio.procurar_cliente(cliente_id)
 
 
-def listar(dados, incluir_inativos=False, incompleto=None):
+def listar(incluir_inativos=False, incompleto=None):
     """Devolve os clientes, filtráveis por estado e por incompletos.
 
     'incompleto' filtra por True ou False quando indicado; None
     (omisso) não filtra. Decisão 11 exige que exista uma listagem
     dos registos incompletos, senão o aviso de campos em falta não
-    produz efeito nenhum — é o que este parâmetro serve.
-
-    Devolve lista nova, para que alterá-la depois não afete a
-    estrutura de dados (mesma convenção de propriedades.listar e
-    unidades.listar).
+    produz efeito nenhum — é o que este parâmetro serve. O filtro
+    aplica-se agora na própria consulta SQL (repositorio.
+    listar_clientes), em vez de em Python sobre a lista em memória.
     """
-
-    resultado = []
-
-    for c in dados["clientes"]:
-        if not incluir_inativos and not c["ativo"]:
-            continue
-
-        if incompleto is not None and c["incompleto"] != incompleto:
-            continue
-
-        resultado.append(c)
-
-    return resultado
+    return repositorio.listar_clientes(
+        incluir_inativos=incluir_inativos, incompleto=incompleto
+    )
 
 
 def atualizar(
-    dados,
     cliente_id,
     regime=None,
     nome=None,
@@ -208,9 +190,10 @@ def atualizar(
     antigo que ainda não os tenha preenchido só volta a poder ser
     atualizado depois de os fornecer nesta mesma chamada.
 
-    Devolve o registo atualizado.
+    Devolve o registo atualizado, já com os campos novos aplicados
+    localmente (evita um SELECT extra a seguir ao UPDATE).
     """
-    cliente = procurar(dados, cliente_id)
+    cliente = procurar(cliente_id)
 
     if cliente is None:
         raise ValueError(f"O cliente {cliente_id} não existe.")
@@ -274,48 +257,51 @@ def atualizar(
         raise ValueError(f"NIF inválido: {candidato['nif']}")
 
     if _nif_pertence_a_outro_cliente(
-        dados, candidato["nif"], ignorar_id=cliente_id
+        candidato["nif"], ignorar_id=cliente_id
     ):
         raise ValueError(
             f"Já existe um cliente ativo com o NIF {candidato['nif']}."
         )
 
-    cliente["nome"] = candidato["nome"]
-
-    cliente["nome"] = candidato["nome"]
-    cliente["tipo_documento"] = candidato["tipo_documento"]
-    cliente["numero_documento"] = candidato["numero_documento"]
-    cliente["nif"] = candidato["nif"]
-    cliente["email"] = candidato["email"]
-    cliente["telefone"] = candidato["telefone"]
-    cliente["morada"] = candidato["morada"]
-    cliente["nacionalidade"] = candidato["nacionalidade"]
-    cliente["estado_civil"] = candidato["estado_civil"]
-    cliente["incompleto"] = bool(em_falta)
+    campos = {
+        "nome": candidato["nome"],
+        "tipo_documento": candidato["tipo_documento"],
+        "numero_documento": candidato["numero_documento"],
+        "nif": candidato["nif"],
+        "email": candidato["email"],
+        "telefone": candidato["telefone"],
+        "morada": candidato["morada"],
+        "nacionalidade": candidato["nacionalidade"],
+        "estado_civil": candidato["estado_civil"],
+        "incompleto": bool(em_falta),
+    }
 
     if data_nascimento is not None:
-        cliente["data_nascimento"] = data_nascimento
+        campos["data_nascimento"] = data_nascimento
 
     if validade_documento is not None:
-        cliente["validade_documento"] = validade_documento
+        campos["validade_documento"] = validade_documento
 
     if contacto_emergencia is not None:
-        cliente["contacto_emergencia"] = contacto_emergencia.strip()
+        campos["contacto_emergencia"] = contacto_emergencia.strip()
+
+    repositorio.atualizar_cliente(cliente_id, campos)
+    cliente.update(campos)
 
     return cliente
 
 
-def desativar(dados, cliente_id):
+def desativar(cliente_id):
     """Marca o cliente como inativo, sem o eliminar.
 
     Um cliente com ocupações associadas não pode desaparecer: os
     contratos históricos referem-se a ele (decisão 8). Desativar
     mantém o registo e tira-o das listagens de escolha, sem apagar
-    nenhum dado pessoal — isso é o que distingue de `anonimizar`
-    (ainda por escrever), que é irreversível e apaga dados.
+    nenhum dado pessoal — isso é o que distingue de `anonimizar`,
+    que é irreversível e apaga dados.
     """
 
-    cliente = procurar(dados, cliente_id)
+    cliente = procurar(cliente_id)
 
     if cliente is None:
         raise ValueError(f"O cliente {cliente_id} não existe.")
@@ -323,11 +309,12 @@ def desativar(dados, cliente_id):
     if not cliente["ativo"]:
         raise ValueError(f"O cliente {cliente_id} já está inativo.")
 
+    repositorio.atualizar_cliente(cliente_id, {"ativo": False})
     cliente["ativo"] = False
     return cliente
 
 
-def reativar(dados, cliente_id):
+def reativar(cliente_id):
     """Repõe um cliente desativado como ativo.
 
     Existe porque a desativação por engano seria irreversível sem
@@ -336,7 +323,7 @@ def reativar(dados, cliente_id):
     irreversível) não pode ser reativado por esta função, porque os
     dados pessoais já foram apagados e não há para onde voltar.
 
-        Recusa também reativar se o NIF do cliente já pertencer, agora,
+    Recusa também reativar se o NIF do cliente já pertencer, agora,
     a outro cliente ativo (item 6, 27/08) — sem esta verificação,
     dois clientes ativos podiam acabar com o mesmo NIF: um
     desativado, um novo criado entretanto com o mesmo NIF (permitido,
@@ -344,7 +331,7 @@ def reativar(dados, cliente_id):
     reativado sem que nada voltasse a cruzar os dois.
     """
 
-    cliente = procurar(dados, cliente_id)
+    cliente = procurar(cliente_id)
 
     if cliente is None:
         raise ValueError(f"O cliente {cliente_id} não existe.")
@@ -358,19 +345,18 @@ def reativar(dados, cliente_id):
     if cliente["ativo"]:
         raise ValueError(f"O cliente {cliente_id} já está ativo.")
 
-    if _nif_pertence_a_outro_cliente(
-        dados, cliente["nif"], ignorar_id=cliente_id
-    ):
+    if _nif_pertence_a_outro_cliente(cliente["nif"], ignorar_id=cliente_id):
         raise ValueError(
             f"Já existe um cliente ativo com o NIF {cliente['nif']} — "
             f"não é possível reativar."
         )
 
+    repositorio.atualizar_cliente(cliente_id, {"ativo": True})
     cliente["ativo"] = True
     return cliente
 
 
-def anonimizar(dados, cliente_id, responsavel_id, data):
+def anonimizar(cliente_id, responsavel_id, data):
     """Anonimiza um cliente, a pedido do titular ou por prazo excedido.
 
     Operação irreversível (decisão 8, RGPD, secção 6). Substitui o
@@ -382,6 +368,14 @@ def anonimizar(dados, cliente_id, responsavel_id, data):
     (Cartão de Cidadão/Passaporte/etc. é categoria, não
     identificador). Contratos, datas e valores associados ao
     cliente nunca são alterados por esta função.
+
+    IMPORTANTE (migração MySQL): esta função limpa
+    'data_nascimento' e 'validade_documento' para None — a tabela
+    `clientes` no esquema original tinha estas duas colunas como
+    DATE NOT NULL, o que bloquearia esta operação. É preciso
+    relaxar essas duas colunas para aceitarem NULL antes de esta
+    função funcionar em produção (ver aviso separado sobre
+    ALTER TABLE clientes).
 
     Marca 'ativo' a False — a anonimização é uma das formas de um
     cliente deixar de estar ativo (ver comentário do campo em
@@ -398,7 +392,7 @@ def anonimizar(dados, cliente_id, responsavel_id, data):
     escrito: uma recusa nunca deixa o cliente meio-anonimizado.
     """
 
-    cliente = procurar(dados, cliente_id)
+    cliente = procurar(cliente_id)
 
     if cliente is None:
         raise ValueError(f"O cliente {cliente_id} não existe.")
@@ -406,25 +400,29 @@ def anonimizar(dados, cliente_id, responsavel_id, data):
     if cliente["anonimizado"]:
         raise ValueError(f"O cliente {cliente_id} já está anonimizado.")
 
-    responsavel = responsaveis.validar_autoria(dados, responsavel_id)
- 
+    responsavel = responsaveis.validar_autoria(responsavel_id)
+
     if data is None:
         raise ValueError("A data da anonimização é obrigatória.")
 
-    cliente["nome"] = f"Titular anonimizado {cliente['id']}"
-    cliente["email"] = ""
-    cliente["telefone"] = ""
-    cliente["morada"] = ""
-    cliente["nif"] = ""
-    cliente["numero_documento"] = ""
-    cliente["validade_documento"] = None
-    cliente["data_nascimento"] = None
-    cliente["contacto_emergencia"] = ""
+    campos = {
+        "nome": f"Titular anonimizado {cliente['id']}",
+        "email": "",
+        "telefone": "",
+        "morada": "",
+        "nif": "",
+        "numero_documento": "",
+        "validade_documento": None,
+        "data_nascimento": None,
+        "contacto_emergencia": "",
+        "incompleto": True,
+        "anonimizado": True,
+        "data_anonimizado": data,
+        "responsavel_anonimizado_id": responsavel_id,
+        "ativo": False,
+    }
 
-    cliente["incompleto"] = True
-    cliente["anonimizado"] = True
-    cliente["data_anonimizado"] = data
-    cliente["responsavel_anonimizado_id"] = responsavel_id
-    cliente["ativo"] = False
-    
+    repositorio.atualizar_cliente(cliente_id, campos)
+    cliente.update(campos)
+
     return cliente

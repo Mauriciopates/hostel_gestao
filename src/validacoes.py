@@ -15,7 +15,7 @@ responsabilidade de quem chama.
 from datetime import date
 
 TIPOS_DOCUMENTO = (
-    "Cartão Cidadão",
+    "Cartão de Cidadão",
     "Passaporte",
     "Título de Residência",
     "Outro",

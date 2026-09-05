@@ -4,9 +4,11 @@ Existe como entidade própria (decisão 12) para o nome e a morada
 viverem num único sítio: repetidos em cada unidade, uma correção
 obrigaria a alterar treze registos e um ficaria por corrigir.
 
-Não acede a ficheiros nem à interface: recebe a estrutura de dados,
-devolve resultado e sinaliza erro com `raise ValueError`. Quem carrega e
-grava é o `main.py`, através do repositório.
+MIGRADO para MySQL (Fase 2, pivot): já não recebe nem devolve a
+estrutura `dados` em memória — fala diretamente com o `repositorio`,
+que faz o INSERT/SELECT/UPDATE na base de dados. Continua a não
+aceder a ficheiros nem à base de dados diretamente (só através do
+repositorio), e continua a sinalizar erro com `raise ValueError`.
 """
 
 import repositorio
@@ -15,12 +17,12 @@ import repositorio
 PREFIXO = "PRO"
 
 
-def criar(dados, nome, morada=""):
-    """Cria uma propriedade e acrescenta-a à estrutura de dados.
+def criar(nome, morada=""):
+    """Cria uma propriedade e grava-a imediatamente na base de dados.
 
-    Devolve o registo criado. Não grava: a gravação é decidida pelo
-    `main.py`, o que permite reunir várias operações numa só escrita e
-    não deixar dados inconsistentes quando uma delas falha.
+    Devolve o registo criado. Ao contrário da versão antiga (em
+    memória), aqui já não há gravação separada: cada função grava a
+    sua própria operação assim que a validação passa.
     """
     nome = nome.strip()
 
@@ -34,11 +36,11 @@ def criar(dados, nome, morada=""):
         "ativo": True,
     }
 
-    dados["propriedades"].append(propriedade)
+    repositorio.inserir_propriedade(propriedade)
     return propriedade
 
 
-def procurar(dados, propriedade_id):
+def procurar(propriedade_id):
     """Devolve a propriedade com o identificador indicado, ou None.
 
     A ausência não é erro: quem chama é que decide se a falta de
@@ -46,56 +48,44 @@ def procurar(dados, propriedade_id):
 
     Não filtra inativas — procura, não decide.
     """
-
-    for p in dados["propriedades"]:
-        if p["id"] == propriedade_id:
-            return p
-
-    return None
+    return repositorio.procurar_propriedade(propriedade_id)
 
 
-def listar(dados, incluir_inativas=False):
-    """Devolve as propriedades ativas, ou todas se pedido.
-
-    Devolve uma lista nova para que alterações a essa lista não afetem
-    a estrutura de dados.
-    """
-
-    resultado = []
-
-    for p in dados["propriedades"]:
-        if incluir_inativas or p["ativo"]:
-            resultado.append(p)
-
-    return resultado
+def listar(incluir_inativas=False):
+    """Devolve as propriedades ativas, ou todas se pedido."""
+    return repositorio.listar_propriedades(incluir_inativas=incluir_inativas)
 
 
-def atualizar(dados, propriedade_id, nome=None, morada=None):
+def atualizar(propriedade_id, nome=None, morada=None):
     """Altera o nome ou a morada de uma propriedade existente.
 
     Um parâmetro a None significa não alterar; uma cadeia vazia
     significa apagar o conteúdo. A morada pode ficar vazia, o nome não.
     """
+    propriedade = procurar(propriedade_id)
 
-    p = procurar(dados, propriedade_id)
-
-    if p is None:
+    if propriedade is None:
         raise ValueError(f"A propriedade {propriedade_id} não existe.")
+
+    campos = {}
 
     if nome is not None:
         nome = nome.strip()
         if not nome:
             raise ValueError("O nome da propriedade é obrigatório.")
-        p["nome"] = nome
+        campos["nome"] = nome
 
     if morada is not None:
-        morada = morada.strip()
-        p["morada"] = morada
+        campos["morada"] = morada.strip()
 
-    return p
+    if campos:
+        repositorio.atualizar_propriedade(propriedade_id, campos)
+        propriedade.update(campos)
+
+    return propriedade
 
 
-def desativar(dados, propriedade_id, forcar=False):
+def desativar(propriedade_id, forcar=False):
     """Marca a propriedade como inativa, sem a eliminar.
 
     Uma propriedade com unidades associadas não pode desaparecer: os
@@ -108,47 +98,43 @@ def desativar(dados, propriedade_id, forcar=False):
     cli.py, para que qualquer interface futura (a GUI da Fase 2, por
     exemplo) herde esta proteção sem ter de a repetir.
     """
+    propriedade = procurar(propriedade_id)
 
-    p = procurar(dados, propriedade_id)
-
-    if p is None:
+    if propriedade is None:
         raise ValueError(f"A propriedade {propriedade_id} não existe.")
 
-    if not p["ativo"]:
+    if not propriedade["ativo"]:
         raise ValueError(f"A propriedade {propriedade_id} já está inativa.")
 
     if not forcar:
-        unidades_ativas = [
-            u for u in dados["unidades"]
-            if u["propriedade_id"] == propriedade_id and u["ativo"]
-        ]
+        total_ativas = repositorio.contar_unidades_ativas(propriedade_id)
 
-        if unidades_ativas:
+        if total_ativas:
             raise ValueError(
                 f"A propriedade {propriedade_id} tem "
-                f"{len(unidades_ativas)} unidade(s) ativa(s) — "
+                f"{total_ativas} unidade(s) ativa(s) — "
                 f"forcar=True para desativar mesmo assim."
             )
 
-    p["ativo"] = False
-    return p
+    repositorio.atualizar_propriedade(propriedade_id, {"ativo": False})
+    propriedade["ativo"] = False
+    return propriedade
 
 
-def reativar(dados, propriedade_id):
+def reativar(propriedade_id):
     """Repõe uma propriedade desativada como ativa.
 
     Existe porque a desativação por engano seria irreversível sem ela.
     É a inversa exata da `desativar`.
-
     """
+    propriedade = procurar(propriedade_id)
 
-    p = procurar(dados, propriedade_id)
-
-    if p is None:
+    if propriedade is None:
         raise ValueError(f"A propriedade {propriedade_id} não existe.")
 
-    if p["ativo"]:
+    if propriedade["ativo"]:
         raise ValueError(f"A propriedade {propriedade_id} já está ativa.")
 
-    p["ativo"] = True 
-    return p
+    repositorio.atualizar_propriedade(propriedade_id, {"ativo": True})
+    propriedade["ativo"] = True
+    return propriedade

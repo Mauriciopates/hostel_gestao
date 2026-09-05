@@ -7,9 +7,14 @@ divisão; lugar é a cama ou posição contratável dentro dele
 ocupado e reservado calculam-se a partir dos contratos, para uma
 data (decisão 3).
 
-Não acede a ficheiros nem à interface: recebe a estrutura de dados,
-devolve resultado e sinaliza erro com `raise ValueError`. Quem
-carrega e grava é o `main.py`, através do repositório.
+MIGRAÇÃO MySQL (Fase 2): as três entidades deste módulo falam
+diretamente com o MySQL através do `repositorio` (unidades, quartos,
+lugares). Desde a migração de `contratos.py`, nenhuma função deste
+módulo recebe `dados` — `desativar`, `estado`, `_estado_mensal`,
+`_estado_airbnb` e `quarto_privativo_ocupado` já não precisam de ler
+`dados["ocupacoes"]` diretamente: leem `repositorio.listar_ocupacoes`
+(mesmo módulo que `contratos.py` usa), o que continua a evitar o
+import circular (`contratos.py` já importa `unidades.py`).
 """
 
 from decimal import Decimal
@@ -25,7 +30,6 @@ PREFIXO_LUGAR = "LUG"
 
 
 def criar(
-    dados,
     propriedade_id,
     nome,
     tipo,
@@ -37,7 +41,7 @@ def criar(
     """Criação das unidades, faz a validações de existencia
     antes de criar a unidade"""
 
-    propriedade = propriedades.procurar(dados, propriedade_id)
+    propriedade = propriedades.procurar(propriedade_id)
 
     if propriedade is None:
         raise ValueError(f"A propriedade {propriedade_id} não existe.")
@@ -82,11 +86,11 @@ def criar(
         "ativo": True,
     }
 
-    dados["unidades"].append(unidade)
+    repositorio.inserir_unidade(unidade)
     return unidade
 
 
-def procurar(dados, unidade_id):
+def procurar(unidade_id):
     """Devolve a unidade com o identificador indicado, ou None.
 
     A ausência não é erro: quem chama decide se ela impede a
@@ -96,41 +100,19 @@ def procurar(dados, unidade_id):
     Não filtra inativas: uma unidade desativada continua a ser
     encontrada, senão a `reativar` não teria como lhe chegar.
     """
-
-    for u in dados["unidades"]:
-        if u["id"] == unidade_id:
-            return u
-
-    return None
+    return repositorio.procurar_unidade(unidade_id)
 
 
-def listar(dados, incluir_inativas=False, propriedade_id=None, tipo=None):
-    """Devolve as unidades, filtráveis por propriedade e por tipo.
-
-    Devolve lista nova: alterá-la depois não afeta a estrutura de
-    dados (mesma convenção de `propriedades.listar`).
-    """
-
-    resultado = []
-
-    for u in dados["unidades"]:
-        if not incluir_inativas and not u["ativo"]:
-            continue
-
-        if propriedade_id is not None:
-            if u["propriedade_id"] != propriedade_id:
-                continue
-
-        if tipo is not None and u["tipo"] != tipo:
-            continue
-
-        resultado.append(u)
-
-    return resultado
+def listar(incluir_inativas=False, propriedade_id=None, tipo=None):
+    """Devolve as unidades, filtráveis por propriedade e por tipo."""
+    return repositorio.listar_unidades(
+        incluir_inativas=incluir_inativas,
+        propriedade_id=propriedade_id,
+        tipo=tipo,
+    )
 
 
 def atualizar(
-    dados,
     unidade_id,
     nome=None,
     preco_base=None,
@@ -153,10 +135,12 @@ def atualizar(
     funções próprias.
     """
 
-    unidade = procurar(dados, unidade_id)
+    unidade = procurar(unidade_id)
 
     if unidade is None:
         raise ValueError(f"A unidade {unidade_id} não existe.")
+
+    campos = {}
 
     if nome is not None:
         nome = nome.strip()
@@ -164,15 +148,19 @@ def atualizar(
         if not nome:
             raise ValueError("O nome da unidade é obrigatório.")
 
-        unidade["nome"] = nome
+        campos["nome"] = nome
 
     precos = (
-        ("preço base", preco_base),
-        ("preço de época alta", preco_epoca_alta),
-        ("multa de check-in tardio", multa_check_in_tardio),
+        ("preço base", "preco_base", preco_base),
+        ("preço de época alta", "preco_epoca_alta", preco_epoca_alta),
+        (
+            "multa de check-in tardio",
+            "multa_check_in_tardio",
+            multa_check_in_tardio,
+        ),
     )
 
-    for nome_preco, valor in precos:
+    for nome_preco, campo, valor in precos:
         if valor is None:
             continue
 
@@ -185,22 +173,19 @@ def atualizar(
         if valor < 0:
             raise ValueError(f"{nome_preco} não pode ser negativo: {valor}.")
 
-    if preco_base is not None:
-        unidade["preco_base"] = preco_base
-
-    if preco_epoca_alta is not None:
-        unidade["preco_epoca_alta"] = preco_epoca_alta
-
-    if multa_check_in_tardio is not None:
-        unidade["multa_check_in_tardio"] = multa_check_in_tardio
+        campos[campo] = valor
 
     if epoca_alta_ativa is not None:
-        unidade["epoca_alta_ativa"] = epoca_alta_ativa
+        campos["epoca_alta_ativa"] = epoca_alta_ativa
+
+    if campos:
+        repositorio.atualizar_unidade(unidade_id, campos)
+        unidade.update(campos)
 
     return unidade
 
 
-def desativar(dados, unidade_id, forcar=False):
+def desativar(unidade_id, forcar=False):
     """Marca a unidade como inativa, sem a eliminar.
 
     Uma unidade com ocupações associadas não pode desaparecer: os
@@ -210,13 +195,14 @@ def desativar(dados, unidade_id, forcar=False):
 
     Recusa por omissão se existirem ocupações ativas dependentes
     (decisão de 27/08, item 9) — passa forcar=True para desativar
-    mesmo assim, conscientemente. Lê dados["ocupacoes"] diretamente
-    em vez de chamar contratos.py, para evitar import circular
-    (contratos.py já importa unidades.py) — mesmo padrão já usado
-    em `_estado_mensal`/`_estado_airbnb`, acima.
+    mesmo assim, conscientemente. Consulta
+    `repositorio.listar_ocupacoes` em vez de chamar `contratos.py`,
+    para evitar import circular (`contratos.py` já importa
+    `unidades.py`) — mesmo padrão usado em `_estado_mensal`/
+    `_estado_airbnb`, abaixo.
     """
 
-    unidade = procurar(dados, unidade_id)
+    unidade = procurar(unidade_id)
 
     if unidade is None:
         raise ValueError(f"A unidade {unidade_id} não existe.")
@@ -225,10 +211,7 @@ def desativar(dados, unidade_id, forcar=False):
         raise ValueError(f"A unidade {unidade_id} já está inativa.")
 
     if not forcar:
-        ocupacoes_ativas = [
-            o for o in dados["ocupacoes"]
-            if o["unidade_id"] == unidade_id and o["ativo"]
-        ]
+        ocupacoes_ativas = repositorio.listar_ocupacoes(unidade_id=unidade_id)
 
         if ocupacoes_ativas:
             raise ValueError(
@@ -237,18 +220,19 @@ def desativar(dados, unidade_id, forcar=False):
                 f"forcar=True para desativar mesmo assim."
             )
 
+    repositorio.atualizar_unidade(unidade_id, {"ativo": False})
     unidade["ativo"] = False
     return unidade
 
 
-def reativar(dados, unidade_id):
+def reativar(unidade_id):
     """Repõe uma unidade desativada como ativa.
 
     Existe porque a desativação por engano seria irreversível sem
     ela. É a inversa exata da `desativar`.
     """
 
-    unidade = procurar(dados, unidade_id)
+    unidade = procurar(unidade_id)
 
     if unidade is None:
         raise ValueError(f"A unidade {unidade_id} não existe.")
@@ -256,11 +240,12 @@ def reativar(dados, unidade_id):
     if unidade["ativo"]:
         raise ValueError(f"A unidade {unidade_id} já está ativa.")
 
+    repositorio.atualizar_unidade(unidade_id, {"ativo": True})
     unidade["ativo"] = True
     return unidade
 
 
-def marcar_manutencao(dados, unidade_id):
+def marcar_manutencao(unidade_id):
     """Coloca a unidade em manutenção, tirando-a da oferta.
 
     'em_manutencao' é a única forma de estado que persiste na
@@ -269,7 +254,7 @@ def marcar_manutencao(dados, unidade_id):
     decisão da gestão, não algo que se infira dos contratos.
     """
 
-    unidade = procurar(dados, unidade_id)
+    unidade = procurar(unidade_id)
 
     if unidade is None:
         raise ValueError(f"A unidade {unidade_id} não existe.")
@@ -277,17 +262,18 @@ def marcar_manutencao(dados, unidade_id):
     if unidade["em_manutencao"]:
         raise ValueError(f"A unidade {unidade_id} já está em manutenção.")
 
+    repositorio.atualizar_unidade(unidade_id, {"em_manutencao": True})
     unidade["em_manutencao"] = True
     return unidade
 
 
-def desmarcar_manutencao(dados, unidade_id):
+def desmarcar_manutencao(unidade_id):
     """Repõe a unidade na oferta, saindo da manutenção.
 
     Inversa exata da `marcar_manutencao`.
     """
 
-    unidade = procurar(dados, unidade_id)
+    unidade = procurar(unidade_id)
 
     if unidade is None:
         raise ValueError(f"A unidade {unidade_id} não existe.")
@@ -295,6 +281,7 @@ def desmarcar_manutencao(dados, unidade_id):
     if not unidade["em_manutencao"]:
         raise ValueError(f"A unidade {unidade_id} não está em manutenção.")
 
+    repositorio.atualizar_unidade(unidade_id, {"em_manutencao": False})
     unidade["em_manutencao"] = False
     return unidade
 
@@ -302,15 +289,13 @@ def desmarcar_manutencao(dados, unidade_id):
 # Inicio do código para Quartos
 
 
-def criar_quarto(dados, unidade_id, nome, privativo=False,
-                limpeza_incluida=False):
+def criar_quarto(unidade_id, nome, privativo=False, limpeza_incluida=False):
     """Cria um quarto dentro de uma unidade existente.
 
-    Devolve o registo criado. Não grava: a gravação é decidida pelo
-    `main.py` (mesma convenção da `criar` da unidade).
+    Devolve o registo criado.
     """
 
-    unidade = procurar(dados, unidade_id)
+    unidade = procurar(unidade_id)
 
     if unidade is None:
         raise ValueError(f"A unidade {unidade_id} não existe.")
@@ -329,49 +314,28 @@ def criar_quarto(dados, unidade_id, nome, privativo=False,
         "ativo": True,
     }
 
-    dados["quartos"].append(quarto)
+    repositorio.inserir_quarto(quarto)
     return quarto
 
 
-def procurar_quarto(dados, quarto_id):
+def procurar_quarto(quarto_id):
     """Devolve o quarto com o identificador indicado, ou None.
 
     A ausência não é erro: quem chama decide se ela impede a
     operação. Não filtra inativos — procura, não decide (mesma
     convenção de `procurar`, unidade acima).
     """
-
-    for q in dados["quartos"]:
-        if q["id"] == quarto_id:
-            return q
-
-    return None
+    return repositorio.procurar_quarto(quarto_id)
 
 
-def listar_quartos(dados, incluir_inativas=False, unidade_id=None):
-    """Devolve os quartos, filtráveis por unidade.
-
-    Devolve lista nova: alterá-la depois não afeta a estrutura de
-    dados (mesma convenção de `listar`, unidade acima).
-    """
-
-    resultado = []
-
-    for q in dados["quartos"]:
-        if not incluir_inativas and not q["ativo"]:
-            continue
-
-        if unidade_id is not None and q["unidade_id"] != unidade_id:
-            continue
-
-        resultado.append(q)
-
-    return resultado
+def listar_quartos(incluir_inativas=False, unidade_id=None):
+    """Devolve os quartos, filtráveis por unidade."""
+    return repositorio.listar_quartos(
+        incluir_inativas=incluir_inativas, unidade_id=unidade_id
+    )
 
 
-def atualizar_quarto(
-    dados, quarto_id, nome=None, privativo=None, limpeza_incluida=None
-):
+def atualizar_quarto(quarto_id, nome=None, privativo=None, limpeza_incluida=None):
     """Altera o nome ou os indicadores de um quarto existente.
 
     Um parâmetro a None significa não alterar (mesma convenção de
@@ -379,10 +343,12 @@ def atualizar_quarto(
     dois indicadores são independentes entre si (decisão 17).
     """
 
-    quarto = procurar_quarto(dados, quarto_id)
+    quarto = procurar_quarto(quarto_id)
 
     if quarto is None:
         raise ValueError(f"O quarto {quarto_id} não existe.")
+
+    campos = {}
 
     if nome is not None:
         nome = nome.strip()
@@ -390,18 +356,22 @@ def atualizar_quarto(
         if not nome:
             raise ValueError("O nome do quarto é obrigatório.")
 
-        quarto["nome"] = nome
+        campos["nome"] = nome
 
     if privativo is not None:
-        quarto["privativo"] = privativo
+        campos["privativo"] = privativo
 
     if limpeza_incluida is not None:
-        quarto["limpeza_incluida"] = limpeza_incluida
+        campos["limpeza_incluida"] = limpeza_incluida
+
+    if campos:
+        repositorio.atualizar_quarto(quarto_id, campos)
+        quarto.update(campos)
 
     return quarto
 
 
-def desativar_quarto(dados, quarto_id):
+def desativar_quarto(quarto_id):
     """Marca o quarto como inativo, sem o eliminar.
 
     Um quarto com lugares associados não pode desaparecer: mantém
@@ -409,7 +379,7 @@ def desativar_quarto(dados, quarto_id):
     histórico (decisão 8).
     """
 
-    quarto = procurar_quarto(dados, quarto_id)
+    quarto = procurar_quarto(quarto_id)
 
     if quarto is None:
         raise ValueError(f"O quarto {quarto_id} não existe.")
@@ -417,18 +387,19 @@ def desativar_quarto(dados, quarto_id):
     if not quarto["ativo"]:
         raise ValueError(f"O quarto {quarto_id} já está inativo.")
 
+    repositorio.atualizar_quarto(quarto_id, {"ativo": False})
     quarto["ativo"] = False
     return quarto
 
 
-def reativar_quarto(dados, quarto_id):
+def reativar_quarto(quarto_id):
     """Repõe um quarto desativado como ativo.
 
     Existe porque a desativação por engano seria irreversível sem
     ela. É a inversa exata da `desativar_quarto`.
     """
 
-    quarto = procurar_quarto(dados, quarto_id)
+    quarto = procurar_quarto(quarto_id)
 
     if quarto is None:
         raise ValueError(f"O quarto {quarto_id} não existe.")
@@ -436,18 +407,18 @@ def reativar_quarto(dados, quarto_id):
     if quarto["ativo"]:
         raise ValueError(f"O quarto {quarto_id} já está ativo.")
 
+    repositorio.atualizar_quarto(quarto_id, {"ativo": True})
     quarto["ativo"] = True
     return quarto
 
 
-def criar_lugar(dados, quarto_id, nome, capacidade=1):
+def criar_lugar(quarto_id, nome, capacidade=1):
     """Cria um lugar dentro de um quarto existente.
 
-    Devolve o registo criado. Não grava: a gravação é decidida pelo
-    `main.py` (mesma convenção da `criar` da unidade e do quarto).
+    Devolve o registo criado.
     """
 
-    quarto = procurar_quarto(dados, quarto_id)
+    quarto = procurar_quarto(quarto_id)
 
     if quarto is None:
         raise ValueError(f"O quarto {quarto_id} não existe.")
@@ -467,46 +438,28 @@ def criar_lugar(dados, quarto_id, nome, capacidade=1):
         "ativo": True,
     }
 
-    dados["lugares"].append(lugar)
+    repositorio.inserir_lugar(lugar)
     return lugar
 
-def procurar_lugar(dados, lugar_id):
+
+def procurar_lugar(lugar_id):
     """Devolve o lugar com o identificador indicado, ou None.
 
     A ausência não é erro: quem chama decide se ela impede a
     operação. Não filtra inativos — procura, não decide (mesma
     convenção de `procurar` e `procurar_quarto`, acima).
     """
-
-    for lg in dados["lugares"]:
-        if lg["id"] == lugar_id:
-            return lg
-
-    return None
+    return repositorio.procurar_lugar(lugar_id)
 
 
-def listar_lugares(dados, incluir_inativas=False, quarto_id=None):
-    """Devolve os lugares, filtráveis por quarto.
-
-    Devolve lista nova: alterá-la depois não afeta a estrutura de
-    dados (mesma convenção de `listar` e `listar_quartos`, acima).
-    """
-
-    resultado = []
-
-    for lg in dados["lugares"]:
-        if not incluir_inativas and not lg["ativo"]:
-            continue
-
-        if quarto_id is not None and lg["quarto_id"] != quarto_id:
-            continue
-
-        resultado.append(lg)
-
-    return resultado
+def listar_lugares(incluir_inativas=False, quarto_id=None):
+    """Devolve os lugares, filtráveis por quarto."""
+    return repositorio.listar_lugares(
+        incluir_inativas=incluir_inativas, quarto_id=quarto_id
+    )
 
 
-def atualizar_lugar(dados, lugar_id, nome=None, capacidade=None):
+def atualizar_lugar(lugar_id, nome=None, capacidade=None):
     """Altera o nome ou a capacidade de um lugar existente.
 
     Um parâmetro a None significa não alterar (mesma convenção de
@@ -514,10 +467,12 @@ def atualizar_lugar(dados, lugar_id, nome=None, capacidade=None):
     pela mesma validação usada na criação.
     """
 
-    lugar = procurar_lugar(dados, lugar_id)
+    lugar = procurar_lugar(lugar_id)
 
     if lugar is None:
         raise ValueError(f"O lugar {lugar_id} não existe.")
+
+    campos = {}
 
     if nome is not None:
         nome = nome.strip()
@@ -525,16 +480,20 @@ def atualizar_lugar(dados, lugar_id, nome=None, capacidade=None):
         if not nome:
             raise ValueError("O nome do lugar é obrigatório.")
 
-        lugar["nome"] = nome
+        campos["nome"] = nome
 
     if capacidade is not None:
         validacoes.validar_capacidade_lugar(capacidade)
-        lugar["capacidade"] = capacidade
+        campos["capacidade"] = capacidade
+
+    if campos:
+        repositorio.atualizar_lugar(lugar_id, campos)
+        lugar.update(campos)
 
     return lugar
 
 
-def desativar_lugar(dados, lugar_id):
+def desativar_lugar(lugar_id):
     """Marca o lugar como inativo, sem o eliminar.
 
     Um lugar com ocupações associadas não pode desaparecer: mantém
@@ -542,7 +501,7 @@ def desativar_lugar(dados, lugar_id):
     histórico (decisão 8).
     """
 
-    lugar = procurar_lugar(dados, lugar_id)
+    lugar = procurar_lugar(lugar_id)
 
     if lugar is None:
         raise ValueError(f"O lugar {lugar_id} não existe.")
@@ -550,17 +509,19 @@ def desativar_lugar(dados, lugar_id):
     if not lugar["ativo"]:
         raise ValueError(f"O lugar {lugar_id} já está inativo.")
 
+    repositorio.atualizar_lugar(lugar_id, {"ativo": False})
     lugar["ativo"] = False
     return lugar
 
-def reativar_lugar(dados, lugar_id):
+
+def reativar_lugar(lugar_id):
     """Repõe um lugar desativado como ativo.
 
     Existe porque a desativação por engano seria irreversível sem
     ela. É a inversa exata da `desativar_lugar`.
     """
 
-    lugar = procurar_lugar(dados, lugar_id)
+    lugar = procurar_lugar(lugar_id)
 
     if lugar is None:
         raise ValueError(f"O lugar {lugar_id} não existe.")
@@ -568,10 +529,12 @@ def reativar_lugar(dados, lugar_id):
     if lugar["ativo"]:
         raise ValueError(f"O lugar {lugar_id} já está ativo.")
 
+    repositorio.atualizar_lugar(lugar_id, {"ativo": True})
     lugar["ativo"] = True
     return lugar
 
-def quarto_privativo_ocupado(dados, lugar_id):
+
+def quarto_privativo_ocupado(lugar_id):
     """Verifica se o lugar indicado pertence a um quarto privativo
     que já tem algum ocupante mensal ativo — em qualquer um dos
     seus lugares, não só no lugar indicado (decisão 17: "privativo
@@ -586,11 +549,11 @@ def quarto_privativo_ocupado(dados, lugar_id):
     aqui; a existência do próprio lugar continua a ser validada por
     contratos.criar_mensal, como até agora.
 
-    lugar_id e ativo vivem os dois no registo BASE de dados["ocupacoes"]
-    (não em ocupacoes_mensal, que só guarda os campos específicos do
-    regime — renda, caução, dia de vencimento) — mesmo padrão já
-    usado em _estado_mensal e desativar. Por isso esta função nem
-    precisa de tocar em ocupacoes_mensal.
+    Consulta `repositorio.listar_ocupacoes` em vez de chamar
+    `contratos.py`, para evitar import circular (mesma razão de
+    `desativar`, acima) — lugar, quarto e a lista de lugares do
+    quarto vêm do MySQL através de `procurar_lugar`,
+    `procurar_quarto` e `listar_lugares`.
 
     Vive aqui, e não em contratos.py, porque "privativo" é um
     atributo do quarto e é este módulo que trata de unidades,
@@ -599,43 +562,36 @@ def quarto_privativo_ocupado(dados, lugar_id):
     pergunta, não decide o que fazer com a resposta: a confirmação
     de um segundo ocupante continua a ser da interface.
     """
-    lugar = procurar_lugar(dados, lugar_id)
+    lugar = procurar_lugar(lugar_id)
 
     if lugar is None:
         return False
 
-    quarto = procurar_quarto(dados, lugar["quarto_id"])
+    quarto = procurar_quarto(lugar["quarto_id"])
 
     if quarto is None or not quarto["privativo"]:
         return False
 
     lugares_do_quarto = {
         lg["id"]
-        for lg in listar_lugares(
-            dados, incluir_inativas=True, quarto_id=quarto["id"]
-        )
+        for lg in listar_lugares(incluir_inativas=True, quarto_id=quarto["id"])
     }
 
-    for ocupacao in dados["ocupacoes"]:
-        if ocupacao["tipo"] != "mensal":
-            continue
-
-        if not ocupacao["ativo"]:
-            continue
-
+    for ocupacao in repositorio.listar_ocupacoes(tipo="mensal"):
         if ocupacao.get("lugar_id") in lugares_do_quarto:
             return True
 
     return False
 
-def estado(dados, unidade_id, data):
+
+def estado(unidade_id, data):
     """Calcula o estado da unidade numa data: Livre, Ocupado,
     Reservado ou, no regime mensal, a proporção ocupada.
 
     'em_manutencao' sobrepõe-se ao cálculo (decisão 3): uma unidade
     em manutenção nunca está livre, independentemente das ocupações.
     """
-    unidade = procurar(dados, unidade_id)
+    unidade = procurar(unidade_id)
 
     if unidade is None:
         raise ValueError(f"A unidade {unidade_id} não existe.")
@@ -644,12 +600,12 @@ def estado(dados, unidade_id, data):
         return "Em manutenção"
 
     if unidade["tipo"] == "mensal":
-        return _estado_mensal(dados, unidade_id, data)
+        return _estado_mensal(unidade_id, data)
 
-    return _estado_airbnb(dados, unidade_id, data)
+    return _estado_airbnb(unidade_id, data)
 
 
-def _estado_mensal(dados, unidade_id, data):
+def _estado_mensal(unidade_id, data):
     """Proporção "ocupados/capacidade" de uma unidade mensal numa
     data (decisão 17: capacidade é a soma dos lugares dos quartos
     ativos; um contrato sem lugar_id conta na mesma, ver secção 4).
@@ -659,22 +615,15 @@ def _estado_mensal(dados, unidade_id, data):
     """
     capacidade = 0
 
-    for quarto in listar_quartos(dados, unidade_id=unidade_id):
-        for lugar in listar_lugares(dados, quarto_id=quarto["id"]):
+    for quarto in listar_quartos(unidade_id=unidade_id):
+        for lugar in listar_lugares(quarto_id=quarto["id"]):
             capacidade += lugar["capacidade"]
 
     ocupados = 0
 
-    for ocupacao in dados["ocupacoes"]:
-        if ocupacao["unidade_id"] != unidade_id:
-            continue
-
-        if ocupacao["tipo"] != "mensal":
-            continue
-
-        if not ocupacao["ativo"]:
-            continue
-
+    for ocupacao in repositorio.listar_ocupacoes(
+        unidade_id=unidade_id, tipo="mensal"
+    ):
         if ocupacao["data_inicio"] > data:
             continue
 
@@ -686,7 +635,7 @@ def _estado_mensal(dados, unidade_id, data):
     return f"{ocupados}/{capacidade}"
 
 
-def _estado_airbnb(dados, unidade_id, data):
+def _estado_airbnb(unidade_id, data):
     """Livre, Ocupado ou Reservado de uma unidade Airbnb numa data.
 
     Fórmula de sobreposição da secção 4 — inicio_A < fim_B E
@@ -697,16 +646,9 @@ def _estado_airbnb(dados, unidade_id, data):
     fim_janela = data + timedelta(days=1)
     tem_futura = False
 
-    for ocupacao in dados["ocupacoes"]:
-        if ocupacao["unidade_id"] != unidade_id:
-            continue
-
-        if ocupacao["tipo"] != "airbnb":
-            continue
-
-        if not ocupacao["ativo"]:
-            continue
-
+    for ocupacao in repositorio.listar_ocupacoes(
+        unidade_id=unidade_id, tipo="airbnb"
+    ):
         if (
             ocupacao["data_inicio"] < fim_janela
             and data < ocupacao["data_fim"]

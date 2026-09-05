@@ -402,12 +402,10 @@ def _criar_propriedade(dados):
     morada = ler_texto("Morada: ", obrigatorio=False)
 
     try:
-        propriedade = propriedades.criar(dados, nome, morada)
+        propriedade = propriedades.criar(nome, morada)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(
         f"Propriedade criada: {propriedade['id']} — " f"{propriedade['nome']}"
@@ -427,7 +425,7 @@ def _listar_propriedades(dados):
     """
     incluir_inativas = confirmar("Incluir propriedades inativas?")
 
-    lista = propriedades.listar(dados, incluir_inativas=incluir_inativas)
+    lista = propriedades.listar(incluir_inativas=incluir_inativas)
 
     if not lista:
         print("\nNenhuma propriedade encontrada.")
@@ -487,7 +485,7 @@ def _atualizar_propriedade(dados):
     print("\n--- Atualizar propriedade ---")
 
     propriedade_id = ler_texto("ID da propriedade: ")
-    propriedade = propriedades.procurar(dados, propriedade_id)
+    propriedade = propriedades.procurar(propriedade_id)
 
     if propriedade is None:
         print(f"Erro: A propriedade {propriedade_id} não existe.")
@@ -500,13 +498,11 @@ def _atualizar_propriedade(dados):
 
     try:
         propriedade = propriedades.atualizar(
-            dados, propriedade_id, nome=nome, morada=morada
+            propriedade_id, nome=nome, morada=morada
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(
         f"Propriedade atualizada: {propriedade['id']} — "
@@ -525,7 +521,7 @@ def _desativar_propriedade(dados):
 
     propriedade_id = ler_texto("ID da propriedade: ")
 
-    unidades_ativas = unidades.listar(dados, propriedade_id=propriedade_id)
+    unidades_ativas = unidades.listar(propriedade_id=propriedade_id)
     forcar = False
 
     if unidades_ativas:
@@ -538,14 +534,10 @@ def _desativar_propriedade(dados):
         forcar = True
 
     try:
-        propriedade = propriedades.desativar(
-            dados, propriedade_id, forcar=forcar
-        )
+        propriedade = propriedades.desativar(propriedade_id, forcar=forcar)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(
         f"Propriedade desativada: {propriedade['id']} — "
@@ -567,12 +559,10 @@ def _reativar_propriedade(dados):
     propriedade_id = ler_texto("ID da propriedade: ")
 
     try:
-        propriedade = propriedades.reativar(dados, propriedade_id)
+        propriedade = propriedades.reativar(propriedade_id)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(
         f"Propriedade reativada: {propriedade['id']} — "
@@ -718,7 +708,6 @@ def _criar_unidade(dados):
 
     try:
         unidade = unidades.criar(
-            dados,
             propriedade_id,
             nome,
             tipo,
@@ -756,7 +745,6 @@ def _listar_unidades(dados):
     )
 
     lista = unidades.listar(
-        dados,
         incluir_inativas=incluir_inativas,
         propriedade_id=propriedade_id,
         tipo=tipo,
@@ -778,7 +766,7 @@ def _listar_unidades(dados):
     for u in lista:
         estado = "ativa" if u["ativo"] else "inativa"
         manutencao = " [em manutenção]" if u["em_manutencao"] else ""
-        propriedade = propriedades.procurar(dados, u["propriedade_id"])
+        propriedade = propriedades.procurar(u["propriedade_id"])
         nome_propriedade = (
             propriedade["nome"] if propriedade else u["propriedade_id"]
         )
@@ -793,7 +781,7 @@ def _listar_unidades(dados):
         )
         print(
             f"    estado em {formatar_data(data)}: "
-            f"{unidades.estado(dados, u['id'], data)}"
+            f"{unidades.estado(u['id'], data)}"
         )
 
 
@@ -807,7 +795,7 @@ def _atualizar_unidade(dados):
     print("\n--- Atualizar unidade ---")
 
     unidade_id = ler_texto("ID da unidade: ")
-    unidade = unidades.procurar(dados, unidade_id)
+    unidade = unidades.procurar(unidade_id)
 
     if unidade is None:
         print(f"Erro: A unidade {unidade_id} não existe.")
@@ -839,7 +827,6 @@ def _atualizar_unidade(dados):
 
     try:
         unidade = unidades.atualizar(
-            dados,
             unidade_id,
             nome=nome,
             preco_base=preco_base,
@@ -850,8 +837,6 @@ def _atualizar_unidade(dados):
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Unidade atualizada: {unidade['id']} — {unidade['nome']}")
 
@@ -866,7 +851,7 @@ def _desativar_unidade(dados):
 
     unidade_id = ler_texto("ID da unidade: ")
 
-    ocupacoes_ativas = contratos.listar(dados, unidade_id=unidade_id)
+    ocupacoes_ativas = contratos.listar(unidade_id=unidade_id)
     forcar = False
 
     if ocupacoes_ativas:
@@ -880,12 +865,10 @@ def _desativar_unidade(dados):
         forcar = True
 
     try:
-        unidade = unidades.desativar(dados, unidade_id, forcar=forcar)
+        unidade = unidades.desativar(unidade_id, forcar=forcar)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Unidade desativada: {unidade['id']} — {unidade['nome']}")
 
@@ -896,12 +879,10 @@ def _reativar_unidade(dados):
     unidade_id = ler_texto("ID da unidade: ")
 
     try:
-        unidade = unidades.reativar(dados, unidade_id)
+        unidade = unidades.reativar(unidade_id)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Unidade reativada: {unidade['id']} — {unidade['nome']}")
 
@@ -915,12 +896,10 @@ def _marcar_manutencao(dados):
     unidade_id = ler_texto("ID da unidade: ")
 
     try:
-        unidade = unidades.marcar_manutencao(dados, unidade_id)
+        unidade = unidades.marcar_manutencao(unidade_id)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(
         f"Unidade {unidade['id']} — {unidade['nome']}" "marcada em manutenção."
@@ -933,12 +912,10 @@ def _desmarcar_manutencao(dados):
     unidade_id = ler_texto("ID da unidade: ")
 
     try:
-        unidade = unidades.desmarcar_manutencao(dados, unidade_id)
+        unidade = unidades.desmarcar_manutencao(unidade_id)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Unidade {unidade['id']} — {unidade['nome']} fora de manutenção.")
 
@@ -949,7 +926,7 @@ def _gerir_quartos(dados):
     (decisão 17), por isso este passo de contexto vem antes.
     """
     unidade_id = ler_texto("ID da unidade: ")
-    unidade = unidades.procurar(dados, unidade_id)
+    unidade = unidades.procurar(unidade_id)
 
     if unidade is None:
         print(f"Erro: A unidade {unidade_id} não existe.")
@@ -1006,7 +983,6 @@ def _criar_quarto(dados, unidade_id):
 
     try:
         quarto = unidades.criar_quarto(
-            dados,
             unidade_id,
             nome,
             privativo=privativo,
@@ -1016,8 +992,6 @@ def _criar_quarto(dados, unidade_id):
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
     print(f"Quarto criado: {quarto['id']} — {quarto['nome']}")
 
 
@@ -1025,7 +999,7 @@ def _listar_quartos(dados, unidade_id):
     incluir_inativos = confirmar("Incluir quartos inativos?")
 
     lista = unidades.listar_quartos(
-        dados, incluir_inativas=incluir_inativos, unidade_id=unidade_id
+        incluir_inativas=incluir_inativos, unidade_id=unidade_id
     )
 
     if not lista:
@@ -1045,7 +1019,7 @@ def _atualizar_quarto(dados, unidade_id):
     print("\n--- Atualizar quarto ---")
 
     quarto_id = ler_texto("ID do quarto: ")
-    quarto = unidades.procurar_quarto(dados, quarto_id)
+    quarto = unidades.procurar_quarto(quarto_id)
 
     if quarto is None:
         print(f"Erro: O quarto {quarto_id} não existe.")
@@ -1066,7 +1040,6 @@ def _atualizar_quarto(dados, unidade_id):
 
     try:
         quarto = unidades.atualizar_quarto(
-            dados,
             quarto_id,
             nome=nome,
             privativo=privativo,
@@ -1076,8 +1049,6 @@ def _atualizar_quarto(dados, unidade_id):
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
     print(f"Quarto atualizado: {quarto['id']} — {quarto['nome']}")
 
 
@@ -1085,7 +1056,7 @@ def _desativar_quarto(dados, unidade_id):
     print("\n--- Desativar quarto ---")
 
     quarto_id = ler_texto("ID do quarto: ")
-    quarto = unidades.procurar_quarto(dados, quarto_id)
+    quarto = unidades.procurar_quarto(quarto_id)
 
     if quarto is not None and quarto["unidade_id"] != unidade_id:
         print(
@@ -1095,12 +1066,10 @@ def _desativar_quarto(dados, unidade_id):
         return
 
     try:
-        quarto = unidades.desativar_quarto(dados, quarto_id)
+        quarto = unidades.desativar_quarto(quarto_id)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Quarto desativado: {quarto['id']} — {quarto['nome']}")
 
@@ -1109,7 +1078,7 @@ def _reativar_quarto(dados, unidade_id):
     print("\n--- Reativar quarto ---")
 
     quarto_id = ler_texto("ID do quarto: ")
-    quarto = unidades.procurar_quarto(dados, quarto_id)
+    quarto = unidades.procurar_quarto(quarto_id)
 
     if quarto is not None and quarto["unidade_id"] != unidade_id:
         print(
@@ -1119,12 +1088,10 @@ def _reativar_quarto(dados, unidade_id):
         return
 
     try:
-        quarto = unidades.reativar_quarto(dados, quarto_id)
+        quarto = unidades.reativar_quarto(quarto_id)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Quarto reativado: {quarto['id']} — {quarto['nome']}")
 
@@ -1134,7 +1101,7 @@ def _gerir_lugares(dados, unidade_id):
     abre o submenu dos seus lugares.
     """
     quarto_id = ler_texto("ID do quarto: ")
-    quarto = unidades.procurar_quarto(dados, quarto_id)
+    quarto = unidades.procurar_quarto(quarto_id)
 
     if quarto is None:
         print(f"Erro: O quarto {quarto_id} não existe.")
@@ -1200,14 +1167,10 @@ def _criar_lugar(dados, quarto_id):
         capacidade = 1
 
     try:
-        lugar = unidades.criar_lugar(
-            dados, quarto_id, nome, capacidade=capacidade
-        )
+        lugar = unidades.criar_lugar(quarto_id, nome, capacidade=capacidade)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Lugar criado: {lugar['id']} — {lugar['nome']}")
 
@@ -1216,7 +1179,7 @@ def _listar_lugares(dados, quarto_id):
     incluir_inativos = confirmar("Incluir lugares inativos?")
 
     lista = unidades.listar_lugares(
-        dados, incluir_inativas=incluir_inativos, quarto_id=quarto_id
+        incluir_inativas=incluir_inativos, quarto_id=quarto_id
     )
 
     if not lista:
@@ -1237,7 +1200,7 @@ def _atualizar_lugar(dados, quarto_id):
     print("\n--- Atualizar lugar ---")
 
     lugar_id = ler_texto("ID do lugar: ")
-    lugar = unidades.procurar_lugar(dados, lugar_id)
+    lugar = unidades.procurar_lugar(lugar_id)
 
     if lugar is None:
         print(f"Erro: O lugar {lugar_id} não existe.")
@@ -1258,13 +1221,11 @@ def _atualizar_lugar(dados, quarto_id):
 
     try:
         lugar = unidades.atualizar_lugar(
-            dados, lugar_id, nome=nome, capacidade=capacidade
+            lugar_id, nome=nome, capacidade=capacidade
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Lugar atualizado: {lugar['id']} — {lugar['nome']}")
 
@@ -1273,7 +1234,7 @@ def _desativar_lugar(dados, quarto_id):
     print("\n--- Desativar lugar ---")
 
     lugar_id = ler_texto("ID do lugar: ")
-    lugar = unidades.procurar_lugar(dados, lugar_id)
+    lugar = unidades.procurar_lugar(lugar_id)
 
     if lugar is not None and lugar["quarto_id"] != quarto_id:
         print(
@@ -1282,12 +1243,10 @@ def _desativar_lugar(dados, quarto_id):
         return
 
     try:
-        lugar = unidades.desativar_lugar(dados, lugar_id)
+        lugar = unidades.desativar_lugar(lugar_id)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Lugar desativado: {lugar['id']} — {lugar['nome']}")
 
@@ -1296,7 +1255,7 @@ def _reativar_lugar(dados, quarto_id):
     print("\n--- Reativar lugar ---")
 
     lugar_id = ler_texto("ID do lugar: ")
-    lugar = unidades.procurar_lugar(dados, lugar_id)
+    lugar = unidades.procurar_lugar(lugar_id)
 
     if lugar is not None and lugar["quarto_id"] != quarto_id:
         print(
@@ -1305,12 +1264,10 @@ def _reativar_lugar(dados, quarto_id):
         return
 
     try:
-        lugar = unidades.reativar_lugar(dados, lugar_id)
+        lugar = unidades.reativar_lugar(lugar_id)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Lugar reativado: {lugar['id']} — {lugar['nome']}")
 
@@ -1356,12 +1313,10 @@ def _criar_responsavel(dados):
     contacto = ler_texto("Contacto: ", obrigatorio=False)
 
     try:
-        responsavel = responsaveis.criar(dados, nome, contacto)
+        responsavel = responsaveis.criar(nome, contacto)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(
         f"Responsável criado: {responsavel['id']} — " f"{responsavel['nome']}"
@@ -1371,7 +1326,7 @@ def _criar_responsavel(dados):
 def _listar_responsaveis(dados):
     incluir_inativos = confirmar("Incluir responsáveis inativos?")
 
-    lista = responsaveis.listar(dados, incluir_inativos=incluir_inativos)
+    lista = responsaveis.listar(incluir_inativos=incluir_inativos)
 
     if not lista:
         print("\nNenhum responsável encontrado.")
@@ -1391,7 +1346,7 @@ def _atualizar_responsavel(dados):
     print("\n--- Atualizar responsável ---")
 
     responsavel_id = ler_texto("ID do responsável: ")
-    responsavel = responsaveis.procurar(dados, responsavel_id)
+    responsavel = responsaveis.procurar(responsavel_id)
 
     if responsavel is None:
         print(f"Erro: O responsável {responsavel_id} não existe.")
@@ -1404,13 +1359,11 @@ def _atualizar_responsavel(dados):
 
     try:
         responsavel = responsaveis.atualizar(
-            dados, responsavel_id, nome=nome, contacto=contacto
+            responsavel_id, nome=nome, contacto=contacto
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(
         f"Responsável atualizado: {responsavel['id']} — "
@@ -1424,12 +1377,10 @@ def _desativar_responsavel(dados):
     responsavel_id = ler_texto("ID do responsável: ")
 
     try:
-        responsavel = responsaveis.desativar(dados, responsavel_id)
+        responsavel = responsaveis.desativar(responsavel_id)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Responsável desativado: {responsavel['id']}")
 
@@ -1440,12 +1391,10 @@ def _reativar_responsavel(dados):
     responsavel_id = ler_texto("ID do responsável: ")
 
     try:
-        responsavel = responsaveis.reativar(dados, responsavel_id)
+        responsavel = responsaveis.reativar(responsavel_id)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Responsável reativado: {responsavel['id']}")
 
@@ -1493,7 +1442,6 @@ def _criar_cliente(dados):
 
     try:
         cliente = clientes.criar(
-            dados,
             nome,
             tipo_documento,
             numero_documento,
@@ -1511,8 +1459,6 @@ def _criar_cliente(dados):
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     aviso = (
         " [incompleto — verifica os campos em falta]"
@@ -1539,7 +1485,7 @@ def _listar_clientes(dados):
     ]
 
     lista = clientes.listar(
-        dados, incluir_inativos=incluir_inativos, incompleto=incompleto
+        incluir_inativos=incluir_inativos, incompleto=incompleto
     )
 
     if not lista:
@@ -1572,7 +1518,7 @@ def _atualizar_cliente(dados):
     print("\n--- Atualizar cliente ---")
 
     cliente_id = ler_texto("ID do cliente: ")
-    cliente = clientes.procurar(dados, cliente_id)
+    cliente = clientes.procurar(cliente_id)
 
     if cliente is None:
         print(f"Erro: O cliente {cliente_id} não existe.")
@@ -1636,7 +1582,6 @@ def _atualizar_cliente(dados):
 
     try:
         cliente = clientes.atualizar(
-            dados,
             cliente_id,
             regime=regime,
             nome=nome,
@@ -1656,8 +1601,6 @@ def _atualizar_cliente(dados):
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
     aviso = " [incompleto]" if cliente["incompleto"] else ""
     print(f"Cliente atualizado: {cliente['id']} — {cliente['nome']}{aviso}")
 
@@ -1668,12 +1611,10 @@ def _desativar_cliente(dados):
     cliente_id = ler_texto("ID do cliente: ")
 
     try:
-        cliente = clientes.desativar(dados, cliente_id)
+        cliente = clientes.desativar(cliente_id)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Cliente desativado: {cliente['id']} — {cliente['nome']}")
 
@@ -1684,12 +1625,10 @@ def _reativar_cliente(dados):
     cliente_id = ler_texto("ID do cliente: ")
 
     try:
-        cliente = clientes.reativar(dados, cliente_id)
+        cliente = clientes.reativar(cliente_id)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Cliente reativado: {cliente['id']} — {cliente['nome']}")
 
@@ -1707,7 +1646,7 @@ def _anonimizar_cliente(dados):
     print("do cliente e não pode ser desfeita.")
 
     cliente_id = ler_texto("ID do cliente: ")
-    cliente = clientes.procurar(dados, cliente_id)
+    cliente = clientes.procurar(cliente_id)
 
     if cliente is None:
         print(f"Erro: O cliente {cliente_id} não existe.")
@@ -1738,12 +1677,10 @@ def _anonimizar_cliente(dados):
         data = date.today()
 
     try:
-        cliente = clientes.anonimizar(dados, cliente_id, responsavel_id, data)
+        cliente = clientes.anonimizar(cliente_id, responsavel_id, data)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Cliente {cliente['id']} anonimizado.")
 
@@ -1847,33 +1784,6 @@ def ler_escolha_atualizacao(mensagem, opcoes, atual):
     return None
 
 
-def _detalhes_mensal(dados, ocupacao_id):
-    """Devolve o registo específico de um contrato mensal, ou None.
-
-    Réplica funcional de contratos._dados_mensais — essa é privada
-    (prefixo _) e só deveria ser usada dentro de contratos.py; esta
-    existe só para o cli.py poder mostrar valores atuais (renda,
-    caução, dia de vencimento) antes de pedir uma atualização. Só
-    lê, nunca decide nada — ver nota na explicação sobre a
-    alternativa mais limpa (expor isto como função pública em
-    contratos.py).
-    """
-    for registo in dados["ocupacoes_mensal"]:
-        if registo["ocupacao_id"] == ocupacao_id:
-            return registo
-
-    return None
-
-
-def _detalhes_airbnb(dados, ocupacao_id):
-    """Mesma ideia de `_detalhes_mensal`, para reservas Airbnb."""
-    for registo in dados["ocupacoes_airbnb"]:
-        if registo["ocupacao_id"] == ocupacao_id:
-            return registo
-
-    return None
-
-
 def _identificar_unidade(unidade, unidade_id):
     """Devolve "nome (ID)" para mostrar nos ecrãs de contratos e
     reservas, ou só o ID se a unidade não existir (procurar() não
@@ -1893,7 +1803,6 @@ def _identificar_cliente(cliente, cliente_id):
     return f"{cliente['nome']} ({cliente['id']})"
 
 
-
 def _criar_contrato_mensal(dados):
     """Ecrã de criação de um contrato mensal.
 
@@ -1908,7 +1817,7 @@ def _criar_contrato_mensal(dados):
     print("\n--- Novo contrato mensal ---")
 
     unidade_id = ler_texto("ID da unidade: ")
-    unidade = unidades.procurar(dados, unidade_id)
+    unidade = unidades.procurar(unidade_id)
 
     if unidade is None:
         print(f"Erro: A unidade {unidade_id} não existe.")
@@ -1920,7 +1829,7 @@ def _criar_contrato_mensal(dados):
         "ID do lugar (Enter se não aplicável): ", obrigatorio=False
     )
 
-    if lugar_id and unidades.quarto_privativo_ocupado(dados, lugar_id):
+    if lugar_id and unidades.quarto_privativo_ocupado(lugar_id):
         if not confirmar(
             f"O quarto deste lugar ({lugar_id}) é privativo e já "
             f"tem um ocupante mensal ativo — confirmas um segundo "
@@ -1993,7 +1902,6 @@ def _criar_contrato_mensal(dados):
 
     try:
         ocupacao, mensal = contratos.criar_mensal(
-            dados,
             unidade_id,
             cliente_id,
             data_inicio,
@@ -2009,9 +1917,7 @@ def _criar_contrato_mensal(dados):
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
-    cliente = clientes.procurar(dados, cliente_id)
+    cliente = clientes.procurar(cliente_id)
     nome_cliente = _identificar_cliente(cliente, cliente_id)
 
     aviso = (
@@ -2047,7 +1953,7 @@ def _criar_reserva_airbnb(dados):
     print("\n--- Nova reserva Airbnb ---")
 
     unidade_id = ler_texto("ID da unidade: ")
-    unidade = unidades.procurar(dados, unidade_id)
+    unidade = unidades.procurar(unidade_id)
 
     if unidade is None:
         print(f"Erro: A unidade {unidade_id} não existe.")
@@ -2116,7 +2022,6 @@ def _criar_reserva_airbnb(dados):
 
     try:
         ocupacao, airbnb = contratos.registar_airbnb(
-            dados,
             unidade_id,
             cliente_id,
             data_inicio,
@@ -2132,9 +2037,7 @@ def _criar_reserva_airbnb(dados):
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
-    cliente = clientes.procurar(dados, cliente_id)
+    cliente = clientes.procurar(cliente_id)
     nome_cliente = _identificar_cliente(cliente, cliente_id)
 
     aviso = (
@@ -2187,7 +2090,6 @@ def _listar_ocupacoes(dados):
     ]
 
     lista = contratos.listar(
-        dados,
         incluir_inativas=incluir_inativas,
         unidade_id=unidade_id,
         cliente_id=cliente_id,
@@ -2204,8 +2106,8 @@ def _listar_ocupacoes(dados):
     for o in lista:
         estado = "ativa" if o["ativo"] else "encerrada/cancelada"
         aviso = " [aviso: documento]" if o["aviso_documento"] else ""
-        unidade = unidades.procurar(dados, o["unidade_id"])
-        cliente = clientes.procurar(dados, o["cliente_id"])
+        unidade = unidades.procurar(o["unidade_id"])
+        cliente = clientes.procurar(o["cliente_id"])
         nome_unidade = _identificar_unidade(unidade, o["unidade_id"])
         nome_cliente = _identificar_cliente(cliente, o["cliente_id"])
         print(
@@ -2222,7 +2124,7 @@ def _atualizar_contrato_mensal(dados):
     print("\n--- Atualizar contrato mensal ---")
 
     ocupacao_id = ler_texto("ID do contrato: ")
-    ocupacao = contratos.procurar(dados, ocupacao_id)
+    ocupacao = contratos.procurar(ocupacao_id)
 
     if ocupacao is None:
         print(f"Erro: A ocupação {ocupacao_id} não existe.")
@@ -2232,7 +2134,7 @@ def _atualizar_contrato_mensal(dados):
         print(f"Erro: A ocupação {ocupacao_id} não é um contrato mensal.")
         return
 
-    mensal = _detalhes_mensal(dados, ocupacao_id)
+    mensal = contratos.detalhes_mensal(ocupacao_id)
 
     if mensal is None:
         print(
@@ -2314,7 +2216,6 @@ def _atualizar_contrato_mensal(dados):
 
     try:
         ocupacao, mensal = contratos.atualizar_mensal(
-            dados,
             ocupacao_id,
             renda_praticada=renda_praticada,
             responsavel_desconto_renda_id=responsavel_desconto_renda_id,
@@ -2327,10 +2228,8 @@ def _atualizar_contrato_mensal(dados):
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
-    unidade = unidades.procurar(dados, ocupacao["unidade_id"])
-    cliente = clientes.procurar(dados, ocupacao["cliente_id"])
+    unidade = unidades.procurar(ocupacao["unidade_id"])
+    cliente = clientes.procurar(ocupacao["cliente_id"])
     nome_unidade = _identificar_unidade(unidade, ocupacao["unidade_id"])
     nome_cliente = _identificar_cliente(cliente, ocupacao["cliente_id"])
 
@@ -2355,7 +2254,7 @@ def _atualizar_reserva_airbnb(dados):
     print("\n--- Atualizar reserva Airbnb ---")
 
     ocupacao_id = ler_texto("ID da reserva: ")
-    ocupacao = contratos.procurar(dados, ocupacao_id)
+    ocupacao = contratos.procurar(ocupacao_id)
 
     if ocupacao is None:
         print(f"Erro: A ocupação {ocupacao_id} não existe.")
@@ -2365,7 +2264,7 @@ def _atualizar_reserva_airbnb(dados):
         print(f"Erro: A ocupação {ocupacao_id} não é uma reserva Airbnb.")
         return
 
-    airbnb = _detalhes_airbnb(dados, ocupacao_id)
+    airbnb = contratos.detalhes_airbnb(ocupacao_id)
 
     if airbnb is None:
         print(
@@ -2431,7 +2330,6 @@ def _atualizar_reserva_airbnb(dados):
 
     try:
         ocupacao, airbnb = contratos.atualizar_airbnb(
-            dados,
             ocupacao_id,
             preco_praticado=preco_praticado,
             responsavel_desconto_preco_id=responsavel_desconto_preco_id,
@@ -2442,10 +2340,8 @@ def _atualizar_reserva_airbnb(dados):
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
-    unidade = unidades.procurar(dados, ocupacao["unidade_id"])
-    cliente = clientes.procurar(dados, ocupacao["cliente_id"])
+    unidade = unidades.procurar(ocupacao["unidade_id"])
+    cliente = clientes.procurar(ocupacao["cliente_id"])
     nome_unidade = _identificar_unidade(unidade, ocupacao["unidade_id"])
     nome_cliente = _identificar_cliente(cliente, ocupacao["cliente_id"])
 
@@ -2464,16 +2360,14 @@ def _encerrar_contrato_mensal(dados):
 
     try:
         ocupacao, mensal = contratos.encerrar_mensal(
-            dados, ocupacao_id, data_fim, motivo=motivo
+            ocupacao_id, data_fim, motivo=motivo
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
-    unidade = unidades.procurar(dados, ocupacao["unidade_id"])
-    cliente = clientes.procurar(dados, ocupacao["cliente_id"])
+    unidade = unidades.procurar(ocupacao["unidade_id"])
+    cliente = clientes.procurar(ocupacao["cliente_id"])
     nome_unidade = _identificar_unidade(unidade, ocupacao["unidade_id"])
     nome_cliente = _identificar_cliente(cliente, ocupacao["cliente_id"])
 
@@ -2499,16 +2393,14 @@ def _cancelar_reserva_airbnb(dados):
 
     try:
         ocupacao, airbnb = contratos.cancelar_airbnb(
-            dados, ocupacao_id, motivo=motivo
+            ocupacao_id, motivo=motivo
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
-    unidade = unidades.procurar(dados, ocupacao["unidade_id"])
-    cliente = clientes.procurar(dados, ocupacao["cliente_id"])
+    unidade = unidades.procurar(ocupacao["unidade_id"])
+    cliente = clientes.procurar(ocupacao["cliente_id"])
     nome_unidade = _identificar_unidade(unidade, ocupacao["unidade_id"])
     nome_cliente = _identificar_cliente(cliente, ocupacao["cliente_id"])
 
@@ -2524,15 +2416,13 @@ def _reativar_ocupacao(dados):
     ocupacao_id = ler_texto("ID da ocupação: ")
 
     try:
-        ocupacao = contratos.reativar(dados, ocupacao_id)
+        ocupacao = contratos.reativar(ocupacao_id)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
-    unidade = unidades.procurar(dados, ocupacao["unidade_id"])
-    cliente = clientes.procurar(dados, ocupacao["cliente_id"])
+    unidade = unidades.procurar(ocupacao["unidade_id"])
+    cliente = clientes.procurar(ocupacao["cliente_id"])
     nome_unidade = _identificar_unidade(unidade, ocupacao["unidade_id"])
     nome_cliente = _identificar_cliente(cliente, ocupacao["cliente_id"])
 
@@ -2599,13 +2489,11 @@ def _criar_produto(dados):
 
     try:
         produto = estoque.criar_produto(
-            dados, nome, unidade_medida, stock_minimo=stock_minimo
+            nome, unidade_medida, stock_minimo=stock_minimo
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Produto criado: {produto['id']} — {produto['nome']}")
 
@@ -2617,7 +2505,7 @@ def _listar_produtos(dados):
     """
     incluir_inativos = confirmar("Incluir produtos inativos?")
 
-    lista = estoque.listar_produtos(dados, incluir_inativos=incluir_inativos)
+    lista = estoque.listar_produtos(incluir_inativos=incluir_inativos)
 
     if not lista:
         print("\nNenhum produto encontrado.")
@@ -2627,10 +2515,10 @@ def _listar_produtos(dados):
 
     for p in lista:
         estado = "ativo" if p["ativo"] else "inativo"
-        saldo = estoque.saldo_produto(dados, p["id"])
+        saldo = estoque.saldo_produto(p["id"])
         alerta = (
             " [abaixo do mínimo]"
-            if estoque.abaixo_do_minimo(dados, p["id"])
+            if estoque.abaixo_do_minimo(p["id"])
             else ""
         )
 
@@ -2645,7 +2533,7 @@ def _atualizar_produto(dados):
     print("\n--- Atualizar produto ---")
 
     produto_id = ler_texto("ID do produto: ")
-    produto = estoque.procurar_produto(dados, produto_id)
+    produto = estoque.procurar_produto(produto_id)
 
     if produto is None:
         print(f"Erro: O produto {produto_id} não existe.")
@@ -2663,7 +2551,6 @@ def _atualizar_produto(dados):
 
     try:
         produto = estoque.atualizar_produto(
-            dados,
             produto_id,
             nome=nome,
             unidade_medida=unidade_medida,
@@ -2672,8 +2559,6 @@ def _atualizar_produto(dados):
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Produto atualizado: {produto['id']} — {produto['nome']}")
 
@@ -2684,12 +2569,10 @@ def _desativar_produto(dados):
     produto_id = ler_texto("ID do produto: ")
 
     try:
-        produto = estoque.desativar_produto(dados, produto_id)
+        produto = estoque.desativar_produto(produto_id)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Produto desativado: {produto['id']} — {produto['nome']}")
 
@@ -2700,12 +2583,10 @@ def _reativar_produto(dados):
     produto_id = ler_texto("ID do produto: ")
 
     try:
-        produto = estoque.reativar_produto(dados, produto_id)
+        produto = estoque.reativar_produto(produto_id)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
-
-    repositorio.gravar(dados)
 
     print(f"Produto reativado: {produto['id']} — {produto['nome']}")
 
@@ -2756,7 +2637,6 @@ def _registar_movimento(dados):
 
     try:
         movimento = estoque.registar_movimento(
-            dados,
             produto_id,
             tipo,
             quantidade,
@@ -2768,9 +2648,7 @@ def _registar_movimento(dados):
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
-    produto = estoque.procurar_produto(dados, produto_id)
+    produto = estoque.procurar_produto(produto_id)
     nome_produto = produto["nome"] if produto else produto_id
 
     print(
@@ -2786,13 +2664,13 @@ def _ver_saldo_produto(dados):
     print("\n--- Saldo de um produto ---")
 
     produto_id = ler_texto("ID do produto: ")
-    produto = estoque.procurar_produto(dados, produto_id)
+    produto = estoque.procurar_produto(produto_id)
 
     if produto is None:
         print(f"Erro: O produto {produto_id} não existe.")
         return
 
-    saldo = estoque.saldo_produto(dados, produto_id)
+    saldo = estoque.saldo_produto(produto_id)
 
     print(
         f"Saldo de {produto['nome']} ({produto_id}): "
@@ -2851,9 +2729,9 @@ def _imprimir_itens_requisicao(dados, requisicao_id):
     print da requisição).
     """
     for item in estoque.listar_itens_requisicao(
-        dados, requisicao_id=requisicao_id
+        requisicao_id=requisicao_id
     ):
-        produto = estoque.procurar_produto(dados, item["produto_id"])
+        produto = estoque.procurar_produto(item["produto_id"])
         nome = produto["nome"] if produto else item["produto_id"]
         print(
             f"    {nome} ({item['produto_id']}) — pedida: "
@@ -2878,7 +2756,6 @@ def _criar_requisicao(dados):
 
     try:
         requisicao = estoque.criar_requisicao(
-            dados,
             responsavel_id,
             itens,
             data_pedido,
@@ -2888,9 +2765,7 @@ def _criar_requisicao(dados):
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
-    responsavel = responsaveis.procurar(dados, responsavel_id)
+    responsavel = responsaveis.procurar(responsavel_id)
     nome_responsavel = responsavel["nome"] if responsavel else responsavel_id
 
     print(
@@ -2926,7 +2801,6 @@ def _listar_requisicoes(dados):
     )
 
     lista = estoque.listar_requisicoes(
-        dados,
         estado=estado,
         responsavel_id=responsavel_id,
         produto_id=produto_id,
@@ -2939,7 +2813,7 @@ def _listar_requisicoes(dados):
     print(f"\n--- Requisições ({len(lista)}) ---")
 
     for r in lista:
-        responsavel = responsaveis.procurar(dados, r["responsavel_id"])
+        responsavel = responsaveis.procurar(r["responsavel_id"])
         nome_responsavel = (
             responsavel["nome"] if responsavel else r["responsavel_id"]
         )
@@ -2968,7 +2842,7 @@ def _enviar_requisicao(dados):
         data_envio = date.today()
 
     itens_pedidos = estoque.listar_itens_requisicao(
-        dados, requisicao_id=requisicao_id
+        requisicao_id=requisicao_id
     )
 
     quantidades_enviadas = None
@@ -2979,7 +2853,7 @@ def _enviar_requisicao(dados):
         quantidades_enviadas = {}
 
         for item in itens_pedidos:
-            produto = estoque.procurar_produto(dados, item["produto_id"])
+            produto = estoque.procurar_produto(item["produto_id"])
             nome = produto["nome"] if produto else item["produto_id"]
             quantidade = ler_inteiro(
                 f"Quantidade enviada de {nome} "
@@ -2994,7 +2868,6 @@ def _enviar_requisicao(dados):
 
     try:
         requisicao = estoque.enviar_requisicao(
-            dados,
             requisicao_id,
             enviado_por_id,
             data_envio,
@@ -3004,9 +2877,7 @@ def _enviar_requisicao(dados):
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
-    responsavel = responsaveis.procurar(dados, requisicao["responsavel_id"])
+    responsavel = responsaveis.procurar(requisicao["responsavel_id"])
     nome_responsavel = (
         responsavel["nome"] if responsavel else requisicao["responsavel_id"]
     )
@@ -3024,15 +2895,13 @@ def _rejeitar_requisicao(dados):
 
     try:
         requisicao = estoque.rejeitar_requisicao(
-            dados, requisicao_id, responsavel_id, motivo
+            requisicao_id, responsavel_id, motivo
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
-    responsavel = responsaveis.procurar(dados, requisicao["responsavel_id"])
+    responsavel = responsaveis.procurar(requisicao["responsavel_id"])
     nome_responsavel = (
         responsavel["nome"] if responsavel else requisicao["responsavel_id"]
     )
@@ -3054,15 +2923,13 @@ def _confirmar_rececao(dados):
 
     try:
         requisicao = estoque.confirmar_rececao_requisicao(
-            dados, requisicao_id, responsavel_id, data_rececao
+            requisicao_id, responsavel_id, data_rececao
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
-    responsavel = responsaveis.procurar(dados, requisicao["responsavel_id"])
+    responsavel = responsaveis.procurar(requisicao["responsavel_id"])
     nome_responsavel = (
         responsavel["nome"] if responsavel else requisicao["responsavel_id"]
     )
@@ -3108,9 +2975,9 @@ def _imprimir_itens_devolucao(dados, devolucao_id):
     estar no cabeçalho).
     """
     for item in estoque.listar_itens_devolucao(
-        dados, devolucao_id=devolucao_id
+        devolucao_id=devolucao_id
     ):
-        produto = estoque.procurar_produto(dados, item["produto_id"])
+        produto = estoque.procurar_produto(item["produto_id"])
         nome = produto["nome"] if produto else item["produto_id"]
         print(f"    {nome} ({item['produto_id']}) — {item['quantidade']}")
 
@@ -3130,7 +2997,6 @@ def _reportar_devolucao(dados):
 
     try:
         devolucao = estoque.reportar_devolucao(
-            dados,
             requisicao_id,
             responsavel_id,
             itens,
@@ -3140,9 +3006,7 @@ def _reportar_devolucao(dados):
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
-    responsavel = responsaveis.procurar(dados, devolucao["responsavel_id"])
+    responsavel = responsaveis.procurar(devolucao["responsavel_id"])
     nome_responsavel = (
         responsavel["nome"] if responsavel else devolucao["responsavel_id"]
     )
@@ -3168,15 +3032,13 @@ def _fechar_devolucao(dados):
 
     try:
         devolucao = estoque.fechar_devolucao(
-            dados, devolucao_id, aceite_por_id, data_fecho
+            devolucao_id, aceite_por_id, data_fecho
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
-    responsavel = responsaveis.procurar(dados, devolucao["responsavel_id"])
+    responsavel = responsaveis.procurar(devolucao["responsavel_id"])
     nome_responsavel = (
         responsavel["nome"] if responsavel else devolucao["responsavel_id"]
     )
@@ -3211,7 +3073,6 @@ def _enviar_rol_lavanderia(dados):
 
     try:
         requisicao = estoque.criar_requisicao(
-            dados,
             responsavel_id,
             itens,
             data,
@@ -3223,10 +3084,9 @@ def _enviar_rol_lavanderia(dados):
 
     try:
         requisicao = estoque.enviar_requisicao(
-            dados, requisicao["id"], enviado_por_id, data
+            requisicao["id"], enviado_por_id, data
         )
     except ValueError as erro:
-        repositorio.gravar(dados)
         print(
             f"Requisição {requisicao['id']} criada, mas não foi "
             f"possível enviar: {erro}"
@@ -3237,9 +3097,7 @@ def _enviar_rol_lavanderia(dados):
         )
         return
 
-    repositorio.gravar(dados)
-
-    responsavel = responsaveis.procurar(dados, responsavel_id)
+    responsavel = responsaveis.procurar(responsavel_id)
     nome_responsavel = responsavel["nome"] if responsavel else responsavel_id
 
     print(

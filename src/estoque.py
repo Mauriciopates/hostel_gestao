@@ -12,9 +12,23 @@ mas envia-se, recebe-se ou aceita-se sempre de uma só vez — nunca
 item a item. Armazém central único, não distribuído: não há stock
 por unidade.
 
-Não acede a ficheiros nem à interface: recebe a estrutura de dados,
-devolve resultado e sinaliza erro com `raise ValueError`. Quem
-carrega e grava é o `main.py`, através do repositório.
+Não acede a ficheiros nem à interface: devolve resultado e sinaliza
+erro com `raise ValueError`.
+
+MIGRAÇÃO MySQL (Fase 2): tal como `propriedades.py`, `unidades.py`,
+`clientes.py`, `responsaveis.py` e `contratos.py`, este módulo já
+não recebe nem devolve `dados` — fala diretamente com o MySQL
+através do `repositorio.py` (inserir_produto, procurar_produto,
+listar_produtos, atualizar_produto; inserir_movimento,
+listar_movimentos; inserir_requisicao, procurar_requisicao,
+listar_requisicoes, atualizar_requisicao; inserir_item_requisicao,
+procurar_item_requisicao, listar_itens_requisicao,
+atualizar_item_requisicao; inserir_devolucao, procurar_devolucao,
+listar_devolucoes, atualizar_devolucao; inserir_item_devolucao,
+procurar_item_devolucao, listar_itens_devolucao). O saldo de um
+produto (`saldo_produto`) passa a somar
+`repositorio.listar_movimentos(produto_id=...)` em vez de percorrer
+`dados["movimentos"]` à mão — mesma lógica, fonte diferente.
 """
 
 import repositorio
@@ -28,8 +42,9 @@ PREFIXO_DEVOLUCAO = "DEV"
 PREFIXO_ITEM_DEVOLUCAO = "ITD"
 
 
-def criar_produto(dados, nome, unidade_medida, stock_minimo=0):
-    """Cria um produto no catálogo e acrescenta-o à estrutura de dados.
+def criar_produto(nome, unidade_medida, stock_minimo=0):
+    """Cria um produto no catálogo e grava-o imediatamente na base de
+    dados.
 
     'stock_minimo' é o limiar de alerta de reposição — não bloqueia
     nada aqui, só fica guardado para quem, mais à frente, o for
@@ -38,9 +53,9 @@ def criar_produto(dados, nome, unidade_medida, stock_minimo=0):
     (decisão 9) — é a mesma razão pela qual `Movimento` não vai ter
     `atualizar` nem `desativar` neste módulo.
 
-    Não grava: a gravação é decidida pelo `main.py` (mesma
-    convenção de propriedades.criar, unidades.criar e
-    clientes.criar).
+    Devolve o registo criado. Grava de imediato via repositório —
+    mesma convenção de propriedades.criar, unidades.criar,
+    clientes.criar e responsaveis.criar, agora todos em MySQL.
     """
     nome = nome.strip()
 
@@ -70,11 +85,11 @@ def criar_produto(dados, nome, unidade_medida, stock_minimo=0):
         "ativo": True,
     }
 
-    dados["produtos"].append(produto)
+    repositorio.inserir_produto(produto)
     return produto
 
 
-def procurar_produto(dados, produto_id):
+def procurar_produto(produto_id):
     """Devolve o produto com o identificador indicado, ou None.
 
     A ausência não é erro: quem chama decide se ela impede a
@@ -82,33 +97,20 @@ def procurar_produto(dados, produto_id):
     convenção de propriedades.procurar, unidades.procurar,
     clientes.procurar e contratos.procurar).
     """
-
-    for p in dados["produtos"]:
-        if p["id"] == produto_id:
-            return p
-
-    return None
+    return repositorio.procurar_produto(produto_id)
 
 
-def listar_produtos(dados, incluir_inativos=False):
+def listar_produtos(incluir_inativos=False):
     """Devolve os produtos, ativos ou todos se pedido.
 
     Devolve lista nova, para que alterá-la depois não afete a
     estrutura de dados (mesma convenção de propriedades.listar,
     unidades.listar, clientes.listar e contratos.listar).
     """
-
-    resultado = []
-
-    for p in dados["produtos"]:
-        if incluir_inativos or p["ativo"]:
-            resultado.append(p)
-
-    return resultado
+    return repositorio.listar_produtos(incluir_inativos=incluir_inativos)
 
 
 def atualizar_produto(
-    dados,
     produto_id,
     nome=None,
     unidade_medida=None,
@@ -122,10 +124,12 @@ def atualizar_produto(
     clientes.atualizar). 'nome' e 'unidade_medida' não podem ficar
     vazios — são obrigatórios, tal como em criar_produto().
     """
-    produto = procurar_produto(dados, produto_id)
+    produto = procurar_produto(produto_id)
 
     if produto is None:
         raise ValueError(f"O produto {produto_id} não existe.")
+
+    campos = {}
 
     if nome is not None:
         nome = nome.strip()
@@ -133,7 +137,7 @@ def atualizar_produto(
         if not nome:
             raise ValueError("O nome do produto é obrigatório.")
 
-        produto["nome"] = nome
+        campos["nome"] = nome
 
     if unidade_medida is not None:
         unidade_medida = unidade_medida.strip()
@@ -141,7 +145,7 @@ def atualizar_produto(
         if not unidade_medida:
             raise ValueError("A unidade de medida é obrigatória.")
 
-        produto["unidade_medida"] = unidade_medida
+        campos["unidade_medida"] = unidade_medida
 
     if stock_minimo is not None:
         if not isinstance(stock_minimo, int) or isinstance(stock_minimo, bool):
@@ -154,12 +158,16 @@ def atualizar_produto(
                 f"O stock mínimo não pode ser negativo: " f"{stock_minimo}."
             )
 
-        produto["stock_minimo"] = stock_minimo
+        campos["stock_minimo"] = stock_minimo
+
+    if campos:
+        repositorio.atualizar_produto(produto_id, campos)
+        produto.update(campos)
 
     return produto
 
 
-def desativar_produto(dados, produto_id):
+def desativar_produto(produto_id):
     """Marca o produto como inativo, sem o eliminar.
 
     Um produto com movimentos ou requisições associadas não pode
@@ -168,7 +176,7 @@ def desativar_produto(dados, produto_id):
     sem apagar o histórico.
     """
 
-    produto = procurar_produto(dados, produto_id)
+    produto = procurar_produto(produto_id)
 
     if produto is None:
         raise ValueError(f"O produto {produto_id} não existe.")
@@ -176,18 +184,19 @@ def desativar_produto(dados, produto_id):
     if not produto["ativo"]:
         raise ValueError(f"O produto {produto_id} já está inativo.")
 
+    repositorio.atualizar_produto(produto_id, {"ativo": False})
     produto["ativo"] = False
     return produto
 
 
-def reativar_produto(dados, produto_id):
+def reativar_produto(produto_id):
     """Repõe um produto desativado como ativo.
 
     Existe porque a desativação por engano seria irreversível sem
     ela. É a inversa exata da `desativar_produto`.
     """
 
-    produto = procurar_produto(dados, produto_id)
+    produto = procurar_produto(produto_id)
 
     if produto is None:
         raise ValueError(f"O produto {produto_id} não existe.")
@@ -195,6 +204,7 @@ def reativar_produto(dados, produto_id):
     if produto["ativo"]:
         raise ValueError(f"O produto {produto_id} já está ativo.")
 
+    repositorio.atualizar_produto(produto_id, {"ativo": True})
     produto["ativo"] = True
     return produto
 
@@ -203,7 +213,6 @@ TIPOS_MOVIMENTO = ("entrada", "saida", "ajuste")
 
 
 def registar_movimento(
-    dados,
     produto_id,
     tipo,
     quantidade,
@@ -232,10 +241,10 @@ def registar_movimento(
     já exige, para que o histórico de stock nunca fique associado a
     um responsável inexistente ou desativado.
 
-    Não grava: a gravação é decidida pelo `main.py` (mesma
-    convenção dos outros módulos de negócio).
+    Grava de imediato via repositório — mesma convenção dos outros
+    módulos de negócio, agora todos em MySQL.
     """
-    produto = procurar_produto(dados, produto_id)
+    produto = procurar_produto(produto_id)
 
     if produto is None:
         raise ValueError(f"O produto {produto_id} não existe.")
@@ -270,7 +279,7 @@ def registar_movimento(
     responsavel_id = responsavel_id.strip()
 
     if responsavel_id:
-        responsavel = responsaveis.validar_autoria(dados, responsavel_id)
+        responsavel = responsaveis.validar_autoria(responsavel_id)
         responsavel_id = responsavel["id"]
 
     movimento = {
@@ -284,30 +293,27 @@ def registar_movimento(
         "motivo": motivo,
     }
 
-    dados["movimentos"].append(movimento)
+    repositorio.inserir_movimento(movimento)
     return movimento
 
 
-def saldo_produto(dados, produto_id):
+def saldo_produto(produto_id):
     """Calcula o saldo atual de um produto, a partir dos movimentos.
 
     Nunca é um valor guardado (decisão 9): soma "entrada" e
     "ajuste" (já vem com o sinal certo), subtrai "saida". Percorre
-    sempre todo o histórico — não há atalho com um total
+    sempre todo o histórico do produto — não há atalho com um total
     intermédio guardado, porque isso seria voltar a ter um campo
     de quantidade fora dos movimentos.
     """
-    produto = procurar_produto(dados, produto_id)
+    produto = procurar_produto(produto_id)
 
     if produto is None:
         raise ValueError(f"O produto {produto_id} não existe.")
 
     total = 0
 
-    for m in dados["movimentos"]:
-        if m["produto_id"] != produto_id:
-            continue
-
+    for m in repositorio.listar_movimentos(produto_id=produto_id):
         if m["tipo"] == "saida":
             total -= m["quantidade"]
         else:
@@ -315,7 +321,7 @@ def saldo_produto(dados, produto_id):
 
     return total
 
-def abaixo_do_minimo(dados, produto_id):
+def abaixo_do_minimo(produto_id):
     """Indica se o saldo do produto está abaixo do limiar de reposição.
 
     Dá uso ao 'stock_minimo' que criar_produto já guarda: até
@@ -335,21 +341,21 @@ def abaixo_do_minimo(dados, produto_id):
     Levanta ValueError se o produto não existir, com a mesma
     mensagem da saldo_produto.
     """
-    produto = procurar_produto(dados, produto_id)
+    produto = procurar_produto(produto_id)
 
     if produto is None:
         raise ValueError(f"O produto {produto_id} não existe.")
 
-    return saldo_produto(dados, produto_id) < produto["stock_minimo"]
+    return saldo_produto(produto_id) < produto["stock_minimo"]
 
 
-def listar_alertas_stock(dados):
+def listar_alertas_stock():
     """Devolve os produtos ativos que estão abaixo do stock mínimo.
 
     Cada elemento é um dicionário novo com o registo do produto, o
     saldo e quanto falta para chegar ao mínimo. Nem 'saldo' nem
-    'em_falta' existem no ficheiro: são calculados a cada chamada,
-    como manda a decisão 9 — nunca se guarda um total.
+    'em_falta' existem na base de dados: são calculados a cada
+    chamada, como manda a decisão 9 — nunca se guarda um total.
 
     Ordenada pelo que falta mais, do maior para o menor. A ordem é
     decisão de negócio, não de apresentação: o que falta mais é o
@@ -361,8 +367,8 @@ def listar_alertas_stock(dados):
     """
     alertas = []
 
-    for produto in listar_produtos(dados):
-        saldo = saldo_produto(dados, produto["id"])
+    for produto in listar_produtos():
+        saldo = saldo_produto(produto["id"])
 
         if saldo >= produto["stock_minimo"]:
             continue
@@ -403,7 +409,6 @@ def _validar_inteiro(valor, nome):
 
 
 def criar_requisicao(
-    dados,
     responsavel_id,
     itens,
     data_pedido,
@@ -434,10 +439,11 @@ def criar_requisicao(
     atual não é, por si só, um erro nesta fase — só se torna
     relevante quando a requisição for enviada.
 
-    Não grava: a gravação é decidida pelo `main.py` (mesma
-    convenção dos outros módulos de negócio).
+    Grava de imediato via repositório (cabeçalho e todos os itens)
+    — mesma convenção dos outros módulos de negócio, agora todos em
+    MySQL.
     """
-    responsavel = responsaveis.validar_autoria(dados, responsavel_id)
+    responsavel = responsaveis.validar_autoria(responsavel_id)
 
     if not itens:
         raise ValueError("A requisição tem de ter pelo menos um item.")
@@ -446,7 +452,7 @@ def criar_requisicao(
 
     for item in itens:
         produto_id = item.get("produto_id")
-        produto = procurar_produto(dados, produto_id)
+        produto = procurar_produto(produto_id)
 
         if produto is None:
             raise ValueError(f"O produto {produto_id} não existe.")
@@ -479,69 +485,55 @@ def criar_requisicao(
         "data_pedido": data_pedido,
         "data_envio": None,
         "data_fecho": None,
+        "responsavel_rejeicao_id": "",
         "motivo_rejeicao": "",
         "observacoes": observacoes.strip(),
     }
 
-    dados["requisicoes"].append(requisicao)
+    repositorio.inserir_requisicao(requisicao)
 
     for item in itens:
-        dados["itens_requisicao"].append(
-            {
-                "id": repositorio.proximo_id(PREFIXO_ITEM_REQUISICAO),
-                "requisicao_id": requisicao["id"],
-                "produto_id": item["produto_id"],
-                "quantidade_pedida": item["quantidade_pedida"],
-                "quantidade_enviada": 0,
-            }
-        )
+        item_requisicao = {
+            "id": repositorio.proximo_id(PREFIXO_ITEM_REQUISICAO),
+            "requisicao_id": requisicao["id"],
+            "produto_id": item["produto_id"],
+            "quantidade_pedida": item["quantidade_pedida"],
+            "quantidade_enviada": 0,
+        }
+        repositorio.inserir_item_requisicao(item_requisicao)
 
     return requisicao
 
 
-def listar_itens_requisicao(dados, requisicao_id=None, produto_id=None):
+def listar_itens_requisicao(requisicao_id=None, produto_id=None):
     """Devolve os itens de requisição, filtráveis por requisição e
     produto.
 
     'requisicao_id' e 'produto_id' filtram por um valor exato
-    quando indicados; None (omisso) não filtra nesse campo.
+    quando indicados; None (omisso) não filtra nesse campo — os
+    filtros aplicam-se na própria consulta SQL, em
+    `repositorio.listar_itens_requisicao`.
 
     Devolve lista nova, para que alterá-la depois não afete a
     estrutura de dados (mesma convenção dos `listar` dos outros
     módulos).
     """
-    resultado = []
-
-    for item in dados["itens_requisicao"]:
-        if (
-            requisicao_id is not None
-            and item["requisicao_id"] != requisicao_id
-        ):
-            continue
-
-        if produto_id is not None and item["produto_id"] != produto_id:
-            continue
-
-        resultado.append(item)
-
-    return resultado
+    return repositorio.listar_itens_requisicao(
+        requisicao_id=requisicao_id, produto_id=produto_id
+    )
 
 
-def procurar_item_requisicao(dados, item_id):
+def procurar_item_requisicao(item_id):
     """Devolve o item de requisição com o identificador indicado, ou
     None.
 
     A ausência não é erro: quem chama decide se ela impede a
     operação (mesma convenção de procurar_requisicao).
     """
-    for item in dados["itens_requisicao"]:
-        if item["id"] == item_id:
-            return item
-
-    return None
+    return repositorio.procurar_item_requisicao(item_id)
 
 
-def procurar_requisicao(dados, requisicao_id):
+def procurar_requisicao(requisicao_id):
     """Devolve a requisição com o identificador indicado, ou None.
 
     A ausência não é erro: quem chama decide se ela impede a
@@ -549,16 +541,10 @@ def procurar_requisicao(dados, requisicao_id):
     convenção de procurar_produto e dos `procurar` dos outros
     módulos).
     """
-
-    for r in dados["requisicoes"]:
-        if r["id"] == requisicao_id:
-            return r
-
-    return None
+    return repositorio.procurar_requisicao(requisicao_id)
 
 
 def enviar_requisicao(
-    dados,
     requisicao_id,
     enviado_por_id,
     data_envio,
@@ -587,10 +573,10 @@ def enviar_requisicao(
     para todos os itens nas quantidades pedidas para este envio, ou
     nenhum movimento é gerado e a requisição continua pendente.
 
-    Não grava: a gravação é decidida pelo `main.py` (mesma
-    convenção dos outros módulos de negócio).
+    Grava de imediato via repositório — mesma convenção dos outros
+    módulos de negócio, agora todos em MySQL.
     """
-    requisicao = procurar_requisicao(dados, requisicao_id)
+    requisicao = procurar_requisicao(requisicao_id)
 
     if requisicao is None:
         raise ValueError(f"A requisição {requisicao_id} não existe.")
@@ -601,9 +587,9 @@ def enviar_requisicao(
             f"(estado atual: {requisicao['estado']})."
         )
 
-    quem_envia = responsaveis.validar_autoria(dados, enviado_por_id)
+    quem_envia = responsaveis.validar_autoria(enviado_por_id)
 
-    itens = listar_itens_requisicao(dados, requisicao_id=requisicao_id)
+    itens = listar_itens_requisicao(requisicao_id=requisicao_id)
 
     if quantidades_enviadas is not None:
         produtos_da_requisicao = {i["produto_id"] for i in itens}
@@ -639,7 +625,7 @@ def enviar_requisicao(
                 f"quantidade pedida."
             )
 
-        saldo = saldo_produto(dados, item["produto_id"])
+        saldo = saldo_produto(item["produto_id"])
 
         if quantidade > saldo:
             raise ValueError(
@@ -654,7 +640,6 @@ def enviar_requisicao(
 
     for item, quantidade in a_enviar:
         registar_movimento(
-            dados,
             produto_id=item["produto_id"],
             tipo="saida",
             quantidade=quantidade,
@@ -662,14 +647,18 @@ def enviar_requisicao(
             responsavel_id=quem_envia["id"],
             requisicao_id=requisicao["id"],
         )
+        repositorio.atualizar_item_requisicao(
+            item["id"], {"quantidade_enviada": quantidade}
+        )
         item["quantidade_enviada"] = quantidade
 
-    requisicao["data_envio"] = data_envio
-    requisicao["estado"] = "enviada"
+    campos = {"data_envio": data_envio, "estado": "enviada"}
+    repositorio.atualizar_requisicao(requisicao_id, campos)
+    requisicao.update(campos)
 
     return requisicao
 
-def rejeitar_requisicao(dados, requisicao_id, responsavel_id, motivo):
+def rejeitar_requisicao(requisicao_id, responsavel_id, motivo):
     """Rejeita uma requisição pendente — pendente → rejeitada.
 
     Saída alternativa a partir de "pendente" (decisão 9), distinta
@@ -686,10 +675,10 @@ def rejeitar_requisicao(dados, requisicao_id, responsavel_id, motivo):
     (clientes.anonimizar): sem guardar quem rejeitou, não há como
     responder depois "quem recusou este pedido".
 
-    Não grava: a gravação é decidida pelo `main.py` (mesma
-    convenção dos outros módulos de negócio).
+    Grava de imediato via repositório — mesma convenção dos outros
+    módulos de negócio, agora todos em MySQL.
     """
-    requisicao = procurar_requisicao(dados, requisicao_id)
+    requisicao = procurar_requisicao(requisicao_id)
 
     if requisicao is None:
         raise ValueError(f"A requisição {requisicao_id} não existe.")
@@ -700,7 +689,7 @@ def rejeitar_requisicao(dados, requisicao_id, responsavel_id, motivo):
             f"(estado atual: {requisicao['estado']})."
         )
 
-    responsavel = responsaveis.validar_autoria(dados, responsavel_id)
+    responsavel = responsaveis.validar_autoria(responsavel_id)
 
     motivo = motivo.strip()
 
@@ -709,15 +698,17 @@ def rejeitar_requisicao(dados, requisicao_id, responsavel_id, motivo):
             "O motivo é obrigatório para rejeitar uma requisição."
         )
 
-    requisicao["estado"] = "rejeitada"
-    requisicao["motivo_rejeicao"] = motivo
-    requisicao["responsavel_rejeicao_id"] = responsavel["id"]
+    campos = {
+        "estado": "rejeitada",
+        "motivo_rejeicao": motivo,
+        "responsavel_rejeicao_id": responsavel["id"],
+    }
+    repositorio.atualizar_requisicao(requisicao_id, campos)
+    requisicao.update(campos)
 
     return requisicao
 
-def confirmar_rececao_requisicao(
-    dados, requisicao_id, responsavel_id, data_fecho
-):
+def confirmar_rececao_requisicao(requisicao_id, responsavel_id, data_fecho):
     """Confirma a receção de uma requisição — enviada → fechada.
 
     Só o responsável que pediu confirma a receção (decisão 9,
@@ -737,10 +728,10 @@ def confirmar_rececao_requisicao(
     `enviar_requisicao`. Confirmar a receção não altera o saldo, só
     o estado da requisição.
 
-    Não grava: a gravação é decidida pelo `main.py` (mesma
-    convenção dos outros módulos de negócio).
+    Grava de imediato via repositório — mesma convenção dos outros
+    módulos de negócio, agora todos em MySQL.
     """
-    requisicao = procurar_requisicao(dados, requisicao_id)
+    requisicao = procurar_requisicao(requisicao_id)
 
     if requisicao is None:
         raise ValueError(f"A requisição {requisicao_id} não existe.")
@@ -751,7 +742,7 @@ def confirmar_rececao_requisicao(
             f"(estado atual: {requisicao['estado']})."
         )
 
-    responsavel = responsaveis.validar_autoria(dados, responsavel_id)
+    responsavel = responsaveis.validar_autoria(responsavel_id)
 
     if responsavel["id"] != requisicao["responsavel_id"]:
         raise ValueError(
@@ -763,13 +754,13 @@ def confirmar_rececao_requisicao(
     if data_fecho is None:
         raise ValueError("A data de receção é obrigatória.")
 
-    requisicao["estado"] = "fechada"
-    requisicao["data_fecho"] = data_fecho
+    campos = {"estado": "fechada", "data_fecho": data_fecho}
+    repositorio.atualizar_requisicao(requisicao_id, campos)
+    requisicao.update(campos)
 
     return requisicao
 
 def reportar_devolucao(
-    dados,
     requisicao_id,
     responsavel_id,
     itens,
@@ -806,10 +797,11 @@ def reportar_devolucao(
     voltou fisicamente ao armazém. O movimento de entrada só é
     gerado em `fechar_devolucao`, quando o admin aceitar.
 
-    Não grava: a gravação é decidida pelo `main.py` (mesma
-    convenção dos outros módulos de negócio).
+    Grava de imediato via repositório (cabeçalho e todos os itens)
+    — mesma convenção dos outros módulos de negócio, agora todos em
+    MySQL.
     """
-    requisicao = procurar_requisicao(dados, requisicao_id)
+    requisicao = procurar_requisicao(requisicao_id)
 
     if requisicao is None:
         raise ValueError(f"A requisição {requisicao_id} não existe.")
@@ -820,7 +812,7 @@ def reportar_devolucao(
             f"(estado atual: {requisicao['estado']})."
         )
 
-    responsavel = responsaveis.validar_autoria(dados, responsavel_id)
+    responsavel = responsaveis.validar_autoria(responsavel_id)
 
     if responsavel["id"] != requisicao["responsavel_id"]:
         raise ValueError(
@@ -832,27 +824,21 @@ def reportar_devolucao(
     if not itens:
         raise ValueError("A devolução tem de ter pelo menos um item.")
 
-    itens_requisicao = listar_itens_requisicao(
-        dados, requisicao_id=requisicao_id
-    )
+    itens_requisicao = listar_itens_requisicao(requisicao_id=requisicao_id)
     itens_por_produto = {i["produto_id"]: i for i in itens_requisicao}
 
     devolucao_ids_existentes = {
-        d["id"]
-        for d in dados["devolucoes"]
-        if d["requisicao_id"] == requisicao_id
+        d["id"] for d in listar_devolucoes(requisicao_id=requisicao_id)
     }
 
     ja_reportado_por_produto = {}
 
-    for it in dados["itens_devolucao"]:
-        if it["devolucao_id"] not in devolucao_ids_existentes:
-            continue
-
-        ja_reportado_por_produto[it["produto_id"]] = (
-            ja_reportado_por_produto.get(it["produto_id"], 0)
-            + it["quantidade"]
-        )
+    for devolucao_id in devolucao_ids_existentes:
+        for item_dev in listar_itens_devolucao(devolucao_id=devolucao_id):
+            ja_reportado_por_produto[item_dev["produto_id"]] = (
+                ja_reportado_por_produto.get(item_dev["produto_id"], 0)
+                + item_dev["quantidade"]
+            )
 
     produtos_vistos = set()
 
@@ -904,64 +890,49 @@ def reportar_devolucao(
         "data_fecho": None,
     }
 
-    dados["devolucoes"].append(devolucao)
+    repositorio.inserir_devolucao(devolucao)
 
     for item in itens:
-        dados["itens_devolucao"].append(
-            {
-                "id": repositorio.proximo_id(PREFIXO_ITEM_DEVOLUCAO),
-                "devolucao_id": devolucao["id"],
-                "produto_id": item["produto_id"],
-                "quantidade": item["quantidade"],
-            }
-        )
+        item_devolucao = {
+            "id": repositorio.proximo_id(PREFIXO_ITEM_DEVOLUCAO),
+            "devolucao_id": devolucao["id"],
+            "produto_id": item["produto_id"],
+            "quantidade": item["quantidade"],
+        }
+        repositorio.inserir_item_devolucao(item_devolucao)
 
     return devolucao
 
 
-def listar_itens_devolucao(dados, devolucao_id=None, produto_id=None):
+def listar_itens_devolucao(devolucao_id=None, produto_id=None):
     """Devolve os itens de devolução, filtráveis por devolução e
     produto.
 
     'devolucao_id' e 'produto_id' filtram por um valor exato quando
-    indicados; None (omisso) não filtra nesse campo.
+    indicados; None (omisso) não filtra nesse campo — os filtros
+    aplicam-se na própria consulta SQL, em
+    `repositorio.listar_itens_devolucao`.
 
     Devolve lista nova, para que alterá-la depois não afete a
     estrutura de dados (mesma convenção dos `listar` dos outros
     módulos).
     """
-    resultado = []
-
-    for item in dados["itens_devolucao"]:
-        if (
-            devolucao_id is not None
-            and item["devolucao_id"] != devolucao_id
-        ):
-            continue
-
-        if produto_id is not None and item["produto_id"] != produto_id:
-            continue
-
-        resultado.append(item)
-
-    return resultado
+    return repositorio.listar_itens_devolucao(
+        devolucao_id=devolucao_id, produto_id=produto_id
+    )
 
 
-def procurar_item_devolucao(dados, item_id):
+def procurar_item_devolucao(item_id):
     """Devolve o item de devolução com o identificador indicado, ou
     None.
 
     A ausência não é erro: quem chama decide se ela impede a
     operação (mesma convenção de procurar_devolucao).
     """
-    for item in dados["itens_devolucao"]:
-        if item["id"] == item_id:
-            return item
-
-    return None
+    return repositorio.procurar_item_devolucao(item_id)
 
 
-def procurar_devolucao(dados, devolucao_id):
+def procurar_devolucao(devolucao_id):
     """Devolve a devolução com o identificador indicado, ou None.
 
     A ausência não é erro: quem chama decide se ela impede a
@@ -969,50 +940,28 @@ def procurar_devolucao(dados, devolucao_id):
     convenção de procurar_requisicao e dos `procurar` dos outros
     módulos).
     """
+    return repositorio.procurar_devolucao(devolucao_id)
 
-    for d in dados["devolucoes"]:
-        if d["id"] == devolucao_id:
-            return d
-
-    return None
-
-def listar_devolucoes(
-    dados, estado=None, requisicao_id=None, responsavel_id=None
-):
+def listar_devolucoes(estado=None, requisicao_id=None, responsavel_id=None):
     """Devolve as devoluções, filtráveis por estado, requisição e
     responsável.
 
     'estado' filtra por um valor exato quando indicado; None
-    (omisso) não filtra — mesma convenção de listar_requisicoes.
+    (omisso) não filtra — mesma convenção de listar_requisicoes. Os
+    filtros aplicam-se na própria consulta SQL, em
+    `repositorio.listar_devolucoes`.
 
     Devolve lista nova, para que alterá-la depois não afete a
     estrutura de dados (mesma convenção dos `listar` dos outros
     módulos).
     """
+    return repositorio.listar_devolucoes(
+        estado=estado,
+        requisicao_id=requisicao_id,
+        responsavel_id=responsavel_id,
+    )
 
-    resultado = []
-
-    for d in dados["devolucoes"]:
-        if estado is not None and d["estado"] != estado:
-            continue
-
-        if (
-            requisicao_id is not None
-            and d["requisicao_id"] != requisicao_id
-        ):
-            continue
-
-        if (
-            responsavel_id is not None
-            and d["responsavel_id"] != responsavel_id
-        ):
-            continue
-
-        resultado.append(d)
-
-    return resultado
-
-def fechar_devolucao(dados, devolucao_id, aceite_por_id, data_fecho):
+def fechar_devolucao(devolucao_id, aceite_por_id, data_fecho):
     """Aceita uma devolução — pendente → fechada.
 
     Gera um movimento de entrada por item (decisão 9, decisão 20) —
@@ -1027,10 +976,10 @@ def fechar_devolucao(dados, devolucao_id, aceite_por_id, data_fecho):
     `enviar_requisicao`, não tem de ser o mesmo responsável que
     pediu ou que devolveu, só precisa de estar ativo.
 
-    Não grava: a gravação é decidida pelo `main.py` (mesma
-    convenção dos outros módulos de negócio).
+    Grava de imediato via repositório — mesma convenção dos outros
+    módulos de negócio, agora todos em MySQL.
     """
-    devolucao = procurar_devolucao(dados, devolucao_id)
+    devolucao = procurar_devolucao(devolucao_id)
 
     if devolucao is None:
         raise ValueError(f"A devolução {devolucao_id} não existe.")
@@ -1041,16 +990,15 @@ def fechar_devolucao(dados, devolucao_id, aceite_por_id, data_fecho):
             f"(estado atual: {devolucao['estado']})."
         )
 
-    aceite = responsaveis.validar_autoria(dados, aceite_por_id)
+    aceite = responsaveis.validar_autoria(aceite_por_id)
 
     if data_fecho is None:
         raise ValueError("A data de fecho é obrigatória.")
 
-    itens = listar_itens_devolucao(dados, devolucao_id=devolucao_id)
+    itens = listar_itens_devolucao(devolucao_id=devolucao_id)
 
     for item in itens:
         registar_movimento(
-            dados,
             produto_id=item["produto_id"],
             tipo="entrada",
             quantidade=item["quantidade"],
@@ -1059,14 +1007,13 @@ def fechar_devolucao(dados, devolucao_id, aceite_por_id, data_fecho):
             requisicao_id=devolucao["requisicao_id"],
         )
 
-    devolucao["estado"] = "fechada"
-    devolucao["data_fecho"] = data_fecho
+    campos = {"estado": "fechada", "data_fecho": data_fecho}
+    repositorio.atualizar_devolucao(devolucao_id, campos)
+    devolucao.update(campos)
 
     return devolucao
 
-def listar_requisicoes(
-    dados, estado=None, responsavel_id=None, produto_id=None
-):
+def listar_requisicoes(estado=None, responsavel_id=None, produto_id=None):
     """Devolve as requisições, filtráveis por estado, responsável e
     produto.
 
@@ -1076,11 +1023,16 @@ def listar_requisicoes(
     "desativada". 'estado' e 'responsavel_id' filtram por um valor
     exato quando indicados; None (omisso) não filtra — mesma
     convenção do 'incompleto' em clientes.listar e do 'tipo' em
-    contratos.listar.
+    contratos.listar. Estes dois filtros aplicam-se na própria
+    consulta SQL, em `repositorio.listar_requisicoes`.
 
     'produto_id', desde a decisão 20, já não é um campo da
     requisição — filtra pelas requisições que têm pelo menos um
-    item desse produto, através de `listar_itens_requisicao`.
+    item desse produto, através de `listar_itens_requisicao`. Este
+    cruzamento continua a ser feito aqui, não em `repositorio.py`
+    (mesmo princípio de `contratos._nif_tem_contrato_mensal_ativo`,
+    que cruza com `clientes` em vez de virar SQL na camada de
+    persistência).
 
     Devolve lista nova, para que alterá-la depois não afete a
     estrutura de dados (mesma convenção de listar_produtos e dos
@@ -1091,29 +1043,16 @@ def listar_requisicoes(
     if produto_id is not None:
         requisicoes_com_produto = {
             item["requisicao_id"]
-            for item in listar_itens_requisicao(
-                dados, produto_id=produto_id
-            )
+            for item in listar_itens_requisicao(produto_id=produto_id)
         }
 
-    resultado = []
+    resultado = repositorio.listar_requisicoes(
+        estado=estado, responsavel_id=responsavel_id
+    )
 
-    for r in dados["requisicoes"]:
-        if estado is not None and r["estado"] != estado:
-            continue
-
-        if (
-            responsavel_id is not None
-            and r["responsavel_id"] != responsavel_id
-        ):
-            continue
-
-        if (
-            requisicoes_com_produto is not None
-            and r["id"] not in requisicoes_com_produto
-        ):
-            continue
-
-        resultado.append(r)
+    if requisicoes_com_produto is not None:
+        resultado = [
+            r for r in resultado if r["id"] in requisicoes_com_produto
+        ]
 
     return resultado

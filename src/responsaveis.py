@@ -9,9 +9,12 @@ Login, palavra-passe e permissões chegam na Fase 2, no
 Entidade independente do `clientes.py`: um responsável não é um
 cliente com outro papel. Não partilham campos nem estrutura.
 
-Não acede a ficheiros nem à interface: recebe a estrutura de dados,
-devolve resultado e sinaliza erro com `raise ValueError`. Quem
-carrega e grava é o `main.py`, através do repositório.
+MIGRAÇÃO MySQL (Fase 2): tal como `propriedades.py` e `unidades.py`,
+este módulo já não recebe nem devolve `dados` — fala diretamente com
+o MySQL através do `repositorio.py` (inserir_responsavel,
+procurar_responsavel, listar_responsaveis, atualizar_responsavel).
+Não acede a ficheiros nem à interface: devolve resultado e sinaliza
+erro com `raise ValueError`.
 """
 
 import repositorio
@@ -19,8 +22,8 @@ import repositorio
 PREFIXO = "RES"
 
 
-def criar(dados, nome, contacto=""):
-    """Cria um responsável e acrescenta-o à estrutura de dados.
+def criar(nome, contacto=""):
+    """Cria um responsável e grava-o imediatamente na base de dados.
 
     O nome é obrigatório: sem ele, a autoria que este módulo
     existe para registar não identificaria ninguém. O contacto é
@@ -33,9 +36,9 @@ def criar(dados, nome, contacto=""):
     decisão 11 é dos dados de hóspedes, comunicados às
     autoridades — não se estende a quem opera o sistema.
 
-    Devolve o registo criado. Não grava: a gravação é decidida
-    pelo `main.py` (mesma convenção de propriedades.criar,
-    unidades.criar e clientes.criar).
+    Devolve o registo criado. Grava de imediato via repositório —
+    mesma convenção de propriedades.criar, unidades.criar e
+    clientes.criar, agora todos em MySQL.
     """
     nome = nome.strip()
 
@@ -49,10 +52,11 @@ def criar(dados, nome, contacto=""):
         "ativo": True,
     }
 
-    dados["responsaveis"].append(responsavel)
+    repositorio.inserir_responsavel(responsavel)
     return responsavel
 
-def procurar(dados, responsavel_id):
+
+def procurar(responsavel_id):
     """Devolve o responsável com o identificador indicado, ou None.
 
     A ausência não é erro: quem chama decide se ela impede a
@@ -65,19 +69,11 @@ def procurar(dados, responsavel_id):
     continua a poder mostrar o nome de quem a fez mesmo depois de
     essa pessoa sair da operação.
     """
+    return repositorio.procurar_responsavel(responsavel_id)
 
-    for r in dados["responsaveis"]:
-        if r["id"] == responsavel_id:
-            return r
 
-    return None
-
-def listar(dados, incluir_inativos=False):
+def listar(incluir_inativos=False):
     """Devolve os responsáveis, ativos ou todos se pedido.
-
-    Devolve lista nova, para que alterá-la depois não afete a
-    estrutura de dados (mesma convenção de propriedades.listar,
-    unidades.listar e clientes.listar).
 
     Não tem filtros de conteúdo: o responsável só tem nome e
     contacto, e nenhum deles é categoria por onde valha a pena
@@ -85,16 +81,10 @@ def listar(dados, incluir_inativos=False):
     que a interface precisa — quem se escolhe hoje e quem já
     passou pela operação.
     """
+    return repositorio.listar_responsaveis(incluir_inativos=incluir_inativos)
 
-    resultado = []
 
-    for r in dados["responsaveis"]:
-        if incluir_inativos or r["ativo"]:
-            resultado.append(r)
-
-    return resultado
-
-def atualizar(dados, responsavel_id, nome=None, contacto=None):
+def atualizar(responsavel_id, nome=None, contacto=None):
     """Altera o nome ou o contacto de um responsável existente.
 
     Um parâmetro a None significa não alterar; "" significa
@@ -106,13 +96,16 @@ def atualizar(dados, responsavel_id, nome=None, contacto=None):
     próprias, com as suas verificações. Deixar mudar o estado por
     aqui abriria um segundo caminho sem essas verificações.
 
-    Devolve o registo atualizado.
+    Devolve o registo atualizado, já com os campos novos aplicados
+    localmente (evita um SELECT extra a seguir ao UPDATE).
     """
 
-    responsavel = procurar(dados, responsavel_id)
+    responsavel = procurar(responsavel_id)
 
     if responsavel is None:
         raise ValueError(f"O responsável {responsavel_id} não existe.")
+
+    campos = {}
 
     if nome is not None:
         nome = nome.strip()
@@ -120,14 +113,19 @@ def atualizar(dados, responsavel_id, nome=None, contacto=None):
         if not nome:
             raise ValueError("O nome do responsável é obrigatório.")
 
-        responsavel["nome"] = nome
+        campos["nome"] = nome
 
     if contacto is not None:
-        responsavel["contacto"] = contacto.strip()
+        campos["contacto"] = contacto.strip()
+
+    if campos:
+        repositorio.atualizar_responsavel(responsavel_id, campos)
+        responsavel.update(campos)
 
     return responsavel
 
-def desativar(dados, responsavel_id):
+
+def desativar(responsavel_id):
     """Marca o responsável como inativo, sem o eliminar.
 
     Um responsável com autoria registada não pode desaparecer: as
@@ -147,7 +145,7 @@ def desativar(dados, responsavel_id):
     de conservação de hóspedes não se lhe aplicam.
     """
 
-    responsavel = procurar(dados, responsavel_id)
+    responsavel = procurar(responsavel_id)
 
     if responsavel is None:
         raise ValueError(f"O responsável {responsavel_id} não existe.")
@@ -157,10 +155,12 @@ def desativar(dados, responsavel_id):
             f"O responsável {responsavel_id} já está inativo."
         )
 
+    repositorio.atualizar_responsavel(responsavel_id, {"ativo": False})
     responsavel["ativo"] = False
     return responsavel
 
-def reativar(dados, responsavel_id):
+
+def reativar(responsavel_id):
     """Repõe um responsável desativado como ativo.
 
     Existe porque a desativação por engano seria irreversível sem
@@ -175,7 +175,7 @@ def reativar(dados, responsavel_id):
     de qualquer registo ser criado.
     """
 
-    responsavel = procurar(dados, responsavel_id)
+    responsavel = procurar(responsavel_id)
 
     if responsavel is None:
         raise ValueError(f"O responsável {responsavel_id} não existe.")
@@ -185,10 +185,12 @@ def reativar(dados, responsavel_id):
             f"O responsável {responsavel_id} já está ativo."
         )
 
+    repositorio.atualizar_responsavel(responsavel_id, {"ativo": True})
     responsavel["ativo"] = True
     return responsavel
 
-def validar_autoria(dados, responsavel_id):
+
+def validar_autoria(responsavel_id):
     """Confirma que o responsável indicado pode assumir autoria.
 
     Exige mais do que a `procurar`: o responsável tem de existir
@@ -217,7 +219,7 @@ def validar_autoria(dados, responsavel_id):
     if not responsavel_id:
         raise ValueError("O responsável é obrigatório.")
 
-    responsavel = procurar(dados, responsavel_id)
+    responsavel = procurar(responsavel_id)
 
     if responsavel is None:
         raise ValueError(f"O responsável {responsavel_id} não existe.")

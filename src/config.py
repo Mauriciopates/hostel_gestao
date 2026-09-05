@@ -8,7 +8,19 @@ Montantes em Decimal (decisão 4). Datas de época alta guardadas como
 (mes, dia) para serem independentes do ano.
 """
 
+import os
+
+from dotenv import load_dotenv
 from decimal import Decimal
+
+load_dotenv()  # lê o .env na raiz do projeto, se existir
+
+# --- Ligação à base de dados MySQL -----------------------------------------
+DB_HOST = os.environ.get("DB_HOST", "localhost")
+DB_PORT = int(os.environ.get("DB_PORT", "3306"))
+DB_USER = os.environ.get("DB_USER", "root")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
+DB_NAME = os.environ.get("DB_NAME", "hostel_gestao")
 
 # --- Preços ---------------------------------------------------------------
 PRECO_BASE_MENSAL = Decimal("250.00")  # por pessoa, por mês
