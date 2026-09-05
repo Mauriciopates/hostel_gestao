@@ -3,6 +3,75 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [1.2.0] - 2026-09-05
+
+Fase 2 — MySQL estabilizado. Fecha os passos de estabilização definidos
+depois da migração completa da v1.1.0: backups adaptados ao MySQL, decisão
+formal de arquitetura (sem SQLite em paralelo), limpeza de avisos pyflakes
+(com um bug real corrigido), confirmação em produção do bug de
+TIPOS_DOCUMENTO, atualização dos documentos formais do projeto, e
+confirmação das 5 condições de "módulo concluído" para os 8 módulos
+tocados na Fase 2.
+
+### Adicionado
+
+- `repositorio.criar_backup()`/`limpar_backups_antigos()`: cópias de
+  segurança passam a ser feitas com `mysqldump` (substituindo a cópia de
+  `dados.json`, que já não existe) — `dump_AAAA-MM-DD.sql` por dia, sem
+  sobrescrever a do próprio dia, password passada por variável de ambiente
+  (`MYSQL_PWD`), nunca como argumento da linha de comandos.
+- `repositorio.py`: docstrings adicionadas às 27 funções públicas que
+  ainda não tinham (sobretudo procurar_X/listar_X/atualizar_X de quartos,
+  lugares, ocupações, produtos, requisições e devoluções) — módulo passa
+  a cumprir a condição 4 do checklist de módulo concluído.
+
+### Alterado
+
+- `Regras_versionamento.txt`: descrições das versões 1.1.0/1.2.0
+  corrigidas de "SQLite" para "MySQL", refletindo a decisão de saltar a
+  fase SQLite e migrar diretamente para MySQL.
+- `Modelo_de_Dados_v1.5.docx`: tabela de fases sem a antiga Fase 3
+  ("MySQL, evolução para PostgreSQL"); Fase 2 passa a descrever MySQL como
+  decisão implementada; DDL da secção 8 substituído pelo esquema MySQL
+  real (17 tabelas); PostgreSQL mantido como evolução futura possível,
+  sem fase atribuída.
+- Ficheiro `esquema.sql` (protótipo SQLite) removido do repositório —
+  MySQL é a decisão definitiva de persistência, sem SQLite em paralelo.
+
+### Corrigido
+
+- `clientes.anonimizar()`: gravava o texto cru recebido como
+  `responsavel_id` em `responsavel_anonimizado_id`, em vez do id canónico
+  devolvido por `responsaveis.validar_autoria()` — corrigido para gravar
+  sempre a forma canónica (ex.: `RES-001`, mesmo indicando `res-001`).
+- `testes/apoio_BD.py`: `BaseMySQLTest.setUp`/`tearDown` ainda guardava e
+  restaurava `repositorio.FICHEIRO_DADOS`, atributo já removido de
+  `repositorio.py` — quebrava com `AttributeError` todos os testes que
+  herdam desta classe base.
+- Avisos pyflakes cosméticos: imports/constantes sem uso removidos em
+  `validacoes.py`, `modelos.py`, `config.py` e `repositorio.py`
+  (`VERSAO_DADOS`, `FICHEIRO_DADOS`, entre outros).
+
+### Testes
+
+- Confirmado em produção que o bug do TIPOS_DOCUMENTO (corrigido na
+  v1.1.0) está resolvido: cliente de teste criado com "Cartão de
+  Cidadão" via CLI, sem erro, confirmado por SELECT no Workbench.
+- Suite completa: 521 testes, todos ok, depois de corrigido o bug em
+  `apoio_BD.py`.
+- Confirmadas as 5 condições de módulo concluído (importa sem erro,
+  testes, PEP 8 — sem dependências externas, documentação, separação de
+  camadas) para os 8 módulos da Fase 2: propriedades, unidades, clientes,
+  responsaveis, contratos, estoque, validacoes, repositorio.
+
+### Notas
+
+O bug em `apoio_BD.py` só foi detetado ao correr a suite completa depois
+de a limpeza de pyflakes anterior ter removido `FICHEIRO_DADOS` de
+`repositorio.py` sem atualizar o ficheiro de apoio dos testes que ainda o
+referenciava — lição para futuras limpezas: fazer grep também em
+`testes/` antes de remover um atributo público de um módulo.
+
 ## [1.1.0] - 2026-09-05
 
 Fase 2 — persistência em MySQL (substitui o SQLite previsto no plano de
