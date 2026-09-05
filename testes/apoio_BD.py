@@ -376,12 +376,10 @@ class BaseMySQLTest(unittest.TestCase):
         self._caminhos_originais = (
             repositorio.PASTA_DADOS,
             repositorio.PASTA_BACKUPS,
-            repositorio.FICHEIRO_DADOS,
             repositorio.FICHEIRO_CONTADORES,
         )
         repositorio.PASTA_DADOS = self._pasta / "dados"
         repositorio.PASTA_BACKUPS = self._pasta / "backups"
-        repositorio.FICHEIRO_DADOS = repositorio.PASTA_DADOS / "dados.json"
         repositorio.FICHEIRO_CONTADORES = (
             repositorio.PASTA_DADOS / "contadores.json"
         )
@@ -392,7 +390,6 @@ class BaseMySQLTest(unittest.TestCase):
         (
             repositorio.PASTA_DADOS,
             repositorio.PASTA_BACKUPS,
-            repositorio.FICHEIRO_DADOS,
             repositorio.FICHEIRO_CONTADORES,
         ) = self._caminhos_originais
 
