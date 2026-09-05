@@ -2,6 +2,7 @@ import datetime
 
 import customtkinter as ctk
 
+import config
 from . import tema
 from . import sessao
 
@@ -12,7 +13,8 @@ class BarraLateral(ctk.CTkFrame):
     de navegação (rótulo + ecrã de destino) — e monta os widgets
     correspondentes. Não sabe nada sobre os ecrãs reais: quem decide
     o que lá vai é quem a instancia (app.py), por isso dá para testar
-    com ecrãs falsos sem Unidades/Clientes/etc. já existirem.
+    com ecrãs falsos sem Unidades/Clientes/etc. já existirem. Mostra
+    sempre a versão do sistema (config.VERSAO) no rodapé (decisão 21).
     """
 
     def __init__(self, master, controlador, itens):
@@ -38,6 +40,14 @@ class BarraLateral(ctk.CTkFrame):
                     anchor="w",
                     command=lambda ecra=item["ecra"]: controlador.mostrar_frame(ecra),
                 ).pack(fill="x", padx=8, pady=2)
+
+        ctk.CTkLabel(
+            self,
+            text=f"v{config.VERSAO}",
+            text_color=tema.COR_TEXTO_SIDEBAR_SECAO,
+            font=ctk.CTkFont(size=9),
+        ).pack(side="bottom", pady=10)
+
 
 class Cabecalho(ctk.CTkFrame):
     """Cabeçalho comum a todos os ecrãs: título à esquerda, data e
