@@ -67,7 +67,9 @@ def _ocupantes_mensal(unidade_id, lugar_id=None):
     regra "lugar de casal admite dois contratos; solteiro admite
     um" (decisão 4).
     """
-    ocupacoes = repositorio.listar_ocupacoes(unidade_id=unidade_id, tipo="mensal")
+    ocupacoes = repositorio.listar_ocupacoes(
+        unidade_id=unidade_id, tipo="mensal"
+    )
 
     if lugar_id is not None:
         ocupacoes = [o for o in ocupacoes if o["lugar_id"] == lugar_id]
@@ -346,9 +348,8 @@ def encerrar_mensal(ocupacao_id, data_fim, motivo=""):
 
     campos_mensal = {
         "duracao_abaixo_minima": meses < config.DURACAO_MINIMA_MESES,
-        "aviso_previo_insuficiente": (
-            data_fim - date.today()
-        ).days < config.AVISO_PREVIO_DIAS,
+        "aviso_previo_insuficiente": (data_fim - date.today()).days
+        < config.AVISO_PREVIO_DIAS,
         "motivo_encerramento": motivo.strip(),
     }
 

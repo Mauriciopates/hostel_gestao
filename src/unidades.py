@@ -335,7 +335,9 @@ def listar_quartos(incluir_inativas=False, unidade_id=None):
     )
 
 
-def atualizar_quarto(quarto_id, nome=None, privativo=None, limpeza_incluida=None):
+def atualizar_quarto(
+    quarto_id, nome=None, privativo=None, limpeza_incluida=None
+):
     """Altera o nome ou os indicadores de um quarto existente.
 
     Um parâmetro a None significa não alterar (mesma convenção de
