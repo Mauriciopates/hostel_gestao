@@ -12,8 +12,6 @@ responsabilidade de quem chama.
 # O que muda aqui mudar o modelo de negício
 # Não altera as configurações de validação.
 
-from datetime import date
-
 TIPOS_DOCUMENTO = (
     "Cartão de Cidadão",
     "Passaporte",

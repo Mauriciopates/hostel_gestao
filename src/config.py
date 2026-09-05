@@ -63,6 +63,3 @@ DIAS_BACKUP = 30
 PRAZO_CONSERVACAO_HOSPEDES_DIAS = 365  # boletins SIBA/AIMA
 PRAZO_CONSERVACAO_FISCAL_DIAS = 3650  # art.º 40.º Código Comercial
 PRAZO_CONSERVACAO_LOGS_DIAS = 180  # minimização
-
-# --- Versão do formato de dados -------------------------------------------
-VERSAO_DADOS = 1

@@ -56,7 +56,6 @@ PASTA_DADOS = RAIZ_PROJETO / "dados"
 # mesmo em sistemas operativos diferentes
 
 PASTA_BACKUPS = RAIZ_PROJETO / "backups"
-FICHEIRO_DADOS = PASTA_DADOS / "dados.json"
 FICHEIRO_CONTADORES = PASTA_DADOS / "contadores.json"
 
 

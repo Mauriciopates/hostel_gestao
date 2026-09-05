@@ -8,7 +8,7 @@ Montantes em Decimal e datas em `date` (decisão 4). A conversão de e para
 texto ISO é responsabilidade do `repositorio.py`.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
