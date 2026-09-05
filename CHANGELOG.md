@@ -3,6 +3,80 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [1.1.0] - 2026-09-05
+
+Fase 2 — persistência em MySQL (substitui o SQLite previsto no plano de
+versões original; decisão de pivot já registada anteriormente). Com esta
+versão, todas as entidades do sistema falam diretamente com o MySQL, sem
+passar por `dados`/JSON em nenhum ponto: propriedades, unidades/quartos/
+lugares, clientes, responsáveis, ocupações (contratos.py) e stock
+(estoque.py).
+
+### Adicionado
+
+- `repositorio.py`: bloco de funções por entidade para clientes,
+  responsáveis, ocupações/ocupações_mensal/ocupações_airbnb e
+  produtos/movimentos/requisições/itens_requisicao/devoluções/
+  itens_devolucao — inserir_X/procurar_X/listar_X/atualizar_X, ligação
+  nova por operação via `obter_conexao()`, `cursor(dictionary=True)`,
+  commit explícito.
+- `testes/apoio_bd.py` (novo): `BaseMySQLTest`, base de testes que
+  provisiona automaticamente uma base de dados MySQL dedicada e separada
+  da base real (`hostel_gestao_teste`), aplica o esquema completo, e
+  esvazia todas as tabelas antes de cada teste — nunca toca em dados
+  reais.
+  - .gitignore foi incluido a regra de não subir o .env com as credenciais para acessar a BD. 
+
+### Alterado
+
+- `clientes.py`, `responsaveis.py`, `contratos.py`, `estoque.py`:
+  reescritos sem `dados` em nenhuma função, falando só com
+  `repositorio.py`.
+- `cli.py`: perde o `dados` nas chamadas a estes quatro módulos e os
+  `repositorio.gravar(dados)` redundantes a seguir.
+- Suite de testes automáticos (`teste_clientes.py`, `teste_responsaveis.py`,
+  `teste_contratos.py`, `teste_estoque.py`, `teste_propriedades.py`,
+  `teste_unidades.py`) reescrita para a API sem `dados`, correndo agora
+  contra MySQL real via `apoio_bd.py`. Mudança de semântica: `procurar_X`/
+  `listar_X` deixam de devolver o mesmo objeto Python que `criar()`
+  devolvera — `assertIs` substituído por `assertEqual` em todo o lado.
+
+### Corrigido
+
+- `clientes.py`: colunas `data_nascimento`/`validade_documento` estavam
+  `NOT NULL` no esquema físico, impedindo `clientes.anonimizar()` de as
+  limpar (RGPD, decisão 8).
+- `repositorio.inserir_cliente`: gravava `""` em vez de `None` em
+  `responsavel_anonimizado_id` (FK), causando `IntegrityError` 1452 ao
+  criar cliente novo.
+- `repositorio._normalizar_cliente`: `responsavel_anonimizado_id` nunca
+  era reposto a `""` na leitura depois de gravado como `None` — todo
+  cliente não anonimizado, relido do MySQL, aparecia com `None` em vez de
+  `""`.
+- `repositorio.inserir_propriedade`: `morada` era convertida para `None`
+  quando vazia, sem normalização de volta na leitura.
+- `validacoes.TIPOS_DOCUMENTO`: "Cartão Cidadão" não coincidia com o ENUM
+  do esquema MySQL nem com a documentação do projeto ("Cartão de
+  Cidadão") — bloqueava a criação de qualquer cliente com esse tipo de
+  documento contra o MySQL real (erro 1265). Bug de maior gravidade desta
+  versão.
+- `estoque.criar_requisicao`: dicionário devolvido não incluía a chave
+  `responsavel_rejeicao_id`, presente em `procurar_requisicao`/
+  `listar_requisicoes`.
+
+### Testes
+
+- Suite completa: 526 testes, todos verdes, contra uma instância MySQL de
+  teste dedicada. `teste_repositorio.py` e `teste_manual_cli.md` sem
+  alterações.
+
+### Notas
+
+Os 5 bugs de persistência acima só foram detetados durante a atualização
+da suite de testes para correr contra MySQL real — nenhum tinha sido
+apanhado pelos testes manuais anteriores (que validavam comportamento,
+não o round-trip completo de cada campo pela base de dados).
+
 ## [1.0.2] - 2026-09-02
 
 ### Corrigido

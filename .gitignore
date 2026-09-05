@@ -12,6 +12,7 @@ backups/
 logs/
 *.db
 *.sqlite3
+*.env*
 
 # Editor e sistema
 .vscode/
