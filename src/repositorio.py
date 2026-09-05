@@ -21,14 +21,17 @@ itens_requisicao, devolucoes, itens_devolucao).
 
 `dados/contadores.json` continua ativo — `proximo_id()` ainda lê e
 grava ali (decisão 1: é uma operação atómica sobre um ficheiro
-próprio, não sobre a estrutura de dados que foi retirada). O
-destino de `criar_backup()`/`limpar_backups_antigos()` (hoje ainda
-cópia do `dados.json`, que deixou de ser escrito) fica para uma
-sessão dedicada — combinado, não mexido aqui.
+próprio, não sobre a estrutura de dados que foi retirada).
+
+`criar_backup()`/`limpar_backups_antigos()` passaram a fazer dump
+da base MySQL via `mysqldump` (antes copiavam `dados.json`, que já
+não existe) — ver docstring de `criar_backup()` para o porquê da
+escolha e os requisitos (binário `mysqldump` no PATH).
 """
 
 import json
-import shutil
+import os
+import subprocess
 from datetime import date, timedelta
 from pathlib import Path
 from typing import cast
@@ -68,27 +71,58 @@ def _garantir_pastas():
 
 
 def criar_backup():
-    """Copia o ficheiro de dados para a pasta de cópias de segurança.
+    """Faz um dump da base de dados MySQL para a pasta de cópias de
+    segurança, usando `mysqldump`.
 
     Uma cópia por dia, criada ao arrancar antes de qualquer operação. Se
     já existir a cópia de hoje, não faz nada — a proteção é do estado com
     que o dia começou.
 
-    Devolve o caminho da cópia, ou None se não houver dados para copiar.
+    A palavra-passe é passada ao `mysqldump` pela variável de ambiente
+    `MYSQL_PWD`, não como argumento da linha de comandos — um argumento
+    fica visível a qualquer utilizador que liste os processos em
+    execução (`ps`), a variável de ambiente do subprocesso não.
+
+    Devolve o caminho da cópia, ou None se o `mysqldump` falhar (binário
+    ausente do PATH, credenciais erradas, ligação recusada) — uma falha
+    no backup não deve impedir o arranque do sistema.
     """
     _garantir_pastas()
 
-    if not FICHEIRO_DADOS.exists():
-        return None
-
-    destino = PASTA_BACKUPS / f"dados_{date.today().isoformat()}.json"
+    destino = PASTA_BACKUPS / f"dump_{date.today().isoformat()}.sql"
     # Formato de data ISO 8601, que é o formato de data mais
     # utilizado e recomendado para intercâmbio de dados entre sistemas.
 
     if destino.exists():
         return destino
 
-    shutil.copy2(FICHEIRO_DADOS, destino)
+    comando = [
+        "mysqldump",
+        f"--host={config.DB_HOST}",
+        f"--port={config.DB_PORT}",
+        f"--user={config.DB_USER}",
+        "--single-transaction",
+        "--routines",
+        "--triggers",
+        config.DB_NAME,
+    ]
+
+    ambiente = {**os.environ, "MYSQL_PWD": config.DB_PASSWORD}
+
+    try:
+        with open(destino, "w", encoding="utf-8") as f:
+            subprocess.run(
+                comando,
+                stdout=f,
+                stderr=subprocess.PIPE,
+                env=ambiente,
+                check=True,
+                text=True,
+            )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        destino.unlink(missing_ok=True)
+        return None
+
     return destino
 
 
@@ -108,8 +142,8 @@ def limpar_backups_antigos(dias=None):
     limite = date.today() - timedelta(days=dias)
     eliminadas = 0
 
-    for ficheiro in PASTA_BACKUPS.glob("dados_*.json"):
-        texto = ficheiro.stem.replace("dados_", "")
+    for ficheiro in PASTA_BACKUPS.glob("dump_*.sql"):
+        texto = ficheiro.stem.replace("dump_", "")
         try:
             data_copia = date.fromisoformat(texto)
         except ValueError:
