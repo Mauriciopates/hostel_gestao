@@ -9,9 +9,11 @@ que existe um ecrã. É este módulo que faz a ponte: lê texto do
 teclado, converte para os tipos internos (`Decimal`, `date`, `int`,
 `bool`), chama a função de negócio, e mostra o resultado ou o erro.
 
-Quem carrega e grava os dados é o `main.py`, através do repositório —
-este módulo recebe a estrutura de dados já carregada, tal como os
-módulos de negócio (secção 5.1 das orientações).
+Desde a migração completa da Fase 2 para MySQL (v1.1.0), cada módulo
+de negócio fala diretamente com a base de dados através de
+`repositorio.py` — este módulo já não recebe nem passa adiante
+nenhuma estrutura `dados` (o padrão descrito na secção 5.1 das
+orientações refere-se à Fase 1, em JSON).
 """
 
 from datetime import date
@@ -22,18 +24,9 @@ import config
 import contratos
 import estoque
 import propriedades
-import repositorio
 import responsaveis
 import unidades
 import validacoes
-
-
-def mostrar_erro_arranque(mensagem):
-    """Mostra um erro fatal de arranque, antes de o sistema chegar
-    ao menu principal.
-    """
-    print(f"\nErro fatal: {mensagem}")
-    print("O sistema não pode continuar.")
 
 
 def ler_texto(mensagem, obrigatorio=True):
@@ -386,15 +379,14 @@ def formatar_valor(valor):
     return f"{texto} €"
 
 
-def _criar_propriedade(dados):
+def _criar_propriedade():
     """Ecrã de criação de uma propriedade.
 
     Lê nome (obrigatório) e morada (opcional), chama
-    propriedades.criar e mostra o resultado ou o erro. Grava logo
-    a seguir a um sucesso — decisão tomada nesta sessão: cada ecrã
-    do cli.py grava de imediato, para minimizar o que se perde se o
-    programa fechar a meio (main.py só grava a cópia de segurança
-    diária, não substitui esta gravação por operação).
+    propriedades.criar e mostra o resultado ou o erro. `propriedades.
+    criar` já grava de imediato no MySQL (cada operação faz o seu
+    próprio commit — ver `repositorio.inserir_propriedade`); este
+    ecrã não tem gravação própria a fazer.
     """
     print("\n--- Nova propriedade ---")
 
@@ -412,7 +404,7 @@ def _criar_propriedade(dados):
     )
 
 
-def _listar_propriedades(dados):
+def _listar_propriedades():
     """Ecrã de listagem de propriedades.
 
     Pergunta se deve incluir as inativas — normalmente não interessam
@@ -420,8 +412,7 @@ def _listar_propriedades(dados):
     de reativar uma). Não há valor por omissão que sirva sempre, por
     isso pergunta em vez de escolher por conta própria.
 
-    Só lê — não altera nada em 'dados', por isso não grava no fim
-    (ao contrário de `_criar_propriedade`).
+    Só lê — não há nada para gravar aqui.
     """
     incluir_inativas = confirmar("Incluir propriedades inativas?")
 
@@ -474,7 +465,7 @@ def ler_atualizacao(mensagem, atual, permite_limpar=False):
     return texto
 
 
-def _atualizar_propriedade(dados):
+def _atualizar_propriedade():
     """Ecrã de atualização de uma propriedade existente.
 
     Pede o ID, mostra os valores atuais através de `ler_atualizacao`
@@ -510,7 +501,7 @@ def _atualizar_propriedade(dados):
     )
 
 
-def _desativar_propriedade(dados):
+def _desativar_propriedade():
     """Ecrã de desativação de uma propriedade.
 
     Conta as unidades ativas dependentes só para decidir se pede
@@ -545,7 +536,7 @@ def _desativar_propriedade(dados):
     )
 
 
-def _reativar_propriedade(dados):
+def _reativar_propriedade():
     """Ecrã de reativação de uma propriedade desativada.
 
     Inversa exata de `_desativar_propriedade` — mesma estrutura,
@@ -570,7 +561,7 @@ def _reativar_propriedade(dados):
     )
 
 
-def menu_propriedades(dados):
+def menu_propriedades():
     """Submenu de gestão de propriedades — o primeiro módulo de
     negócio ligado à interface.
 
@@ -605,7 +596,7 @@ def menu_propriedades(dados):
         if escolha is None:
             return
 
-        acoes[escolha](dados)
+        acoes[escolha]()
 
 
 def ler_escolha(mensagem, opcoes, obrigatorio=True):
@@ -685,7 +676,7 @@ def ler_booleano_atualizacao(mensagem, atual):
     return None
 
 
-def _criar_unidade(dados):
+def _criar_unidade():
     """Ecrã de criação de uma unidade.
 
     Os três preços são obrigatórios (decisão 6, revista: nenhum é
@@ -720,15 +711,13 @@ def _criar_unidade(dados):
         print(f"Erro: {erro}")
         return
 
-    repositorio.gravar(dados)
-
     print(
         f"Unidade criada: {unidade['id']} — {unidade['nome']} "
         f"({unidade['tipo']})"
     )
 
 
-def _listar_unidades(dados):
+def _listar_unidades():
     """Ecrã de listagem de unidades, filtrável por propriedade e tipo."""
     incluir_inativas = confirmar("Incluir unidades inativas?")
 
@@ -785,7 +774,7 @@ def _listar_unidades(dados):
         )
 
 
-def _atualizar_unidade(dados):
+def _atualizar_unidade():
     """Ecrã de atualização de uma unidade.
 
     Tipo e propriedade não se alteram (unidades.atualizar não os
@@ -841,7 +830,7 @@ def _atualizar_unidade(dados):
     print(f"Unidade atualizada: {unidade['id']} — {unidade['nome']}")
 
 
-def _desativar_unidade(dados):
+def _desativar_unidade():
     """Ecrã de desativação de uma unidade.
 
     Mesma lógica de `_desativar_propriedade`, para ocupações ativas
@@ -873,7 +862,7 @@ def _desativar_unidade(dados):
     print(f"Unidade desativada: {unidade['id']} — {unidade['nome']}")
 
 
-def _reativar_unidade(dados):
+def _reativar_unidade():
     print("\n--- Reativar unidade ---")
 
     unidade_id = ler_texto("ID da unidade: ")
@@ -887,7 +876,7 @@ def _reativar_unidade(dados):
     print(f"Unidade reativada: {unidade['id']} — {unidade['nome']}")
 
 
-def _marcar_manutencao(dados):
+def _marcar_manutencao():
     """'em_manutencao' é o único estado que persiste na unidade
     (decisão 3) — livre/ocupado/reservado calculam-se dos contratos.
     """
@@ -906,7 +895,7 @@ def _marcar_manutencao(dados):
     )
 
 
-def _desmarcar_manutencao(dados):
+def _desmarcar_manutencao():
     print("\n--- Desmarcar manutenção ---")
 
     unidade_id = ler_texto("ID da unidade: ")
@@ -920,7 +909,7 @@ def _desmarcar_manutencao(dados):
     print(f"Unidade {unidade['id']} — {unidade['nome']} fora de manutenção.")
 
 
-def _gerir_quartos(dados):
+def _gerir_quartos():
     """Pede a unidade e, se existir, abre o submenu dos seus
     quartos — quartos e lugares vivem sempre dentro de uma unidade
     (decisão 17), por isso este passo de contexto vem antes.
@@ -932,10 +921,10 @@ def _gerir_quartos(dados):
         print(f"Erro: A unidade {unidade_id} não existe.")
         return
 
-    _menu_quartos(dados, unidade_id)
+    _menu_quartos(unidade_id)
 
 
-def menu_unidades(dados):
+def menu_unidades():
     """Submenu de gestão de unidades. Chamada por menu_principal."""
     acoes = (
         _criar_unidade,
@@ -967,10 +956,10 @@ def menu_unidades(dados):
         if escolha is None:
             return
 
-        acoes[escolha](dados)
+        acoes[escolha]()
 
 
-def _criar_quarto(dados, unidade_id):
+def _criar_quarto(unidade_id):
     """'privativo' e 'limpeza_incluida' são independentes entre si
     (decisão 17) — perguntados em separado, nunca inferido um do
     outro.
@@ -995,7 +984,7 @@ def _criar_quarto(dados, unidade_id):
     print(f"Quarto criado: {quarto['id']} — {quarto['nome']}")
 
 
-def _listar_quartos(dados, unidade_id):
+def _listar_quartos(unidade_id):
     incluir_inativos = confirmar("Incluir quartos inativos?")
 
     lista = unidades.listar_quartos(
@@ -1015,7 +1004,7 @@ def _listar_quartos(dados, unidade_id):
         print(f"{q['id']} — {q['nome']} ({estado}, {privativo}, {limpeza})")
 
 
-def _atualizar_quarto(dados, unidade_id):
+def _atualizar_quarto(unidade_id):
     print("\n--- Atualizar quarto ---")
 
     quarto_id = ler_texto("ID do quarto: ")
@@ -1052,7 +1041,7 @@ def _atualizar_quarto(dados, unidade_id):
     print(f"Quarto atualizado: {quarto['id']} — {quarto['nome']}")
 
 
-def _desativar_quarto(dados, unidade_id):
+def _desativar_quarto(unidade_id):
     print("\n--- Desativar quarto ---")
 
     quarto_id = ler_texto("ID do quarto: ")
@@ -1074,7 +1063,7 @@ def _desativar_quarto(dados, unidade_id):
     print(f"Quarto desativado: {quarto['id']} — {quarto['nome']}")
 
 
-def _reativar_quarto(dados, unidade_id):
+def _reativar_quarto(unidade_id):
     print("\n--- Reativar quarto ---")
 
     quarto_id = ler_texto("ID do quarto: ")
@@ -1096,7 +1085,7 @@ def _reativar_quarto(dados, unidade_id):
     print(f"Quarto reativado: {quarto['id']} — {quarto['nome']}")
 
 
-def _gerir_lugares(dados, unidade_id):
+def _gerir_lugares(unidade_id):
     """Pede o quarto (validando que pertence à unidade em curso) e
     abre o submenu dos seus lugares.
     """
@@ -1114,10 +1103,10 @@ def _gerir_lugares(dados, unidade_id):
         )
         return
 
-    _menu_lugares(dados, quarto_id)
+    _menu_lugares(quarto_id)
 
 
-def _menu_quartos(dados, unidade_id):
+def _menu_quartos(unidade_id):
     """Submenu dos quartos de uma unidade. Só se chega aqui a
     partir de _gerir_quartos, que já validou a unidade.
     """
@@ -1149,10 +1138,10 @@ def _menu_quartos(dados, unidade_id):
         if escolha is None:
             return
 
-        acoes[escolha](dados, unidade_id)
+        acoes[escolha](unidade_id)
 
 
-def _criar_lugar(dados, quarto_id):
+def _criar_lugar(quarto_id):
     """Capacidade por omissão 1 (decisão 17 — um beliche são dois
     lugares de capacidade 1, nunca um de capacidade 2).
     """
@@ -1175,7 +1164,7 @@ def _criar_lugar(dados, quarto_id):
     print(f"Lugar criado: {lugar['id']} — {lugar['nome']}")
 
 
-def _listar_lugares(dados, quarto_id):
+def _listar_lugares(quarto_id):
     incluir_inativos = confirmar("Incluir lugares inativos?")
 
     lista = unidades.listar_lugares(
@@ -1196,7 +1185,7 @@ def _listar_lugares(dados, quarto_id):
         )
 
 
-def _atualizar_lugar(dados, quarto_id):
+def _atualizar_lugar(quarto_id):
     print("\n--- Atualizar lugar ---")
 
     lugar_id = ler_texto("ID do lugar: ")
@@ -1230,7 +1219,7 @@ def _atualizar_lugar(dados, quarto_id):
     print(f"Lugar atualizado: {lugar['id']} — {lugar['nome']}")
 
 
-def _desativar_lugar(dados, quarto_id):
+def _desativar_lugar(quarto_id):
     print("\n--- Desativar lugar ---")
 
     lugar_id = ler_texto("ID do lugar: ")
@@ -1251,7 +1240,7 @@ def _desativar_lugar(dados, quarto_id):
     print(f"Lugar desativado: {lugar['id']} — {lugar['nome']}")
 
 
-def _reativar_lugar(dados, quarto_id):
+def _reativar_lugar(quarto_id):
     print("\n--- Reativar lugar ---")
 
     lugar_id = ler_texto("ID do lugar: ")
@@ -1272,7 +1261,7 @@ def _reativar_lugar(dados, quarto_id):
     print(f"Lugar reativado: {lugar['id']} — {lugar['nome']}")
 
 
-def _menu_lugares(dados, quarto_id):
+def _menu_lugares(quarto_id):
     """Submenu dos lugares de um quarto — último nível da
     hierarquia física (decisão 17). Só se chega aqui a partir de
     _gerir_lugares, que já validou o quarto.
@@ -1303,10 +1292,10 @@ def _menu_lugares(dados, quarto_id):
         if escolha is None:
             return
 
-        acoes[escolha](dados, quarto_id)
+        acoes[escolha](quarto_id)
 
 
-def _criar_responsavel(dados):
+def _criar_responsavel():
     print("\n--- Novo responsável ---")
 
     nome = ler_texto("Nome: ")
@@ -1323,7 +1312,7 @@ def _criar_responsavel(dados):
     )
 
 
-def _listar_responsaveis(dados):
+def _listar_responsaveis():
     incluir_inativos = confirmar("Incluir responsáveis inativos?")
 
     lista = responsaveis.listar(incluir_inativos=incluir_inativos)
@@ -1342,7 +1331,7 @@ def _listar_responsaveis(dados):
             print(f"    contacto: {r['contacto']}")
 
 
-def _atualizar_responsavel(dados):
+def _atualizar_responsavel():
     print("\n--- Atualizar responsável ---")
 
     responsavel_id = ler_texto("ID do responsável: ")
@@ -1371,7 +1360,7 @@ def _atualizar_responsavel(dados):
     )
 
 
-def _desativar_responsavel(dados):
+def _desativar_responsavel():
     print("\n--- Desativar responsável ---")
 
     responsavel_id = ler_texto("ID do responsável: ")
@@ -1385,7 +1374,7 @@ def _desativar_responsavel(dados):
     print(f"Responsável desativado: {responsavel['id']}")
 
 
-def _reativar_responsavel(dados):
+def _reativar_responsavel():
     print("\n--- Reativar responsável ---")
 
     responsavel_id = ler_texto("ID do responsável: ")
@@ -1399,7 +1388,7 @@ def _reativar_responsavel(dados):
     print(f"Responsável reativado: {responsavel['id']}")
 
 
-def _criar_cliente(dados):
+def _criar_cliente():
     """Ecrã de criação de um cliente.
 
     'regime' não fica gravado (não é campo do cliente — ver
@@ -1468,7 +1457,7 @@ def _criar_cliente(dados):
     print(f"Cliente criado: {cliente['id']} — {cliente['nome']}{aviso}")
 
 
-def _listar_clientes(dados):
+def _listar_clientes():
     """Inclui o filtro por 'incompleto' — decisão 11 exige que essa
     listagem exista, senão o aviso de campos em falta não produz
     efeito nenhum.
@@ -1506,7 +1495,7 @@ def _listar_clientes(dados):
         print(f"    {c['tipo_documento']} {c['numero_documento']}")
 
 
-def _atualizar_cliente(dados):
+def _atualizar_cliente():
     """Ecrã de atualização de um cliente.
 
     Recusa atualizar um cliente anonimizado — clientes.atualizar,
@@ -1605,7 +1594,7 @@ def _atualizar_cliente(dados):
     print(f"Cliente atualizado: {cliente['id']} — {cliente['nome']}{aviso}")
 
 
-def _desativar_cliente(dados):
+def _desativar_cliente():
     print("\n--- Desativar cliente ---")
 
     cliente_id = ler_texto("ID do cliente: ")
@@ -1619,7 +1608,7 @@ def _desativar_cliente(dados):
     print(f"Cliente desativado: {cliente['id']} — {cliente['nome']}")
 
 
-def _reativar_cliente(dados):
+def _reativar_cliente():
     print("\n--- Reativar cliente ---")
 
     cliente_id = ler_texto("ID do cliente: ")
@@ -1633,7 +1622,7 @@ def _reativar_cliente(dados):
     print(f"Cliente reativado: {cliente['id']} — {cliente['nome']}")
 
 
-def _anonimizar_cliente(dados):
+def _anonimizar_cliente():
     """Ecrã de anonimização — operação IRREVERSÍVEL (decisão 8,
     RGPD secção 6). Valida o responsável com
     responsaveis.validar_autoria antes de anonimizar: é exatamente
@@ -1685,7 +1674,7 @@ def _anonimizar_cliente(dados):
     print(f"Cliente {cliente['id']} anonimizado.")
 
 
-def menu_clientes(dados):
+def menu_clientes():
     """Submenu de gestão de clientes. Chamada por menu_principal.
 
     Inclui a anonimização (decisão 8, RGPD, irreversível) como
@@ -1719,10 +1708,10 @@ def menu_clientes(dados):
         if escolha is None:
             return
 
-        acoes[escolha](dados)
+        acoes[escolha]()
 
 
-def menu_responsaveis(dados):
+def menu_responsaveis():
     """Submenu de gestão de responsáveis. Chamada por menu_principal."""
 
     acoes = (
@@ -1743,7 +1732,7 @@ def menu_responsaveis(dados):
         if escolha is None:
             return
 
-        acoes[escolha](dados)
+        acoes[escolha]()
 
 
 def ler_escolha_atualizacao(mensagem, opcoes, atual):
@@ -1803,7 +1792,7 @@ def _identificar_cliente(cliente, cliente_id):
     return f"{cliente['nome']} ({cliente['id']})"
 
 
-def _criar_contrato_mensal(dados):
+def _criar_contrato_mensal():
     """Ecrã de criação de um contrato mensal.
 
     Mostra a renda calculada (preço base da unidade) antes de pedir
@@ -1938,7 +1927,7 @@ def _criar_contrato_mensal(dados):
     )
 
 
-def _criar_reserva_airbnb(dados):
+def _criar_reserva_airbnb():
     """Ecrã de registo de uma reserva Airbnb.
 
     Mostra o preço calculado ANTES de pedir o praticado, através de
@@ -2062,7 +2051,7 @@ def _criar_reserva_airbnb(dados):
     )
 
 
-def _listar_ocupacoes(dados):
+def _listar_ocupacoes():
     incluir_inativas = confirmar("Incluir ocupações inativas/encerradas?")
 
     unidade_id = (
@@ -2120,7 +2109,7 @@ def _listar_ocupacoes(dados):
         )
 
 
-def _atualizar_contrato_mensal(dados):
+def _atualizar_contrato_mensal():
     print("\n--- Atualizar contrato mensal ---")
 
     ocupacao_id = ler_texto("ID do contrato: ")
@@ -2239,7 +2228,7 @@ def _atualizar_contrato_mensal(dados):
     )
 
 
-def _atualizar_reserva_airbnb(dados):
+def _atualizar_reserva_airbnb():
     """Ecrã de atualização de uma reserva Airbnb.
 
     'preco_calculado' e 'multa_calculada' já vêm gravados na
@@ -2351,7 +2340,7 @@ def _atualizar_reserva_airbnb(dados):
     )
 
 
-def _encerrar_contrato_mensal(dados):
+def _encerrar_contrato_mensal():
     print("\n--- Encerrar contrato mensal ---")
 
     ocupacao_id = ler_texto("ID do contrato: ")
@@ -2385,7 +2374,7 @@ def _encerrar_contrato_mensal(dados):
     )
 
 
-def _cancelar_reserva_airbnb(dados):
+def _cancelar_reserva_airbnb():
     print("\n--- Cancelar reserva Airbnb ---")
 
     ocupacao_id = ler_texto("ID da reserva: ")
@@ -2410,7 +2399,7 @@ def _cancelar_reserva_airbnb(dados):
     )
 
 
-def _reativar_ocupacao(dados):
+def _reativar_ocupacao():
     print("\n--- Reativar ocupação ---")
 
     ocupacao_id = ler_texto("ID da ocupação: ")
@@ -2432,7 +2421,7 @@ def _reativar_ocupacao(dados):
     )
 
 
-def menu_contratos(dados):
+def menu_contratos():
     """Submenu de gestão de contratos mensais e reservas Airbnb.
 
     Chamada por menu_principal. Junta as ações dos dois regimes num
@@ -2472,10 +2461,10 @@ def menu_contratos(dados):
         if escolha is None:
             return
 
-        acoes[escolha](dados)
+        acoes[escolha]()
 
 
-def _criar_produto(dados):
+def _criar_produto():
     print("\n--- Novo produto ---")
 
     nome = ler_texto("Nome: ")
@@ -2498,7 +2487,7 @@ def _criar_produto(dados):
     print(f"Produto criado: {produto['id']} — {produto['nome']}")
 
 
-def _listar_produtos(dados):
+def _listar_produtos():
     """Mostra o saldo de cada produto e assinala quando está abaixo
     do stock mínimo — dá uso real ao 'stock_minimo' que
     estoque.criar_produto já guarda como limiar de alerta.
@@ -2517,9 +2506,7 @@ def _listar_produtos(dados):
         estado = "ativo" if p["ativo"] else "inativo"
         saldo = estoque.saldo_produto(p["id"])
         alerta = (
-            " [abaixo do mínimo]"
-            if estoque.abaixo_do_minimo(p["id"])
-            else ""
+            " [abaixo do mínimo]" if estoque.abaixo_do_minimo(p["id"]) else ""
         )
 
         print(
@@ -2529,7 +2516,7 @@ def _listar_produtos(dados):
         print(f"    saldo: {saldo}  mínimo: {p['stock_minimo']}")
 
 
-def _atualizar_produto(dados):
+def _atualizar_produto():
     print("\n--- Atualizar produto ---")
 
     produto_id = ler_texto("ID do produto: ")
@@ -2563,7 +2550,7 @@ def _atualizar_produto(dados):
     print(f"Produto atualizado: {produto['id']} — {produto['nome']}")
 
 
-def _desativar_produto(dados):
+def _desativar_produto():
     print("\n--- Desativar produto ---")
 
     produto_id = ler_texto("ID do produto: ")
@@ -2577,7 +2564,7 @@ def _desativar_produto(dados):
     print(f"Produto desativado: {produto['id']} — {produto['nome']}")
 
 
-def _reativar_produto(dados):
+def _reativar_produto():
     print("\n--- Reativar produto ---")
 
     produto_id = ler_texto("ID do produto: ")
@@ -2591,7 +2578,7 @@ def _reativar_produto(dados):
     print(f"Produto reativado: {produto['id']} — {produto['nome']}")
 
 
-def _menu_produtos(dados):
+def _menu_produtos():
     acoes = (
         _criar_produto,
         _listar_produtos,
@@ -2610,10 +2597,10 @@ def _menu_produtos(dados):
         if escolha is None:
             return
 
-        acoes[escolha](dados)
+        acoes[escolha]()
 
 
-def _registar_movimento(dados):
+def _registar_movimento():
     """Movimentos são imutáveis (decisão 9) — não há ecrã de
     'atualizar' nem 'desativar' movimento. Uma correção é sempre um
     novo movimento de ajuste, com motivo obrigatório.
@@ -2657,7 +2644,7 @@ def _registar_movimento(dados):
     )
 
 
-def _ver_saldo_produto(dados):
+def _ver_saldo_produto():
     """Ecrã só de leitura — mostra o saldo atual (soma dos
     movimentos, nunca um campo guardado — decisão 9).
     """
@@ -2678,7 +2665,7 @@ def _ver_saldo_produto(dados):
     )
 
 
-def _menu_movimentos(dados):
+def _menu_movimentos():
     acoes = (_registar_movimento, _ver_saldo_produto)
     rotulos = ["Registar movimento", "Ver saldo de um produto"]
 
@@ -2690,10 +2677,10 @@ def _menu_movimentos(dados):
         if escolha is None:
             return
 
-        acoes[escolha](dados)
+        acoes[escolha]()
 
 
-def _ler_itens_requisicao(dados):
+def _ler_itens_requisicao():
     """Lê a lista de itens (produto + quantidade pedida) de uma
     requisição, um de cada vez, até o utilizador dizer que não quer
     pedir mais nenhum produto — uma requisição pode juntar vários
@@ -2721,16 +2708,14 @@ def _ler_itens_requisicao(dados):
     return itens
 
 
-def _imprimir_itens_requisicao(dados, requisicao_id):
+def _imprimir_itens_requisicao(requisicao_id):
     """Mostra cada item de uma requisição, uma linha por produto —
     reutilizado por todos os ecrãs que apresentam o resultado de
     uma operação sobre a requisição (decisão 20: os itens deixaram
     de estar no cabeçalho, por isso já não aparecem sozinhos no
     print da requisição).
     """
-    for item in estoque.listar_itens_requisicao(
-        requisicao_id=requisicao_id
-    ):
+    for item in estoque.listar_itens_requisicao(requisicao_id=requisicao_id):
         produto = estoque.procurar_produto(item["produto_id"])
         nome = produto["nome"] if produto else item["produto_id"]
         print(
@@ -2740,11 +2725,11 @@ def _imprimir_itens_requisicao(dados, requisicao_id):
         )
 
 
-def _criar_requisicao(dados):
+def _criar_requisicao():
     print("\n--- Nova requisição ---")
 
     responsavel_id = ler_texto("ID do responsável: ")
-    itens = _ler_itens_requisicao(dados)
+    itens = _ler_itens_requisicao()
     data_pedido = ler_data(
         "Data do pedido [Enter para hoje]: ", obrigatorio=False
     )
@@ -2772,10 +2757,10 @@ def _criar_requisicao(dados):
         f"Requisição criada: {requisicao['id']} — "
         f"{nome_responsavel} (pendente)"
     )
-    _imprimir_itens_requisicao(dados, requisicao["id"])
+    _imprimir_itens_requisicao(requisicao["id"])
 
 
-def _listar_requisicoes(dados):
+def _listar_requisicoes():
     estado = ler_escolha(
         "Filtrar por estado (Enter para todos)",
         (
@@ -2820,10 +2805,10 @@ def _listar_requisicoes(dados):
         print(
             f"{r['id']} — responsável {nome_responsavel} " f"({r['estado']})"
         )
-        _imprimir_itens_requisicao(dados, r["id"])
+        _imprimir_itens_requisicao(r["id"])
 
 
-def _enviar_requisicao(dados):
+def _enviar_requisicao():
     """Envia a requisição toda de uma só vez — não há aprovação
     item a item (decisão 20). Por omissão envia-se cada item na
     quantidade pedida; o ajuste por item só aparece se for pedido
@@ -2883,10 +2868,10 @@ def _enviar_requisicao(dados):
     )
 
     print(f"Requisição enviada: {requisicao['id']} — {nome_responsavel}")
-    _imprimir_itens_requisicao(dados, requisicao["id"])
+    _imprimir_itens_requisicao(requisicao["id"])
 
 
-def _rejeitar_requisicao(dados):
+def _rejeitar_requisicao():
     print("\n--- Rejeitar requisição ---")
 
     requisicao_id = ler_texto("ID da requisição: ")
@@ -2909,7 +2894,7 @@ def _rejeitar_requisicao(dados):
     print(f"Requisição rejeitada: {requisicao['id']} — {nome_responsavel}")
 
 
-def _confirmar_rececao(dados):
+def _confirmar_rececao():
     print("\n--- Confirmar receção ---")
 
     requisicao_id = ler_texto("ID da requisição: ")
@@ -2938,10 +2923,10 @@ def _confirmar_rececao(dados):
         f"Receção confirmada — requisição fechada: {requisicao['id']} "
         f"— {nome_responsavel}"
     )
-    _imprimir_itens_requisicao(dados, requisicao["id"])
+    _imprimir_itens_requisicao(requisicao["id"])
 
 
-def _ler_itens_devolucao(dados):
+def _ler_itens_devolucao():
     """Lê a lista de itens (produto + quantidade) de uma devolução,
     um de cada vez, até o utilizador dizer que não sobrou mais
     nenhum produto — simétrico a `_ler_itens_requisicao` (decisão
@@ -2968,26 +2953,24 @@ def _ler_itens_devolucao(dados):
     return itens
 
 
-def _imprimir_itens_devolucao(dados, devolucao_id):
+def _imprimir_itens_devolucao(devolucao_id):
     """Mostra cada item de uma devolução, uma linha por produto —
     reutilizado pelos ecrãs que apresentam o resultado de uma
     operação sobre a devolução (decisão 20: os itens deixaram de
     estar no cabeçalho).
     """
-    for item in estoque.listar_itens_devolucao(
-        devolucao_id=devolucao_id
-    ):
+    for item in estoque.listar_itens_devolucao(devolucao_id=devolucao_id):
         produto = estoque.procurar_produto(item["produto_id"])
         nome = produto["nome"] if produto else item["produto_id"]
         print(f"    {nome} ({item['produto_id']}) — {item['quantidade']}")
 
 
-def _reportar_devolucao(dados):
+def _reportar_devolucao():
     print("\n--- Reportar sobra (devolução) ---")
 
     requisicao_id = ler_texto("ID da requisição (já fechada): ")
     responsavel_id = ler_texto("ID do responsável que devolve: ")
-    itens = _ler_itens_devolucao(dados)
+    itens = _ler_itens_devolucao()
     data_reportada = ler_data(
         "Data de devolução [Enter para hoje]: ", obrigatorio=False
     )
@@ -3015,10 +2998,10 @@ def _reportar_devolucao(dados):
         f"Devolução registada: {devolucao['id']} — {nome_responsavel} "
         f"(requisição {devolucao['requisicao_id']})"
     )
-    _imprimir_itens_devolucao(dados, devolucao["id"])
+    _imprimir_itens_devolucao(devolucao["id"])
 
 
-def _fechar_devolucao(dados):
+def _fechar_devolucao():
     print("\n--- Aceitar devolução ---")
 
     devolucao_id = ler_texto("ID da devolução: ")
@@ -3044,10 +3027,10 @@ def _fechar_devolucao(dados):
     )
 
     print(f"Devolução aceite: {devolucao['id']} — {nome_responsavel}")
-    _imprimir_itens_devolucao(dados, devolucao["id"])
+    _imprimir_itens_devolucao(devolucao["id"])
 
 
-def _enviar_rol_lavanderia(dados):
+def _enviar_rol_lavanderia():
     """Envia stock a um responsável sem que ele o tenha pedido antes
     — o caso típico de reposição do rol de lavanderia (decisão 20):
     o admin decide o que enviar, sem depender de uma requisição
@@ -3069,7 +3052,7 @@ def _enviar_rol_lavanderia(dados):
     if data is None:
         data = date.today()
 
-    itens = _ler_itens_requisicao(dados)
+    itens = _ler_itens_requisicao()
 
     try:
         requisicao = estoque.criar_requisicao(
@@ -3104,10 +3087,10 @@ def _enviar_rol_lavanderia(dados):
         f"Rol enviado: {requisicao['id']} — {nome_responsavel} "
         f"(estado: {requisicao['estado']})"
     )
-    _imprimir_itens_requisicao(dados, requisicao["id"])
+    _imprimir_itens_requisicao(requisicao["id"])
 
 
-def _menu_requisicoes(dados):
+def _menu_requisicoes():
     acoes = (
         _criar_requisicao,
         _listar_requisicoes,
@@ -3138,10 +3121,10 @@ def _menu_requisicoes(dados):
         if escolha is None:
             return
 
-        acoes[escolha](dados)
+        acoes[escolha]()
 
 
-def menu_estoque(dados):
+def menu_estoque():
     """Submenu de gestão de stock — chamada por menu_principal.
 
     Três entidades paralelas (Produto, Movimento, Requisição, não
@@ -3159,13 +3142,12 @@ def menu_estoque(dados):
         if escolha is None:
             return
 
-        acoes[escolha](dados)
+        acoes[escolha]()
 
 
-def menu_principal(dados):
+def menu_principal():
     """Menu principal — ponto de entrada do cli.py, chamado por
-    main.py depois de repositorio.carregar() e da cópia de
-    segurança diária.
+    main.py depois da cópia de segurança diária.
 
     Amarra os seis submenus de módulo através de mostrar_menu, com
     texto_saida="Sair" — é o único menu onde "sair" significa
@@ -3173,10 +3155,10 @@ def menu_principal(dados):
     (0, mostrar_menu) significa "voltar a este menu", não sair do
     cli.py.
 
-    Não grava nada diretamente: cada ecrã já grava a seguir à sua
-    própria operação (decisão tomada nesta sessão — logo após cada
-    sucesso). main.py só precisa de chamar isto uma vez, depois de
-    carregar os dados.
+    Não recebe nem grava nenhuma estrutura de dados: cada módulo de
+    negócio já fala diretamente com o MySQL através de
+    `repositorio.py`, com commit próprio por operação. main.py só
+    precisa de chamar isto uma vez, depois da cópia de segurança.
     """
     acoes = (
         menu_propriedades,
@@ -3205,4 +3187,4 @@ def menu_principal(dados):
             print("\nAté à próxima.")
             return
 
-        acoes[escolha](dados)
+        acoes[escolha]()

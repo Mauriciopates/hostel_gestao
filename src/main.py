@@ -1,11 +1,8 @@
 """Ponto de entrada do sistema — arranque, cópia de segurança e
-entrega da estrutura de dados à interface (decisão 7: só o cli.py
-interage com quem usa o sistema; este módulo não tem input() nem
-print() próprio — até o erro de arranque é mostrado através de
-cli.mostrar_erro_arranque, nunca de um print() aqui).
+entrega do controlo à interface (decisão 7: só o cli.py interage
+com quem usa o sistema; este módulo não tem input() nem print()
+próprio).
 """
-
-import sys
 
 import cli
 import repositorio
@@ -13,7 +10,7 @@ import repositorio
 
 def main():
     """Arranca o sistema: cópia de segurança, limpeza de cópias
-    antigas, carregamento dos dados e entrega ao menu principal.
+    antigas e entrega ao menu principal.
 
     A ordem importa: a cópia de hoje faz-se ANTES da limpeza, para
     que um erro na limpeza nunca deixe passar um arranque sem
@@ -22,24 +19,20 @@ def main():
     hoje já existe, o segundo usa `config.DIAS_BACKUP` por
     omissão.
 
-    `repositorio.carregar()` só levanta `ValueError` num caso: o
-    ficheiro de dados foi gravado por uma versão posterior à deste
-    programa (ver repositorio.py). É o único ponto do sistema em
-    que uma exceção é apanhada fora de um ecrã do cli.py — porque
-    acontece ANTES de o menu principal, e portanto qualquer ecrã,
-    existirem. Termina com sys.exit(1): um erro de arranque não
-    tem por onde continuar.
+    Não há mais nenhuma estrutura de dados a carregar aqui: desde a
+    migração completa da Fase 2 para MySQL (v1.1.0), cada módulo de
+    negócio fala diretamente com a base de dados através de
+    `repositorio.py` — não existe um `dados` único carregado no
+    arranque e devolvido no fecho. `repositorio.carregar()` /
+    `gravar()` / `_estrutura_vazia()` (o mecanismo antigo, ligado a
+    `dados/dados.json`) e `cli.mostrar_erro_arranque` (só usada para
+    o erro de versão que `carregar()` levantava) foram removidos por
+    já não terem nenhum consumidor.
     """
     repositorio.criar_backup()
     repositorio.limpar_backups_antigos()
 
-    try:
-        dados = repositorio.carregar()
-    except ValueError as erro:
-        cli.mostrar_erro_arranque(str(erro))
-        sys.exit(1)
-
-    cli.menu_principal(dados)
+    cli.menu_principal()
 
 
 if __name__ == "__main__":
