@@ -59,7 +59,7 @@ class TesteValidarCliente(unittest.TestCase):
         """
         return {
             "nome": "Ana Silva",
-            "tipo_documento": "Cartão Cidadão",
+            "tipo_documento": "Cartão de Cidadão",
             "numero_documento": "12345678",
             "validade_documento": date(2030, 1, 1),
             "data_nascimento": date(1990, 5, 20),

@@ -1,10 +1,17 @@
 """Testes de clientes.py — registo, listagem de incompletos e RGPD.
 
-Mesma abordagem de teste_unidades.py: estrutura de dados em memória,
-sem pasta temporária. repositorio.proximo_id() é a única exceção que
-toca em ficheiro (decisão 1). Os testes de validar_cliente() e
-nif_valido() já existem em teste_validacoes.py — aqui confirma-se só
-que clientes.py delega corretamente, sem repetir essa cobertura.
+MIGRAÇÃO MySQL (Fase 2): tal como propriedades.py, unidades.py e
+responsaveis.py, clientes.py já não recebe nem devolve a estrutura
+`dados` em memória — fala diretamente com a base de dados MySQL,
+através do repositorio.py. Estes testes correm contra uma base de
+dados de teste dedicada e isolada da real (ver apoio_bd.py); cada
+teste começa com as tabelas vazias e os contadores de identificadores
+reiniciados, tal como antes cada teste começava com um dicionário
+`dados` novo.
+
+Os testes de validar_cliente() e nif_valido() já existem em
+teste_validacoes.py — aqui confirma-se só que clientes.py delega
+corretamente, sem repetir essa cobertura.
 
 Os dois construtores abaixo (criar_cliente_mensal/airbnb) devolvem,
 por omissão, um cliente COMPLETO nos dois regimes (nacionalidade,
@@ -16,43 +23,44 @@ que não os toque (ver nota em Pendencias_Antes_v1.0.0.txt, item 2).
 Os testes que precisam de um cliente incompleto de propósito limpam
 o campo que querem testar, em vez de partir de um cliente incompleto
 por omissão.
+
+NOTA sobre identidade: `procurar()` faz sempre um SELECT novo à base
+de dados — já não devolve o MESMO objeto Python que `criar()`
+devolveu. Por isso comparamos com `assertEqual` (valores iguais),
+nunca com `assertIs` (mesmo objeto). As funções que alteram um
+cliente (`atualizar`, `desativar`, `reativar`, `anonimizar`) também
+fazem o seu próprio `procurar()` interno antes de mutar e devolver o
+registo — por isso os testes passaram a verificar sempre o valor
+DEVOLVIDO por cada uma destas chamadas, e não o objeto que
+`criar_cliente_mensal/airbnb` tinha devolvido antes (esse já não é o
+mesmo objeto Python que ficou mutado).
+
+Cada teste que precisa de um responsável cria o seu, com
+responsaveis.criar(...), em vez do antigo "RES-001" fixo em
+dados_base() — a anonimização valida a autoria através de
+responsaveis.validar_autoria.
 """
 
 import sys
 import unittest
 from datetime import date
+from pathlib import Path
 
-sys.path.insert(0, "src")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+from apoio_BD import BaseMySQLTest
 
 import clientes
+import responsaveis
 
 
-def dados_base():
-    """Devolve uma estrutura de dados nova, sem clientes.
-
-    Inclui um responsável ativo (RES-001) porque a anonimização
-    passou a validar a autoria dentro do módulo, e não no cli.py.
-    """
-    return {
-        "clientes": [],
-        "responsaveis": [
-            {
-                "id": "RES-001",
-                "nome": "Responsável de teste",
-                "contacto": "",
-                "ativo": True,
-            }
-        ],
-    }
-
-
-def criar_cliente_mensal(dados, **overrides):
+def criar_cliente_mensal(**overrides):
     """Cria um cliente de teste válido e completo para o regime
     mensal (nif, morada e estado_civil obrigatórios pela decisão de
     26/08 — ponto 2)."""
     campos = {
         "nome": "Ana Silva",
-        "tipo_documento": "Cartão Cidadão",
+        "tipo_documento": "Cartão de Cidadão",
         "numero_documento": "12345678",
         "regime": "mensal",
         "nif": "501442600",
@@ -63,10 +71,10 @@ def criar_cliente_mensal(dados, **overrides):
         "validade_documento": date(2030, 1, 1),
     }
     campos.update(overrides)
-    return clientes.criar(dados, **campos)
+    return clientes.criar(**campos)
 
 
-def criar_cliente_airbnb(dados, **overrides):
+def criar_cliente_airbnb(**overrides):
     """Cria um cliente de teste válido e completo para o regime
     Airbnb, sem NIF (nacionalidade e data de nascimento obrigatórias
     pela decisão de 26/08 — ponto 2)."""
@@ -82,39 +90,33 @@ def criar_cliente_airbnb(dados, **overrides):
         "validade_documento": date(2030, 1, 1),
     }
     campos.update(overrides)
-    return clientes.criar(dados, **campos)
+    return clientes.criar(**campos)
 
 
-class TesteCriar(unittest.TestCase):
+class TesteCriar(BaseMySQLTest):
 
     def test_cria_cliente_mensal_valido(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
+        cliente = criar_cliente_mensal()
         self.assertEqual(cliente["nome"], "Ana Silva")
         self.assertEqual(cliente["nif"], "501442600")
         self.assertTrue(cliente["ativo"])
         self.assertFalse(cliente["anonimizado"])
-        self.assertIn(cliente, dados["clientes"])
+        self.assertEqual(cliente, clientes.procurar(cliente["id"]))
 
     def test_cria_cliente_airbnb_sem_nif(self):
-        dados = dados_base()
-        cliente = criar_cliente_airbnb(dados)
+        cliente = criar_cliente_airbnb()
         self.assertEqual(cliente["nif"], "")
 
     def test_id_com_prefixo_cli(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
+        cliente = criar_cliente_mensal()
         self.assertTrue(cliente["id"].startswith("CLI-"))
 
     def test_regime_nao_fica_guardado(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
+        cliente = criar_cliente_mensal()
         self.assertNotIn("regime", cliente)
 
     def test_completo_fica_marcado_como_nao_incompleto(self):
-        dados = dados_base()
         cliente = criar_cliente_mensal(
-            dados,
             email="ana@exemplo.pt",
             telefone="912345678",
             morada="Rua do Porto, 12",
@@ -123,87 +125,72 @@ class TesteCriar(unittest.TestCase):
         self.assertFalse(cliente["incompleto"])
 
     def test_sem_opcionais_fica_marcado_incompleto(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
+        cliente = criar_cliente_mensal()
         self.assertTrue(cliente["incompleto"])
 
     def test_recusa_nome_vazio(self):
-        dados = dados_base()
         with self.assertRaises(ValueError):
-            criar_cliente_mensal(dados, nome="   ")
+            criar_cliente_mensal(nome="   ")
 
     def test_recusa_tipo_documento_vazio(self):
-        dados = dados_base()
         with self.assertRaises(ValueError):
-            criar_cliente_mensal(dados, tipo_documento="")
+            criar_cliente_mensal(tipo_documento="")
 
     def test_recusa_tipo_documento_fora_da_lista(self):
-        dados = dados_base()
         with self.assertRaises(ValueError):
-            criar_cliente_mensal(dados, tipo_documento="Carta de Condução")
+            criar_cliente_mensal(tipo_documento="Carta de Condução")
 
     def test_recusa_numero_documento_vazio(self):
-        dados = dados_base()
         with self.assertRaises(ValueError):
-            criar_cliente_mensal(dados, numero_documento="  ")
+            criar_cliente_mensal(numero_documento="  ")
 
     def test_recusa_nif_vazio_no_mensal(self):
-        dados = dados_base()
         with self.assertRaises(ValueError):
-            criar_cliente_mensal(dados, nif="")
+            criar_cliente_mensal(nif="")
 
     def test_recusa_nif_invalido_no_mensal(self):
-        dados = dados_base()
         with self.assertRaises(ValueError):
-            criar_cliente_mensal(dados, nif="501442601")
+            criar_cliente_mensal(nif="501442601")
 
     def test_recusa_validade_documento_em_falta(self):
         """Novo (decisão de 26/08, ponto 2): obrigatória nos dois
         regimes."""
-        dados = dados_base()
         with self.assertRaises(ValueError):
-            criar_cliente_mensal(dados, validade_documento=None)
+            criar_cliente_mensal(validade_documento=None)
 
     def test_recusa_data_nascimento_em_falta(self):
         """Novo (decisão de 26/08, ponto 2, reforçada pelo aluno):
         obrigatória nos dois regimes."""
-        dados = dados_base()
         with self.assertRaises(ValueError):
-            criar_cliente_mensal(dados, data_nascimento=None)
+            criar_cliente_mensal(data_nascimento=None)
 
     def test_recusa_morada_em_falta_no_mensal(self):
         """Novo (decisão de 26/08, ponto 2): morada obrigatória só
         no mensal."""
-        dados = dados_base()
         with self.assertRaises(ValueError):
-            criar_cliente_mensal(dados, morada="")
+            criar_cliente_mensal(morada="")
 
     def test_recusa_estado_civil_em_falta_no_mensal(self):
         """Campo novo (decisão de 26/08, ponto 2): obrigatório só no
         mensal."""
-        dados = dados_base()
         with self.assertRaises(ValueError):
-            criar_cliente_mensal(dados, estado_civil="")
+            criar_cliente_mensal(estado_civil="")
 
     def test_recusa_nacionalidade_em_falta_no_airbnb(self):
         """Novo (decisão de 26/08, ponto 2): nacionalidade
         obrigatória só no Airbnb."""
-        dados = dados_base()
         with self.assertRaises(ValueError):
-            criar_cliente_airbnb(dados, nacionalidade="")
+            criar_cliente_airbnb(nacionalidade="")
 
     def test_limpa_espacos_dos_campos_de_texto(self):
-        dados = dados_base()
         cliente = criar_cliente_mensal(
-            dados, nome="  Ana Silva  ", morada="  Rua do Porto  "
+            nome="  Ana Silva  ", morada="  Rua do Porto  "
         )
         self.assertEqual(cliente["nome"], "Ana Silva")
         self.assertEqual(cliente["morada"], "Rua do Porto")
 
     def test_guarda_datas_como_vieram(self):
-        dados = dados_base()
         cliente = criar_cliente_mensal(
-            dados,
             data_nascimento=date(1990, 5, 20),
             validade_documento=date(2030, 1, 1),
         )
@@ -213,307 +200,265 @@ class TesteCriar(unittest.TestCase):
     def test_recusa_nif_duplicado_de_cliente_ativo(self):
         """Novo (decisão de 26/08, item 5): o mesmo NIF não pode
         pertencer a dois clientes ativos."""
-        dados = dados_base()
-        criar_cliente_mensal(dados, nif="501442600")
+        criar_cliente_mensal(nif="501442600")
         with self.assertRaises(ValueError):
             criar_cliente_mensal(
-                dados, numero_documento="99999999", nif="501442600"
+                numero_documento="99999999", nif="501442600"
             )
 
     def test_permite_nif_vazio_repetido(self):
         """Dois clientes Airbnb sem NIF nunca colidem entre si — o
         NIF só é obrigatório no mensal."""
-        dados = dados_base()
-        criar_cliente_airbnb(dados)
-        cliente_2 = criar_cliente_airbnb(dados, numero_documento="X999")
+        criar_cliente_airbnb()
+        cliente_2 = criar_cliente_airbnb(numero_documento="X999")
         self.assertEqual(cliente_2["nif"], "")
 
     def test_permite_nif_repetido_de_cliente_inativo(self):
         """Um cliente inativo não bloqueia a reutilização do NIF."""
-        dados = dados_base()
-        cliente_1 = criar_cliente_mensal(dados, nif="501442600")
-        clientes.desativar(dados, cliente_1["id"])
+        cliente_1 = criar_cliente_mensal(nif="501442600")
+        clientes.desativar(cliente_1["id"])
         cliente_2 = criar_cliente_mensal(
-            dados, numero_documento="99999999", nif="501442600"
+            numero_documento="99999999", nif="501442600"
         )
         self.assertEqual(cliente_2["nif"], "501442600")
 
 
-class TesteProcurar(unittest.TestCase):
+class TesteProcurar(BaseMySQLTest):
 
     def test_encontra_cliente_existente(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
-        encontrado = clientes.procurar(dados, cliente["id"])
-        self.assertIs(encontrado, cliente)
+        cliente = criar_cliente_mensal()
+        encontrado = clientes.procurar(cliente["id"])
+        self.assertEqual(encontrado, cliente)
 
     def test_devolve_none_para_id_inexistente(self):
-        dados = dados_base()
-        self.assertIsNone(clientes.procurar(dados, "CLI-999"))
+        self.assertIsNone(clientes.procurar("CLI-999"))
 
     def test_encontra_cliente_inativo(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
-        clientes.desativar(dados, cliente["id"])
-        self.assertIsNotNone(clientes.procurar(dados, cliente["id"]))
+        cliente = criar_cliente_mensal()
+        clientes.desativar(cliente["id"])
+        self.assertIsNotNone(clientes.procurar(cliente["id"]))
 
 
-class TesteListar(unittest.TestCase):
+class TesteListar(BaseMySQLTest):
 
     def test_lista_vazia_sem_clientes(self):
-        dados = dados_base()
-        self.assertEqual(clientes.listar(dados), [])
+        self.assertEqual(clientes.listar(), [])
 
     def test_lista_so_ativos_por_omissao(self):
-        dados = dados_base()
-        ativo = criar_cliente_mensal(dados)
-        inativo = criar_cliente_airbnb(dados)
-        clientes.desativar(dados, inativo["id"])
-        self.assertEqual(clientes.listar(dados), [ativo])
+        ativo = criar_cliente_mensal()
+        inativo = criar_cliente_airbnb()
+        clientes.desativar(inativo["id"])
+        self.assertEqual(clientes.listar(), [ativo])
 
     def test_lista_incluir_inativos(self):
-        dados = dados_base()
-        criar_cliente_mensal(dados)
-        inativo = criar_cliente_airbnb(dados)
-        clientes.desativar(dados, inativo["id"])
-        resultado = clientes.listar(dados, incluir_inativos=True)
+        criar_cliente_mensal()
+        inativo = criar_cliente_airbnb()
+        clientes.desativar(inativo["id"])
+        resultado = clientes.listar(incluir_inativos=True)
         self.assertEqual(len(resultado), 2)
 
     def test_filtra_por_incompleto_true(self):
-        dados = dados_base()
-        incompleto = criar_cliente_mensal(dados)
+        incompleto = criar_cliente_mensal()
         criar_cliente_airbnb(
-            dados,
             email="j@exemplo.com",
             telefone="1",
             morada="Rua X",
             nacionalidade="Americana",
         )
-        resultado = clientes.listar(dados, incompleto=True)
+        resultado = clientes.listar(incompleto=True)
         self.assertEqual(resultado, [incompleto])
 
     def test_filtra_por_incompleto_false(self):
-        dados = dados_base()
-        criar_cliente_mensal(dados)
+        criar_cliente_mensal()
         completo = criar_cliente_airbnb(
-            dados,
             email="j@exemplo.com",
             telefone="1",
             morada="Rua X",
             nacionalidade="Americana",
         )
-        resultado = clientes.listar(dados, incompleto=False)
+        resultado = clientes.listar(incompleto=False)
         self.assertEqual(resultado, [completo])
 
     def test_devolve_lista_nova(self):
-        dados = dados_base()
-        criar_cliente_mensal(dados)
-        resultado = clientes.listar(dados)
+        criar_cliente_mensal()
+        resultado = clientes.listar()
         resultado.append("intruso")
-        self.assertEqual(len(dados["clientes"]), 1)
+        self.assertEqual(len(clientes.listar()), 1)
 
 
-class TesteAtualizar(unittest.TestCase):
+class TesteAtualizar(BaseMySQLTest):
 
     def test_recusa_id_inexistente(self):
-        dados = dados_base()
         with self.assertRaises(ValueError):
-            clientes.atualizar(dados, "CLI-999", nome="Teste")
+            clientes.atualizar("CLI-999", nome="Teste")
 
     def test_none_nao_altera(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
-        clientes.atualizar(dados, cliente["id"])
-        self.assertEqual(cliente["nome"], "Ana Silva")
+        cliente = criar_cliente_mensal()
+        atualizado = clientes.atualizar(cliente["id"])
+        self.assertEqual(atualizado["nome"], "Ana Silva")
 
     def test_altera_email(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
-        clientes.atualizar(dados, cliente["id"], email="nova@exemplo.pt")
-        self.assertEqual(cliente["email"], "nova@exemplo.pt")
+        cliente = criar_cliente_mensal()
+        atualizado = clientes.atualizar(cliente["id"], email="nova@exemplo.pt")
+        self.assertEqual(atualizado["email"], "nova@exemplo.pt")
 
     def test_limpa_campo_opcional_com_vazio(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados, telefone="912345678")
-        clientes.atualizar(dados, cliente["id"], telefone="")
-        self.assertEqual(cliente["telefone"], "")
+        cliente = criar_cliente_mensal(telefone="912345678")
+        atualizado = clientes.atualizar(cliente["id"], telefone="")
+        self.assertEqual(atualizado["telefone"], "")
 
     def test_recusa_apagar_nome(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
+        cliente = criar_cliente_mensal()
         with self.assertRaises(ValueError):
-            clientes.atualizar(dados, cliente["id"], nome="")
+            clientes.atualizar(cliente["id"], nome="")
 
     def test_recusa_apagar_numero_documento(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
+        cliente = criar_cliente_mensal()
         with self.assertRaises(ValueError):
-            clientes.atualizar(dados, cliente["id"], numero_documento="")
+            clientes.atualizar(cliente["id"], numero_documento="")
 
     def test_recusa_tipo_documento_fora_da_lista(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
+        cliente = criar_cliente_mensal()
         with self.assertRaises(ValueError):
             clientes.atualizar(
-                dados, cliente["id"], tipo_documento="Carta de Condução"
+                cliente["id"], tipo_documento="Carta de Condução"
             )
 
     def test_sem_regime_nif_nao_e_obrigatorio(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
-        clientes.atualizar(dados, cliente["id"], nif="")
-        self.assertEqual(cliente["nif"], "")
+        cliente = criar_cliente_mensal()
+        atualizado = clientes.atualizar(cliente["id"], nif="")
+        self.assertEqual(atualizado["nif"], "")
 
     def test_sem_regime_nif_invalido_e_recusado(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
+        cliente = criar_cliente_mensal()
         with self.assertRaises(ValueError):
-            clientes.atualizar(dados, cliente["id"], nif="501442601")
+            clientes.atualizar(cliente["id"], nif="501442601")
 
     def test_com_regime_mensal_nif_vazio_e_recusado(self):
-        dados = dados_base()
-        cliente = criar_cliente_airbnb(dados)
+        cliente = criar_cliente_airbnb()
         with self.assertRaises(ValueError):
-            clientes.atualizar(dados, cliente["id"], regime="mensal")
+            clientes.atualizar(cliente["id"], regime="mensal")
 
     def test_com_regime_mensal_nif_novo_valido_passa(self):
-        dados = dados_base()
-        cliente = criar_cliente_airbnb(dados)
-        clientes.atualizar(
-            dados, cliente["id"], regime="mensal", nif="501442600"
+        cliente = criar_cliente_airbnb()
+        atualizado = clientes.atualizar(
+            cliente["id"], regime="mensal", nif="501442600"
         )
-        self.assertEqual(cliente["nif"], "501442600")
+        self.assertEqual(atualizado["nif"], "501442600")
 
     def test_recusa_atualizar_nif_para_valor_de_outro_cliente_ativo(self):
         """Novo (decisão de 26/08, item 5)."""
-        dados = dados_base()
-        criar_cliente_mensal(dados, nif="501442600")
+        criar_cliente_mensal(nif="501442600")
         cliente_2 = criar_cliente_mensal(
-            dados, numero_documento="99999999", nif="222222220"
+            numero_documento="99999999", nif="222222220"
         )
         with self.assertRaises(ValueError):
-            clientes.atualizar(dados, cliente_2["id"], nif="501442600")
+            clientes.atualizar(cliente_2["id"], nif="501442600")
 
     def test_atualizar_mantendo_o_proprio_nif_nao_e_recusado(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados, nif="501442600")
-        clientes.atualizar(dados, cliente["id"], nif="501442600")
-        self.assertEqual(cliente["nif"], "501442600")
+        cliente = criar_cliente_mensal(nif="501442600")
+        atualizado = clientes.atualizar(cliente["id"], nif="501442600")
+        self.assertEqual(atualizado["nif"], "501442600")
 
     def test_permite_atualizar_nif_para_valor_de_cliente_inativo(self):
-        dados = dados_base()
-        cliente_1 = criar_cliente_mensal(dados, nif="501442600")
-        clientes.desativar(dados, cliente_1["id"])
+        cliente_1 = criar_cliente_mensal(nif="501442600")
+        clientes.desativar(cliente_1["id"])
         cliente_2 = criar_cliente_mensal(
-            dados, numero_documento="99999999", nif="222222220"
+            numero_documento="99999999", nif="222222220"
         )
-        clientes.atualizar(dados, cliente_2["id"], nif="501442600")
-        self.assertEqual(cliente_2["nif"], "501442600")
+        atualizado = clientes.atualizar(cliente_2["id"], nif="501442600")
+        self.assertEqual(atualizado["nif"], "501442600")
 
     def test_recusa_apagar_morada_no_regime_mensal(self):
         """Novo (decisão de 26/08, ponto 2): tentar limpar a morada
         com regime="mensal" é recusado por validar_cliente."""
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
+        cliente = criar_cliente_mensal()
         with self.assertRaises(ValueError):
-            clientes.atualizar(
-                dados, cliente["id"], regime="mensal", morada=""
-            )
+            clientes.atualizar(cliente["id"], regime="mensal", morada="")
 
     def test_recusa_apagar_nacionalidade_no_regime_airbnb(self):
         """Novo (decisão de 26/08, ponto 2): tentar limpar a
         nacionalidade com regime="airbnb" é recusado por
         validar_cliente."""
-        dados = dados_base()
-        cliente = criar_cliente_airbnb(dados)
+        cliente = criar_cliente_airbnb()
         with self.assertRaises(ValueError):
             clientes.atualizar(
-                dados, cliente["id"], regime="airbnb", nacionalidade=""
+                cliente["id"], regime="airbnb", nacionalidade=""
             )
 
     def test_altera_estado_civil(self):
         """Campo novo (decisão de 26/08, ponto 2)."""
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
-        clientes.atualizar(
-            dados, cliente["id"], estado_civil="Casado(a)"
+        cliente = criar_cliente_mensal()
+        atualizado = clientes.atualizar(
+            cliente["id"], estado_civil="Casado(a)"
         )
-        self.assertEqual(cliente["estado_civil"], "Casado(a)")
+        self.assertEqual(atualizado["estado_civil"], "Casado(a)")
 
     def test_atualiza_incompleto_ao_preencher_opcionais(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
+        cliente = criar_cliente_mensal()
         self.assertTrue(cliente["incompleto"])
-        clientes.atualizar(
-            dados,
+        atualizado = clientes.atualizar(
             cliente["id"],
             email="ana@exemplo.pt",
             telefone="912345678",
             morada="Rua do Porto, 12",
             nacionalidade="Portuguesa",
         )
-        self.assertFalse(cliente["incompleto"])
+        self.assertFalse(atualizado["incompleto"])
 
     def test_altera_data_nascimento(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
-        clientes.atualizar(
-            dados, cliente["id"], data_nascimento=date(1990, 5, 20)
+        cliente = criar_cliente_mensal()
+        atualizado = clientes.atualizar(
+            cliente["id"], data_nascimento=date(1990, 5, 20)
         )
-        self.assertEqual(cliente["data_nascimento"], date(1990, 5, 20))
+        self.assertEqual(atualizado["data_nascimento"], date(1990, 5, 20))
 
     def test_recusa_atualizar_cliente_anonimizado(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
-        clientes.anonimizar(dados, cliente["id"], "RES-001", date.today())
+        resp = responsaveis.criar("Responsável de teste")
+        cliente = criar_cliente_mensal()
+        clientes.anonimizar(cliente["id"], resp["id"], date.today())
         with self.assertRaises(ValueError):
-            clientes.atualizar(dados, cliente["id"], nome="Novo Nome")
+            clientes.atualizar(cliente["id"], nome="Novo Nome")
 
 
-class TesteDesativarReativar(unittest.TestCase):
+class TesteDesativarReativar(BaseMySQLTest):
 
     def test_desativa_cliente_ativo(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
-        clientes.desativar(dados, cliente["id"])
-        self.assertFalse(cliente["ativo"])
+        cliente = criar_cliente_mensal()
+        desativado = clientes.desativar(cliente["id"])
+        self.assertFalse(desativado["ativo"])
 
     def test_recusa_desativar_duas_vezes(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
-        clientes.desativar(dados, cliente["id"])
+        cliente = criar_cliente_mensal()
+        clientes.desativar(cliente["id"])
         with self.assertRaises(ValueError):
-            clientes.desativar(dados, cliente["id"])
+            clientes.desativar(cliente["id"])
 
     def test_recusa_desativar_inexistente(self):
-        dados = dados_base()
         with self.assertRaises(ValueError):
-            clientes.desativar(dados, "CLI-999")
+            clientes.desativar("CLI-999")
 
     def test_reativa_cliente_inativo(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
-        clientes.desativar(dados, cliente["id"])
-        clientes.reativar(dados, cliente["id"])
-        self.assertTrue(cliente["ativo"])
+        cliente = criar_cliente_mensal()
+        clientes.desativar(cliente["id"])
+        reativado = clientes.reativar(cliente["id"])
+        self.assertTrue(reativado["ativo"])
 
     def test_recusa_reativar_ja_ativo(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
+        cliente = criar_cliente_mensal()
         with self.assertRaises(ValueError):
-            clientes.reativar(dados, cliente["id"])
+            clientes.reativar(cliente["id"])
 
     def test_recusa_reativar_inexistente(self):
-        dados = dados_base()
         with self.assertRaises(ValueError):
-            clientes.reativar(dados, "CLI-999")
+            clientes.reativar("CLI-999")
 
     def test_recusa_reativar_cliente_anonimizado(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
-        clientes.anonimizar(dados, cliente["id"], "RES-001", date.today())
+        resp = responsaveis.criar("Responsável de teste")
+        cliente = criar_cliente_mensal()
+        clientes.anonimizar(cliente["id"], resp["id"], date.today())
         with self.assertRaises(ValueError):
-            clientes.reativar(dados, cliente["id"])
+            clientes.reativar(cliente["id"])
 
     def test_recusa_reativar_quando_nif_pertence_a_outro_ativo(self):
         """Novo (decisão de 26/08, item 6): fecha o "gap" que
@@ -521,101 +466,99 @@ class TesteDesativarReativar(unittest.TestCase):
         cliente_1 desativado, cliente_2 criado entretanto com o
         mesmo NIF (permitido, item 5, porque cliente_1 está
         inativo), e só então se tenta reativar cliente_1."""
-        dados = dados_base()
-        cliente_1 = criar_cliente_mensal(dados, nif="501442600")
-        clientes.desativar(dados, cliente_1["id"])
-        criar_cliente_mensal(
-            dados, numero_documento="99999999", nif="501442600"
-        )
+        cliente_1 = criar_cliente_mensal(nif="501442600")
+        clientes.desativar(cliente_1["id"])
+        criar_cliente_mensal(numero_documento="99999999", nif="501442600")
         with self.assertRaises(ValueError):
-            clientes.reativar(dados, cliente_1["id"])
+            clientes.reativar(cliente_1["id"])
 
     def test_permite_reativar_quando_nif_esta_livre(self):
         """Confirma que a verificação nova não bloqueia o caso
         normal: NIF que continua livre."""
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados, nif="501442600")
-        clientes.desativar(dados, cliente["id"])
-        clientes.reativar(dados, cliente["id"])
-        self.assertTrue(cliente["ativo"])
+        cliente = criar_cliente_mensal(nif="501442600")
+        clientes.desativar(cliente["id"])
+        reativado = clientes.reativar(cliente["id"])
+        self.assertTrue(reativado["ativo"])
 
 
-class TesteAnonimizar(unittest.TestCase):
+class TesteAnonimizar(BaseMySQLTest):
 
     def test_substitui_o_nome(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
-        clientes.anonimizar(dados, cliente["id"], "RES-001", date.today())
+        resp = responsaveis.criar("Responsável de teste")
+        cliente = criar_cliente_mensal()
+        anonimizado = clientes.anonimizar(
+            cliente["id"], resp["id"], date.today()
+        )
         self.assertEqual(
-            cliente["nome"], f"Titular anonimizado {cliente['id']}"
+            anonimizado["nome"], f"Titular anonimizado {cliente['id']}"
         )
 
     def test_apaga_dados_pessoais(self):
-        dados = dados_base()
+        resp = responsaveis.criar("Responsável de teste")
         cliente = criar_cliente_mensal(
-            dados,
             email="ana@exemplo.pt",
             telefone="912345678",
             morada="Rua do Porto, 12",
             contacto_emergencia="Filho: 913456789",
             data_nascimento=date(1990, 5, 20),
         )
-        clientes.anonimizar(dados, cliente["id"], "RES-001", date.today())
+        anonimizado = clientes.anonimizar(
+            cliente["id"], resp["id"], date.today()
+        )
 
-        self.assertEqual(cliente["email"], "")
-        self.assertEqual(cliente["telefone"], "")
-        self.assertEqual(cliente["morada"], "")
-        self.assertEqual(cliente["nif"], "")
-        self.assertEqual(cliente["numero_documento"], "")
-        self.assertIsNone(cliente["validade_documento"])
-        self.assertIsNone(cliente["data_nascimento"])
-        self.assertEqual(cliente["contacto_emergencia"], "")
+        self.assertEqual(anonimizado["email"], "")
+        self.assertEqual(anonimizado["telefone"], "")
+        self.assertEqual(anonimizado["morada"], "")
+        self.assertEqual(anonimizado["nif"], "")
+        self.assertEqual(anonimizado["numero_documento"], "")
+        self.assertIsNone(anonimizado["validade_documento"])
+        self.assertIsNone(anonimizado["data_nascimento"])
+        self.assertEqual(anonimizado["contacto_emergencia"], "")
 
     def test_conserva_nacionalidade_e_tipo_documento(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados, nacionalidade="Portuguesa")
-        clientes.anonimizar(dados, cliente["id"], "RES-001", date.today())
+        resp = responsaveis.criar("Responsável de teste")
+        cliente = criar_cliente_mensal(nacionalidade="Portuguesa")
+        anonimizado = clientes.anonimizar(
+            cliente["id"], resp["id"], date.today()
+        )
 
-        self.assertEqual(cliente["nacionalidade"], "Portuguesa")
-        self.assertEqual(cliente["tipo_documento"], "Cartão Cidadão")
+        self.assertEqual(anonimizado["nacionalidade"], "Portuguesa")
+        self.assertEqual(anonimizado["tipo_documento"], "Cartão de Cidadão")
 
     def test_marca_anonimizado_e_regista_autoria(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
+        resp = responsaveis.criar("Responsável de teste")
+        cliente = criar_cliente_mensal()
         hoje = date.today()
-        clientes.anonimizar(dados, cliente["id"], "RES-001", hoje)
+        anonimizado = clientes.anonimizar(cliente["id"], resp["id"], hoje)
 
-        self.assertTrue(cliente["anonimizado"])
-        self.assertEqual(cliente["data_anonimizado"], hoje)
-        self.assertEqual(cliente["responsavel_anonimizado_id"], "RES-001")
-        self.assertFalse(cliente["ativo"])
-        self.assertTrue(cliente["incompleto"])
+        self.assertTrue(anonimizado["anonimizado"])
+        self.assertEqual(anonimizado["data_anonimizado"], hoje)
+        self.assertEqual(anonimizado["responsavel_anonimizado_id"], resp["id"])
+        self.assertFalse(anonimizado["ativo"])
+        self.assertTrue(anonimizado["incompleto"])
 
     def test_recusa_anonimizar_duas_vezes(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
-        clientes.anonimizar(dados, cliente["id"], "RES-001", date.today())
+        resp = responsaveis.criar("Responsável de teste")
+        cliente = criar_cliente_mensal()
+        clientes.anonimizar(cliente["id"], resp["id"], date.today())
         with self.assertRaises(ValueError):
-            clientes.anonimizar(
-                dados, cliente["id"], "RES-001", date.today()
-            )
+            clientes.anonimizar(cliente["id"], resp["id"], date.today())
 
     def test_recusa_anonimizar_inexistente(self):
-        dados = dados_base()
+        resp = responsaveis.criar("Responsável de teste")
         with self.assertRaises(ValueError):
-            clientes.anonimizar(dados, "CLI-999", "RES-001", date.today())
+            clientes.anonimizar("CLI-999", resp["id"], date.today())
 
     def test_recusa_sem_responsavel(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
+        cliente = criar_cliente_mensal()
         with self.assertRaises(ValueError):
-            clientes.anonimizar(dados, cliente["id"], "  ", date.today())
+            clientes.anonimizar(cliente["id"], "  ", date.today())
 
     def test_recusa_sem_data(self):
-        dados = dados_base()
-        cliente = criar_cliente_mensal(dados)
+        resp = responsaveis.criar("Responsável de teste")
+        cliente = criar_cliente_mensal()
         with self.assertRaises(ValueError):
-            clientes.anonimizar(dados, cliente["id"], "RES-001", None)
+            clientes.anonimizar(cliente["id"], resp["id"], None)
 
 
 if __name__ == "__main__":

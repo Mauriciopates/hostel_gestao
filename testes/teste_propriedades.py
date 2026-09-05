@@ -1,11 +1,23 @@
 """Testes da gestão de propriedades.
 
-Como o módulo recebe a estrutura de dados como argumento, os testes
-constroem um dicionário e verificam o resultado. Não é preciso pasta
-temporária nem redirecionar caminhos: as funções não acedem a ficheiros.
+MIGRAÇÃO MySQL (Fase 2): desde que `propriedades.py` passou a falar
+diretamente com a base de dados (já não recebe nem devolve a
+estrutura `dados`), estes testes correm contra uma base de dados
+MySQL de teste, dedicada e isolada da base de dados real do aluno —
+ver `apoio_bd.py` para os detalhes. Cada teste começa com a tabela
+vazia (TRUNCATE) e com os contadores de identificadores reiniciados,
+tal como antes cada teste começava com um dicionário `dados` novo.
 
-O identificador não é verificado por igualdade porque o contador está
-gravado em ficheiro e avança entre execuções; verifica-se o prefixo.
+O identificador não é verificado por igualdade porque o contador é
+reiniciado por teste mas mantém-se sequencial: verifica-se sempre o
+prefixo (decisão antiga, mantida) — exceto quando um teste cria só
+UMA propriedade nessa base de dados vazia, caso em que "PRO-001" é
+previsível e serve para confirmar o formato com três dígitos.
+
+NOTA sobre identidade: `procurar()` faz sempre um SELECT novo à base
+de dados — já não devolve o MESMO objeto Python que `criar()`
+devolveu. Por isso comparamos com `assertEqual` (valores iguais),
+nunca com `assertIs` (mesmo objeto).
 """
 
 import sys
@@ -15,50 +27,38 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from apoio_BD import BaseMySQLTest
+
 import propriedades
 import unidades
 
 
-def estrutura(*nomes):
-    """Devolve uma estrutura com as propriedades indicadas já criadas.
-
-    Inclui "unidades" e "ocupacoes" vazias mesmo que este ficheiro não
-    crie nada lá por omissão — desativar() passou a verificar
-    dependências ativas (decisão de 27/08, item 9), e alguns testes
-    abaixo criam (e desativam) unidades para exercitar essa
-    verificação.
-    """
-    dados = {"propriedades": [], "unidades": [], "ocupacoes": []}
-    for nome in nomes:
-        propriedades.criar(dados, nome)
-    return dados
-
-
-class TesteCriar(unittest.TestCase):
+class TesteCriar(BaseMySQLTest):
     """Criação de propriedades."""
 
-    def teste_criar_acrescenta_a_lista(self):
-        """A propriedade criada fica na estrutura e é devolvida."""
-        dados = {"propriedades": []}
+    def teste_criar_devolve_a_propriedade_criada(self):
+        """A propriedade criada é devolvida, com o nome indicado."""
+        p = propriedades.criar("Rei Ramiro")
 
-        p = propriedades.criar(dados, "Rei Ramiro")
-
-        self.assertEqual(1, len(dados["propriedades"]))
         self.assertEqual("Rei Ramiro", p["nome"])
+        self.assertEqual(1, len(propriedades.listar()))
 
     def teste_criar_atribui_id_com_prefixo(self):
         """O identificador segue o formato PRO-000 (decisão 2)."""
-        dados = {"propriedades": []}
-
-        p = propriedades.criar(dados, "Foz Velha")
+        p = propriedades.criar("Foz Velha")
 
         self.assertTrue(p["id"].startswith("PRO-"))
 
+    def teste_criar_primeiro_id_e_pro_001(self):
+        """Numa base de dados de teste vazia, o primeiro id é
+        previsível: PRO-001, com três dígitos."""
+        p = propriedades.criar("Foz Velha")
+
+        self.assertEqual("PRO-001", p["id"])
+
     def teste_criar_nasce_ativa(self):
         """Uma propriedade nova está ativa por omissão."""
-        dados = {"propriedades": []}
-
-        p = propriedades.criar(dados, "Aldoar")
+        p = propriedades.criar("Aldoar")
 
         self.assertTrue(p["ativo"])
 
@@ -68,9 +68,7 @@ class TesteCriar(unittest.TestCase):
         Sem a limpeza, " Beco " e "Beco" seriam propriedades distintas
         numa listagem.
         """
-        dados = {"propriedades": []}
-
-        p = propriedades.criar(dados, "  Beco  ", "  Rua do Beco  ")
+        p = propriedades.criar("  Beco  ", "  Rua do Beco  ")
 
         self.assertEqual("Beco", p["nome"])
         self.assertEqual("Rua do Beco", p["morada"])
@@ -78,28 +76,24 @@ class TesteCriar(unittest.TestCase):
     def teste_criar_sem_nome_e_recusado(self):
         """O nome é obrigatório: vazio ou só espaços não passa."""
         for nome in ("", "   "):
-            dados = {"propriedades": []}
             with self.assertRaises(ValueError):
-                propriedades.criar(dados, nome)
+                propriedades.criar(nome)
 
     def teste_criar_sem_morada_e_aceite(self):
         """A morada é opcional e fica vazia."""
-        dados = {"propriedades": []}
-
-        p = propriedades.criar(dados, "Casa da Música")
+        p = propriedades.criar("Casa da Música")
 
         self.assertEqual("", p["morada"])
 
 
-class TesteProcurar(unittest.TestCase):
+class TesteProcurar(BaseMySQLTest):
     """Procura de uma propriedade pelo identificador."""
 
     def teste_procurar_encontra(self):
         """Devolve o registo quando o identificador corresponde."""
-        dados = estrutura("Rei Ramiro")
-        criada = dados["propriedades"][0]
+        criada = propriedades.criar("Rei Ramiro")
 
-        encontrada = propriedades.procurar(dados, criada["id"])
+        encontrada = propriedades.procurar(criada["id"])
 
         self.assertEqual(criada, encontrada)
 
@@ -108,82 +102,82 @@ class TesteProcurar(unittest.TestCase):
 
         A ausência não é erro: quem chama é que decide se é problema.
         """
-        dados = estrutura("Rei Ramiro")
+        propriedades.criar("Rei Ramiro")
 
-        self.assertIsNone(propriedades.procurar(dados, "PRO-999"))
+        self.assertIsNone(propriedades.procurar("PRO-999"))
 
-    def teste_procurar_em_lista_vazia(self):
+    def teste_procurar_em_base_vazia(self):
         """Sem propriedades registadas, devolve None."""
-        dados = {"propriedades": []}
-
-        self.assertIsNone(propriedades.procurar(dados, "PRO-001"))
+        self.assertIsNone(propriedades.procurar("PRO-001"))
 
     def teste_procurar_encontra_inativas(self):
         """A procura não filtra: devolve também as desativadas."""
-        dados = estrutura("Aldoar")
-        pro_id = dados["propriedades"][0]["id"]
-        propriedades.desativar(dados, pro_id)
+        pro_id = propriedades.criar("Aldoar")["id"]
+        propriedades.desativar(pro_id)
 
-        self.assertIsNotNone(propriedades.procurar(dados, pro_id))
+        self.assertIsNotNone(propriedades.procurar(pro_id))
 
 
-class TesteListar(unittest.TestCase):
+class TesteListar(BaseMySQLTest):
     """Listagem com e sem as propriedades inativas."""
 
     def teste_listar_devolve_todas_as_ativas(self):
         """Por omissão, a listagem tem todas as propriedades ativas."""
-        dados = estrutura("Foz Velha", "Aldoar", "Beco")
+        propriedades.criar("Foz Velha")
+        propriedades.criar("Aldoar")
+        propriedades.criar("Beco")
 
-        self.assertEqual(3, len(propriedades.listar(dados)))
+        self.assertEqual(3, len(propriedades.listar()))
 
     def teste_listar_omite_as_inativas(self):
         """Uma propriedade desativada não aparece na listagem."""
-        dados = estrutura("Foz Velha", "Aldoar")
-        propriedades.desativar(dados, dados["propriedades"][0]["id"])
+        inativa_id = propriedades.criar("Foz Velha")["id"]
+        propriedades.criar("Aldoar")
+        propriedades.desativar(inativa_id)
 
-        self.assertEqual(1, len(propriedades.listar(dados)))
+        self.assertEqual(1, len(propriedades.listar()))
 
     def teste_listar_com_inativas_devolve_todas(self):
         """Com incluir_inativas, a listagem tem também as desativadas."""
-        dados = estrutura("Foz Velha", "Aldoar")
-        propriedades.desativar(dados, dados["propriedades"][0]["id"])
+        inativa_id = propriedades.criar("Foz Velha")["id"]
+        propriedades.criar("Aldoar")
+        propriedades.desativar(inativa_id)
 
-        todas = propriedades.listar(dados, incluir_inativas=True)
+        todas = propriedades.listar(incluir_inativas=True)
 
         self.assertEqual(2, len(todas))
 
-    def teste_listar_estrutura_vazia(self):
+    def teste_listar_base_vazia(self):
         """Sem propriedades registadas, a listagem é vazia."""
-        self.assertEqual([], propriedades.listar({"propriedades": []}))
+        self.assertEqual([], propriedades.listar())
 
     def teste_listar_devolve_lista_nova(self):
-        """Alterar a lista devolvida não altera a estrutura de dados."""
-        dados = estrutura("Foz Velha")
+        """Alterar a lista devolvida não altera a base de dados."""
+        propriedades.criar("Foz Velha")
 
-        listagem = propriedades.listar(dados)
+        listagem = propriedades.listar()
         listagem.clear()
 
-        self.assertEqual(1, len(dados["propriedades"]))
+        self.assertEqual(1, len(propriedades.listar()))
 
 
-class TesteAtualizar(unittest.TestCase):
+class TesteAtualizar(BaseMySQLTest):
     """Alteração do nome e da morada."""
 
     def teste_atualizar_altera_o_nome(self):
         """O nome indicado substitui o anterior."""
-        dados = estrutura("Rei Ramiro")
-        pro_id = dados["propriedades"][0]["id"]
+        pro_id = propriedades.criar("Rei Ramiro")["id"]
 
-        p = propriedades.atualizar(dados, pro_id, nome="Rei Ramiro 1-13")
+        p = propriedades.atualizar(pro_id, nome="Rei Ramiro 1-13")
 
         self.assertEqual("Rei Ramiro 1-13", p["nome"])
+        self.assertEqual("Rei Ramiro 1-13", propriedades.procurar(pro_id)["nome"])
 
     def teste_atualizar_altera_a_morada(self):
         """A morada indicada substitui a anterior."""
-        dados = estrutura("Beco")
-        pro_id = dados["propriedades"][0]["id"]
+        pro_id = propriedades.criar("Beco")["id"]
 
-        p = propriedades.atualizar(dados, pro_id, morada="Rua do Beco, 4")
+        p = propriedades.atualizar(pro_id, morada="Rua do Beco, 4")
 
         self.assertEqual("Rua do Beco, 4", p["morada"])
 
@@ -192,149 +186,131 @@ class TesteAtualizar(unittest.TestCase):
 
         É o que permite mudar só a morada sem passar o nome atual.
         """
-        dados = estrutura("Aldoar")
-        pro_id = dados["propriedades"][0]["id"]
+        pro_id = propriedades.criar("Aldoar")["id"]
 
-        p = propriedades.atualizar(dados, pro_id)
+        p = propriedades.atualizar(pro_id)
 
         self.assertEqual("Aldoar", p["nome"])
 
     def teste_atualizar_apaga_a_morada(self):
         """Uma cadeia vazia apaga a morada, ao contrário de None."""
-        dados = {"propriedades": []}
-        propriedades.criar(dados, "Aldoar", "Rua de Aldoar")
-        pro_id = dados["propriedades"][0]["id"]
+        pro_id = propriedades.criar("Aldoar", "Rua de Aldoar")["id"]
 
-        p = propriedades.atualizar(dados, pro_id, morada="")
+        p = propriedades.atualizar(pro_id, morada="")
 
         self.assertEqual("", p["morada"])
 
     def teste_atualizar_com_nome_vazio_e_recusado(self):
         """O nome não pode ser apagado: a propriedade deixaria de se
         identificar."""
-        dados = estrutura("Aldoar")
-        pro_id = dados["propriedades"][0]["id"]
+        pro_id = propriedades.criar("Aldoar")["id"]
 
         with self.assertRaises(ValueError):
-            propriedades.atualizar(dados, pro_id, nome="")
+            propriedades.atualizar(pro_id, nome="")
 
     def teste_atualizar_limpa_espacos(self):
         """Os espaços nas extremidades não são guardados."""
-        dados = estrutura("Aldoar")
-        pro_id = dados["propriedades"][0]["id"]
+        pro_id = propriedades.criar("Aldoar")["id"]
 
-        p = propriedades.atualizar(dados, pro_id, nome="  Foz Pinhais  ")
+        p = propriedades.atualizar(pro_id, nome="  Foz Pinhais  ")
 
         self.assertEqual("Foz Pinhais", p["nome"])
 
     def teste_atualizar_inexistente_e_recusado(self):
         """Um identificador desconhecido produz erro."""
-        dados = {"propriedades": []}
-
         with self.assertRaises(ValueError):
-            propriedades.atualizar(dados, "PRO-999", nome="Teste")
+            propriedades.atualizar("PRO-999", nome="Teste")
 
 
-class TesteDesativarReativar(unittest.TestCase):
+class TesteDesativarReativar(BaseMySQLTest):
     """Desativação e reposição (decisão 8)."""
 
     def teste_desativar_marca_como_inativa(self):
-        """A propriedade continua na estrutura, marcada como inativa.
+        """A propriedade continua a existir, marcada como inativa.
 
         Não é eliminada porque os contratos históricos referem as suas
         unidades: eliminar deixaria referências a apontar para nada.
         """
-        dados = estrutura("Aldoar")
-        pro_id = dados["propriedades"][0]["id"]
+        pro_id = propriedades.criar("Aldoar")["id"]
 
-        p = propriedades.desativar(dados, pro_id)
+        p = propriedades.desativar(pro_id)
 
         self.assertFalse(p["ativo"])
-        self.assertEqual(1, len(dados["propriedades"]))
+        self.assertEqual(1, len(propriedades.listar(incluir_inativas=True)))
 
     def teste_desativar_duas_vezes_e_recusado(self):
         """Desativar uma propriedade já inativa produz erro.
 
         A recusa expõe o engano em vez de o aceitar em silêncio.
         """
-        dados = estrutura("Aldoar")
-        pro_id = dados["propriedades"][0]["id"]
-        propriedades.desativar(dados, pro_id)
+        pro_id = propriedades.criar("Aldoar")["id"]
+        propriedades.desativar(pro_id)
 
         with self.assertRaises(ValueError):
-            propriedades.desativar(dados, pro_id)
+            propriedades.desativar(pro_id)
 
     def teste_desativar_inexistente_e_recusado(self):
         """Um identificador desconhecido produz erro."""
-        dados = {"propriedades": []}
-
         with self.assertRaises(ValueError):
-            propriedades.desativar(dados, "PRO-999")
+            propriedades.desativar("PRO-999")
 
     def teste_reativar_repoe_como_ativa(self):
         """Uma propriedade desativada por engano pode ser reposta."""
-        dados = estrutura("Aldoar")
-        pro_id = dados["propriedades"][0]["id"]
-        propriedades.desativar(dados, pro_id)
+        pro_id = propriedades.criar("Aldoar")["id"]
+        propriedades.desativar(pro_id)
 
-        p = propriedades.reativar(dados, pro_id)
+        p = propriedades.reativar(pro_id)
 
         self.assertTrue(p["ativo"])
 
     def teste_reativar_uma_ativa_e_recusado(self):
         """Reativar uma propriedade que já está ativa produz erro."""
-        dados = estrutura("Aldoar")
-        pro_id = dados["propriedades"][0]["id"]
+        pro_id = propriedades.criar("Aldoar")["id"]
 
         with self.assertRaises(ValueError):
-            propriedades.reativar(dados, pro_id)
+            propriedades.reativar(pro_id)
 
     def teste_reativar_inexistente_e_recusado(self):
         """Um identificador desconhecido produz erro."""
-        dados = {"propriedades": []}
-
         with self.assertRaises(ValueError):
-            propriedades.reativar(dados, "PRO-999")
+            propriedades.reativar("PRO-999")
 
     def teste_desativar_com_unidade_ativa_e_recusado_sem_forcar(self):
         """Novo (decisão de 27/08, item 9): sem forcar=True, recusa
         desativar se existir alguma unidade ativa dependente."""
-        dados = estrutura("Aldoar")
-        pro_id = dados["propriedades"][0]["id"]
+        pro_id = propriedades.criar("Aldoar")["id"]
         unidades.criar(
-            dados, pro_id, "Unidade Teste", "mensal",
+            pro_id, "Unidade Teste", "mensal",
             Decimal("250.00"), Decimal("250.00"), Decimal("20.00"),
         )
 
         with self.assertRaises(ValueError):
-            propriedades.desativar(dados, pro_id)
+            propriedades.desativar(pro_id)
 
     def teste_desativar_com_forcar_ignora_unidades_ativas(self):
         """Com forcar=True, desativa mesmo com unidades ativas
         dependentes — decisão consciente de quem chama."""
-        dados = estrutura("Aldoar")
-        pro_id = dados["propriedades"][0]["id"]
+        pro_id = propriedades.criar("Aldoar")["id"]
         unidades.criar(
-            dados, pro_id, "Unidade Teste", "mensal",
+            pro_id, "Unidade Teste", "mensal",
             Decimal("250.00"), Decimal("250.00"), Decimal("20.00"),
         )
 
-        p = propriedades.desativar(dados, pro_id, forcar=True)
+        p = propriedades.desativar(pro_id, forcar=True)
 
         self.assertFalse(p["ativo"])
 
     def teste_desativar_ignora_unidade_ja_inativa(self):
         """Uma unidade já inativa não conta como dependência ativa —
         não exige forcar."""
-        dados = estrutura("Aldoar")
-        pro_id = dados["propriedades"][0]["id"]
+        pro_id = propriedades.criar("Aldoar")["id"]
         unidade = unidades.criar(
-            dados, pro_id, "Unidade Teste", "mensal",
+            pro_id, "Unidade Teste", "mensal",
             Decimal("250.00"), Decimal("250.00"), Decimal("20.00"),
         )
-        unidades.desativar(dados, unidade["id"])
+        unidades.desativar(unidade["id"])
 
-        p = propriedades.desativar(dados, pro_id)
+        p = propriedades.desativar(pro_id)
 
         self.assertFalse(p["ativo"])
 
