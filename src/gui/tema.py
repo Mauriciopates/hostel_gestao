@@ -20,6 +20,11 @@ COR_TEXTO = ("#0C2F48", "#E8EEF3")              # texto sobre COR_FUNDO
 COR_TEXTO_SECUNDARIO = ("#5A6B7A", "#94A3AD")   # legendas, rótulos pequenos
 COR_BORDA = ("#D0D0D0", "#3A4048")              # bordas de tabelas/campos
 
+# Texto da barra lateral — fundo fixo (navy nos dois modos), por
+# isso o texto também tem de ser fixo, não pode vir de COR_TEXTO*
+COR_TEXTO_SIDEBAR = "#FFFFFF"
+COR_TEXTO_SIDEBAR_SECAO = "#7C93A6"
+
 # Avisos e erros — sem relação com a marca (decisão já tomada)
 AMARELO_AVISO = ("#FFF3D6", "#4A3B14")          # fundo da caixa de aviso
 TEXTO_AVISO = ("#9A7B12", "#F0D888")
