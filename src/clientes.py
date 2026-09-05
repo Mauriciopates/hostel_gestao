@@ -256,9 +256,7 @@ def atualizar(
     ):
         raise ValueError(f"NIF inválido: {candidato['nif']}")
 
-    if _nif_pertence_a_outro_cliente(
-        candidato["nif"], ignorar_id=cliente_id
-    ):
+    if _nif_pertence_a_outro_cliente(candidato["nif"], ignorar_id=cliente_id):
         raise ValueError(
             f"Já existe um cliente ativo com o NIF {candidato['nif']}."
         )
@@ -418,7 +416,7 @@ def anonimizar(cliente_id, responsavel_id, data):
         "incompleto": True,
         "anonimizado": True,
         "data_anonimizado": data,
-        "responsavel_anonimizado_id": responsavel_id,
+        "responsavel_anonimizado_id": responsavel["id"],
         "ativo": False,
     }
 
