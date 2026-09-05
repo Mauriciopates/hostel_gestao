@@ -273,6 +273,7 @@ def inserir_propriedade(propriedade):
 
 
 def procurar_propriedade(propriedade_id):
+    """Procura a propriedade pelo id. Devolve None se não existir."""
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor(dictionary=True)
@@ -398,6 +399,7 @@ def _normalizar_unidade(linha):
 
 
 def procurar_unidade(unidade_id):
+    """Procura a unidade pelo id. Devolve None se não existir."""
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor(dictionary=True)
@@ -469,6 +471,11 @@ def atualizar_unidade(unidade_id, campos):
 
 
 def inserir_quarto(quarto):
+    """Insere um quarto novo na base de dados.
+
+    Espera um dicionário com id, unidade_id, nome, privativo,
+    limpeza_incluida, ativo.
+    """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor()
@@ -497,6 +504,7 @@ def _normalizar_quarto(linha):
 
 
 def procurar_quarto(quarto_id):
+    """Procura o quarto pelo id. Devolve None se não existir."""
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor(dictionary=True)
@@ -512,6 +520,10 @@ def procurar_quarto(quarto_id):
 
 
 def listar_quartos(incluir_inativas=False, unidade_id=None):
+    """Devolve os quartos, filtráveis por unidade — o filtro aplica-se
+    na própria consulta SQL, em vez de em Python sobre a lista em
+    memória.
+    """
     condicoes = []
     valores = []
 
@@ -538,6 +550,9 @@ def listar_quartos(incluir_inativas=False, unidade_id=None):
 
 
 def atualizar_quarto(quarto_id, campos):
+    """Atualiza os campos indicados (dicionário nome -> valor novo) do
+    quarto. Não faz nada se `campos` vier vazio.
+    """
     if not campos:
         return
 
@@ -557,6 +572,10 @@ def atualizar_quarto(quarto_id, campos):
 
 
 def inserir_lugar(lugar):
+    """Insere um lugar novo na base de dados.
+
+    Espera um dicionário com id, quarto_id, nome, capacidade, ativo.
+    """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor()
@@ -582,6 +601,7 @@ def _normalizar_lugar(linha):
 
 
 def procurar_lugar(lugar_id):
+    """Procura o lugar pelo id. Devolve None se não existir."""
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor(dictionary=True)
@@ -597,6 +617,10 @@ def procurar_lugar(lugar_id):
 
 
 def listar_lugares(incluir_inativas=False, quarto_id=None):
+    """Devolve os lugares, filtráveis por quarto — o filtro aplica-se
+    na própria consulta SQL, em vez de em Python sobre a lista em
+    memória.
+    """
     condicoes = []
     valores = []
 
@@ -623,6 +647,9 @@ def listar_lugares(incluir_inativas=False, quarto_id=None):
 
 
 def atualizar_lugar(lugar_id, campos):
+    """Atualiza os campos indicados (dicionário nome -> valor novo) do
+    lugar. Não faz nada se `campos` vier vazio.
+    """
     if not campos:
         return
 
@@ -672,6 +699,7 @@ def _normalizar_responsavel(linha):
 
 
 def procurar_responsavel(responsavel_id):
+    """Procura o responsável pelo id. Devolve None se não existir."""
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor(dictionary=True)
@@ -796,6 +824,7 @@ def _normalizar_cliente(linha):
 
 
 def procurar_cliente(cliente_id):
+    """Procura o cliente pelo id. Devolve None se não existir."""
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor(dictionary=True)
@@ -939,6 +968,9 @@ def _normalizar_ocupacao(linha):
 
 
 def procurar_ocupacao(ocupacao_id):
+    """Procura a ocupação (base comum) pelo id. Devolve None se não
+    existir.
+    """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor(dictionary=True)
@@ -1087,6 +1119,9 @@ def _normalizar_ocupacao_mensal(linha):
 
 
 def procurar_ocupacao_mensal(ocupacao_id):
+    """Procura os dados específicos do contrato mensal pelo id da
+    ocupação. Devolve None se não existir.
+    """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor(dictionary=True)
@@ -1203,6 +1238,9 @@ def _normalizar_ocupacao_airbnb(linha):
 
 
 def procurar_ocupacao_airbnb(ocupacao_id):
+    """Procura os dados específicos da reserva Airbnb pelo id da
+    ocupação. Devolve None se não existir.
+    """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor(dictionary=True)
@@ -1287,6 +1325,7 @@ def _normalizar_produto(linha):
 
 
 def procurar_produto(produto_id):
+    """Procura o produto pelo id. Devolve None se não existir."""
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor(dictionary=True)
@@ -1454,6 +1493,7 @@ def _normalizar_requisicao(linha):
 
 
 def procurar_requisicao(requisicao_id):
+    """Procura a requisição pelo id. Devolve None se não existir."""
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor(dictionary=True)
@@ -1537,6 +1577,11 @@ def atualizar_requisicao(requisicao_id, campos):
 
 
 def inserir_item_requisicao(item):
+    """Insere um item de requisição novo na base de dados.
+
+    Espera um dicionário com id, requisicao_id, produto_id,
+    quantidade_pedida, quantidade_enviada.
+    """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor()
@@ -1558,6 +1603,9 @@ def inserir_item_requisicao(item):
 
 
 def procurar_item_requisicao(item_id):
+    """Procura o item de requisição pelo id. Devolve None se não
+    existir.
+    """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor(dictionary=True)
@@ -1572,6 +1620,10 @@ def procurar_item_requisicao(item_id):
 
 
 def listar_itens_requisicao(requisicao_id=None, produto_id=None):
+    """Devolve os itens de requisição, filtráveis por requisição e por
+    produto — os filtros aplicam-se na própria consulta SQL, em vez
+    de em Python sobre a lista em memória.
+    """
     condicoes = []
     valores = []
 
@@ -1623,6 +1675,11 @@ def atualizar_item_requisicao(item_id, campos):
 
 
 def inserir_devolucao(devolucao):
+    """Insere uma devolução nova na base de dados.
+
+    Espera um dicionário com id, requisicao_id, responsavel_id,
+    estado, data_reportada, data_fecho.
+    """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor()
@@ -1645,6 +1702,7 @@ def inserir_devolucao(devolucao):
 
 
 def procurar_devolucao(devolucao_id):
+    """Procura a devolução pelo id. Devolve None se não existir."""
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor(dictionary=True)
@@ -1659,6 +1717,10 @@ def procurar_devolucao(devolucao_id):
 
 
 def listar_devolucoes(estado=None, requisicao_id=None, responsavel_id=None):
+    """Devolve as devoluções, filtráveis por estado, requisição e
+    responsável — os filtros aplicam-se na própria consulta SQL, em
+    vez de em Python sobre a lista em memória.
+    """
     condicoes = []
     valores = []
 
@@ -1690,6 +1752,9 @@ def listar_devolucoes(estado=None, requisicao_id=None, responsavel_id=None):
 
 
 def atualizar_devolucao(devolucao_id, campos):
+    """Atualiza os campos indicados (dicionário nome -> valor novo) da
+    devolução. Não faz nada se `campos` vier vazio.
+    """
     if not campos:
         return
 
@@ -1711,6 +1776,11 @@ def atualizar_devolucao(devolucao_id, campos):
 
 
 def inserir_item_devolucao(item):
+    """Insere um item de devolução novo na base de dados.
+
+    Espera um dicionário com id, devolucao_id, produto_id,
+    quantidade.
+    """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor()
@@ -1730,6 +1800,9 @@ def inserir_item_devolucao(item):
 
 
 def procurar_item_devolucao(item_id):
+    """Procura o item de devolução pelo id. Devolve None se não
+    existir.
+    """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor(dictionary=True)
@@ -1744,6 +1817,10 @@ def procurar_item_devolucao(item_id):
 
 
 def listar_itens_devolucao(devolucao_id=None, produto_id=None):
+    """Devolve os itens de devolução, filtráveis por devolução e por
+    produto — os filtros aplicam-se na própria consulta SQL, em vez
+    de em Python sobre a lista em memória.
+    """
     condicoes = []
     valores = []
 
