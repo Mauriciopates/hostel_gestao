@@ -1,18 +1,26 @@
 """Testes da camada de persistência.
 
+Cobre só o que continua a existir em repositorio.py fora das funções
+por entidade (essas têm teste próprio em cada teste_<entidade>.py,
+via apoio_BD.py): os contadores de identificador (contadores.json) e
+as cópias de segurança. A antiga TestePersistencia (carregar/gravar/
+_estrutura_vazia, conversão de Decimal e date, gravação atómica,
+recusa de versão posterior) foi removida nesta sessão — essas
+funções saíram de repositorio.py por já não terem nenhum consumidor,
+substituídas pelas funções por entidade que falam diretamente com o
+MySQL (ver Estado_Projeto_2026-09-05.txt, secção 6).
+
 Cada teste corre numa pasta temporária própria, criada antes e eliminada
 depois. As constantes de caminho do repositório são redirecionadas para
 essa pasta e repostas no fim, para os testes nunca tocarem nos dados
 reais de `dados/` e `backups/`.
 """
 
-import json
 import shutil
 import sys
 import tempfile
 import unittest
 from datetime import date, timedelta
-from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
@@ -75,13 +83,13 @@ class TesteContadores(BaseRepositorio):
 
         É o erro do protótipo descartado: eliminar registos fazia o
         contador reiniciar e reatribuir identificadores já usados.
+        `contadores.json` é independente de qualquer estrutura de
+        registos (hoje, das próprias tabelas MySQL) — chamar
+        proximo_id() várias vezes seguidas já prova isto sozinho, sem
+        precisar de simular nenhuma eliminação.
         """
         for _ in range(5):
             repositorio.proximo_id("UNI")
-
-        dados = repositorio.carregar()
-        dados["unidades"] = []
-        repositorio.gravar(dados)
 
         self.assertEqual("UNI-006", repositorio.proximo_id("UNI"))
 
@@ -91,97 +99,6 @@ class TesteContadores(BaseRepositorio):
             repositorio.proximo_id("UNI")
 
         self.assertEqual("UNI-010", repositorio.proximo_id("UNI"))
-
-
-class TestePersistencia(BaseRepositorio):
-    """Gravação e leitura de dados, com conversão de tipos (decisão 4)."""
-
-    def teste_carregar_sem_ficheiro_devolve_estrutura_vazia(self):
-        """Na primeira execução não há ficheiro: devolve estrutura vazia."""
-        dados = repositorio.carregar()
-
-        self.assertEqual(repositorio.config.VERSAO_DADOS, dados["versao_dados"])
-        self.assertEqual([], dados["unidades"])
-        self.assertEqual([], dados["clientes"])
-
-    def teste_gravar_e_carregar_preserva_decimal(self):
-        """Um Decimal gravado e relido continua a ser o mesmo valor.
-
-        É a decisão 4: o JSON não conhece Decimal, e converter para float
-        introduziria erros de arredondamento que se acumulam nos totais.
-        """
-        dados = repositorio.carregar()
-        dados["unidades"].append(
-            {
-                "id": "UNI-001",
-                "preco_base": Decimal("45.00"),
-            }
-        )
-        repositorio.gravar(dados)
-
-        lido = repositorio.carregar()
-        unidade = lido["unidades"][0]
-
-        self.assertEqual(Decimal("45.00"), unidade["preco_base"])
-        self.assertIsInstance(unidade["preco_base"], Decimal)
-
-    def teste_gravar_e_carregar_preserva_data(self):
-        """Uma data gravada e relida continua a ser a mesma data.
-
-        As datas são guardadas em ISO (AAAA-MM-DD) porque ordenam
-        corretamente como texto e não são ambíguas — 03/04 é 3 de abril
-        ou 4 de março consoante o país.
-        """
-        dados = repositorio.carregar()
-        dados["ocupacoes"].append(
-        {
-            "id": "OCU-001",
-            "data_inicio": date(2026, 3, 15),
-        }
-    )
-        repositorio.gravar(dados)
-
-        lido = repositorio.carregar()
-        ocupacao = lido["ocupacoes"][0]
-
-        self.assertEqual(date(2026, 3, 15), ocupacao["data_inicio"])
-        self.assertIsInstance(ocupacao["data_inicio"], date)
-
-    def teste_gravacao_atomica_nao_deixa_temporario(self):
-        """Depois de gravar não sobra o ficheiro temporário.
-
-        A gravação passa por um .tmp que só substitui o definitivo no
-        fim: uma interrupção a meio deixaria o ficheiro truncado e os
-        dados perdidos. Se o .tmp sobrevive à gravação, a substituição
-        não aconteceu.
-        """
-        dados = repositorio.carregar()
-        dados["produtos"].append({"id": "PRD-001", "nome": "Lixívia"})
-        repositorio.gravar(dados)
-
-        temporario = repositorio.FICHEIRO_DADOS.with_suffix(".tmp")
-
-        self.assertTrue(repositorio.FICHEIRO_DADOS.exists())
-        self.assertFalse(temporario.exists())
-
-    def teste_versao_posterior_e_recusada(self):
-        """Dados gravados por uma versão mais recente não são carregados.
-
-        Se carregasse, os campos que esta versão desconhece
-        desapareceriam na gravação seguinte. Recusar arrancar é
-        preferível a apagar informação em silêncio.
-        """
-        repositorio._garantir_pastas()
-        conteudo = {
-            "versao_dados": repositorio.config.VERSAO_DADOS + 1,
-            "unidades": [],
-        }
-
-        with open(repositorio.FICHEIRO_DADOS, "w", encoding="utf-8") as f:
-            json.dump(conteudo, f)
-
-        with self.assertRaises(ValueError):
-            repositorio.carregar()
 
 
 class TesteBackups(BaseRepositorio):
@@ -203,8 +120,8 @@ class TesteBackups(BaseRepositorio):
         consultar o sistema de ficheiros — a data de modificação diria
         quando foi copiada, não a que estado corresponde.
         """
-        dados = repositorio.carregar()
-        repositorio.gravar(dados)
+        repositorio._garantir_pastas()
+        repositorio.FICHEIRO_DADOS.write_text("{}", encoding="utf-8")
 
         copia = repositorio.criar_backup()
         esperado = f"dados_{date.today().isoformat()}.json"
@@ -245,15 +162,18 @@ class TesteBackups(BaseRepositorio):
         a sobrescrevesse, um erro detetado à tarde já estaria dentro da
         cópia — e a proteção desaparecia quando fosse precisa.
         """
-        dados = repositorio.carregar()
-        repositorio.gravar(dados)
+        repositorio._garantir_pastas()
+        repositorio.FICHEIRO_DADOS.write_text(
+            '{"estado": "manha"}', encoding="utf-8"
+        )
         copia = repositorio.criar_backup()
 
         assert copia is not None
         conteudo_manha = copia.read_text(encoding="utf-8")
 
-        dados["produtos"].append({"id": "PRD-001", "nome": "Lixívia"})
-        repositorio.gravar(dados)
+        repositorio.FICHEIRO_DADOS.write_text(
+            '{"estado": "tarde"}', encoding="utf-8"
+        )
         repositorio.criar_backup()
 
         self.assertEqual(conteudo_manha, copia.read_text(encoding="utf-8"))
