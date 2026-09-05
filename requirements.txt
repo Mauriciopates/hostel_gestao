@@ -1,5 +1,11 @@
 # Fase 1 — apenas biblioteca padrão do Python 3.11.
 # Sem dependências externas, por decisão de projeto.
-#
-# Fase 2: customtkinter
-# Fase 3: django, mysqlclient, gunicorn
+
+# Fase 2
+mysql-connector-python==26.7.0
+customtkinter==6.0.0
+
+# Fase 3 (planeado, ainda não usado)
+# django
+# mysqlclient
+# gunicorn
