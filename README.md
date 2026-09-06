@@ -17,7 +17,7 @@ e programação de sistemas de informação.
 
 | Fase | Âmbito | Estado |
 |------|--------|--------|
-| 1.0 | CLI + JSON | Em curso |
+| 1.0 | CLI + JSON | Finalizado |
 | 2.0 | GUI CustomTkinter + MySQL + financeiro, relatórios, utilizadores | Em andamento |
 | 3.0 | Django + Nginx | Fora da entrega de outubro | Tentativa de entrega em Novembro na apresentação final
 
