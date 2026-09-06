@@ -29,6 +29,8 @@ TIPOS_ESTADO_CIVIL = (
 
 TIPOS_UNIDADE = ("mensal", "airbnb")
 
+TIPOS_CAMA = ("solteiro", "casal", "beliche")
+
 
 def nif_valido(nif):
     """Verifica um NIF português pelo dígito de controlo.
@@ -292,3 +294,20 @@ def em_epoca_alta(data, epoca_alta_ativa, inicio, fim):
         return False
 
     return inicio <= (data.month, data.day) <= fim
+
+#Criado na fase GUI
+
+def validar_tipo_cama(tipo_cama):
+    """Verifica que o tipo de cama é um dos valores fixos aceites.
+
+    Só decide a aparência do lugar na interface (tamanho/forma da
+    caixa na planta de lugares, decisão de 06/09/2026) — nunca a
+    capacidade, que continua um campo à parte, validado por
+    `validar_capacidade_lugar` (decisão 17). Sem valor por omissão:
+    é sempre obrigatório.
+    """
+    if not tipo_cama or not tipo_cama.strip():
+        raise ValueError("O tipo de cama é obrigatório.")
+
+    if tipo_cama not in TIPOS_CAMA:
+        raise ValueError(f"Tipo de cama desconhecido: {tipo_cama}")

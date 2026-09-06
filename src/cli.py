@@ -1142,12 +1142,14 @@ def _menu_quartos(unidade_id):
 
 
 def _criar_lugar(quarto_id):
-    """Capacidade por omissão 1 (decisão 17 — um beliche são dois
-    lugares de capacidade 1, nunca um de capacidade 2).
+    """Capacidade por omissão 1 (decisão 17). Tipo de cama é
+    obrigatório, sem omissão (decisão de 06/09/2026) — só decide a
+    aparência do lugar na GUI, não a capacidade.
     """
     print(f"\n--- Novo lugar em {quarto_id} ---")
 
     nome = ler_texto("Nome do lugar: ")
+    tipo_cama = ler_escolha("Tipo de cama", validacoes.TIPOS_CAMA)
     capacidade = ler_inteiro(
         "Capacidade [Enter para 1]: ", obrigatorio=False, minimo=1
     )
@@ -1156,13 +1158,51 @@ def _criar_lugar(quarto_id):
         capacidade = 1
 
     try:
-        lugar = unidades.criar_lugar(quarto_id, nome, capacidade=capacidade)
+        lugar = unidades.criar_lugar(
+            quarto_id, nome, tipo_cama, capacidade=capacidade
+        )
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
 
     print(f"Lugar criado: {lugar['id']} — {lugar['nome']}")
 
+
+def _atualizar_lugar(quarto_id):
+    print("\n--- Atualizar lugar ---")
+
+    lugar_id = ler_texto("ID do lugar: ")
+    lugar = unidades.procurar_lugar(lugar_id)
+
+    if lugar is None:
+        print(f"Erro: O lugar {lugar_id} não existe.")
+        return
+
+    if lugar["quarto_id"] != quarto_id:
+        print(
+            f"Erro: O lugar {lugar_id} não pertence ao quarto " f"{quarto_id}."
+        )
+        return
+
+    nome = ler_atualizacao("Nome", lugar["nome"])
+    tipo_cama = ler_escolha_atualizacao(
+        "Tipo de cama", validacoes.TIPOS_CAMA, lugar["tipo_cama"]
+    )
+    capacidade = ler_inteiro(
+        f"Capacidade [atual: {lugar['capacidade']}, Enter mantém]: ",
+        obrigatorio=False,
+        minimo=1,
+    )
+
+    try:
+        lugar = unidades.atualizar_lugar(
+            lugar_id, nome=nome, tipo_cama=tipo_cama, capacidade=capacidade
+        )
+    except ValueError as erro:
+        print(f"Erro: {erro}")
+        return
+
+    print(f"Lugar atualizado: {lugar['id']} — {lugar['nome']}")
 
 def _listar_lugares(quarto_id):
     incluir_inativos = confirmar("Incluir lugares inativos?")
@@ -1184,39 +1224,6 @@ def _listar_lugares(quarto_id):
             f"(capacidade {lg['capacidade']}, {estado})"
         )
 
-
-def _atualizar_lugar(quarto_id):
-    print("\n--- Atualizar lugar ---")
-
-    lugar_id = ler_texto("ID do lugar: ")
-    lugar = unidades.procurar_lugar(lugar_id)
-
-    if lugar is None:
-        print(f"Erro: O lugar {lugar_id} não existe.")
-        return
-
-    if lugar["quarto_id"] != quarto_id:
-        print(
-            f"Erro: O lugar {lugar_id} não pertence ao quarto " f"{quarto_id}."
-        )
-        return
-
-    nome = ler_atualizacao("Nome", lugar["nome"])
-    capacidade = ler_inteiro(
-        f"Capacidade [atual: {lugar['capacidade']}, Enter mantém]: ",
-        obrigatorio=False,
-        minimo=1,
-    )
-
-    try:
-        lugar = unidades.atualizar_lugar(
-            lugar_id, nome=nome, capacidade=capacidade
-        )
-    except ValueError as erro:
-        print(f"Erro: {erro}")
-        return
-
-    print(f"Lugar atualizado: {lugar['id']} — {lugar['nome']}")
 
 
 def _desativar_lugar(quarto_id):

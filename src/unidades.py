@@ -414,12 +414,15 @@ def reativar_quarto(quarto_id):
     return quarto
 
 
-def criar_lugar(quarto_id, nome, capacidade=1):
+def criar_lugar(quarto_id, nome, tipo_cama, capacidade=1):
     """Cria um lugar dentro de um quarto existente.
+
+    'tipo_cama' é obrigatório e só decide a aparência do lugar na
+    planta de lugares (GUI) — não deriva nem substitui a
+    capacidade, que continua um campo à parte (decisão 17).
 
     Devolve o registo criado.
     """
-
     quarto = procurar_quarto(quarto_id)
 
     if quarto is None:
@@ -430,17 +433,57 @@ def criar_lugar(quarto_id, nome, capacidade=1):
     if not nome:
         raise ValueError("O nome do lugar é obrigatório.")
 
+    validacoes.validar_tipo_cama(tipo_cama)
     validacoes.validar_capacidade_lugar(capacidade)
 
     lugar = {
         "id": repositorio.proximo_id(PREFIXO_LUGAR),
         "quarto_id": quarto_id,
         "nome": nome,
+        "tipo_cama": tipo_cama,
         "capacidade": capacidade,
         "ativo": True,
     }
 
     repositorio.inserir_lugar(lugar)
+    return lugar
+
+
+def atualizar_lugar(lugar_id, nome=None, tipo_cama=None, capacidade=None):
+    """Altera o nome, o tipo de cama ou a capacidade de um lugar
+    existente.
+
+    Um parâmetro a None significa não alterar (mesma convenção de
+    `atualizar` e `atualizar_quarto`, acima). 'tipo_cama', quando
+    indicado, passa pela mesma validação da criação.
+    """
+    lugar = procurar_lugar(lugar_id)
+
+    if lugar is None:
+        raise ValueError(f"O lugar {lugar_id} não existe.")
+
+    campos = {}
+
+    if nome is not None:
+        nome = nome.strip()
+
+        if not nome:
+            raise ValueError("O nome do lugar é obrigatório.")
+
+        campos["nome"] = nome
+
+    if tipo_cama is not None:
+        validacoes.validar_tipo_cama(tipo_cama)
+        campos["tipo_cama"] = tipo_cama
+
+    if capacidade is not None:
+        validacoes.validar_capacidade_lugar(capacidade)
+        campos["capacidade"] = capacidade
+
+    if campos:
+        repositorio.atualizar_lugar(lugar_id, campos)
+        lugar.update(campos)
+
     return lugar
 
 
@@ -460,39 +503,6 @@ def listar_lugares(incluir_inativas=False, quarto_id=None):
         incluir_inativas=incluir_inativas, quarto_id=quarto_id
     )
 
-
-def atualizar_lugar(lugar_id, nome=None, capacidade=None):
-    """Altera o nome ou a capacidade de um lugar existente.
-
-    Um parâmetro a None significa não alterar (mesma convenção de
-    `atualizar` e `atualizar_quarto`, acima). A capacidade passa
-    pela mesma validação usada na criação.
-    """
-
-    lugar = procurar_lugar(lugar_id)
-
-    if lugar is None:
-        raise ValueError(f"O lugar {lugar_id} não existe.")
-
-    campos = {}
-
-    if nome is not None:
-        nome = nome.strip()
-
-        if not nome:
-            raise ValueError("O nome do lugar é obrigatório.")
-
-        campos["nome"] = nome
-
-    if capacidade is not None:
-        validacoes.validar_capacidade_lugar(capacidade)
-        campos["capacidade"] = capacidade
-
-    if campos:
-        repositorio.atualizar_lugar(lugar_id, campos)
-        lugar.update(campos)
-
-    return lugar
 
 
 def desativar_lugar(lugar_id):

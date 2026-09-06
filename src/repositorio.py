@@ -574,18 +574,21 @@ def atualizar_quarto(quarto_id, campos):
 def inserir_lugar(lugar):
     """Insere um lugar novo na base de dados.
 
-    Espera um dicionário com id, quarto_id, nome, capacidade, ativo.
+    Espera um dicionário com id, quarto_id, nome, tipo_cama,
+    capacidade, ativo.
     """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor()
         cursor.execute(
-            "INSERT INTO lugares (id, quarto_id, nome, capacidade, ativo) "
-            "VALUES (%s, %s, %s, %s, %s)",
+            "INSERT INTO lugares "
+            "(id, quarto_id, nome, tipo_cama, capacidade, ativo) "
+            "VALUES (%s, %s, %s, %s, %s, %s)",
             (
                 lugar["id"],
                 lugar["quarto_id"],
                 lugar["nome"],
+                lugar["tipo_cama"],
                 lugar["capacidade"],
                 lugar["ativo"],
             ),

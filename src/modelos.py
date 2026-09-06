@@ -73,18 +73,21 @@ class Lugar:
     """Cama ou posição contratável dentro de um quarto.
 
     É a unidade minima de ocupação. A capacidade é guardada aqui,
-    não derivada do tipo de cama - permite configurações fora do par 
-    solteiro/casal. Um beliche são dois lugares de capacidade 1, 
+    não derivada do tipo de cama - permite configurações fora do par
+    solteiro/casal. Um beliche são dois lugares de capacidade 1,
     nunca um lugar de capacidade 2 (decisão 17).
 
+    'tipo_cama' ("solteiro"/"casal"/"beliche") só decide a aparência
+    do lugar na planta de lugares (GUI) — não deriva nem substitui
+    'capacidade' (decisão de 06/09/2026, ao chegar este ecrã).
     """
 
     id: str
     quarto_id: str
     nome: str
+    tipo_cama: str
     capacidade: int = 1
     ativo: bool = True
-
 
 @dataclass
 class Cliente:
