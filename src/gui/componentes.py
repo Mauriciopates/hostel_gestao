@@ -32,6 +32,23 @@ def mostrar_sucesso(mensagem, titulo="Sucesso"):
     messagebox.showinfo(titulo, mensagem)
 
 
+def confirmar(mensagem, titulo="Confirmar"):
+    """Pergunta sim/não num popup nativo antes de uma ação
+    destrutiva ou irreversível (ex.: desativar uma propriedade ou
+    unidade) — terceira convenção de popup da GUI, ao lado de
+    mostrar_erro/mostrar_sucesso (decisão do aluno, 06/09/2026, ao
+    acrescentar desativar/reativar ao ecrã de Propriedades e
+    Unidades: a GUI nunca força uma desativação com dependências
+    ativas — só confirma a intenção antes de tentar, o próprio
+    `propriedades.desativar`/`unidades.desativar` continua a
+    recusar sozinho quando há dependências, e esse erro aparece
+    depois em mostrar_erro).
+
+    Devolve True só se o utilizador confirmar ("Sim").
+    """
+    return messagebox.askyesno(titulo, mensagem)
+
+
 class BarraLateral(ctk.CTkFrame):
     """Barra lateral de navegação. Recebe uma lista de itens — cada
     um ou uma secção (rótulo não clicável, ex. "MENSAL") ou um item
@@ -63,7 +80,9 @@ class BarraLateral(ctk.CTkFrame):
                     hover_color=tema.AZUL_PRINCIPAL,
                     corner_radius=tema.RAIO_BOTAO,
                     anchor="w",
-                    command=lambda ecra=item["ecra"]: controlador.mostrar_frame(ecra),
+                    command=lambda ecra=item["ecra"]: (
+                        controlador.mostrar_frame(ecra)
+                    ),
                 ).pack(fill="x", padx=8, pady=2)
 
         ctk.CTkLabel(

@@ -12,7 +12,7 @@ import customtkinter as ctk
 AZUL_PRINCIPAL = "#0E6291"       # botões primários, item ativo da navegação
 AZUL_CLARO = "#2B99BF"           # hover, destaques
 VERDE = "#4FBE7C"                # ações positivas (aprovar, sucesso)
-NAVY_ESCURO = "#0C2F48"          # fundo da sidebar — já escuro, serve nos dois modos
+NAVY_ESCURO = "#0C2F48"          # fundo da sidebar — já escuro nos dois
 
 # Cores que mudam consoante o modo: (claro, escuro)
 COR_FUNDO = ("#FFFFFF", "#1A1F26")              # fundo principal da janela
@@ -37,6 +37,15 @@ TEXTO_ERRO = ("#C0392B", "#F0A79C")
 # em 06/09/2026, a pedido, ao chegar a planta de lugares.
 CINZA_INDISPONIVEL = ("#E4E6E8", "#2A2E33")     # fundo da caixa
 TEXTO_INDISPONIVEL = ("#6B7280", "#9AA3AD")
+
+# Par "livre", em falta até agora: a Planta de Lugares mostra "Livre"
+# sem fundo (só texto em VERDE, sobre COR_FUNDO), mas o ecrã de
+# Propriedades e Unidades (06/09/2026) mostra o estado de cada
+# unidade como uma etiqueta/pílula, igual às de parcial/ocupado/
+# manutenção — precisa do mesmo par (fundo, texto) que as outras,
+# em vez de destoar sendo a única sem fundo.
+VERDE_LIVRE = ("#E1F5EA", "#1C3A2A")            # fundo da etiqueta
+TEXTO_LIVRE = ("#2E8B57", "#8FD9AE")
 
 # Raios de canto por omissão — arredondado em toda a interface
 RAIO_BOTAO = 10
