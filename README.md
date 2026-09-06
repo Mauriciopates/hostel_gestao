@@ -7,7 +7,6 @@ Projeto individual da UFCD 26.0462 — Desenvolvimento de projeto de tecnologias
 e programação de sistemas de informação.
 
 **Autor:** Mauricio Pates
-**Formador:** Alberto Crista
 **Entrega:** outubro de 2026
 
 ---
@@ -19,8 +18,8 @@ e programação de sistemas de informação.
 | Fase | Âmbito | Estado |
 |------|--------|--------|
 | 1.0 | CLI + JSON | Em curso |
-| 2.0 | GUI CustomTkinter + SQLite + financeiro, relatórios, utilizadores | Planeada |
-| 3.0 | Django + MySQL + Nginx | Fora da entrega de outubro |
+| 2.0 | GUI CustomTkinter + MySQL + financeiro, relatórios, utilizadores | Em andamento |
+| 3.0 | Django + Nginx | Fora da entrega de outubro | Tentativa de entrega em Novembro na apresentação final
 
 ---
 
