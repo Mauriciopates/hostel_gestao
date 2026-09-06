@@ -1,10 +1,35 @@
 import datetime
+from tkinter import messagebox
 
 import customtkinter as ctk
 
 import config
 from . import tema
 from . import sessao
+
+
+def mostrar_erro(mensagem, titulo="Erro"):
+    """Mostra um erro num popup nativo (triângulo de aviso, mensagem,
+    botão OK) — convenção única de toda a interface gráfica para
+    avisos de erro (decisão do aluno, 06/09/2026, ao testar o ecrã
+    de Novo Contrato Mensal): substitui a legenda vermelha que cada
+    ecrã desenhava por si, por um popup do próprio sistema
+    operativo. É bloqueante (o resto do ecrã só volta a responder
+    depois de clicar OK), mas não fecha nem limpa nada à volta —
+    o formulário fica exatamente como estava, pronto a continuar a
+    editar.
+    """
+    messagebox.showwarning(titulo, mensagem)
+
+
+def mostrar_sucesso(mensagem, titulo="Sucesso"):
+    """Mostra uma confirmação de sucesso num popup nativo (ícone de
+    informação, mensagem, botão OK) — mesma convenção de
+    mostrar_erro, agora para o caso contrário (decisão do aluno,
+    06/09/2026, logo a seguir a pedir o popup de erro): "após criado,
+    apareça um pop up, contrato criado com sucesso: CNT-XXX".
+    """
+    messagebox.showinfo(titulo, mensagem)
 
 
 class BarraLateral(ctk.CTkFrame):
