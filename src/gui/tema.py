@@ -31,6 +31,13 @@ TEXTO_AVISO = ("#9A7B12", "#F0D888")
 VERMELHO_ERRO = ("#FBE4E1", "#4A1E19")
 TEXTO_ERRO = ("#C0392B", "#F0A79C")
 
+# Indisponibilidade (ex.: um lugar já reservado para uma data futura,
+# sem estar ocupado agora) — cinzento, para não se confundir nem com
+# aviso/parcial (amarelo) nem com erro/ocupado (vermelho). Acrescentado
+# em 06/09/2026, a pedido, ao chegar a planta de lugares.
+CINZA_INDISPONIVEL = ("#E4E6E8", "#2A2E33")     # fundo da caixa
+TEXTO_INDISPONIVEL = ("#6B7280", "#9AA3AD")
+
 # Raios de canto por omissão — arredondado em toda a interface
 RAIO_BOTAO = 10
 RAIO_CARTAO = 14
