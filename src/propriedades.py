@@ -11,7 +11,10 @@ aceder a ficheiros nem à base de dados diretamente (só através do
 repositorio), e continua a sinalizar erro com `raise ValueError`.
 """
 
+from datetime import date
+
 import repositorio
+import responsaveis
 
 # prefixo antes da numeração da propriedade
 PREFIXO = "PRO"
@@ -85,7 +88,7 @@ def atualizar(propriedade_id, nome=None, morada=None):
     return propriedade
 
 
-def desativar(propriedade_id, forcar=False):
+def desativar(propriedade_id, forcar=False, responsavel_id=None):
     """Marca a propriedade como inativa, sem a eliminar.
 
     Uma propriedade com unidades associadas não pode desaparecer: os
@@ -97,6 +100,16 @@ def desativar(propriedade_id, forcar=False):
     mesmo assim, conscientemente. A verificação vive aqui, não só no
     cli.py, para que qualquer interface futura (a GUI da Fase 2, por
     exemplo) herde esta proteção sem ter de a repetir.
+
+    Forçar com dependências ativas exige `responsavel_id` (decisão do
+    aluno, 06/09/2026, ao testar a desativação forçada na GUI): quem
+    contorna o aviso fica registado em `desativado_por_id`/
+    `data_desativacao`, validado por
+    `responsaveis.validar_autoria` (mesma autorização já usada nos
+    movimentos de stock e na anonimização de clientes). Sem
+    dependências ativas, forcar=True não tem efeito nenhum além de
+    ignorar uma verificação que já ia passar — não exige responsável
+    nem grava nada nesses dois campos.
     """
     propriedade = procurar(propriedade_id)
 
@@ -106,18 +119,29 @@ def desativar(propriedade_id, forcar=False):
     if not propriedade["ativo"]:
         raise ValueError(f"A propriedade {propriedade_id} já está inativa.")
 
-    if not forcar:
-        total_ativas = repositorio.contar_unidades_ativas(propriedade_id)
+    total_ativas = repositorio.contar_unidades_ativas(propriedade_id)
+    campos: dict = {"ativo": False}
 
-        if total_ativas:
+    if total_ativas:
+        if not forcar:
             raise ValueError(
                 f"A propriedade {propriedade_id} tem "
                 f"{total_ativas} unidade(s) ativa(s) — "
                 f"forcar=True para desativar mesmo assim."
             )
 
-    repositorio.atualizar_propriedade(propriedade_id, {"ativo": False})
-    propriedade["ativo"] = False
+        if not responsavel_id:
+            raise ValueError(
+                "É obrigatório indicar o responsável para forçar a "
+                "desativação com dependências ativas."
+            )
+
+        responsavel = responsaveis.validar_autoria(responsavel_id)
+        campos["desativado_por_id"] = responsavel["id"]
+        campos["data_desativacao"] = date.today()
+
+    repositorio.atualizar_propriedade(propriedade_id, campos)
+    propriedade.update(campos)
     return propriedade
 
 
@@ -125,7 +149,10 @@ def reativar(propriedade_id):
     """Repõe uma propriedade desativada como ativa.
 
     Existe porque a desativação por engano seria irreversível sem ela.
-    É a inversa exata da `desativar`.
+    É a inversa exata da `desativar` — inclui limpar
+    `desativado_por_id`/`data_desativacao`, quando a desativação
+    tinha sido forçada, para não deixar rasto de uma desativação que
+    já não está em vigor.
     """
     propriedade = procurar(propriedade_id)
 
@@ -135,6 +162,11 @@ def reativar(propriedade_id):
     if propriedade["ativo"]:
         raise ValueError(f"A propriedade {propriedade_id} já está ativa.")
 
-    repositorio.atualizar_propriedade(propriedade_id, {"ativo": True})
-    propriedade["ativo"] = True
+    campos = {
+        "ativo": True,
+        "desativado_por_id": None,
+        "data_desativacao": None,
+    }
+    repositorio.atualizar_propriedade(propriedade_id, campos)
+    propriedade.update(campos)
     return propriedade

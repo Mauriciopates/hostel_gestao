@@ -507,6 +507,12 @@ def _desativar_propriedade():
     Conta as unidades ativas dependentes só para decidir se pede
     confirmação (decisão de 27/08, item 9) — quem efetivamente
     bloqueia é propriedades.desativar(), com o parâmetro `forcar`.
+
+    Ao forçar, pede também o responsável que autoriza (decisão do
+    aluno, 06/09/2026, para consistência com a GUI, que passou a
+    guardar quem força cada desativação em desativado_por_id/
+    data_desativacao) — sem isto, `propriedades.desativar` recusa
+    com "É obrigatório indicar o responsável...".
     """
     print("\n--- Desativar propriedade ---")
 
@@ -514,6 +520,7 @@ def _desativar_propriedade():
 
     unidades_ativas = unidades.listar(propriedade_id=propriedade_id)
     forcar = False
+    responsavel_id = None
 
     if unidades_ativas:
         if not confirmar(
@@ -523,9 +530,14 @@ def _desativar_propriedade():
             print("Desativação cancelada.")
             return
         forcar = True
+        responsavel_id = ler_texto(
+            "ID do responsável que autoriza a desativação forçada: "
+        )
 
     try:
-        propriedade = propriedades.desativar(propriedade_id, forcar=forcar)
+        propriedade = propriedades.desativar(
+            propriedade_id, forcar=forcar, responsavel_id=responsavel_id
+        )
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
@@ -834,7 +846,9 @@ def _desativar_unidade():
     """Ecrã de desativação de uma unidade.
 
     Mesma lógica de `_desativar_propriedade`, para ocupações ativas
-    (contratos mensais/reservas Airbnb) em vez de unidades.
+    (contratos mensais/reservas Airbnb) em vez de unidades — inclui
+    o mesmo pedido de responsável ao forçar (ver a nota em
+    `_desativar_propriedade`).
     """
     print("\n--- Desativar unidade ---")
 
@@ -842,6 +856,7 @@ def _desativar_unidade():
 
     ocupacoes_ativas = contratos.listar(unidade_id=unidade_id)
     forcar = False
+    responsavel_id = None
 
     if ocupacoes_ativas:
         if not confirmar(
@@ -852,9 +867,14 @@ def _desativar_unidade():
             print("Desativação cancelada.")
             return
         forcar = True
+        responsavel_id = ler_texto(
+            "ID do responsável que autoriza a desativação forçada: "
+        )
 
     try:
-        unidade = unidades.desativar(unidade_id, forcar=forcar)
+        unidade = unidades.desativar(
+            unidade_id, forcar=forcar, responsavel_id=responsavel_id
+        )
     except ValueError as erro:
         print(f"Erro: {erro}")
         return

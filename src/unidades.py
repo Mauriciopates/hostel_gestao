@@ -18,11 +18,12 @@ import circular (`contratos.py` já importa `unidades.py`).
 """
 
 from decimal import Decimal
-from datetime import timedelta
+from datetime import date, timedelta
 
 import repositorio
 import validacoes
 import propriedades
+import responsaveis
 
 PREFIXO = "UNI"
 PREFIXO_QUARTO = "QRT"
@@ -185,7 +186,7 @@ def atualizar(
     return unidade
 
 
-def desativar(unidade_id, forcar=False):
+def desativar(unidade_id, forcar=False, responsavel_id=None):
     """Marca a unidade como inativa, sem a eliminar.
 
     Uma unidade com ocupações associadas não pode desaparecer: os
@@ -200,6 +201,16 @@ def desativar(unidade_id, forcar=False):
     para evitar import circular (`contratos.py` já importa
     `unidades.py`) — mesmo padrão usado em `_estado_mensal`/
     `_estado_airbnb`, abaixo.
+
+    Forçar com ocupações ativas exige `responsavel_id` (decisão do
+    aluno, 06/09/2026, ao testar a desativação forçada na GUI): quem
+    contorna o aviso fica registado em `desativado_por_id`/
+    `data_desativacao`, validado por
+    `responsaveis.validar_autoria` (mesma autorização já usada nos
+    movimentos de stock e na anonimização de clientes). Sem
+    ocupações ativas, forcar=True não tem efeito nenhum além de
+    ignorar uma verificação que já ia passar — não exige responsável
+    nem grava nada nesses dois campos.
     """
 
     unidade = procurar(unidade_id)
@@ -210,18 +221,29 @@ def desativar(unidade_id, forcar=False):
     if not unidade["ativo"]:
         raise ValueError(f"A unidade {unidade_id} já está inativa.")
 
-    if not forcar:
-        ocupacoes_ativas = repositorio.listar_ocupacoes(unidade_id=unidade_id)
+    ocupacoes_ativas = repositorio.listar_ocupacoes(unidade_id=unidade_id)
+    campos: dict = {"ativo": False}
 
-        if ocupacoes_ativas:
+    if ocupacoes_ativas:
+        if not forcar:
             raise ValueError(
                 f"A unidade {unidade_id} tem "
                 f"{len(ocupacoes_ativas)} ocupação(ões) ativa(s) — "
                 f"forcar=True para desativar mesmo assim."
             )
 
-    repositorio.atualizar_unidade(unidade_id, {"ativo": False})
-    unidade["ativo"] = False
+        if not responsavel_id:
+            raise ValueError(
+                "É obrigatório indicar o responsável para forçar a "
+                "desativação com dependências ativas."
+            )
+
+        responsavel = responsaveis.validar_autoria(responsavel_id)
+        campos["desativado_por_id"] = responsavel["id"]
+        campos["data_desativacao"] = date.today()
+
+    repositorio.atualizar_unidade(unidade_id, campos)
+    unidade.update(campos)
     return unidade
 
 
@@ -229,7 +251,10 @@ def reativar(unidade_id):
     """Repõe uma unidade desativada como ativa.
 
     Existe porque a desativação por engano seria irreversível sem
-    ela. É a inversa exata da `desativar`.
+    ela. É a inversa exata da `desativar` — inclui limpar
+    `desativado_por_id`/`data_desativacao`, quando a desativação
+    tinha sido forçada, para não deixar rasto de uma desativação
+    que já não está em vigor.
     """
 
     unidade = procurar(unidade_id)
@@ -240,8 +265,13 @@ def reativar(unidade_id):
     if unidade["ativo"]:
         raise ValueError(f"A unidade {unidade_id} já está ativa.")
 
-    repositorio.atualizar_unidade(unidade_id, {"ativo": True})
-    unidade["ativo"] = True
+    campos = {
+        "ativo": True,
+        "desativado_por_id": None,
+        "data_desativacao": None,
+    }
+    repositorio.atualizar_unidade(unidade_id, campos)
+    unidade.update(campos)
     return unidade
 
 
