@@ -41,6 +41,17 @@ por baixo de `contratos.py` — porque o que se testa aí é o próprio
 código de `unidades.py` (a comparação de datas em `_estado_mensal`,
 o filtro por `tipo` em `quarto_privativo_ocupado`), não as regras de
 `contratos.py`.
+
+NOTA sobre `tipo_cama` (06/09/2026): `unidades.criar_lugar` passou a
+exigir `tipo_cama` como terceiro parâmetro posicional, sem valor por
+omissão (só decide a aparência do lugar na planta de lugares da GUI
+— nunca a capacidade, decisão 17). Todas as chamadas a `criar_lugar`
+neste ficheiro passaram a indicar um tipo — "solteiro" onde o teste
+não depende do valor, ou um tipo que combina com o nome do lugar
+("casal"/"beliche") onde isso já fazia sentido pelo nome usado.
+`atualizar_lugar` continua com `tipo_cama=None` por omissão
+(convenção de "None não altera"), por isso as chamadas existentes
+que não mexem em tipo_cama não precisaram de mudar.
 """
 
 import itertools
@@ -95,11 +106,15 @@ def criar_unidade_airbnb(propriedade_id):
 def dar_lugares(unidade_id, capacidades):
     """Cria um quarto com um lugar por capacidade indicada, devolve
     a soma — a capacidade total esperada da unidade.
+
+    'tipo_cama' fixo em "solteiro": este auxiliar serve os testes de
+    capacidade/estado, que não dependem do tipo de cama.
     """
     quarto = unidades.criar_quarto(unidade_id, "Quarto de teste")
     for capacidade in capacidades:
         unidades.criar_lugar(
-            quarto["id"], f"Lugar {capacidade}", capacidade=capacidade
+            quarto["id"], f"Lugar {capacidade}", "solteiro",
+            capacidade=capacidade,
         )
     return sum(capacidades)
 
@@ -663,8 +678,9 @@ class TesteCriarLugar(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
-        lugar = unidades.criar_lugar(quarto["id"], "Cama 1")
+        lugar = unidades.criar_lugar(quarto["id"], "Cama 1", "solteiro")
         self.assertEqual(lugar["quarto_id"], quarto["id"])
+        self.assertEqual(lugar["tipo_cama"], "solteiro")
         self.assertEqual(lugar["capacidade"], 1)
         self.assertTrue(lugar["ativo"])
         self.assertIn(
@@ -675,26 +691,39 @@ class TesteCriarLugar(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
-        lugar = unidades.criar_lugar(quarto["id"], "Cama casal", capacidade=2)
+        lugar = unidades.criar_lugar(
+            quarto["id"], "Cama casal", "casal", capacidade=2
+        )
         self.assertEqual(lugar["capacidade"], 2)
+        self.assertEqual(lugar["tipo_cama"], "casal")
+
+    def test_cria_lugar_beliche(self):
+        propriedade = criar_propriedade()
+        unidade = criar_unidade_mensal(propriedade["id"])
+        quarto = unidades.criar_quarto(unidade["id"], "Q1")
+        lugar = unidades.criar_lugar(quarto["id"], "Beliche cima", "beliche")
+        self.assertEqual(lugar["tipo_cama"], "beliche")
+        self.assertEqual(lugar["capacidade"], 1)
 
     def test_recusa_quarto_inexistente(self):
         with self.assertRaises(ValueError):
-            unidades.criar_lugar("QRT-999", "Cama 1")
+            unidades.criar_lugar("QRT-999", "Cama 1", "solteiro")
 
     def test_recusa_nome_vazio(self):
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
         with self.assertRaises(ValueError):
-            unidades.criar_lugar(quarto["id"], "  ")
+            unidades.criar_lugar(quarto["id"], "  ", "solteiro")
 
     def test_recusa_capacidade_invalida(self):
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
         with self.assertRaises(ValueError):
-            unidades.criar_lugar(quarto["id"], "Cama 1", capacidade=0)
+            unidades.criar_lugar(
+                quarto["id"], "Cama 1", "solteiro", capacidade=0
+            )
 
     def test_recusa_capacidade_none(self):
         propriedade = criar_propriedade()
@@ -702,8 +731,23 @@ class TesteCriarLugar(BaseMySQLTest):
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
         with self.assertRaises(ValueError):
             unidades.criar_lugar(
-                quarto["id"], "Cama 1", capacidade=None  # type: ignore
+                quarto["id"], "Cama 1", "solteiro",
+                capacidade=None,  # type: ignore
             )
+
+    def test_recusa_tipo_cama_vazio(self):
+        propriedade = criar_propriedade()
+        unidade = criar_unidade_mensal(propriedade["id"])
+        quarto = unidades.criar_quarto(unidade["id"], "Q1")
+        with self.assertRaises(ValueError):
+            unidades.criar_lugar(quarto["id"], "Cama 1", "")
+
+    def test_recusa_tipo_cama_desconhecido(self):
+        propriedade = criar_propriedade()
+        unidade = criar_unidade_mensal(propriedade["id"])
+        quarto = unidades.criar_quarto(unidade["id"], "Q1")
+        with self.assertRaises(ValueError):
+            unidades.criar_lugar(quarto["id"], "Cama 1", "queen size")
 
 
 class TesteProcurarLugar(BaseMySQLTest):
@@ -712,7 +756,7 @@ class TesteProcurarLugar(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
-        lugar = unidades.criar_lugar(quarto["id"], "Cama 1")
+        lugar = unidades.criar_lugar(quarto["id"], "Cama 1", "solteiro")
         encontrado = unidades.procurar_lugar(lugar["id"])
         self.assertEqual(encontrado, lugar)
 
@@ -727,8 +771,8 @@ class TesteListarLugares(BaseMySQLTest):
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto_a = unidades.criar_quarto(unidade["id"], "A")
         quarto_b = unidades.criar_quarto(unidade["id"], "B")
-        lugar_a = unidades.criar_lugar(quarto_a["id"], "Cama 1")
-        unidades.criar_lugar(quarto_b["id"], "Cama 1")
+        lugar_a = unidades.criar_lugar(quarto_a["id"], "Cama 1", "solteiro")
+        unidades.criar_lugar(quarto_b["id"], "Cama 1", "solteiro")
         resultado = unidades.listar_lugares(quarto_id=quarto_a["id"])
         self.assertEqual(resultado, [lugar_a])
 
@@ -736,8 +780,8 @@ class TesteListarLugares(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
-        ativo = unidades.criar_lugar(quarto["id"], "Cama 1")
-        inativo = unidades.criar_lugar(quarto["id"], "Cama 2")
+        ativo = unidades.criar_lugar(quarto["id"], "Cama 1", "solteiro")
+        inativo = unidades.criar_lugar(quarto["id"], "Cama 2", "solteiro")
         unidades.desativar_lugar(inativo["id"])
         resultado = unidades.listar_lugares(quarto_id=quarto["id"])
         self.assertEqual(resultado, [ativo])
@@ -753,7 +797,7 @@ class TesteAtualizarLugar(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
-        lugar = unidades.criar_lugar(quarto["id"], "Cama 1")
+        lugar = unidades.criar_lugar(quarto["id"], "Cama 1", "solteiro")
         atualizado = unidades.atualizar_lugar(lugar["id"], nome="Cama nova")
         self.assertEqual(atualizado["nome"], "Cama nova")
 
@@ -761,7 +805,7 @@ class TesteAtualizarLugar(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
-        lugar = unidades.criar_lugar(quarto["id"], "Cama 1")
+        lugar = unidades.criar_lugar(quarto["id"], "Cama 1", "solteiro")
         with self.assertRaises(ValueError):
             unidades.atualizar_lugar(lugar["id"], nome="  ")
 
@@ -769,7 +813,7 @@ class TesteAtualizarLugar(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
-        lugar = unidades.criar_lugar(quarto["id"], "Cama 1")
+        lugar = unidades.criar_lugar(quarto["id"], "Cama 1", "solteiro")
         atualizado = unidades.atualizar_lugar(lugar["id"], capacidade=2)
         self.assertEqual(atualizado["capacidade"], 2)
 
@@ -777,18 +821,35 @@ class TesteAtualizarLugar(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
-        lugar = unidades.criar_lugar(quarto["id"], "Cama 1")
+        lugar = unidades.criar_lugar(quarto["id"], "Cama 1", "solteiro")
         with self.assertRaises(ValueError):
             unidades.atualizar_lugar(lugar["id"], capacidade=0)
+
+    def test_altera_tipo_cama(self):
+        propriedade = criar_propriedade()
+        unidade = criar_unidade_mensal(propriedade["id"])
+        quarto = unidades.criar_quarto(unidade["id"], "Q1")
+        lugar = unidades.criar_lugar(quarto["id"], "Cama 1", "solteiro")
+        atualizado = unidades.atualizar_lugar(lugar["id"], tipo_cama="casal")
+        self.assertEqual(atualizado["tipo_cama"], "casal")
+
+    def test_recusa_tipo_cama_desconhecido(self):
+        propriedade = criar_propriedade()
+        unidade = criar_unidade_mensal(propriedade["id"])
+        quarto = unidades.criar_quarto(unidade["id"], "Q1")
+        lugar = unidades.criar_lugar(quarto["id"], "Cama 1", "solteiro")
+        with self.assertRaises(ValueError):
+            unidades.atualizar_lugar(lugar["id"], tipo_cama="queen size")
 
     def test_none_nao_altera(self):
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
-        lugar = unidades.criar_lugar(quarto["id"], "Cama 1")
+        lugar = unidades.criar_lugar(quarto["id"], "Cama 1", "solteiro")
         atualizado = unidades.atualizar_lugar(lugar["id"])
         self.assertEqual(atualizado["nome"], "Cama 1")
         self.assertEqual(atualizado["capacidade"], 1)
+        self.assertEqual(atualizado["tipo_cama"], "solteiro")
 
 
 class TesteDesativarReativarLugar(BaseMySQLTest):
@@ -797,7 +858,7 @@ class TesteDesativarReativarLugar(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
-        lugar = unidades.criar_lugar(quarto["id"], "Cama 1")
+        lugar = unidades.criar_lugar(quarto["id"], "Cama 1", "solteiro")
         desativado = unidades.desativar_lugar(lugar["id"])
         self.assertFalse(desativado["ativo"])
         reativado = unidades.reativar_lugar(lugar["id"])
@@ -807,7 +868,7 @@ class TesteDesativarReativarLugar(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
-        lugar = unidades.criar_lugar(quarto["id"], "Cama 1")
+        lugar = unidades.criar_lugar(quarto["id"], "Cama 1", "solteiro")
         unidades.desativar_lugar(lugar["id"])
         with self.assertRaises(ValueError):
             unidades.desativar_lugar(lugar["id"])
@@ -816,7 +877,7 @@ class TesteDesativarReativarLugar(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
-        lugar = unidades.criar_lugar(quarto["id"], "Cama 1")
+        lugar = unidades.criar_lugar(quarto["id"], "Cama 1", "solteiro")
         with self.assertRaises(ValueError):
             unidades.reativar_lugar(lugar["id"])
 
@@ -1044,13 +1105,17 @@ class TesteQuartoPrivativoOcupado(BaseMySQLTest):
             privativo=False, limpeza_incluida=True,
         )
 
-        self.lugar_privativo_a = unidades.criar_lugar(privativo["id"], "Cama A")["id"]
-        self.lugar_privativo_b = unidades.criar_lugar(privativo["id"], "Cama B")["id"]
+        self.lugar_privativo_a = unidades.criar_lugar(
+            privativo["id"], "Cama A", "solteiro"
+        )["id"]
+        self.lugar_privativo_b = unidades.criar_lugar(
+            privativo["id"], "Cama B", "solteiro"
+        )["id"]
         self.lugar_partilhado_a = unidades.criar_lugar(
-            partilhado["id"], "Beliche cima"
+            partilhado["id"], "Beliche cima", "beliche"
         )["id"]
         self.lugar_partilhado_b = unidades.criar_lugar(
-            partilhado["id"], "Beliche baixo"
+            partilhado["id"], "Beliche baixo", "beliche"
         )["id"]
 
     def _ocupar(self, lugar_id, tipo="mensal", ativo=True):
