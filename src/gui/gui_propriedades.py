@@ -64,7 +64,7 @@ do aluno), antes deste ficheiro:
    Ainda no mesmo pedido: "para saber quem desativou forçadamente",
    `_ConfirmarForcarModal` ganhou um dropdown de Responsável
    (mesmo padrão de "Responsável do desconto" em
-   gui/contratos.py) — obrigatório para "Forçar desativação"
+   gui/gui_contratos.py) — obrigatório para "Forçar desativação"
    avançar. `propriedades.desativar`/`unidades.desativar` passaram
    a aceitar `responsavel_id` e a gravá-lo (com a data) em
    `desativado_por_id`/`data_desativacao`, só quando a desativação
@@ -144,7 +144,7 @@ import responsaveis
 import unidades
 from . import componentes
 from . import tema
-from .unidades import PlantaLugares
+from .gui_unidades import PlantaLugares
 
 
 def _cor_estado(texto_estado):
@@ -157,7 +157,7 @@ def _cor_estado(texto_estado):
     - Airbnb (acrescentado 06/09/2026, ao juntar as unidades Airbnb
       a este ecrã): "Livre", "Ocupado" ou "Reservado" — mesma
       paleta de "Livre"/"Ocupado"/"Reservado" já usada na Planta de
-      Lugares (`gui/unidades.py`, `_cores_estado`), sem o estado
+      Lugares (`gui/gui_unidades.py`, `_cores_estado`), sem o estado
       "parcial" (não existe capacidade parcial numa reserva Airbnb —
       ocupa a unidade inteira ou não ocupa nada).
     """
@@ -195,7 +195,7 @@ def _formatar_valor(valor):
 
 def _ler_decimal(texto, nome_campo):
     """Converte o texto de um campo monetário em Decimal, aceitando
-    vírgula ou ponto (mesma tolerância de gui/contratos.py). Levanta
+    vírgula ou ponto (mesma tolerância de gui/gui_contratos.py). Levanta
     ValueError com mensagem pronta para popup, em vez de deixar
     escapar decimal.InvalidOperation.
     """
@@ -232,7 +232,7 @@ class _ConfirmarForcarModal(ctk.CTkToplevel):
     negócio ser a primeira coisa que o utilizador vê).
 
     O dropdown de Responsável (mesmo padrão de "Responsável do
-    desconto" em gui/contratos.py) é obrigatório para forçar —
+    desconto" em gui/gui_contratos.py) é obrigatório para forçar —
     `propriedades.desativar`/`unidades.desativar` exigem
     `responsavel_id` sempre que forcar=True encontra dependências
     ativas, para saber quem autorizou (decisão do aluno,

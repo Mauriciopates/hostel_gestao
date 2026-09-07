@@ -191,7 +191,7 @@ def _ler_data(texto, nome_campo):
     """Converte dd/mm/aaaa em date. data_nascimento e
     validade_documento são sempre obrigatórias, nos dois regimes
     (validacoes.validar_cliente) — por isso, ao contrário do dia de
-    vencimento em gui/contratos.py, não há aqui um caminho "vazio
+    vencimento em gui/gui_contratos.py, não há aqui um caminho "vazio
     fica por omissão".
     """
     texto = texto.strip()
@@ -219,7 +219,7 @@ def _email_valido(email):
 
 def _colocar_no_topo(janela):
     """Traz um popup para a frente da janela principal — mesma
-    função de gui/propriedades.py, repetida aqui porque cada módulo
+    função de gui/gui_propriedades.py, repetida aqui porque cada módulo
     da GUI já a define localmente (não há, ainda, um sítio comum
     para ela em componentes.py).
     """

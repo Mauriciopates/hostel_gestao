@@ -34,6 +34,15 @@ ordem de necessidade" a seguir a este), por isso este ecrã traz o
 seu próprio seletor de unidade em vez de depender de uma escolha já
 feita noutro sítio.
 
+Clicar numa caixa livre ou reservada abre o Novo Contrato Mensal
+(gui/gui_contratos.py) já pré-preenchido com esta unidade e esse
+lugar — decisão tomada na Parte 3 (06/09/2026), concretizada em
+07/09/2026 quando os ecrãs passaram a partilhar o mesmo controlador
+através da barra lateral (gui/app.py). Caixas parciais/ocupadas não
+são clicáveis (decisão original: só faz sentido abrir um contrato
+novo quando o lugar ainda pode receber alguém agora ou está à
+espera de quem já reservou).
+
 Segue a mesma separação de camadas do resto do sistema (decisão 7):
 só fala com `unidades`, `contratos` e `clientes` — nunca com
 `repositorio` diretamente.
@@ -48,6 +57,7 @@ import contratos
 import unidades
 from . import componentes
 from . import tema
+from .gui_contratos import NovoContratoMensal
 
 LARGURA_CAIXA = {
     "solteiro": 120,
@@ -296,6 +306,22 @@ def _cores_estado(estado):
     return tema.VERMELHO_ERRO, tema.TEXTO_ERRO
 
 
+def _tornar_clicavel(widget, ao_clicar):
+    """Liga um clique (botão esquerdo) a um widget e a todos os seus
+    descendentes — precisa de ser feito widget a widget porque, em
+    Tkinter, um clique num CTkLabel não propaga sozinho para o
+    CTkFrame pai. Muda também o cursor para "mão", sinal visual de
+    que a caixa é clicável (decisão de 07/09/2026, ao ligar a planta
+    ao Novo Contrato Mensal — só as caixas livres/reservadas passam
+    por aqui, nunca as parciais/ocupadas).
+    """
+    widget.configure(cursor="hand2")
+    widget.bind("<Button-1>", lambda evento: ao_clicar())
+
+    for filho in widget.winfo_children():
+        _tornar_clicavel(filho, ao_clicar)
+
+
 class PlantaLugares(ctk.CTkFrame):
     """Ecrã da planta de lugares de uma unidade mensal.
 
@@ -401,6 +427,18 @@ class PlantaLugares(ctk.CTkFrame):
         """Chamada pelo CTkOptionMenu quando a escolha muda."""
         self.unidade_id = self._opcoes_unidade.get(rotulo)
         self._desenhar_planta()
+
+    def _abrir_contrato(self, lugar_id):
+        """Abre o Novo Contrato Mensal já pré-preenchido com a
+        unidade atual e o lugar clicado — só chamado a partir de
+        caixas livres ou reservadas (ver `_tornar_clicavel`, chamado
+        em `_desenhar_caixa`/`_desenhar_beliche`).
+        """
+        self.controlador.mostrar_frame(
+            NovoContratoMensal,
+            unidade_id=self.unidade_id,
+            lugar_id=lugar_id,
+        )
 
     def _limpar_planta(self):
         for widget in self.area_planta.winfo_children():
@@ -582,6 +620,12 @@ class PlantaLugares(ctk.CTkFrame):
                 wraplength=largura - 30,
             ).pack()
 
+        if estado in ("livre", "reservado"):
+            _tornar_clicavel(
+                caixa,
+                lambda lugar_id=lugar["id"]: self._abrir_contrato(lugar_id),
+            )
+
     def _desenhar_beliche(self, master, par, ocupacoes_mensais, hoje):
         """Desenha um par de lugares "beliche" como duas caixas
         pequenas empilhadas dentro de um contentor comum, para se
@@ -648,3 +692,11 @@ class PlantaLugares(ctk.CTkFrame):
                     text_color=cor_texto,
                     font=ctk.CTkFont(size=9),
                 ).pack(expand=True)
+
+            if estado in ("livre", "reservado"):
+                _tornar_clicavel(
+                    caixa,
+                    lambda lugar_id=lugar["id"]: self._abrir_contrato(
+                        lugar_id
+                    ),
+                )

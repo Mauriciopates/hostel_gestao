@@ -2,7 +2,7 @@
 
 Só fala com os módulos de negócio (unidades, clientes, responsaveis,
 contratos, validacoes) — nunca com repositorio diretamente, mesma
-disciplina de gui/unidades.py.
+disciplina de gui/gui_unidades.py.
 
 Mockup validado com o aluno em 06/09/2026 (capturas
 screenshot_contrato_vazio.png / screenshot_contrato_preenchido.png,

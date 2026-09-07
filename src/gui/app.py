@@ -2,10 +2,10 @@ import customtkinter as ctk
 
 from . import tema
 from . import componentes
-from .clientes import ListaClientes
-from .contratos import NovoContratoMensal
-from .propriedades import ListaPropriedades
-from .unidades import PlantaLugares
+from .gui_clientes import ListaClientes
+from .gui_contratos import NovoContratoMensal
+from .gui_propriedades import ListaPropriedades
+from .gui_unidades import PlantaLugares
 
 # Itens da barra lateral — lista simples, sem secções (decisão do
 # aluno, 07/09/2026: só 4 ecrãs por agora, secções ficam para quando
