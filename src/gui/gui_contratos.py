@@ -1,4 +1,7 @@
-"""Ecrã de criação de um contrato de arrendamento mensal.
+"""Ecrãs de Contratos e Reservas: criação de um contrato de
+arrendamento mensal (NovoContratoMensal) e listagem das ocupações
+já existentes, mensais e Airbnb (ListaOcupacoes, 07/09/2026 — ver
+docstring da própria classe para as decisões dessa 1ª entrega).
 
 Só fala com os módulos de negócio (unidades, clientes, responsaveis,
 contratos, validacoes) — nunca com repositorio diretamente, mesma
@@ -477,3 +480,346 @@ class NovoContratoMensal(ctk.CTkFrame):
         self._recarregar_clientes()
         self._recarregar_responsaveis()
         self._recarregar_lugares()
+
+
+def _formatar_data(valor):
+    """Formata uma date para dd/mm/aaaa — "em aberto" quando None
+    (contrato mensal ainda ativo, sem data de fim marcada).
+    """
+    if valor is None:
+        return "em aberto"
+    return valor.strftime("%d/%m/%Y")
+
+
+def _identificar_unidade(unidade, unidade_id):
+    """Devolve "nome (ID)" para mostrar num cartão de ocupação, ou só
+    o ID se a unidade não existir — mesma convenção de
+    cli.py:_identificar_unidade (decisão 8 de
+    Pendencias_Antes_v1.0.0.txt: o nome sozinho não chega para
+    rastrear, os ecrãs precisam também do código).
+    """
+    if unidade is None:
+        return unidade_id
+    return f"{unidade['nome']} ({unidade['id']})"
+
+
+def _identificar_cliente(cliente, cliente_id):
+    """Mesma ideia de `_identificar_unidade`, para clientes."""
+    if cliente is None:
+        return cliente_id
+    return f"{cliente['nome']} ({cliente['id']})"
+
+
+def _colocar_no_topo(janela):
+    """Traz um popup para a frente da janela principal — mesma
+    função de gui/gui_clientes.py e gui/gui_propriedades.py, repetida
+    aqui porque cada módulo da GUI já a define localmente (não há,
+    ainda, um sítio comum para ela em componentes.py).
+    """
+    janela.after(
+        10, lambda: (janela.lift(), janela.focus_force(), janela.grab_set())
+    )
+
+
+class NovoContratoModal(ctk.CTkToplevel):
+    """Popup com o formulário de Novo Contrato Mensal — 07/09/2026,
+    substituindo o item "Novo Contrato Mensal" que a barra lateral
+    tinha antes (decisão do aluno: ficava parecido demais com
+    "Contrato Mensal", a lista; ao mover para um botão fixo dentro
+    da própria lista, deixa de haver os dois nomes lado a lado).
+
+    Reaproveita a classe NovoContratoMensal tal e qual — ela já traz
+    o seu próprio cabeçalho, cartões e botão "Criar contrato"; esta
+    janela só a encaixa num popup, mesmo padrão de NovoClienteModal/
+    EditarClienteModal em gui_clientes.py (CTkToplevel, geometria
+    fixa, _colocar_no_topo). Nenhuma lógica do formulário foi
+    duplicada nem alterada.
+
+    A lista por trás (`tela_lista`) só recarrega quando a janela
+    fecha, não a cada contrato criado — de propósito: o próprio
+    NovoContratoMensal já se limpa sozinho depois de cada sucesso
+    para permitir criar vários contratos seguidos na mesma unidade
+    (decisão da Parte 3 de 06/09/2026); fechar o popup é o sinal de
+    "terminei", e é aí que a lista precisa de estar atualizada.
+    """
+
+    def __init__(self, tela_lista, unidade_id=None, lugar_id=None):
+        super().__init__(tela_lista)
+        self.tela_lista = tela_lista
+
+        self.title("Novo Contrato Mensal")
+        self.geometry("640x700")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_lista)
+        _colocar_no_topo(self)
+        self.protocol("WM_DELETE_WINDOW", self._fechar)
+
+        NovoContratoMensal(
+            self,
+            controlador=tela_lista.controlador,
+            unidade_id=unidade_id,
+            lugar_id=lugar_id,
+        ).pack(fill="both", expand=True)
+
+    def _fechar(self):
+        self.tela_lista._recarregar()
+        self.destroy()
+
+
+class _ListaOcupacoesBase(ctk.CTkFrame):
+    """Base comum a ListaContratosMensais e ListaReservasAirbnb —
+    07/09/2026, substitui a antiga ListaOcupacoes (um ecrã só, com
+    dropdown de tipo Todos/Mensal/Airbnb misturando os dois regimes)
+    por dois itens separados na barra lateral, cada um já filtrado
+    por tipo — decisão do aluno: mais direto do que abrir um ecrã e
+    ainda ter de escolher o tipo lá dentro.
+
+    Cada subclasse só define `tipo` ("mensal"/"airbnb") e `titulo`
+    (cabeçalho do ecrã); o resto — filtros, cartões, Reativar — é
+    igual nos dois. `_botao_criar` é um "gancho" que por omissão não
+    desenha nada: só ListaContratosMensais o usa, para o botão fixo
+    "+ Novo Contrato" (Registar reserva Airbnb ainda não existe).
+
+    Mesmos filtros do CLI (`_listar_ocupacoes`, cli.py) — mostrar
+    inativas/encerradas, aviso de documento. Filtro por unidade/
+    cliente (que no CLI pede o ID por texto livre) fica de fora: os
+    ecrãs da GUI não pedem para escrever IDs à mão, só selecionam
+    registos existentes.
+
+    Cada cartão identifica a unidade e o cliente por "nome (ID)"
+    (mesma convenção do CLI, decisão 8) e mostra o período, o estado
+    (Ativa / Encerrada / Cancelada) e o aviso de documento, quando
+    aplicável. Só "Reativar" está ligado — não precisa de formulário,
+    só confirmação (mesmo padrão de Clientes/Propriedades). Editar/
+    Encerrar/Cancelar ficam para as próximas entregas, cada um com o
+    seu modal — decisão de não entregar botões sem ação nenhuma por
+    trás, para não confundir o aluno a testar.
+    """
+
+    # Strings vazias (não None) de propósito: cada subclasse
+    # substitui pelo valor real, e assim o Pylance não acusa
+    # falso positivo em `self.titulo.lower()` (str sempre tem
+    # `.lower()`; None não).
+    tipo: str = ""
+    titulo: str = ""
+
+    def __init__(self, master, controlador):
+        super().__init__(master, fg_color=tema.COR_FUNDO)
+        self.controlador = controlador
+
+        componentes.Cabecalho(self, titulo=self.titulo).pack(fill="x")
+
+        barra = ctk.CTkFrame(self, fg_color=tema.COR_FUNDO)
+        barra.pack(fill="x", padx=20, pady=(8, 4))
+
+        self._botao_criar(barra)
+
+        self.mostrar_inativas = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            barra,
+            text="Mostrar inativas/encerradas",
+            variable=self.mostrar_inativas,
+            command=self._recarregar,
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(side="right", padx=(12, 0))
+
+        self.combo_aviso = ctk.CTkOptionMenu(
+            barra,
+            values=["Todos", "Com aviso", "Sem aviso"],
+            command=lambda _valor: self._recarregar(),
+            width=130,
+        )
+        self.combo_aviso.set("Todos")
+        self.combo_aviso.pack(side="right")
+
+        self.area_lista = ctk.CTkScrollableFrame(
+            self, fg_color="transparent"
+        )
+        self.area_lista.pack(fill="both", expand=True, padx=16, pady=(8, 16))
+
+        self._recarregar()
+
+    # -- gancho para o botão de criação (só ListaContratosMensais) --
+
+    def _botao_criar(self, barra):
+        return
+
+    # -- carregamento / atualização ----------------------------------
+
+    def _aviso_selecionado(self):
+        return {"Todos": None, "Com aviso": True, "Sem aviso": False}[
+            self.combo_aviso.get()
+        ]
+
+    def _recarregar(self):
+        """Limpa e volta a desenhar a lista inteira — chamada na
+        abertura do ecrã, ao mexer nos filtros, depois de reativar
+        uma ocupação, e ao fechar o popup de Novo Contrato (mesmo
+        princípio de ListaClientes._recarregar).
+        """
+        for widget in self.area_lista.winfo_children():
+            widget.destroy()
+
+        lista = contratos.listar(
+            incluir_inativas=self.mostrar_inativas.get(),
+            tipo=self.tipo,
+            aviso_documento=self._aviso_selecionado(),
+        )
+
+        if not lista:
+            ctk.CTkLabel(
+                self.area_lista,
+                text=f"Nenhum(a) {self.titulo.lower()} encontrado(a).",
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=13),
+            ).pack(pady=40)
+            return
+
+        for ocupacao in lista:
+            self._desenhar_ocupacao(ocupacao)
+
+    # -- desenho -------------------------------------------------------
+
+    def _desenhar_ocupacao(self, ocupacao):
+        inativa = not ocupacao["ativo"]
+
+        unidade = unidades.procurar(ocupacao["unidade_id"])
+        cliente = clientes.procurar(ocupacao["cliente_id"])
+        nome_unidade = _identificar_unidade(unidade, ocupacao["unidade_id"])
+        nome_cliente = _identificar_cliente(cliente, ocupacao["cliente_id"])
+
+        cartao = ctk.CTkFrame(
+            self.area_lista,
+            corner_radius=tema.RAIO_CARTAO,
+            fg_color=tema.COR_FUNDO,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+        )
+        cartao.pack(fill="x", pady=6)
+
+        linha = ctk.CTkFrame(cartao, fg_color="transparent")
+        linha.pack(fill="x", padx=16, pady=12)
+
+        bloco_texto = ctk.CTkFrame(linha, fg_color="transparent")
+        bloco_texto.pack(side="left", anchor="w")
+
+        cor_titulo = tema.COR_TEXTO_SECUNDARIO if inativa else tema.COR_TEXTO
+        ctk.CTkLabel(
+            bloco_texto,
+            text=f"{ocupacao['id']} · {nome_unidade}",
+            text_color=cor_titulo,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            anchor="w",
+        ).pack(anchor="w")
+
+        periodo = (
+            f"{_formatar_data(ocupacao['data_inicio'])} → "
+            f"{_formatar_data(ocupacao['data_fim'])}"
+        )
+        ctk.CTkLabel(
+            bloco_texto,
+            text=f"{nome_cliente} · {periodo}",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+            anchor="w",
+        ).pack(anchor="w")
+
+        bloco_direita = ctk.CTkFrame(linha, fg_color="transparent")
+        bloco_direita.pack(side="right")
+
+        if inativa:
+            rotulo_estado = (
+                "Encerrado" if ocupacao["tipo"] == "mensal" else "Cancelada"
+            )
+            self._etiqueta(
+                bloco_direita,
+                rotulo_estado,
+                tema.CINZA_INDISPONIVEL,
+                tema.TEXTO_INDISPONIVEL,
+            )
+        else:
+            self._etiqueta(
+                bloco_direita, "Ativa", tema.VERDE_LIVRE, tema.TEXTO_LIVRE
+            )
+
+        if ocupacao["aviso_documento"]:
+            self._etiqueta(
+                bloco_direita,
+                "Doc. a expirar",
+                tema.AMARELO_AVISO,
+                tema.TEXTO_AVISO,
+            )
+
+        if inativa:
+            ctk.CTkButton(
+                bloco_direita,
+                text="Reativar",
+                width=80,
+                height=26,
+                corner_radius=tema.RAIO_BOTAO,
+                fg_color=tema.VERDE,
+                hover_color=tema.VERDE,
+                command=lambda: self._reativar(ocupacao),
+            ).pack(side="left", padx=(10, 0))
+
+    def _etiqueta(self, master, texto, fundo, cor_texto):
+        ctk.CTkLabel(
+            master,
+            text=texto,
+            text_color=cor_texto,
+            fg_color=fundo,
+            corner_radius=8,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            width=110,
+            height=22,
+        ).pack(side="left", padx=(6, 0))
+
+    # -- ações -----------------------------------------------------------
+
+    def _reativar(self, ocupacao):
+        pergunta = f"Reativar a ocupação {ocupacao['id']}?"
+        if not componentes.confirmar(pergunta):
+            return
+
+        try:
+            contratos.reativar(ocupacao["id"])
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        componentes.mostrar_sucesso(f"Ocupação {ocupacao['id']} reativada.")
+        self._recarregar()
+
+
+class ListaContratosMensais(_ListaOcupacoesBase):
+    """Lista só os contratos mensais — item "Contrato Mensal" na
+    barra lateral. Traz o botão fixo "+ Novo Contrato" (verde,
+    decisão do aluno, 07/09/2026), que abre NovoContratoModal por
+    cima da própria lista.
+    """
+
+    tipo = "mensal"
+    titulo = "Contrato Mensal"
+
+    def _botao_criar(self, barra):
+        ctk.CTkButton(
+            barra,
+            text="+ Novo Contrato",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.VERDE,
+            hover_color=tema.VERDE,
+            command=lambda: NovoContratoModal(self),
+        ).pack(side="left")
+
+
+class ListaReservasAirbnb(_ListaOcupacoesBase):
+    """Lista só as reservas Airbnb — item "Reservas Airbnb" na barra
+    lateral. Sem botão de criação por agora: "Registar reserva
+    Airbnb" ainda não tem formulário nenhum construído (fica para
+    uma próxima entrega, mesma decisão de não pôr botão sem ação).
+    """
+
+    tipo = "airbnb"
+    titulo = "Reservas Airbnb"

@@ -3,16 +3,26 @@ import customtkinter as ctk
 from . import tema
 from . import componentes
 from .gui_clientes import ListaClientes
-from .gui_contratos import NovoContratoMensal
+from .gui_contratos import ListaContratosMensais, ListaReservasAirbnb
 from .gui_propriedades import ListaPropriedades
 from .gui_unidades import PlantaLugares
 
 # Itens da barra lateral — lista simples, sem secções (decisão do
 # aluno, 07/09/2026: só 4 ecrãs por agora, secções ficam para quando
-# houver mais — Reservas, Stock, Responsáveis, Dashboard). Ordem
-# pensada pelo fluxo de trabalho: primeiro o que se cadastra
-# (Propriedades e Unidades, Clientes), depois o que se consulta/usa
-# a partir daí (Planta de Lugares, Novo Contrato Mensal).
+# houver mais — Stock, Responsáveis, Dashboard). Ordem pensada pelo
+# fluxo de trabalho: primeiro o que se cadastra (Propriedades e
+# Unidades, Clientes), depois o que se consulta/usa a partir daí
+# (Planta de Lugares, Contrato Mensal, Reservas Airbnb).
+#
+# 07/09/2026: "Novo Contrato Mensal" saiu da barra lateral — ficava
+# parecido demais com "Contrato Mensal" (a lista), um debaixo do
+# outro, só a palavra "Novo" a distinguir. Agora só é acessível pelo
+# botão "+ Novo Contrato" dentro do próprio ecrã "Contrato Mensal"
+# (ver ListaContratosMensais/NovoContratoModal, gui_contratos.py).
+# "Contratos e Reservas" (um ecrã só, com dropdown de tipo) também
+# saiu — decisão do aluno de separar em dois itens já filtrados,
+# "Contrato Mensal" e "Reservas Airbnb", em vez de escolher o tipo
+# lá dentro.
 ITENS_MENU = [
     {
         "tipo": "item",
@@ -23,8 +33,13 @@ ITENS_MENU = [
     {"tipo": "item", "texto": "Planta de Lugares", "ecra": PlantaLugares},
     {
         "tipo": "item",
-        "texto": "Novo Contrato Mensal",
-        "ecra": NovoContratoMensal,
+        "texto": "Contrato Mensal",
+        "ecra": ListaContratosMensais,
+    },
+    {
+        "tipo": "item",
+        "texto": "Reservas Airbnb",
+        "ecra": ListaReservasAirbnb,
     },
 ]
 
