@@ -1,7 +1,10 @@
 """Ecrãs de Contratos e Reservas: criação de um contrato de
-arrendamento mensal (NovoContratoMensal) e listagem das ocupações
-já existentes, mensais e Airbnb (ListaOcupacoes, 07/09/2026 — ver
-docstring da própria classe para as decisões dessa 1ª entrega).
+arrendamento mensal (NovoContratoMensal), registo de uma reserva
+Airbnb (NovaReservaAirbnb, 07/09/2026 — ver docstring da própria
+classe) e listagem das ocupações já existentes, mensais e Airbnb
+(ListaContratosMensais / ListaReservasAirbnb, com botão fixo "+
+Novo Contrato" / "+ Nova Reserva Airbnb" e popup, ver docstring de
+_ListaOcupacoesBase).
 
 Só fala com os módulos de negócio (unidades, clientes, responsaveis,
 contratos, validacoes) — nunca com repositorio diretamente, mesma
@@ -57,6 +60,20 @@ dados falsos). Decisões tomadas nessa validação:
    contratos seguidos na mesma unidade); cliente, datas, valores e a
    confirmação da caução voltam ao vazio, e lugar/cliente/responsável
    são recarregados, para já refletirem o contrato acabado de criar.
+
+8. NovaReservaAirbnb (07/09/2026): mockup (imagem, sem código real)
+   validado com o aluno antes de codar, mesmo padrão de botão fixo
+   + popup já fechado em "Contrato Mensal". Duas perguntas feitas ao
+   aluno (AskUserQuestion) sobre pontos sem convenção prévia — ambas
+   respondidas com a opção recomendada:
+   - Recalcular o "Preço calculado" ao sair do campo de data
+     (<FocusOut>, só quando as duas datas já estão preenchidas e
+     válidas) — não há aqui um combo único (como a Unidade, no
+     mensal) que dispare um evento de recálculo.
+   - Combo "Cliente" já vem pré-selecionado com o primeiro da lista
+     (mesmo comportamento de NovoContratoMensal), em vez de vazio.
+   Ver a docstring da própria classe para as restantes decisões
+   (sem "Lugar", sem "Nacionalidade"/"Data de nascimento").
 """
 
 import datetime
@@ -567,6 +584,464 @@ class NovoContratoModal(ctk.CTkToplevel):
         self.destroy()
 
 
+class NovaReservaAirbnb(ctk.CTkFrame):
+    """Formulário de registo de uma reserva Airbnb — 07/09/2026,
+    mesmo espírito de NovoContratoMensal (cartões, tudo sempre
+    visível, popup de erro/sucesso, formulário que se limpa sozinho
+    depois de um registo com sucesso), adaptado aos campos de
+    `contratos.registar_airbnb`.
+
+    Diferenças de propósito em relação ao Contrato Mensal:
+
+    - Sem "Lugar": o regime Airbnb nunca usa quarto/lugar (decisão
+      da Fase 2, item 3 de Decisoes_Pendentes_Fase2.txt) — só o
+      mensal usa essa hierarquia para capacidade.
+    - Sem "Nacionalidade"/"Data de nascimento": não são campos da
+      reserva, são campos da ficha do cliente — já validados
+      (incondicionalmente, por agora) em `validacoes.py` quando o
+      cliente é criado/atualizado no regime Airbnb.
+    - "Preço calculado" não tem um combo único (como a Unidade) que
+      dispare um evento — recalcula ao sair de qualquer um dos dois
+      campos de data (evento <FocusOut>), quando as duas já estão
+      preenchidas e válidas. Mockup validado com o aluno,
+      07/09/2026.
+    - "Multa calculada" só depende da unidade escolhida (vem de
+      unidade["multa_check_in_tardio"]), por isso recalcula já
+      junto com a própria escolha da unidade — não precisa de
+      esperar por nenhuma data.
+    - Cliente já vem pré-selecionado com o primeiro da lista, mesmo
+      comportamento do Contrato Mensal (consistência entre os dois
+      formulários, decisão do aluno, 07/09/2026).
+    """
+
+    def __init__(self, master, controlador, unidade_id=None):
+        super().__init__(master, fg_color=tema.COR_FUNDO)
+        self.controlador = controlador
+        self.unidade_selecionada = None
+
+        componentes.Cabecalho(self, "Nova Reserva Airbnb").pack(fill="x")
+
+        self.area = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self.area.pack(fill="both", expand=True, padx=24, pady=16)
+
+        self._montar_cartao_unidade_cliente()
+        self._montar_cartao_estadia()
+        self._montar_cartao_checkin_tardio()
+        self._montar_rodape()
+
+        self._recarregar_unidades(unidade_id)
+        self._recarregar_clientes()
+        self._recarregar_responsaveis()
+
+    # -- montagem dos widgets ------------------------------------------
+
+    def _criar_cartao(self, titulo):
+        cartao = ctk.CTkFrame(
+            self.area,
+            fg_color=tema.COR_FUNDO,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            corner_radius=tema.RAIO_CARTAO,
+        )
+        cartao.pack(fill="x", pady=(0, 16))
+        ctk.CTkLabel(
+            cartao,
+            text=titulo,
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=13, weight="bold"),
+        ).pack(anchor="w", padx=18, pady=(14, 6))
+        corpo = ctk.CTkFrame(cartao, fg_color="transparent")
+        corpo.pack(fill="x", padx=18, pady=(0, 16))
+        corpo.grid_columnconfigure(0, weight=0)
+        corpo.grid_columnconfigure(1, weight=1)
+        return corpo
+
+    def _linha(self, corpo, linha, rotulo):
+        ctk.CTkLabel(
+            corpo,
+            text=rotulo,
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=12),
+            anchor="w",
+            width=160,
+        ).grid(row=linha, column=0, sticky="w", pady=6, padx=(0, 12))
+
+    def _montar_cartao_unidade_cliente(self):
+        corpo = self._criar_cartao("Unidade e cliente")
+
+        self._linha(corpo, 0, "Unidade *")
+        self.combo_unidade = ctk.CTkOptionMenu(
+            corpo,
+            values=["—"],
+            command=self._ao_escolher_unidade,
+        )
+        self.combo_unidade.grid(row=0, column=1, sticky="ew", pady=6)
+
+        self._linha(corpo, 1, "Cliente *")
+        self.combo_cliente = ctk.CTkOptionMenu(corpo, values=["—"])
+        self.combo_cliente.grid(row=1, column=1, sticky="ew", pady=6)
+
+    def _montar_cartao_estadia(self):
+        corpo = self._criar_cartao("Estadia e valores")
+
+        self._linha(corpo, 0, "Data de entrada *")
+        self.campo_data_inicio = ctk.CTkEntry(
+            corpo, placeholder_text="dd/mm/aaaa"
+        )
+        self.campo_data_inicio.grid(row=0, column=1, sticky="ew", pady=6)
+        self.campo_data_inicio.bind(
+            "<FocusOut>", lambda _evento: self._recalcular_preco()
+        )
+
+        self._linha(corpo, 1, "Data de saída *")
+        self.campo_data_fim = ctk.CTkEntry(
+            corpo, placeholder_text="dd/mm/aaaa"
+        )
+        self.campo_data_fim.grid(row=1, column=1, sticky="ew", pady=6)
+        self.campo_data_fim.bind(
+            "<FocusOut>", lambda _evento: self._recalcular_preco()
+        )
+
+        self._linha(corpo, 2, "Preço calculado")
+        self.rotulo_preco_calculado = ctk.CTkLabel(
+            corpo,
+            text="— (escolhe as datas)",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            anchor="w",
+        )
+        self.rotulo_preco_calculado.grid(row=2, column=1, sticky="ew", pady=6)
+
+        self._linha(corpo, 3, "Preço praticado *")
+        self.campo_preco_praticado = ctk.CTkEntry(
+            corpo, placeholder_text="0,00"
+        )
+        self.campo_preco_praticado.grid(row=3, column=1, sticky="ew", pady=6)
+
+        self._linha(corpo, 4, "Motivo da diferença")
+        self.campo_motivo_preco = ctk.CTkEntry(
+            corpo,
+            placeholder_text="opcional — só se o preço for diferente",
+        )
+        self.campo_motivo_preco.grid(row=4, column=1, sticky="ew", pady=6)
+
+        self._linha(corpo, 5, "Responsável do desconto")
+        self.combo_responsavel_preco = ctk.CTkOptionMenu(
+            corpo, values=["— Nenhum —"]
+        )
+        self.combo_responsavel_preco.grid(
+            row=5, column=1, sticky="ew", pady=6
+        )
+        ctk.CTkLabel(
+            corpo,
+            text="obrigatório quando o preço praticado é inferior ao "
+            "calculado",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+        ).grid(row=6, column=1, sticky="w")
+
+    def _montar_cartao_checkin_tardio(self):
+        corpo = self._criar_cartao("Check-in tardio")
+
+        self.checkin_tardio = ctk.CTkCheckBox(corpo, text="Check-in tardio")
+        self.checkin_tardio.grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 6)
+        )
+
+        self._linha(corpo, 1, "Hora de chegada")
+        self.campo_hora_chegada = ctk.CTkEntry(
+            corpo, placeholder_text="hh:mm"
+        )
+        self.campo_hora_chegada.grid(row=1, column=1, sticky="ew", pady=6)
+        ctk.CTkLabel(
+            corpo,
+            text="obrigatória quando o check-in é tardio",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+        ).grid(row=2, column=1, sticky="w")
+
+        self._linha(corpo, 3, "Multa calculada")
+        self.rotulo_multa_calculada = ctk.CTkLabel(
+            corpo,
+            text="— (escolhe a unidade)",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            anchor="w",
+        )
+        self.rotulo_multa_calculada.grid(row=3, column=1, sticky="ew", pady=6)
+
+        self._linha(corpo, 4, "Multa praticada")
+        self.campo_multa_praticada = ctk.CTkEntry(
+            corpo, placeholder_text="Enter para a multa calculada"
+        )
+        self.campo_multa_praticada.grid(row=4, column=1, sticky="ew", pady=6)
+
+        self._linha(corpo, 5, "Responsável do desconto")
+        self.combo_responsavel_multa = ctk.CTkOptionMenu(
+            corpo, values=["— Nenhum —"]
+        )
+        self.combo_responsavel_multa.grid(
+            row=5, column=1, sticky="ew", pady=6
+        )
+        ctk.CTkLabel(
+            corpo,
+            text="obrigatório quando a multa praticada é inferior à "
+            "calculada",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+        ).grid(row=6, column=1, sticky="w")
+
+    def _montar_rodape(self):
+        rodape = ctk.CTkFrame(self.area, fg_color="transparent")
+        rodape.pack(fill="x", pady=(4, 0))
+
+        ctk.CTkButton(
+            rodape,
+            text="Registar reserva",
+            fg_color=tema.AZUL_PRINCIPAL,
+            hover_color=tema.AZUL_CLARO,
+            corner_radius=tema.RAIO_BOTAO,
+            command=self._registar,
+        ).pack(side="right")
+
+    # -- carregamento de dados -------------------------------------
+
+    def _recarregar_unidades(self, unidade_id_inicial=None):
+        self.unidades_airbnb = unidades.listar(tipo="airbnb")
+        nomes = [
+            f"{u['id']} · {u['nome']}" for u in self.unidades_airbnb
+        ] or ["— Sem unidades Airbnb —"]
+        self.combo_unidade.configure(values=nomes)
+
+        alvo = None
+        if unidade_id_inicial:
+            alvo = next(
+                (
+                    u
+                    for u in self.unidades_airbnb
+                    if u["id"] == unidade_id_inicial
+                ),
+                None,
+            )
+        if alvo is None and self.unidades_airbnb:
+            alvo = self.unidades_airbnb[0]
+
+        if alvo is not None:
+            indice = self.unidades_airbnb.index(alvo)
+            self.combo_unidade.set(nomes[indice])
+            self._ao_escolher_unidade(nomes[indice])
+
+    def _recarregar_clientes(self):
+        self.clientes_disponiveis = clientes.listar()
+        nomes = [
+            f"{c['id']} · {c['nome']} (NIF {c['nif'] or '—'})"
+            for c in self.clientes_disponiveis
+        ] or ["— Sem clientes —"]
+        self.combo_cliente.configure(values=nomes)
+        if self.clientes_disponiveis:
+            self.combo_cliente.set(nomes[0])
+
+    def _recarregar_responsaveis(self):
+        self.responsaveis_disponiveis = responsaveis.listar()
+        nomes = ["— Nenhum —"] + [
+            f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
+        ]
+        self.combo_responsavel_preco.configure(values=nomes)
+        self.combo_responsavel_preco.set(nomes[0])
+        self.combo_responsavel_multa.configure(values=nomes)
+        self.combo_responsavel_multa.set(nomes[0])
+
+    def _ao_escolher_unidade(self, _valor_escolhido):
+        indice = self.combo_unidade.cget("values").index(
+            self.combo_unidade.get()
+        )
+        if indice >= len(self.unidades_airbnb):
+            self.unidade_selecionada = None
+        else:
+            self.unidade_selecionada = self.unidades_airbnb[indice]
+
+        self._atualizar_multa_calculada()
+        self._recalcular_preco()
+
+    # -- valores calculados ------------------------------------------
+
+    def _ler_data(self, campo):
+        texto = campo.get().strip()
+        if not texto:
+            return None
+        try:
+            return datetime.datetime.strptime(texto, "%d/%m/%Y").date()
+        except ValueError:
+            return None
+
+    def _recalcular_preco(self):
+        if self.unidade_selecionada is None:
+            self.rotulo_preco_calculado.configure(text="—")
+            return
+
+        data_inicio = self._ler_data(self.campo_data_inicio)
+        data_fim = self._ler_data(self.campo_data_fim)
+
+        if data_inicio is None or data_fim is None or data_fim <= data_inicio:
+            self.rotulo_preco_calculado.configure(
+                text="— (escolhe as datas)"
+            )
+            return
+
+        preco = contratos.calcular_preco_airbnb(
+            self.unidade_selecionada, data_inicio, data_fim
+        )
+        self.rotulo_preco_calculado.configure(text=_formatar_valor(preco))
+
+    def _atualizar_multa_calculada(self):
+        if self.unidade_selecionada is None:
+            self.rotulo_multa_calculada.configure(
+                text="— (escolhe a unidade)"
+            )
+            return
+
+        self.rotulo_multa_calculada.configure(
+            text=_formatar_valor(
+                self.unidade_selecionada["multa_check_in_tardio"]
+            )
+        )
+
+    # -- submissão ----------------------------------------------------
+
+    def _mostrar_erro(self, texto):
+        componentes.mostrar_erro(texto)
+
+    def _mostrar_sucesso(self, texto):
+        componentes.mostrar_sucesso(texto)
+
+    def _cliente_escolhido_id(self):
+        indice = self.combo_cliente.cget("values").index(
+            self.combo_cliente.get()
+        )
+        return self.clientes_disponiveis[indice]["id"]
+
+    def _id_responsavel(self, combo):
+        indice = combo.cget("values").index(combo.get())
+        if indice == 0:
+            return ""
+        return self.responsaveis_disponiveis[indice - 1]["id"]
+
+    def _registar(self):
+        if self.unidade_selecionada is None:
+            self._mostrar_erro("Escolhe uma unidade Airbnb.")
+            return
+
+        data_inicio = self._ler_data(self.campo_data_inicio)
+        if data_inicio is None:
+            self._mostrar_erro("Data de entrada inválida (usa dd/mm/aaaa).")
+            return
+
+        data_fim = self._ler_data(self.campo_data_fim)
+        if data_fim is None:
+            self._mostrar_erro("Data de saída inválida (usa dd/mm/aaaa).")
+            return
+
+        try:
+            preco_praticado = Decimal(
+                self.campo_preco_praticado.get().strip().replace(",", ".")
+            )
+        except InvalidOperation:
+            self._mostrar_erro("Preço praticado com formato inválido.")
+            return
+
+        check_in_tardio = bool(self.checkin_tardio.get())
+        hora_chegada = self.campo_hora_chegada.get().strip()
+
+        texto_multa = self.campo_multa_praticada.get().strip()
+        multa_praticada = None
+        if texto_multa:
+            try:
+                multa_praticada = Decimal(texto_multa.replace(",", "."))
+            except InvalidOperation:
+                self._mostrar_erro("Multa praticada com formato inválido.")
+                return
+
+        try:
+            ocupacao, _airbnb = contratos.registar_airbnb(
+                self.unidade_selecionada["id"],
+                self._cliente_escolhido_id(),
+                data_inicio,
+                data_fim,
+                preco_praticado,
+                responsavel_desconto_preco_id=self._id_responsavel(
+                    self.combo_responsavel_preco
+                ),
+                check_in_tardio=check_in_tardio,
+                hora_chegada=hora_chegada,
+                multa_praticada=multa_praticada,
+                responsavel_desconto_multa_id=self._id_responsavel(
+                    self.combo_responsavel_multa
+                ),
+            )
+        except ValueError as erro:
+            self._mostrar_erro(str(erro))
+            return
+
+        aviso = (
+            " (aviso: documento expira durante a estadia)"
+            if (ocupacao["aviso_documento"])
+            else ""
+        )
+        self._mostrar_sucesso(
+            f"Reserva registada com sucesso: {ocupacao['id']}{aviso}"
+        )
+        self._limpar_formulario()
+
+    def _limpar_formulario(self):
+        """Mesma ideia de NovoContratoMensal._limpar_formulario: repõe
+        o formulário para o próximo registo, mantendo a unidade
+        escolhida (comum registar várias reservas seguidas na mesma
+        unidade Airbnb) e recarregando cliente/responsáveis, para já
+        refletirem a reserva acabada de criar.
+        """
+        self.campo_data_inicio.delete(0, "end")
+        self.campo_data_fim.delete(0, "end")
+        self.campo_preco_praticado.delete(0, "end")
+        self.campo_motivo_preco.delete(0, "end")
+        self.checkin_tardio.deselect()
+        self.campo_hora_chegada.delete(0, "end")
+        self.campo_multa_praticada.delete(0, "end")
+
+        self._recarregar_clientes()
+        self._recarregar_responsaveis()
+        self._recalcular_preco()
+
+
+class NovaReservaAirbnbModal(ctk.CTkToplevel):
+    """Popup com o formulário de Nova Reserva Airbnb — 07/09/2026,
+    mesmo padrão de NovoContratoModal (CTkToplevel, geometria fixa,
+    _colocar_no_topo, a lista só recarrega quando a janela fecha).
+
+    Ao contrário do NovoContratoModal, não embrulha um formulário já
+    existente — NovaReservaAirbnb é construído de raiz nesta mesma
+    entrega (contratos.registar_airbnb já existia, mas não havia
+    nenhum ecrã de GUI para lá chegar).
+    """
+
+    def __init__(self, tela_lista):
+        super().__init__(tela_lista)
+        self.tela_lista = tela_lista
+
+        self.title("Nova Reserva Airbnb")
+        self.geometry("640x700")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_lista)
+        _colocar_no_topo(self)
+        self.protocol("WM_DELETE_WINDOW", self._fechar)
+
+        NovaReservaAirbnb(
+            self, controlador=tela_lista.controlador
+        ).pack(fill="both", expand=True)
+
+    def _fechar(self):
+        self.tela_lista._recarregar()
+        self.destroy()
+
+
 class _ListaOcupacoesBase(ctk.CTkFrame):
     """Base comum a ListaContratosMensais e ListaReservasAirbnb —
     07/09/2026, substitui a antiga ListaOcupacoes (um ecrã só, com
@@ -816,10 +1291,21 @@ class ListaContratosMensais(_ListaOcupacoesBase):
 
 class ListaReservasAirbnb(_ListaOcupacoesBase):
     """Lista só as reservas Airbnb — item "Reservas Airbnb" na barra
-    lateral. Sem botão de criação por agora: "Registar reserva
-    Airbnb" ainda não tem formulário nenhum construído (fica para
-    uma próxima entrega, mesma decisão de não pôr botão sem ação).
+    lateral. Traz o botão fixo "+ Nova Reserva Airbnb" (verde, mesmo
+    padrão do "+ Novo Contrato" em ListaContratosMensais, decisão do
+    aluno em 07/09/2026), que abre NovaReservaAirbnbModal por cima
+    da própria lista.
     """
 
     tipo = "airbnb"
     titulo = "Reservas Airbnb"
+
+    def _botao_criar(self, barra):
+        ctk.CTkButton(
+            barra,
+            text="+ Nova Reserva Airbnb",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.VERDE,
+            hover_color=tema.VERDE,
+            command=lambda: NovaReservaAirbnbModal(self),
+        ).pack(side="left")
