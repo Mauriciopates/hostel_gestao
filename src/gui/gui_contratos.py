@@ -74,6 +74,25 @@ dados falsos). Decisões tomadas nessa validação:
      (mesmo comportamento de NovoContratoMensal), em vez de vazio.
    Ver a docstring da própria classe para as restantes decisões
    (sem "Lugar", sem "Nacionalidade"/"Data de nascimento").
+
+9. EncerrarContratoModal (07/09/2026): mockup (imagem) validado com
+   o aluno antes de codar — botão "Encerrar" no cartão de cada
+   contrato mensal ativo (contorno cinzento, não vermelho: o
+   vermelho fica para o botão de confirmação dentro do modal, mesma
+   convenção de _AnonimizarModal em gui_clientes.py) e modal com
+   Data de fim + Motivo, os mesmos campos do CLI
+   (cli.py:_encerrar_contrato_mensal). Duas perguntas feitas ao
+   aluno (AskUserQuestion) — ambas respondidas com a opção
+   recomendada:
+   - Data de fim já pré-preenchida com a data de hoje, em vez de
+     vazia (o caso normal é encerrar hoje).
+   - Avisos de duração abaixo do mínimo / aviso prévio insuficiente
+     mostrados AO VIVO, antes de encerrar (caixa amarela que só
+     aparece quando se aplicam), em vez de só depois no popup de
+     sucesso como o CLI faz. Os avisos continuam a não bloquear
+     nada (decisão 14: regra da casa, não imposição legal) e são
+     calculados por `contratos.avisos_encerramento` — a regra fica
+     no módulo de negócio, a GUI só a mostra.
 """
 
 import datetime
@@ -1042,6 +1061,219 @@ class NovaReservaAirbnbModal(ctk.CTkToplevel):
         self.destroy()
 
 
+class EncerrarContratoModal(ctk.CTkToplevel):
+    """Popup de encerramento de um contrato mensal — 07/09/2026,
+    aberto pelo botão "Encerrar" de cada cartão ativo em
+    ListaContratosMensais.
+
+    Mesmo padrão dos modais curtos já existentes (_AnonimizarModal,
+    gui_clientes.py): resumo do registo em cima, campos, rodapé com
+    Cancelar à esquerda e a ação à direita. Pede exatamente o que
+    `contratos.encerrar_mensal` recebe — data de fim (obrigatória) e
+    motivo (opcional) — sem nada a mais.
+
+    A caixa amarela de avisos é recalculada ao sair do campo da data
+    (<FocusOut>, mesma convenção do "Preço calculado" em
+    NovaReservaAirbnb) e só aparece quando há mesmo algum aviso a
+    dar. Não bloqueia nada: o botão encerra na mesma, porque a
+    duração mínima e o aviso prévio são regra da casa e não
+    imposição legal (decisão 14) — ficam registados no contrato.
+    """
+
+    def __init__(self, tela_lista, ocupacao):
+        super().__init__(tela_lista)
+        self.tela_lista = tela_lista
+        self.ocupacao = ocupacao
+
+        self.title("Encerrar contrato mensal")
+        self.geometry("420x400")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_lista)
+        _colocar_no_topo(self)
+
+        unidade = unidades.procurar(ocupacao["unidade_id"])
+        cliente = clientes.procurar(ocupacao["cliente_id"])
+        nome_unidade = _identificar_unidade(unidade, ocupacao["unidade_id"])
+        nome_cliente = _identificar_cliente(cliente, ocupacao["cliente_id"])
+
+        mensagem = (
+            f"Encerrar o contrato {ocupacao['id']}?\n"
+            f"{nome_cliente} · unidade {nome_unidade}\n"
+            f"Início: {_formatar_data(ocupacao['data_inicio'])}"
+        )
+        ctk.CTkLabel(
+            self,
+            text=mensagem,
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=13),
+            wraplength=370,
+            justify="left",
+        ).pack(padx=20, pady=(24, 14), fill="x")
+
+        ctk.CTkLabel(
+            self,
+            text="Data de fim *",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=20)
+
+        self.campo_data_fim = ctk.CTkEntry(
+            self,
+            placeholder_text="dd/mm/aaaa",
+            corner_radius=tema.RAIO_CAMPO,
+        )
+        self.campo_data_fim.insert(
+            0, datetime.date.today().strftime("%d/%m/%Y")
+        )
+        self.campo_data_fim.pack(fill="x", padx=20, pady=(2, 10))
+        self.campo_data_fim.bind(
+            "<FocusOut>", lambda _evento: self._atualizar_avisos()
+        )
+        self.campo_data_fim.bind(
+            "<Return>", lambda _evento: self._atualizar_avisos()
+        )
+
+        self.caixa_avisos = ctk.CTkLabel(
+            self,
+            text="",
+            text_color=tema.TEXTO_AVISO,
+            fg_color=tema.AMARELO_AVISO,
+            corner_radius=8,
+            font=ctk.CTkFont(size=11),
+            justify="left",
+            anchor="w",
+            wraplength=350,
+        )
+
+        self.rotulo_motivo = ctk.CTkLabel(
+            self,
+            text="Motivo do encerramento (opcional)",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        )
+        self.rotulo_motivo.pack(anchor="w", padx=20)
+
+        self.campo_motivo = ctk.CTkEntry(
+            self,
+            placeholder_text="ex.: saída antecipada do inquilino",
+            corner_radius=tema.RAIO_CAMPO,
+        )
+        self.campo_motivo.pack(fill="x", padx=20, pady=(2, 10))
+
+        rodape = ctk.CTkFrame(self, fg_color="transparent")
+        rodape.pack(fill="x", padx=20, pady=20, side="bottom")
+        ctk.CTkButton(
+            rodape,
+            text="Cancelar",
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="left")
+        ctk.CTkButton(
+            rodape,
+            text="Encerrar contrato",
+            fg_color=tema.TEXTO_ERRO,
+            hover_color=tema.VERMELHO_ERRO,
+            command=self._encerrar,
+        ).pack(side="right")
+
+        self._atualizar_avisos()
+
+    # -- avisos ao vivo ------------------------------------------------
+
+    def _ler_data_fim(self):
+        """Devolve a data escrita, ou None se estiver vazia ou com
+        formato inválido — o erro de formato só é dado ao submeter
+        (mesma convenção de NovaReservaAirbnb._ler_data).
+        """
+        texto = self.campo_data_fim.get().strip()
+
+        if not texto:
+            return None
+
+        try:
+            return datetime.datetime.strptime(texto, "%d/%m/%Y").date()
+        except ValueError:
+            return None
+
+    def _atualizar_avisos(self):
+        data_fim = self._ler_data_fim()
+
+        if data_fim is None:
+            self.caixa_avisos.pack_forget()
+            return
+
+        avisos = contratos.avisos_encerramento(self.ocupacao, data_fim)
+        linhas = []
+
+        if avisos["duracao_abaixo_minima"]:
+            linhas.append(
+                f"⚠  Duração abaixo do mínimo "
+                f"({config.DURACAO_MINIMA_MESES} meses)"
+            )
+
+        if avisos["aviso_previo_insuficiente"]:
+            linhas.append(
+                f"⚠  Aviso prévio insuficiente "
+                f"({config.AVISO_PREVIO_DIAS} dias)"
+            )
+
+        if not linhas:
+            self.caixa_avisos.pack_forget()
+            return
+
+        self.caixa_avisos.configure(text="\n".join(linhas))
+        self.caixa_avisos.pack(
+            fill="x",
+            padx=20,
+            pady=(0, 10),
+            ipady=8,
+            before=self.rotulo_motivo,
+        )
+
+    # -- ação ------------------------------------------------------------
+
+    def _encerrar(self):
+        texto = self.campo_data_fim.get().strip()
+
+        try:
+            data_fim = datetime.datetime.strptime(texto, "%d/%m/%Y").date()
+        except ValueError:
+            componentes.mostrar_erro(
+                "Data de fim inválida (usa dd/mm/aaaa)."
+            )
+            return
+
+        try:
+            ocupacao, mensal = contratos.encerrar_mensal(
+                self.ocupacao["id"],
+                data_fim,
+                motivo=self.campo_motivo.get().strip(),
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        avisos = []
+        if mensal["duracao_abaixo_minima"]:
+            avisos.append("duração abaixo do mínimo")
+        if mensal["aviso_previo_insuficiente"]:
+            avisos.append("aviso prévio insuficiente")
+
+        texto_avisos = f" [{', '.join(avisos)}]" if avisos else ""
+
+        componentes.mostrar_sucesso(
+            f"Contrato {ocupacao['id']} encerrado em "
+            f"{_formatar_data(data_fim)}{texto_avisos}."
+        )
+        self.destroy()
+        self.tela_lista._recarregar()
+
+
 class _ListaOcupacoesBase(ctk.CTkFrame):
     """Base comum a ListaContratosMensais e ListaReservasAirbnb —
     07/09/2026, substitui a antiga ListaOcupacoes (um ecrã só, com
@@ -1069,7 +1301,11 @@ class _ListaOcupacoesBase(ctk.CTkFrame):
     só confirmação (mesmo padrão de Clientes/Propriedades). Editar/
     Encerrar/Cancelar ficam para as próximas entregas, cada um com o
     seu modal — decisão de não entregar botões sem ação nenhuma por
-    trás, para não confundir o aluno a testar.
+    trás, para não confundir o aluno a testar. Em 07/09/2026,
+    "Encerrar" passou a estar ligado em ListaContratosMensais
+    (EncerrarContratoModal), pelo gancho `_acoes_ativa`, o irmão do
+    `_botao_criar` para os botões de cada cartão ativo; "Cancelar"
+    (Airbnb) e "Editar" continuam por fazer.
     """
 
     # Strings vazias (não None) de propósito: cada subclasse
@@ -1119,6 +1355,18 @@ class _ListaOcupacoesBase(ctk.CTkFrame):
     # -- gancho para o botão de criação (só ListaContratosMensais) --
 
     def _botao_criar(self, barra):
+        return
+
+    # -- gancho para os botões de cada cartão ativo ------------------
+
+    def _acoes_ativa(self, bloco_direita, ocupacao):
+        """Botões de ação de uma ocupação ATIVA (o "Reativar" das
+        inativas continua a ser desenhado na base, porque é igual nos
+        dois regimes). Por omissão não desenha nada: só
+        ListaContratosMensais o usa, para o botão "Encerrar" —
+        "Cancelar" (Airbnb) entra aqui da mesma forma quando for
+        feito.
+        """
         return
 
     # -- carregamento / atualização ----------------------------------
@@ -1238,6 +1486,8 @@ class _ListaOcupacoesBase(ctk.CTkFrame):
                 hover_color=tema.VERDE,
                 command=lambda: self._reativar(ocupacao),
             ).pack(side="left", padx=(10, 0))
+        else:
+            self._acoes_ativa(bloco_direita, ocupacao)
 
     def _etiqueta(self, master, texto, fundo, cor_texto):
         ctk.CTkLabel(
@@ -1272,7 +1522,8 @@ class ListaContratosMensais(_ListaOcupacoesBase):
     """Lista só os contratos mensais — item "Contrato Mensal" na
     barra lateral. Traz o botão fixo "+ Novo Contrato" (verde,
     decisão do aluno, 07/09/2026), que abre NovoContratoModal por
-    cima da própria lista.
+    cima da própria lista, e o botão "Encerrar" em cada cartão
+    ativo, que abre EncerrarContratoModal.
     """
 
     tipo = "mensal"
@@ -1287,6 +1538,21 @@ class ListaContratosMensais(_ListaOcupacoesBase):
             hover_color=tema.VERDE,
             command=lambda: NovoContratoModal(self),
         ).pack(side="left")
+
+    def _acoes_ativa(self, bloco_direita, ocupacao):
+        ctk.CTkButton(
+            bloco_direita,
+            text="Encerrar",
+            width=80,
+            height=26,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=lambda: EncerrarContratoModal(self, ocupacao),
+        ).pack(side="left", padx=(10, 0))
 
 
 class ListaReservasAirbnb(_ListaOcupacoesBase):

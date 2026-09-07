@@ -306,6 +306,34 @@ def listar(
     )
 
 
+def avisos_encerramento(ocupacao, data_fim):
+    """Devolve os dois sinais de encerramento de um contrato mensal,
+    para uma data de fim pretendida: duração abaixo do mínimo
+    (config.DURACAO_MINIMA_MESES) e aviso prévio insuficiente
+    (config.AVISO_PREVIO_DIAS, contado a partir de hoje).
+
+    Nenhum dos dois bloqueia o encerramento (decisão 14: regra da
+    casa, não imposição legal) — só ficam registados. Existe como
+    função própria, e não só dentro de `encerrar_mensal`, para a
+    interface poder mostrar os avisos ANTES de encerrar, sem
+    duplicar a regra fora do módulo de negócio (07/09/2026, ecrã de
+    Encerrar contrato na GUI).
+
+    Recebe o registo da ocupação já lido (dicionário), não o seu
+    identificador — não vai buscar nada ao repositório, mesma
+    convenção de `calcular_preco_airbnb`, que recebe a unidade.
+    """
+    meses = (data_fim.year - ocupacao["data_inicio"].year) * 12 + (
+        data_fim.month - ocupacao["data_inicio"].month
+    )
+
+    return {
+        "duracao_abaixo_minima": meses < config.DURACAO_MINIMA_MESES,
+        "aviso_previo_insuficiente": (data_fim - date.today()).days
+        < config.AVISO_PREVIO_DIAS,
+    }
+
+
 def encerrar_mensal(ocupacao_id, data_fim, motivo=""):
     """Encerra um contrato de arrendamento mensal, preenchendo a
     data de fim.
@@ -315,6 +343,9 @@ def encerrar_mensal(ocupacao_id, data_fim, motivo=""):
     partir de hoje) ficam sinalizados no registo específico
     ('ocupacoes_mensal') — nunca bloqueiam o encerramento (mesmo
     princípio da decisão 14: regra da casa, não imposição legal).
+    Os dois sinais são calculados por `avisos_encerramento`, a mesma
+    função que a interface gráfica usa para os mostrar antes de
+    encerrar (07/09/2026).
 
     Devolve os dois registos (base e específico), em tuplo — mesma
     convenção da criar_mensal.
@@ -342,16 +373,8 @@ def encerrar_mensal(ocupacao_id, data_fim, motivo=""):
     if mensal is None:
         raise ValueError(f"Faltam os dados mensais da ocupação {ocupacao_id}.")
 
-    meses = (data_fim.year - ocupacao["data_inicio"].year) * 12 + (
-        data_fim.month - ocupacao["data_inicio"].month
-    )
-
-    campos_mensal = {
-        "duracao_abaixo_minima": meses < config.DURACAO_MINIMA_MESES,
-        "aviso_previo_insuficiente": (data_fim - date.today()).days
-        < config.AVISO_PREVIO_DIAS,
-        "motivo_encerramento": motivo.strip(),
-    }
+    campos_mensal = avisos_encerramento(ocupacao, data_fim)
+    campos_mensal["motivo_encerramento"] = motivo.strip()
 
     repositorio.atualizar_ocupacao_mensal(ocupacao_id, campos_mensal)
     mensal.update(campos_mensal)
