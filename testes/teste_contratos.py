@@ -33,7 +33,7 @@ cliente sem esses campos, consoante o regime.
 
 import sys
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -74,7 +74,7 @@ class BaseContratosTest(BaseMySQLTest):
             self.unidade_mensal["id"], "Quarto 1"
         )
         self.lugar = unidades.criar_lugar(
-            self.quarto["id"], "Cama 1", capacidade=2
+            self.quarto["id"], "Cama 1", "casal", capacidade=2
         )
 
         self.unidade_airbnb = unidades.criar(
@@ -131,7 +131,9 @@ class TesteCriarMensal(BaseContratosTest):
         # para confirmar que o que foi devolvido é mesmo o que ficou
         # persistido.
         persistido = contratos.detalhes_mensal(ocupacao["id"])
-        self.assertEqual(mensal, {chave: persistido[chave] for chave in mensal})
+        self.assertEqual(
+            mensal, {chave: persistido[chave] for chave in mensal}
+        )
 
     def test_id_gerado_com_prefixo_cnt(self):
         ocupacao, _ = contratos.criar_mensal(
@@ -142,8 +144,6 @@ class TesteCriarMensal(BaseContratosTest):
             Decimal("250.00"),
         )
         self.assertTrue(ocupacao["id"].startswith("CNT-"))
-
-
 
     def test_unidade_inexistente_gera_erro(self):
         with self.assertRaises(ValueError):
@@ -203,7 +203,10 @@ class TesteCriarMensal(BaseContratosTest):
     def test_bloqueia_ao_atingir_capacidade(self):
         # capacidade da unidade = 2 (um único lugar, capacidade 2)
         cliente_2 = clientes.criar(
-            "Maria", "Passaporte", "222", "mensal",
+            "Maria",
+            "Passaporte",
+            "222",
+            "mensal",
             nif="222222220",
             morada="Rua X, 1",
             estado_civil="Solteiro(a)",
@@ -211,7 +214,10 @@ class TesteCriarMensal(BaseContratosTest):
             validade_documento=date(2030, 1, 1),
         )
         cliente_3 = clientes.criar(
-            "Pedro", "Passaporte", "333", "mensal",
+            "Pedro",
+            "Passaporte",
+            "333",
+            "mensal",
             nif="333333330",
             morada="Rua Y, 2",
             estado_civil="Solteiro(a)",
@@ -219,17 +225,26 @@ class TesteCriarMensal(BaseContratosTest):
             validade_documento=date(2030, 1, 1),
         )
         contratos.criar_mensal(
-            self.unidade_mensal["id"], self.cliente_mensal["id"],
-            date(2026, 1, 10), Decimal("250.00"), Decimal("250.00"),
+            self.unidade_mensal["id"],
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
         )
         contratos.criar_mensal(
-            self.unidade_mensal["id"], cliente_2["id"],
-            date(2026, 1, 10), Decimal("250.00"), Decimal("250.00"),
+            self.unidade_mensal["id"],
+            cliente_2["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
         )
         with self.assertRaises(ValueError):
             contratos.criar_mensal(
-                self.unidade_mensal["id"], cliente_3["id"],
-                date(2026, 1, 10), Decimal("250.00"), Decimal("250.00"),
+                self.unidade_mensal["id"],
+                cliente_3["id"],
+                date(2026, 1, 10),
+                Decimal("250.00"),
+                Decimal("250.00"),
             )
 
     def test_lugar_inexistente_gera_erro(self):
@@ -245,14 +260,16 @@ class TesteCriarMensal(BaseContratosTest):
 
     def test_lugar_de_outra_unidade_recusado(self):
         outra_unidade = unidades.criar(
-            self.propriedade["id"], "Outra Unidade", "mensal",
-            Decimal("250.00"), Decimal("250.00"), Decimal("20.00"),
+            self.propriedade["id"],
+            "Outra Unidade",
+            "mensal",
+            Decimal("250.00"),
+            Decimal("250.00"),
+            Decimal("20.00"),
         )
-        outro_quarto = unidades.criar_quarto(
-            outra_unidade["id"], "Quarto X"
-        )
+        outro_quarto = unidades.criar_quarto(outra_unidade["id"], "Quarto X")
         outro_lugar = unidades.criar_lugar(
-            outro_quarto["id"], "Cama X"
+            outro_quarto["id"], "Cama X", "solteiro"
         )
         with self.assertRaises(ValueError):
             contratos.criar_mensal(
@@ -266,7 +283,10 @@ class TesteCriarMensal(BaseContratosTest):
 
     def test_lugar_de_casal_admite_dois_contratos(self):
         cliente_2 = clientes.criar(
-            "Maria", "Passaporte", "222", "mensal",
+            "Maria",
+            "Passaporte",
+            "222",
+            "mensal",
             nif="222222220",
             morada="Rua X, 1",
             estado_civil="Solteiro(a)",
@@ -274,21 +294,30 @@ class TesteCriarMensal(BaseContratosTest):
             validade_documento=date(2030, 1, 1),
         )
         contratos.criar_mensal(
-            self.unidade_mensal["id"], self.cliente_mensal["id"],
-            date(2026, 1, 10), Decimal("250.00"), Decimal("250.00"),
+            self.unidade_mensal["id"],
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
             lugar_id=self.lugar["id"],
         )
         # segundo contrato no mesmo lugar (capacidade 2) tem de passar
         ocupacao, _ = contratos.criar_mensal(
-            self.unidade_mensal["id"], cliente_2["id"],
-            date(2026, 1, 10), Decimal("250.00"), Decimal("250.00"),
+            self.unidade_mensal["id"],
+            cliente_2["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
             lugar_id=self.lugar["id"],
         )
         self.assertEqual(ocupacao["lugar_id"], self.lugar["id"])
 
     def test_lugar_esgotado_recusa_terceiro_contrato(self):
         cliente_2 = clientes.criar(
-            "Maria", "Passaporte", "222", "mensal",
+            "Maria",
+            "Passaporte",
+            "222",
+            "mensal",
             nif="222222220",
             morada="Rua X, 1",
             estado_civil="Solteiro(a)",
@@ -300,10 +329,13 @@ class TesteCriarMensal(BaseContratosTest):
         outro_quarto = unidades.criar_quarto(
             self.unidade_mensal["id"], "Quarto 2"
         )
-        unidades.criar_lugar(outro_quarto["id"], "Cama 2")
+        unidades.criar_lugar(outro_quarto["id"], "Cama 2", "solteiro")
 
         cliente_3 = clientes.criar(
-            "Pedro", "Passaporte", "333", "mensal",
+            "Pedro",
+            "Passaporte",
+            "333",
+            "mensal",
             nif="333333330",
             morada="Rua Y, 2",
             estado_civil="Solteiro(a)",
@@ -311,19 +343,28 @@ class TesteCriarMensal(BaseContratosTest):
             validade_documento=date(2030, 1, 1),
         )
         contratos.criar_mensal(
-            self.unidade_mensal["id"], self.cliente_mensal["id"],
-            date(2026, 1, 10), Decimal("250.00"), Decimal("250.00"),
+            self.unidade_mensal["id"],
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
             lugar_id=self.lugar["id"],
         )
         contratos.criar_mensal(
-            self.unidade_mensal["id"], cliente_2["id"],
-            date(2026, 1, 10), Decimal("250.00"), Decimal("250.00"),
+            self.unidade_mensal["id"],
+            cliente_2["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
             lugar_id=self.lugar["id"],
         )
         with self.assertRaises(ValueError):
             contratos.criar_mensal(
-                self.unidade_mensal["id"], cliente_3["id"],
-                date(2026, 1, 10), Decimal("250.00"), Decimal("250.00"),
+                self.unidade_mensal["id"],
+                cliente_3["id"],
+                date(2026, 1, 10),
+                Decimal("250.00"),
+                Decimal("250.00"),
                 lugar_id=self.lugar["id"],
             )
 
@@ -331,21 +372,28 @@ class TesteCriarMensal(BaseContratosTest):
         with self.assertRaises(ValueError):
             contratos.criar_mensal(
                 self.unidade_mensal["id"],
-                self.cliente_mensal["id"], date(2026, 1, 10),
-                Decimal("0.00"), Decimal("0.00"),
+                self.cliente_mensal["id"],
+                date(2026, 1, 10),
+                Decimal("0.00"),
+                Decimal("0.00"),
             )
 
     def test_caucao_acima_do_teto_gera_erro(self):
         with self.assertRaises(ValueError):
             contratos.criar_mensal(
                 self.unidade_mensal["id"],
-                self.cliente_mensal["id"], date(2026, 1, 10),
-                Decimal("250.00"), Decimal("600.00"),
+                self.cliente_mensal["id"],
+                date(2026, 1, 10),
+                Decimal("250.00"),
+                Decimal("600.00"),
             )
 
     def test_documento_ja_caducado_marca_aviso(self):
         cliente = clientes.criar(
-            "Expirado", "Passaporte", "999", "mensal",
+            "Expirado",
+            "Passaporte",
+            "999",
+            "mensal",
             nif="444444440",
             morada="Rua Z, 3",
             estado_civil="Solteiro(a)",
@@ -353,14 +401,20 @@ class TesteCriarMensal(BaseContratosTest):
             validade_documento=date(2025, 12, 31),
         )
         ocupacao, _ = contratos.criar_mensal(
-            self.unidade_mensal["id"], cliente["id"],
-            date(2026, 1, 10), Decimal("250.00"), Decimal("250.00"),
+            self.unidade_mensal["id"],
+            cliente["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
         )
         self.assertTrue(ocupacao["aviso_documento"])
 
     def test_documento_valido_nao_marca_aviso(self):
         cliente = clientes.criar(
-            "Válido", "Passaporte", "888", "mensal",
+            "Válido",
+            "Passaporte",
+            "888",
+            "mensal",
             nif="555555550",
             morada="Rua W, 4",
             estado_civil="Solteiro(a)",
@@ -368,24 +422,31 @@ class TesteCriarMensal(BaseContratosTest):
             validade_documento=date(2030, 1, 1),
         )
         ocupacao, _ = contratos.criar_mensal(
-            self.unidade_mensal["id"], cliente["id"],
-            date(2026, 1, 10), Decimal("250.00"), Decimal("250.00"),
+            self.unidade_mensal["id"],
+            cliente["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
         )
         self.assertFalse(ocupacao["aviso_documento"])
 
     def test_dia_vencimento_omisso_usa_valor_por_omissao(self):
         _, mensal = contratos.criar_mensal(
             self.unidade_mensal["id"],
-            self.cliente_mensal["id"], date(2026, 1, 10),
-            Decimal("250.00"), Decimal("250.00"),
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
         )
         self.assertEqual(mensal["dia_vencimento"], config.DIA_VENCIMENTO)
 
     def test_dia_vencimento_personalizado_e_aceite(self):
         _, mensal = contratos.criar_mensal(
             self.unidade_mensal["id"],
-            self.cliente_mensal["id"], date(2026, 1, 10),
-            Decimal("250.00"), Decimal("250.00"),
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
             dia_vencimento=15,
         )
         self.assertEqual(mensal["dia_vencimento"], 15)
@@ -394,8 +455,10 @@ class TesteCriarMensal(BaseContratosTest):
         with self.assertRaises(ValueError):
             contratos.criar_mensal(
                 self.unidade_mensal["id"],
-                self.cliente_mensal["id"], date(2026, 1, 10),
-                Decimal("250.00"), Decimal("250.00"),
+                self.cliente_mensal["id"],
+                date(2026, 1, 10),
+                Decimal("250.00"),
+                Decimal("250.00"),
                 dia_vencimento=31,
             )
 
@@ -403,24 +466,30 @@ class TesteCriarMensal(BaseContratosTest):
         with self.assertRaises(ValueError):
             contratos.criar_mensal(
                 self.unidade_mensal["id"],
-                self.cliente_mensal["id"], date(2026, 1, 10),
-                Decimal("250.00"), Decimal("250.00"),
+                self.cliente_mensal["id"],
+                date(2026, 1, 10),
+                Decimal("250.00"),
+                Decimal("250.00"),
                 dia_vencimento="dez",
             )
 
     def test_caucao_igual_a_renda_nao_exige_confirmacao(self):
         _, mensal = contratos.criar_mensal(
             self.unidade_mensal["id"],
-            self.cliente_mensal["id"], date(2026, 1, 10),
-            Decimal("250.00"), Decimal("250.00"),
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
         )
         self.assertFalse(mensal["caucao_exige_confirmacao"])
 
     def test_caucao_acima_da_renda_exige_confirmacao(self):
         _, mensal = contratos.criar_mensal(
             self.unidade_mensal["id"],
-            self.cliente_mensal["id"], date(2026, 1, 10),
-            Decimal("250.00"), Decimal("400.00"),
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("400.00"),
         )
         self.assertTrue(mensal["caucao_exige_confirmacao"])
 
@@ -430,16 +499,20 @@ class TesteCriarMensal(BaseContratosTest):
         with self.assertRaises(ValueError):
             contratos.criar_mensal(
                 self.unidade_mensal["id"],
-                self.cliente_mensal["id"], date(2026, 1, 10),
-                Decimal("200.00"), Decimal("200.00"),
+                self.cliente_mensal["id"],
+                date(2026, 1, 10),
+                Decimal("200.00"),
+                Decimal("200.00"),
             )
 
     def test_renda_abaixo_da_calculada_com_responsavel_valido_grava(self):
         responsavel = responsaveis.criar("Gestor de Turno")
         _, mensal = contratos.criar_mensal(
             self.unidade_mensal["id"],
-            self.cliente_mensal["id"], date(2026, 1, 10),
-            Decimal("200.00"), Decimal("200.00"),
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("200.00"),
+            Decimal("200.00"),
             responsavel_desconto_renda_id=responsavel["id"],
         )
         self.assertEqual(mensal["renda_praticada"], Decimal("200.00"))
@@ -450,8 +523,10 @@ class TesteCriarMensal(BaseContratosTest):
     def test_renda_igual_a_calculada_nao_exige_responsavel(self):
         _, mensal = contratos.criar_mensal(
             self.unidade_mensal["id"],
-            self.cliente_mensal["id"], date(2026, 1, 10),
-            Decimal("250.00"), Decimal("250.00"),
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
         )
         self.assertEqual(mensal["responsavel_desconto_renda_id"], "")
 
@@ -461,8 +536,10 @@ class TesteCriarMensal(BaseContratosTest):
         responsavel = responsaveis.criar("Gestor de Turno")
         _, mensal = contratos.criar_mensal(
             self.unidade_mensal["id"],
-            self.cliente_mensal["id"], date(2026, 1, 10),
-            Decimal("300.00"), Decimal("300.00"),
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("300.00"),
+            Decimal("300.00"),
             responsavel_desconto_renda_id=responsavel["id"],
         )
         self.assertEqual(mensal["responsavel_desconto_renda_id"], "")
@@ -473,38 +550,46 @@ class TesteCriarMensal(BaseContratosTest):
         with self.assertRaises(ValueError):
             contratos.criar_mensal(
                 self.unidade_mensal["id"],
-                self.cliente_airbnb["id"], date(2026, 1, 10),
-                Decimal("250.00"), Decimal("250.00"),
+                self.cliente_airbnb["id"],
+                date(2026, 1, 10),
+                Decimal("250.00"),
+                Decimal("250.00"),
             )
 
     def test_recusa_segundo_contrato_mensal_ativo_mesmo_cliente(self):
         contratos.criar_mensal(
             self.unidade_mensal["id"],
-            self.cliente_mensal["id"], date(2026, 1, 10),
-            Decimal("250.00"), Decimal("250.00"),
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
         )
         with self.assertRaises(ValueError):
             contratos.criar_mensal(
                 self.unidade_mensal["id"],
-                self.cliente_mensal["id"], date(2026, 2, 1),
-                Decimal("250.00"), Decimal("250.00"),
+                self.cliente_mensal["id"],
+                date(2026, 2, 1),
+                Decimal("250.00"),
+                Decimal("250.00"),
             )
 
     def test_permite_novo_contrato_apos_encerrar_o_anterior(self):
         ocupacao, _ = contratos.criar_mensal(
             self.unidade_mensal["id"],
-            self.cliente_mensal["id"], date(2026, 1, 10),
-            Decimal("250.00"), Decimal("250.00"),
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
         )
-        contratos.encerrar_mensal(
-            ocupacao["id"], date(2026, 3, 1)
-        )
+        contratos.encerrar_mensal(ocupacao["id"], date(2026, 3, 1))
         # o contrato anterior já não está ativo — o NIF fica livre
         # para um novo contrato, mesmo cliente ou não.
         novo_ocupacao, _ = contratos.criar_mensal(
             self.unidade_mensal["id"],
-            self.cliente_mensal["id"], date(2026, 3, 5),
-            Decimal("250.00"), Decimal("250.00"),
+            self.cliente_mensal["id"],
+            date(2026, 3, 5),
+            Decimal("250.00"),
+            Decimal("250.00"),
         )
         self.assertTrue(novo_ocupacao["ativo"])
 
@@ -543,14 +628,18 @@ class TesteCriarMensal(BaseContratosTest):
 
         contratos.criar_mensal(
             self.unidade_mensal["id"],
-            self.cliente_mensal["id"], date(2026, 1, 10),
-            Decimal("250.00"), Decimal("250.00"),
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
         )
         with self.assertRaises(ValueError):
             contratos.criar_mensal(
                 self.unidade_mensal["id"],
-                cliente_b["id"], date(2026, 2, 1),
-                Decimal("250.00"), Decimal("250.00"),
+                cliente_b["id"],
+                date(2026, 2, 1),
+                Decimal("250.00"),
+                Decimal("250.00"),
             )
 
 
@@ -560,8 +649,10 @@ class TesteAtualizarMensal(BaseContratosTest):
         super().setUp()
         self.ocupacao, self.mensal = contratos.criar_mensal(
             self.unidade_mensal["id"],
-            self.cliente_mensal["id"], date(2026, 1, 10),
-            Decimal("250.00"), Decimal("250.00"),
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
         )
 
     def test_altera_renda_praticada(self):
@@ -583,9 +674,7 @@ class TesteAtualizarMensal(BaseContratosTest):
 
     def test_dia_vencimento_invalido_gera_erro(self):
         with self.assertRaises(ValueError):
-            contratos.atualizar_mensal(
-                self.ocupacao["id"], dia_vencimento=31
-            )
+            contratos.atualizar_mensal(self.ocupacao["id"], dia_vencimento=31)
 
     def test_dia_vencimento_valido_grava(self):
         _, mensal = contratos.atualizar_mensal(
@@ -600,9 +689,7 @@ class TesteAtualizarMensal(BaseContratosTest):
         self.assertTrue(mensal["caucao_exige_confirmacao"])
 
     def test_contrato_encerrado_nao_pode_ser_alterado(self):
-        contratos.encerrar_mensal(
-            self.ocupacao["id"], date(2026, 6, 1)
-        )
+        contratos.encerrar_mensal(self.ocupacao["id"], date(2026, 6, 1))
         with self.assertRaises(ValueError):
             contratos.atualizar_mensal(
                 self.ocupacao["id"],
@@ -666,13 +753,16 @@ class TesteEncerrarMensal(BaseContratosTest):
         super().setUp()
         self.ocupacao, self.mensal = contratos.criar_mensal(
             self.unidade_mensal["id"],
-            self.cliente_mensal["id"], date(2026, 1, 10),
-            Decimal("250.00"), Decimal("250.00"),
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
         )
 
     def test_encerra_com_sucesso(self):
         ocupacao, mensal = contratos.encerrar_mensal(
-            self.ocupacao["id"], date(2026, 6, 10),
+            self.ocupacao["id"],
+            date(2026, 6, 10),
             motivo="fim de contrato",
         )
         self.assertEqual(ocupacao["data_fim"], date(2026, 6, 10))
@@ -685,23 +775,20 @@ class TesteEncerrarMensal(BaseContratosTest):
 
     def test_data_fim_antes_do_inicio_gera_erro(self):
         with self.assertRaises(ValueError):
-            contratos.encerrar_mensal(
-                self.ocupacao["id"], date(2026, 1, 1)
-            )
+            contratos.encerrar_mensal(self.ocupacao["id"], date(2026, 1, 1))
 
     def test_ja_encerrado_gera_erro(self):
-        contratos.encerrar_mensal(
-            self.ocupacao["id"], date(2026, 6, 10)
-        )
+        contratos.encerrar_mensal(self.ocupacao["id"], date(2026, 6, 10))
         with self.assertRaises(ValueError):
-            contratos.encerrar_mensal(
-                self.ocupacao["id"], date(2026, 8, 1)
-            )
+            contratos.encerrar_mensal(self.ocupacao["id"], date(2026, 8, 1))
 
     def test_reserva_airbnb_recusada(self):
         oa, _ = contratos.registar_airbnb(
-            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 1, 10),
+            date(2026, 1, 15),
+            Decimal("225.00"),
         )
         with self.assertRaises(ValueError):
             contratos.encerrar_mensal(oa["id"], date(2026, 2, 1))
@@ -726,20 +813,23 @@ class TesteReativar(BaseContratosTest):
     def test_reativa_contrato_mensal_repoe_data_fim_nula(self):
         ocupacao, _ = contratos.criar_mensal(
             self.unidade_mensal["id"],
-            self.cliente_mensal["id"], date(2026, 1, 10),
-            Decimal("250.00"), Decimal("250.00"),
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
         )
-        contratos.encerrar_mensal(
-            ocupacao["id"], date(2026, 6, 10)
-        )
+        contratos.encerrar_mensal(ocupacao["id"], date(2026, 6, 10))
         reativada = contratos.reativar(ocupacao["id"])
         self.assertTrue(reativada["ativo"])
         self.assertIsNone(reativada["data_fim"])
 
     def test_reativa_reserva_airbnb_mantem_data_fim(self):
         oa, _ = contratos.registar_airbnb(
-            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 1, 10),
+            date(2026, 1, 15),
+            Decimal("225.00"),
         )
         contratos.cancelar_airbnb(oa["id"])
         reativada = contratos.reativar(oa["id"])
@@ -749,8 +839,10 @@ class TesteReativar(BaseContratosTest):
     def test_ja_ativa_gera_erro(self):
         ocupacao, _ = contratos.criar_mensal(
             self.unidade_mensal["id"],
-            self.cliente_mensal["id"], date(2026, 1, 10),
-            Decimal("250.00"), Decimal("250.00"),
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
         )
         with self.assertRaises(ValueError):
             contratos.reativar(ocupacao["id"])
@@ -764,8 +856,11 @@ class TesteRegistarAirbnb(BaseContratosTest):
 
     def test_regista_com_sucesso(self):
         ocupacao, airbnb = contratos.registar_airbnb(
-            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 1, 10),
+            date(2026, 1, 15),
+            Decimal("225.00"),
         )
         self.assertEqual(ocupacao["tipo"], "airbnb")
         self.assertEqual(ocupacao["lugar_id"], "")
@@ -776,8 +871,10 @@ class TesteRegistarAirbnb(BaseContratosTest):
         with self.assertRaises(ValueError):
             contratos.registar_airbnb(
                 self.unidade_mensal["id"],
-                self.cliente_airbnb["id"], date(2026, 1, 10),
-                date(2026, 1, 15), Decimal("50.00"),
+                self.cliente_airbnb["id"],
+                date(2026, 1, 10),
+                date(2026, 1, 15),
+                Decimal("50.00"),
             )
 
     def test_unidade_inativa_recusada(self):
@@ -788,8 +885,10 @@ class TesteRegistarAirbnb(BaseContratosTest):
         with self.assertRaises(ValueError):
             contratos.registar_airbnb(
                 self.unidade_airbnb["id"],
-                self.cliente_airbnb["id"], date(2026, 1, 10),
-                date(2026, 1, 15), Decimal("225.00"),
+                self.cliente_airbnb["id"],
+                date(2026, 1, 10),
+                date(2026, 1, 15),
+                Decimal("225.00"),
             )
 
     def test_estadia_de_uma_noite_aceite(self):
@@ -797,8 +896,10 @@ class TesteRegistarAirbnb(BaseContratosTest):
         # ser o caso-limite válido, não um caso abaixo do mínimo.
         ocupacao, airbnb = contratos.registar_airbnb(
             self.unidade_airbnb["id"],
-            self.cliente_airbnb["id"], date(2026, 1, 10),
-            date(2026, 1, 11), Decimal("50.00"),
+            self.cliente_airbnb["id"],
+            date(2026, 1, 10),
+            date(2026, 1, 11),
+            Decimal("50.00"),
         )
         self.assertEqual(ocupacao["data_fim"], date(2026, 1, 11))
         self.assertEqual(airbnb["preco_praticado"], Decimal("50.00"))
@@ -807,31 +908,44 @@ class TesteRegistarAirbnb(BaseContratosTest):
         with self.assertRaises(ValueError):
             contratos.registar_airbnb(
                 self.unidade_airbnb["id"],
-                self.cliente_airbnb["id"], date(2026, 1, 1),
-                date(2026, 2, 15), Decimal("50.00"),
+                self.cliente_airbnb["id"],
+                date(2026, 1, 1),
+                date(2026, 2, 15),
+                Decimal("50.00"),
             )
 
     def test_sobreposicao_recusada(self):
         contratos.registar_airbnb(
-            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 1, 10),
+            date(2026, 1, 15),
+            Decimal("225.00"),
         )
         with self.assertRaises(ValueError):
             contratos.registar_airbnb(
                 self.unidade_airbnb["id"],
-                self.cliente_airbnb["id"], date(2026, 1, 12),
-                date(2026, 1, 18), Decimal("50.00"),
+                self.cliente_airbnb["id"],
+                date(2026, 1, 12),
+                date(2026, 1, 18),
+                Decimal("50.00"),
             )
 
     def test_reservas_consecutivas_nao_sobrepoem(self):
         contratos.registar_airbnb(
-            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 1, 10),
+            date(2026, 1, 15),
+            Decimal("225.00"),
         )
         # entra exatamente no dia em que a outra sai — não é conflito
         ocupacao, _ = contratos.registar_airbnb(
-            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 15), date(2026, 1, 20), Decimal("225.00"),
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 1, 15),
+            date(2026, 1, 20),
+            Decimal("225.00"),
         )
         self.assertEqual(ocupacao["data_inicio"], date(2026, 1, 15))
 
@@ -839,18 +953,22 @@ class TesteRegistarAirbnb(BaseContratosTest):
         # 29/06 e 30/06 fora de época alta (45 cada); 01/07 e 02/07
         # dentro (90 cada) -> total 270.00
         _, airbnb = contratos.registar_airbnb(
-            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 6, 29), date(2026, 7, 3), Decimal("270.00"),
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 6, 29),
+            date(2026, 7, 3),
+            Decimal("270.00"),
         )
         self.assertEqual(airbnb["preco_calculado"], Decimal("270.00"))
 
     def test_epoca_alta_ignorada_se_indicador_desligado(self):
-        unidades.atualizar(
-            self.unidade_airbnb["id"], epoca_alta_ativa=False
-        )
+        unidades.atualizar(self.unidade_airbnb["id"], epoca_alta_ativa=False)
         _, airbnb = contratos.registar_airbnb(
-            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 7, 1), date(2026, 7, 4), Decimal("135.00"),
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 7, 1),
+            date(2026, 7, 4),
+            Decimal("135.00"),
         )
         # sem o indicador ativo, mesmo em julho, preço fica sempre base
         self.assertEqual(airbnb["preco_calculado"], Decimal("135.00"))
@@ -859,24 +977,32 @@ class TesteRegistarAirbnb(BaseContratosTest):
         with self.assertRaises(ValueError):
             contratos.registar_airbnb(
                 self.unidade_airbnb["id"],
-                self.cliente_airbnb["id"], date(2026, 1, 10),
-                date(2026, 1, 15), Decimal("0.00"),
+                self.cliente_airbnb["id"],
+                date(2026, 1, 10),
+                date(2026, 1, 15),
+                Decimal("0.00"),
             )
 
     def test_check_in_tardio_sem_hora_gera_erro(self):
         with self.assertRaises(ValueError):
             contratos.registar_airbnb(
                 self.unidade_airbnb["id"],
-                self.cliente_airbnb["id"], date(2026, 1, 10),
-                date(2026, 1, 15), Decimal("225.00"),
+                self.cliente_airbnb["id"],
+                date(2026, 1, 10),
+                date(2026, 1, 15),
+                Decimal("225.00"),
                 check_in_tardio=True,
             )
 
     def test_check_in_tardio_usa_multa_da_unidade(self):
         _, airbnb = contratos.registar_airbnb(
-            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
-            check_in_tardio=True, hora_chegada="18:00",
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 1, 10),
+            date(2026, 1, 15),
+            Decimal("225.00"),
+            check_in_tardio=True,
+            hora_chegada="18:00",
         )
         self.assertEqual(airbnb["multa_calculada"], Decimal("20.00"))
         self.assertEqual(airbnb["multa_praticada"], Decimal("20.00"))
@@ -886,9 +1012,13 @@ class TesteRegistarAirbnb(BaseContratosTest):
         # um desconto parcial — decisão do aluno, 25/08/2026.
         responsavel = responsaveis.criar("Gestor de Turno")
         _, airbnb = contratos.registar_airbnb(
-            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
-            check_in_tardio=True, hora_chegada="18:00",
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 1, 10),
+            date(2026, 1, 15),
+            Decimal("225.00"),
+            check_in_tardio=True,
+            hora_chegada="18:00",
             multa_praticada=Decimal("0.00"),
             responsavel_desconto_multa_id=responsavel["id"],
         )
@@ -900,8 +1030,11 @@ class TesteRegistarAirbnb(BaseContratosTest):
 
     def test_sem_check_in_tardio_multa_fica_zero(self):
         _, airbnb = contratos.registar_airbnb(
-            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 1, 10),
+            date(2026, 1, 15),
+            Decimal("225.00"),
         )
         self.assertEqual(airbnb["multa_calculada"], Decimal("0.00"))
         self.assertEqual(airbnb["multa_praticada"], Decimal("0.00"))
@@ -918,14 +1051,16 @@ class TesteRegistarAirbnb(BaseContratosTest):
         self.assertTrue(ocupacao["id"].startswith("RSV-"))
 
 
-
 class TesteAtualizarAirbnb(BaseContratosTest):
 
     def setUp(self):
         super().setUp()
         self.ocupacao, self.airbnb = contratos.registar_airbnb(
-            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 1, 10),
+            date(2026, 1, 15),
+            Decimal("225.00"),
         )
 
     def test_altera_preco_praticado(self):
@@ -943,9 +1078,13 @@ class TesteAtualizarAirbnb(BaseContratosTest):
 
     def test_multa_negativa_gera_erro(self):
         ocupacao, _ = contratos.registar_airbnb(
-            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 2, 1), date(2026, 2, 5), Decimal("180.00"),
-            check_in_tardio=True, hora_chegada="18:00",
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 2, 1),
+            date(2026, 2, 5),
+            Decimal("180.00"),
+            check_in_tardio=True,
+            hora_chegada="18:00",
         )
         with self.assertRaises(ValueError):
             contratos.atualizar_airbnb(
@@ -954,15 +1093,20 @@ class TesteAtualizarAirbnb(BaseContratosTest):
 
     def test_multa_zero_admitida_como_perdao(self):
         ocupacao, _ = contratos.registar_airbnb(
-            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 2, 1), date(2026, 2, 5), Decimal("180.00"),
-            check_in_tardio=True, hora_chegada="18:00",
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 2, 1),
+            date(2026, 2, 5),
+            Decimal("180.00"),
+            check_in_tardio=True,
+            hora_chegada="18:00",
         )
         # perdão total (0.00) continua a exigir responsável, tal como
         # um desconto parcial — decisão do aluno, 25/08/2026.
         responsavel = responsaveis.criar("Gestor de Turno")
         _, airbnb = contratos.atualizar_airbnb(
-            ocupacao["id"], multa_praticada=Decimal("0.00"),
+            ocupacao["id"],
+            multa_praticada=Decimal("0.00"),
             responsavel_desconto_multa_id=responsavel["id"],
         )
         self.assertEqual(airbnb["multa_praticada"], Decimal("0.00"))
@@ -984,8 +1128,11 @@ class TesteCancelarAirbnb(BaseContratosTest):
     def setUp(self):
         super().setUp()
         self.ocupacao, self.airbnb = contratos.registar_airbnb(
-            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 1, 10),
+            date(2026, 1, 15),
+            Decimal("225.00"),
         )
 
     def test_cancela_com_sucesso(self):
@@ -1005,8 +1152,10 @@ class TesteCancelarAirbnb(BaseContratosTest):
     def test_contrato_mensal_recusado(self):
         oc, _ = contratos.criar_mensal(
             self.unidade_mensal["id"],
-            self.cliente_mensal["id"], date(2026, 1, 10),
-            Decimal("250.00"), Decimal("250.00"),
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
         )
         with self.assertRaises(ValueError):
             contratos.cancelar_airbnb(oc["id"])
@@ -1015,8 +1164,11 @@ class TesteCancelarAirbnb(BaseContratosTest):
         contratos.cancelar_airbnb(self.ocupacao["id"])
         # as mesmas datas, agora livres, têm de ser aceites
         ocupacao, _ = contratos.registar_airbnb(
-            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 1, 10),
+            date(2026, 1, 15),
+            Decimal("225.00"),
         )
         self.assertTrue(ocupacao["ativo"])
 
@@ -1027,17 +1179,22 @@ class TesteProcurarListar(BaseContratosTest):
         super().setUp()
         self.mensal, _ = contratos.criar_mensal(
             self.unidade_mensal["id"],
-            self.cliente_mensal["id"], date(2026, 1, 10),
-            Decimal("250.00"), Decimal("250.00"),
+            self.cliente_mensal["id"],
+            date(2026, 1, 10),
+            Decimal("250.00"),
+            Decimal("250.00"),
         )
         self.airbnb, _ = contratos.registar_airbnb(
-            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
-            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 1, 10),
+            date(2026, 1, 15),
+            Decimal("225.00"),
         )
 
     def test_procurar_encontra_por_id(self):
         encontrada = contratos.procurar(self.mensal["id"])
-        self.assertEqual(encontrada["id"], self.mensal["id"]) # type: ignore
+        self.assertEqual(encontrada["id"], self.mensal["id"])  # type: ignore
 
     def test_procurar_inexistente_devolve_none(self):
         self.assertIsNone(contratos.procurar("CNT-999"))
@@ -1052,9 +1209,7 @@ class TesteProcurarListar(BaseContratosTest):
         self.assertEqual(resultado[0]["tipo"], "mensal")
 
     def test_listar_filtra_por_unidade(self):
-        resultado = contratos.listar(
-            unidade_id=self.unidade_airbnb["id"]
-        )
+        resultado = contratos.listar(unidade_id=self.unidade_airbnb["id"])
         self.assertEqual(len(resultado), 1)
         self.assertEqual(resultado[0]["id"], self.airbnb["id"])
 
@@ -1074,14 +1229,20 @@ class TesteProcurarListar(BaseContratosTest):
         # reserva com termo definido (ao contrário do mensal, que
         # compara só com o início)
         cliente_expirado = clientes.criar(
-            "Expirado", "Passaporte", "777", "airbnb",
+            "Expirado",
+            "Passaporte",
+            "777",
+            "airbnb",
             nacionalidade="Britânica",
             data_nascimento=date(1980, 11, 5),
             validade_documento=date(2026, 3, 3),
         )
         contratos.registar_airbnb(
-            self.unidade_airbnb["id"], cliente_expirado["id"],
-            date(2026, 3, 1), date(2026, 3, 5), Decimal("180.00"),
+            self.unidade_airbnb["id"],
+            cliente_expirado["id"],
+            date(2026, 3, 1),
+            date(2026, 3, 5),
+            Decimal("180.00"),
         )
         resultado = contratos.listar(aviso_documento=True)
         self.assertEqual(len(resultado), 1)
@@ -1096,7 +1257,7 @@ class TesteProcurarListar(BaseContratosTest):
         contratos.cancelar_airbnb(self.airbnb["id"])
         encontrada = contratos.procurar(self.airbnb["id"])
         self.assertIsNotNone(encontrada)
-        self.assertFalse(encontrada["ativo"]) # type: ignore
+        self.assertFalse(encontrada["ativo"])  # type: ignore
 
 
 class TesteSobreposicao(unittest.TestCase):
@@ -1109,33 +1270,117 @@ class TesteSobreposicao(unittest.TestCase):
     def test_sem_sobreposicao_quando_saida_coincide_com_entrada(self):
         self.assertFalse(
             contratos._sobrepoe(
-                date(2026, 1, 10), date(2026, 1, 15),
-                date(2026, 1, 15), date(2026, 1, 20),
+                date(2026, 1, 10),
+                date(2026, 1, 15),
+                date(2026, 1, 15),
+                date(2026, 1, 20),
             )
         )
 
     def test_sobreposicao_quando_intervalos_se_cruzam(self):
         self.assertTrue(
             contratos._sobrepoe(
-                date(2026, 1, 10), date(2026, 1, 15),
-                date(2026, 1, 12), date(2026, 1, 18),
+                date(2026, 1, 10),
+                date(2026, 1, 15),
+                date(2026, 1, 12),
+                date(2026, 1, 18),
             )
         )
 
     def test_sobreposicao_quando_um_intervalo_contem_o_outro(self):
         self.assertTrue(
             contratos._sobrepoe(
-                date(2026, 1, 1), date(2026, 1, 31),
-                date(2026, 1, 10), date(2026, 1, 15),
+                date(2026, 1, 1),
+                date(2026, 1, 31),
+                date(2026, 1, 10),
+                date(2026, 1, 15),
             )
         )
 
     def test_sem_sobreposicao_quando_intervalos_totalmente_separados(self):
         self.assertFalse(
             contratos._sobrepoe(
-                date(2026, 1, 1), date(2026, 1, 5),
-                date(2026, 2, 1), date(2026, 2, 5),
+                date(2026, 1, 1),
+                date(2026, 1, 5),
+                date(2026, 2, 1),
+                date(2026, 2, 5),
             )
+        )
+
+
+class TesteAvisosEncerramento(unittest.TestCase):
+    """contratos.avisos_encerramento — os dois sinais registados ao
+    encerrar um contrato mensal (decisão 14: sinalizam, nunca
+    bloqueiam).
+    """
+
+    def test_duracao_acima_do_minimo_nao_levanta_aviso(self):
+        inicio = date.today() - timedelta(days=365)
+        fim = date.today() + timedelta(days=60)
+
+        avisos = contratos.avisos_encerramento({"data_inicio": inicio}, fim)
+
+        self.assertFalse(avisos["duracao_abaixo_minima"])
+
+    def test_duracao_abaixo_do_minimo_levanta_aviso(self):
+        inicio = date(2026, 3, 1)
+        fim = date(2026, 4, 30)  # 1 mês de diferença, mínimo são 3
+
+        avisos = contratos.avisos_encerramento({"data_inicio": inicio}, fim)
+
+        self.assertTrue(avisos["duracao_abaixo_minima"])
+
+    def test_duracao_conta_meses_de_calendario_nao_dias(self):
+        """31/03 → 01/04 é 1 dia, mas conta como 1 mês — mesma regra
+        que encerrar_mensal já usava antes desta função existir.
+        """
+        avisos = contratos.avisos_encerramento(
+            {"data_inicio": date(2026, 3, 31)}, date(2026, 4, 1)
+        )
+
+        self.assertTrue(avisos["duracao_abaixo_minima"])
+
+    def test_encerrar_hoje_e_aviso_previo_insuficiente(self):
+        hoje = date.today()
+
+        avisos = contratos.avisos_encerramento(
+            {"data_inicio": hoje - timedelta(days=365)}, hoje
+        )
+
+        self.assertTrue(avisos["aviso_previo_insuficiente"])
+
+    def test_aviso_previo_cumprido_nao_levanta_aviso(self):
+        fim = date.today() + timedelta(days=config.AVISO_PREVIO_DIAS + 1)
+
+        avisos = contratos.avisos_encerramento(
+            {"data_inicio": date.today() - timedelta(days=365)}, fim
+        )
+
+        self.assertFalse(avisos["aviso_previo_insuficiente"])
+
+    def test_limite_exato_do_aviso_previo_e_suficiente(self):
+        """Exatamente AVISO_PREVIO_DIAS dias já cumpre — a regra é
+        'menos de', não 'menos ou igual'.
+        """
+        fim = date.today() + timedelta(days=config.AVISO_PREVIO_DIAS)
+
+        avisos = contratos.avisos_encerramento(
+            {"data_inicio": date.today() - timedelta(days=365)}, fim
+        )
+
+        self.assertFalse(avisos["aviso_previo_insuficiente"])
+
+    def test_devolve_so_as_duas_chaves(self):
+        """O motivo do encerramento não entra aqui — é acrescentado
+        por encerrar_mensal, que junta este resultado ao motivo.
+        """
+        avisos = contratos.avisos_encerramento(
+            {"data_inicio": date(2026, 1, 1)}, date(2026, 12, 31)
+        )
+
+        self.assertEqual(
+            set(avisos),
+            {"duracao_abaixo_minima", "aviso_previo_insuficiente"},
         )
 
 
