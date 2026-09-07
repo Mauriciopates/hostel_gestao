@@ -47,6 +47,28 @@ TEXTO_INDISPONIVEL = ("#6B7280", "#9AA3AD")
 VERDE_LIVRE = ("#E1F5EA", "#1C3A2A")            # fundo da etiqueta
 TEXTO_LIVRE = ("#2E8B57", "#8FD9AE")
 
+# Chip de ID (propriedade/unidade) — acrescentado em 07/09/2026,
+# aprovado por mockup, para mostrar o ID ao lado do nome em
+# Propriedades e Unidades sem competir visualmente com as etiquetas
+# de estado (fundo bem mais claro, sem apelo de "aviso"). Só a
+# propriedade usa este par — o chip de ID da unidade reaproveita
+# CINZA_INDISPONIVEL/TEXTO_INDISPONIVEL, já existentes.
+ID_CHIP_FUNDO = ("#EAF3F8", "#16323F")          # fundo do chip de ID
+
+# Zebra striping das tabelas de Gestão de Propriedades (07/09/2026,
+# 4ª ronda, ao passar para uma "tabela a sério") — tom muito
+# ligeiramente diferente de COR_FUNDO, só para o olho seguir a linha
+# sem precisar de bordas pesadas por todo o lado. Só as linhas
+# ativas alternam; as inativas ficam sempre no fundo normal.
+LINHA_ALTERNADA = ("#F7F9FB", "#20262E")
+
+# Fundo do cabeçalho das mesmas tabelas (07/09/2026, 5ª ronda — o
+# aluno achou que, mesmo com colunas alinhadas, "não parecia uma
+# tabela"): uma faixa com fundo próprio por trás do cabeçalho,
+# dentro de um cartão com borda à volta de toda a tabela, é o que
+# faz ler como tabela a sério, não só texto alinhado em colunas.
+CABECALHO_TABELA_FUNDO = ("#F5F6F9", "#1E242B")
+
 # Raios de canto por omissão — arredondado em toda a interface
 RAIO_BOTAO = 10
 RAIO_CARTAO = 14

@@ -128,12 +128,238 @@ do aluno), antes deste ficheiro:
    qualquer combinação (o cli.py, que já pergunta "Época alta
    ativa?" para os dois tipos, fica exatamente como estava).
 
+9. BUSCA + FILTRO POR ESTADO + BOTÃO MANUTENÇÃO (07/09/2026) —
+   itens 2/3/5 do checklist de wireframes, aprovados por mockup
+   (imagem, sem código) antes de codar. O wireframe original previa
+   um ecrã de escolha de regime e uma lista Airbnb à parte; decisão
+   do aluno foi manter a fusão já existente neste ecrã, só
+   acrescentando o que faltava dentro dele:
+
+   - Campo de busca (nome ou ID, live enquanto se escreve) e
+     dropdown "Estado" (Todos/Livre/Parcial/Ocupado/Reservado/Em
+     manutenção) na barra do topo, ao lado de "Mostrar inativos".
+     Filtram as UNIDADES; uma propriedade sem nenhuma unidade que
+     bata certo com os filtros não é desenhada (evita mostrar
+     cartões vazios de propriedade só porque o filtro escondeu
+     todas as unidades lá dentro). `_cor_estado` foi desmembrada em
+     `_categoria_estado` (classificação) + `_cor_estado` (cores),
+     para o filtro reutilizar exatamente a mesma classificação que
+     já pinta a etiqueta — nunca duas fontes de verdade para a
+     mesma regra.
+   - Botão "Manutenção"/"Retirar manutenção" por unidade ATIVA
+     (mesmo critério de Desativar/Editar — inativa não tem estado
+     calculado para alternar), ligado a
+     `unidades.marcar_manutencao`/`desmarcar_manutencao` (já
+     existiam no módulo de negócio, só não tinham ecrã — módulo B
+     do checklist). "Manutenção" pede confirmação simples
+     (`componentes.confirmar`, tira da oferta); "Retirar
+     manutenção" não pede (mesma convenção de "Reativar" — repor
+     não é destrutivo).
+
+   O item 5 do checklist ("Confirmar alteração de preço") não entra
+   aqui: já fechou em 06/09/2026 por decisão própria (dropdown do
+   responsável vale como confirmação, sem popup à parte) — sem
+   nenhuma alteração de código.
+
+9b. 2ª RONDA DO PONTO 9 (07/09/2026, mesmo dia) — aprovado por
+    mockup, a pedido do aluno depois de testar a 1ª entrega no
+    PC/MySQL real dele:
+
+    - Busca deixou de filtrar a cada tecla (ficava feio, a
+      redesenhar a lista inteira a cada letra) — passa a filtrar só
+      ao premir Enter dentro do campo.
+    - O botão "Manutenção"/"Retirar manutenção" saiu da linha da
+      lista (desalinhava "Ver planta →") e passou para dentro de
+      `EditarUnidadeModal`, agindo na hora e fechando o modal a
+      seguir. Uma unidade em manutenção mostra só texto simples a
+      seguir ao nome ("— em manutenção", cor secundária, mesmo
+      padrão do "(inativa)") — sem pílula de estado nem botão
+      nenhum na linha.
+    - Chip de ID a seguir ao nome, tanto da propriedade
+      (`prop["id"]`) quanto de cada unidade (`uni["id"]`) — a busca
+      já aceitava procurar por ID, mas o ID não aparecia em lado
+      nenhum da tela. Cor nova em `gui/tema.py`: `ID_CHIP_FUNDO`
+      (chip da propriedade); o chip da unidade reaproveita
+      `CINZA_INDISPONIVEL`/`TEXTO_INDISPONIVEL`, já existentes.
+    - Duplo clique numa linha de unidade (nome ou chip de ID) abre
+      `EditarUnidadeModal` dessa unidade — atalho, sem botão novo.
+
+10. REESTRUTURAÇÃO — "GESTÃO DE PROPRIEDADES" (07/09/2026, mesmo
+    dia) — aprovado por mockup (imagem, sem código, em duas rondas),
+    a pedido do aluno depois de ver o layout do ponto 9b quebrado no
+    PC real dele: em vez de mais um ajuste ao ecrã fundido, decidiu
+    separar propriedades e unidades em dois níveis.
+
+    - Ecrã renomeado para "Gestão de Propriedades" (título do
+      Cabecalho e item da barra lateral, ver `gui/app.py`) e passa a
+      listar SÓ propriedades, em tabela simples
+      (ID/Nome/Morada/ações) — as unidades deixam de aparecer aqui.
+    - Ganhou busca própria (nome ou ID, mesmo padrão Enter das
+      unidades) — faltava, reparado pelo aluno ao validar a 1ª
+      versão do mockup. O filtro por estado sai daqui (não fazia
+      sentido nas propriedades, só nas unidades) e "Mostrar
+      inativos" passa a valer só para propriedades.
+    - Clicar no ID da propriedade (rótulo azul-claro, cursor de
+      mão) abre `UnidadesDaPropriedadeModal`: popup com cabeçalho
+      "UNIDADES DA PROPRIEDADE" + nome da propriedade, e lá dentro a
+      tabela de unidades (ID/Nome/Estado/Preço/ações) — no formato
+      que o aluno gostou desde o primeiro mockup deste ecrã (ver
+      wireframe original do checklist). Busca, filtro de estado,
+      "Mostrar inativas" e "+ Nova Unidade" mudam-se todos para
+      dentro deste popup (antes viviam no ecrã principal) — cada um
+      age só sobre as unidades da propriedade aberta.
+    - Cada linha de unidade no popup tem Desativar/Editar/Abrir — a
+      1ª versão do mockup só tinha "Abrir" e o aluno pediu para
+      repor os outros dois, que continuavam a fazer falta. "Abrir"
+      continua a levar à Planta de Lugares e só aparece nas
+      unidades mensais (Airbnb não tem planta, decisão 5); duplo
+      clique no nome/ID continua a abrir Editar Unidade, mesmo
+      atalho do ponto 9b. O que "Abrir" deve fazer numa unidade
+      Airbnb (o aluno quer ligar isto ao cálculo de roupa de cama a
+      enviar) fica para decisão futura — depende de stock, ainda por
+      desenhar.
+    - As duas tabelas (propriedades e unidades) passaram a desenhar
+      cada coluna como um único widget com largura fixa (`width=`),
+      lado a lado com `.pack(side="left")` — sem `CTkFrame`
+      aninhada nenhuma a combinar nome+chip de ID como no ponto 9b.
+      Resolve por construção o bug relatado pelo aluno (aquele
+      `pack_propagate(False)` sem altura que criava espaços vazios
+      enormes entre as linhas): sem frame nenhuma a "prender"
+      altura, não há altura nenhuma para prender mal. O chip de ID
+      passa a ser a própria coluna "ID" (já não fica colado ao
+      nome) — por isso `ID_CHIP_FUNDO`, criado no ponto 9b, continua
+      a ser usado, só que agora numa coluna própria.
+    - "Planta de Lugares" sai da barra lateral (`gui/app.py`) — só
+      se chega lá pelo botão "Abrir" de uma unidade mensal dentro
+      do popup. O ecrã continua a existir e a funcionar exatamente
+      igual (`PlantaLugares`, `gui/gui_unidades.py`); só deixou de
+      ter entrada própria no menu.
+
+11. AJUSTES DO PONTO 10, TESTADOS NO PC REAL (07/09/2026, 3ª ronda):
+
+    - Chip de ID (propriedade e unidade) e pílula de estado
+      ganharam `anchor="w"` — sem isso, o texto ficava centrado
+      dentro da largura fixa da coluna, desalinhado com o
+      cabeçalho da tabela (que já usava `anchor="w"`). Nome/Morada/
+      Preço já estavam corretos, só o chip/pílula é que faltava.
+    - Larguras das colunas Nome/Morada da tabela de propriedades
+      reduzidas (200→190, 220→170) — o botão "Editar" ficava fora
+      da janela (900x700, menos os 150px da barra lateral), a soma
+      das larguras ficava demasiado perto do limite.
+    - "Abrir" (unidade mensal, dentro do popup) renomeado para
+      "Abrir Mapa" — mais claro que é a planta de lugares que abre.
+
+12. "TABELA A SÉRIO" (07/09/2026, 4ª ronda) — aprovado por mockup,
+    a pedido do aluno ("como tu farias, sendo um dev sénior"): as
+    duas tabelas (propriedades e unidades) ganham disciplina de
+    tabela profissional, em vez de larguras fixas escolhidas por
+    tentativa e erro (o que já ia na 3ª ronda de acertos).
+
+    - `_LARGURA_*`: uma constante por coluna, no topo do módulo —
+      cabeçalho e linhas leem sempre a MESMA constante. Antes, o
+      número vinha escrito duas vezes (uma no cabeçalho, outra em
+      cada linha) — bastava mudar um sítio e esquecer o outro para
+      desalinhar tudo outra vez.
+    - `_truncar_texto`: um nome (ou morada) mais largo do que a
+      coluna corta com reticências ("…"), medido a sério com
+      `tkinter.font.Font.measure` — não é um número "adivinhado",
+      é a largura real do texto nessa fonte. Resolve de vez o bug
+      relatado ("MYSQL AIRBNB · Airbnb (inativa)—" colado à coluna
+      seguinte): um nome comprido já não empurra as colunas
+      seguintes, corta e para. Nota honesta: a fonte usada para
+      medir (`tkinter.font.Font`) não é pixel-a-pixel idêntica à
+      que o CustomTkinter usa para desenhar (`CTkFont`) — a
+      diferença é cosmética (corta um caráter a mais ou a menos no
+      limite), nunca causa colisão nenhuma.
+    - "(inativa)" sai do texto do nome e passa para uma segunda
+      linha, dentro do mesmo `CTkLabel` (`text="nome\ninativa"`,
+      `justify="left"`) — sem frame nenhuma a envolver, sem
+      `pack_propagate` nenhum, por isso não reintroduz o bug do
+      ponto 10. Deixa de competir com "· Airbnb" na mesma linha.
+    - Zebra striping subtil (`tema.LINHA_ALTERNADA`, cor nova, só
+      um tom muito ligeiramente diferente do fundo) nas linhas
+      ativas, alternada — as inativas ficam sempre no fundo normal,
+      para não juntar dois sinais visuais de "diferente" ao mesmo
+      tempo. Uma linha fina (`tema.COR_BORDA`, altura 1px) separa
+      cada linha da tabela.
+    - Preço alinhado à direita (`anchor="e"`, como o cabeçalho
+      "PREÇO") — convenção normal para comparar valores numéricos.
+
+13. AINDA "TABELA A SÉRIO" + "ABRIR MAPA" EM POPUP (07/09/2026, 5ª
+    ronda) — aprovado por mockup: o ponto 12 ainda não "lia" como
+    tabela aos olhos do aluno (colunas alinhadas, mas sem cara de
+    tabela), e "Abrir Mapa" ficou aprovado para deixar de trocar o
+    ecrã principal.
+
+    - As duas tabelas (propriedades e unidades) ganham um cartão
+      com borda à volta (`corner_radius=tema.RAIO_CARTAO,
+      border_width=1`) e uma faixa de fundo própria no cabeçalho
+      (`tema.CABECALHO_TABELA_FUNDO`, cor nova) — é isto, mais do
+      que só colunas alinhadas, que faz ler como tabela a sério.
+    - BUG corrigido de caminho: o `return` do ramo "unidade
+      inativa" em `_desenhar_unidade` saltava a linha divisória
+      dessa linha — virou `if`/`else`, os dois ramos convergem na
+      mesma linha divisória no final.
+    - "Abrir Mapa" passa a abrir `PlantaLugaresModal` — um popup
+      novo que embrulha a `PlantaLugares` já existente
+      (`gui/gui_unidades.py`, sem lhe tocar nada) e acrescenta
+      "← Voltar" junto ao título, que fecha o popup e reabre
+      `UnidadesDaPropriedadeModal` da mesma propriedade. Fecha
+      primeiro o popup de unidades, para nunca haver dois popups
+      abertos ao mesmo tempo sobre o mesmo assunto.
+    - `_ControladorPontePlanta`: `PlantaLugares._abrir_contrato`
+      navega para `NovoContratoMensal` chamando
+      `self.controlador.mostrar_frame(...)` (clique numa cama
+      livre/reservada) — sem esta ponte, isso trocaria o ecrã
+      principal por trás com o popup do mapa ainda aberto por
+      cima, flutuando sem sentido. A ponte fecha o popup primeiro e
+      só depois repassa a chamada ao controlador verdadeiro.
+
+14. ESPAÇO MAL DISTRIBUÍDO NAS TABELAS + "< VOLTAR" (07/09/2026, 6ª
+    ronda) — depois de `app.py` passar a `resizable(True, True)`
+    com 1100x700 por omissão (pedido do aluno, ver comentário em
+    `Aplicacao.__init__`), as colunas de largura fixa das duas
+    tabelas deixavam sobrar espaço em branco entre a Morada/Preço e
+    os botões — nunca esticavam com a janela.
+
+    - Cada linha ganha um espaçador transparente entre a última
+      coluna de texto (Morada, ou Preço na tabela de unidades) e o
+      frame de botões, com `.pack(side="left", fill="x",
+      expand=True)`: absorve toda a folga da linha e empurra
+      Desativar/Editar/Abrir Mapa para a margem direita, tal como
+      "justify-content:flex-end" no mockup `tabela_moderna.html`
+      (5ª ronda) já mostrava — só não estava implementado ainda.
+    - BUG corrigido na mesma ronda: a primeira versão deste
+      espaçador (`ctk.CTkFrame(linha, fg_color="transparent")`, sem
+      `height`) esticou cada linha para ~200px de altura — um
+      CTkFrame sem altura explícita assume 200px por omissão, e
+      `fill="x"` só estica a largura, nunca a altura (mesma família
+      do bug do `pack_propagate` do ponto 10, mas ao contrário: não
+      era faltar `propagate(False)`, era faltar `height`). Corrigido
+      passando
+      `height=1` ao espaçador — invisível (`fg_color="transparent"`)
+      e não interfere no `fill="x"`.
+    - As larguras `_LARGURA_NOME_PROPRIEDADE`/`_LARGURA_MORADA`/
+      `_LARGURA_NOME_UNIDADE` e a geometria dos popups NÃO mudam
+      nesta ronda — uma tentativa de as aumentar (240/210/230)
+      chegou a ser feita, mas cortava os botões pela margem direita
+      nalgumas larguras de janela (o texto de um CTkButton também só
+      respeita `width=` como mínimo, tal como o CTkLabel do ponto
+      11); revertido para não arriscar isso — o espaçador sozinho já
+      resolve a distribuição do espaço.
+    - "< Voltar" (era "← Voltar"): o glifo Unicode da seta aparecia
+      como um quadrado (tofu) no Windows do aluno — mesma família de
+      bug do antigo "Ver planta →" (por isso "Abrir Mapa" já não usa
+      seta nenhuma). "<" é ASCII puro, sem depender da fonte ter
+      esse glifo.
+
 Segue a mesma disciplina de camadas do resto da GUI (decisão 7): só
 fala com `propriedades` e `unidades` — nunca com `repositorio`
 diretamente.
 """
 
 import datetime
+import tkinter.font as tkfont
 from decimal import Decimal, InvalidOperation
 
 import customtkinter as ctk
@@ -145,6 +371,49 @@ import unidades
 from . import componentes
 from . import tema
 from .gui_unidades import PlantaLugares
+
+
+def _categoria_estado(texto_estado):
+    """Classifica o texto de `unidades.estado()` numa categoria —
+    "manutencao", "livre", "parcial", "ocupado" ou "reservado".
+
+    Extraída de `_cor_estado` em 07/09/2026 para o filtro por estado
+    (`ListaPropriedades`) reutilizar exatamente a mesma classificação
+    que já pinta a etiqueta de cada unidade — uma só fonte de
+    verdade para "o que é livre/parcial/ocupado", em vez de repetir
+    a lógica no filtro.
+    """
+    if texto_estado == "Em manutenção":
+        return "manutencao"
+
+    if texto_estado == "Livre":
+        return "livre"
+
+    if texto_estado == "Ocupado":
+        return "ocupado"
+
+    if texto_estado == "Reservado":
+        return "reservado"
+
+    ocupados, capacidade = texto_estado.split("/")
+    ocupados, capacidade = int(ocupados), int(capacidade)
+
+    if ocupados == 0:
+        return "livre"
+
+    if ocupados >= capacidade:
+        return "ocupado"
+
+    return "parcial"
+
+
+_CORES_POR_CATEGORIA = {
+    "manutencao": (tema.CINZA_INDISPONIVEL, tema.TEXTO_INDISPONIVEL),
+    "livre": (tema.VERDE_LIVRE, tema.TEXTO_LIVRE),
+    "parcial": (tema.AMARELO_AVISO, tema.TEXTO_AVISO),
+    "ocupado": (tema.VERMELHO_ERRO, tema.TEXTO_ERRO),
+    "reservado": (tema.CINZA_INDISPONIVEL, tema.TEXTO_INDISPONIVEL),
+}
 
 
 def _cor_estado(texto_estado):
@@ -161,28 +430,60 @@ def _cor_estado(texto_estado):
       "parcial" (não existe capacidade parcial numa reserva Airbnb —
       ocupa a unidade inteira ou não ocupa nada).
     """
-    if texto_estado == "Em manutenção":
-        return tema.CINZA_INDISPONIVEL, tema.TEXTO_INDISPONIVEL
+    return _CORES_POR_CATEGORIA[_categoria_estado(texto_estado)]
 
-    if texto_estado == "Livre":
-        return tema.VERDE_LIVRE, tema.TEXTO_LIVRE
 
-    if texto_estado == "Ocupado":
-        return tema.VERMELHO_ERRO, tema.TEXTO_ERRO
+# Rótulos do dropdown "Estado" -> categoria de _categoria_estado.
+# "Todos" fica de fora de propósito: ausência de chave == sem
+# filtro, ver `ListaPropriedades._estado_filtro_selecionado`.
+_ESTADOS_FILTRO = {
+    "Livre": "livre",
+    "Parcial": "parcial",
+    "Ocupado": "ocupado",
+    "Reservado": "reservado",
+    "Em manutenção": "manutencao",
+}
 
-    if texto_estado == "Reservado":
-        return tema.CINZA_INDISPONIVEL, tema.TEXTO_INDISPONIVEL
 
-    ocupados, capacidade = texto_estado.split("/")
-    ocupados, capacidade = int(ocupados), int(capacidade)
+# Larguras fixas das colunas das duas tabelas deste ecrã (07/09/2026,
+# 4ª ronda, ponto 12) — uma constante por coluna, lida tanto pelo
+# cabeçalho como pelas linhas, para os dois nunca poderem desalinhar
+# por um número esquecido num dos dois sítios.
+_LARGURA_ID = 70
+_LARGURA_NOME_PROPRIEDADE = 190
+_LARGURA_MORADA = 170
+_LARGURA_NOME_UNIDADE = 190
+_LARGURA_ESTADO = 90
+_LARGURA_PRECO = 80
 
-    if ocupados == 0:
-        return tema.VERDE_LIVRE, tema.TEXTO_LIVRE
+# Margem interna subtraída à largura da coluna antes de decidir se
+# um texto precisa de reticências (`_truncar_texto`) — folga
+# pequena para não cortar um texto que já cabe "à justa".
+_MARGEM_TRUNCAGEM = 10
 
-    if ocupados >= capacidade:
-        return tema.VERMELHO_ERRO, tema.TEXTO_ERRO
 
-    return tema.AMARELO_AVISO, tema.TEXTO_AVISO
+def _truncar_texto(fonte, texto, largura_max):
+    """Corta `texto` com reticências ("…") se a sua largura
+    renderizada (medida com `fonte`, um `tkinter.font.Font` real —
+    ver `import tkinter.font as tkfont` no topo do módulo)
+    ultrapassar `largura_max` em pixels.
+
+    Existe para um nome ou morada fora do normal nunca mais
+    empurrar as colunas seguintes (bug relatado pelo aluno,
+    07/09/2026, 4ª ronda: "MYSQL AIRBNB · Airbnb (inativa)—" colado
+    à coluna seguinte) — as larguras das colunas continuam fixas
+    (`_LARGURA_*`, dimensionadas para o conteúdo normal), isto é só
+    a rede de segurança para o caso raro de um valor mais comprido.
+    """
+    if fonte.measure(texto) <= largura_max:
+        return texto
+
+    reticencias = "…"
+    cortado = texto
+    while cortado and fonte.measure(cortado + reticencias) > largura_max:
+        cortado = cortado[:-1]
+
+    return (cortado + reticencias) if cortado else reticencias
 
 
 def _formatar_valor(valor):
@@ -318,21 +619,36 @@ class _ConfirmarForcarModal(ctk.CTkToplevel):
 
 
 class ListaPropriedades(ctk.CTkFrame):
-    """Ecrã principal: lista as propriedades e as suas unidades —
-    mensais e Airbnb —, com ações de criar/editar/desativar/
-    reativar.
+    """Ecrã principal: lista as propriedades, em tabela simples —
+    ID, nome, morada e ações (desativar/reativar, editar). As
+    unidades de cada propriedade deixaram de aparecer aqui
+    (07/09/2026, ver ponto 10 do docstring do módulo): clicar no ID
+    de uma propriedade abre-as num popup próprio
+    (`UnidadesDaPropriedadeModal`).
     """
 
     def __init__(self, master, controlador):
         super().__init__(master, fg_color=tema.COR_FUNDO)
         self.controlador = controlador
 
-        componentes.Cabecalho(self, titulo="Propriedades e Unidades").pack(
+        componentes.Cabecalho(self, titulo="Gestão de Propriedades").pack(
             fill="x"
         )
 
         barra = ctk.CTkFrame(self, fg_color=tema.COR_FUNDO)
         barra.pack(fill="x", padx=20, pady=(0, 4))
+
+        self.campo_busca = ctk.CTkEntry(
+            barra,
+            placeholder_text="Procurar por nome ou ID… (Enter)",
+            width=220,
+            corner_radius=tema.RAIO_CAMPO,
+        )
+        self.campo_busca.pack(side="left")
+        # Só filtra ao premir Enter (mesmo padrão do popup de
+        # unidades, ponto 9b) — filtrar a cada tecla ficava feio, a
+        # redesenhar a lista inteira a cada letra escrita.
+        self.campo_busca.bind("<Return>", lambda evento: self._recarregar())
 
         self.mostrar_inativos = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
@@ -344,8 +660,50 @@ class ListaPropriedades(ctk.CTkFrame):
             font=ctk.CTkFont(size=11),
         ).pack(side="right")
 
-        self.area_lista = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self.area_lista.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+        # Cartão com borda à volta de toda a tabela + faixa de fundo
+        # própria no cabeçalho (07/09/2026, 5ª ronda: colunas
+        # alinhadas por si só ainda não "lia" como tabela a sério aos
+        # olhos do aluno — faltava isto).
+        cartao_tabela = ctk.CTkFrame(
+            self,
+            corner_radius=tema.RAIO_CARTAO,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            fg_color=tema.COR_FUNDO,
+        )
+        cartao_tabela.pack(fill="both", expand=True, padx=20, pady=(4, 12))
+
+        cabecalho_tabela = ctk.CTkFrame(
+            cartao_tabela,
+            corner_radius=0,
+            fg_color=tema.CABECALHO_TABELA_FUNDO,
+        )
+        cabecalho_tabela.pack(fill="x")
+        cabecalho_interno = ctk.CTkFrame(
+            cabecalho_tabela, fg_color="transparent"
+        )
+        cabecalho_interno.pack(fill="x", padx=16, pady=9)
+        for texto, largura in (
+            ("ID", _LARGURA_ID),
+            ("NOME", _LARGURA_NOME_PROPRIEDADE),
+            ("MORADA", _LARGURA_MORADA),
+        ):
+            ctk.CTkLabel(
+                cabecalho_interno,
+                text=texto,
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=10, weight="bold"),
+                width=largura,
+                anchor="w",
+            ).pack(side="left")
+        ctk.CTkFrame(cartao_tabela, height=1, fg_color=tema.COR_BORDA).pack(
+            fill="x"
+        )
+
+        self.area_lista = ctk.CTkScrollableFrame(
+            cartao_tabela, fg_color="transparent"
+        )
+        self.area_lista.pack(fill="both", expand=True)
 
         rodape = ctk.CTkFrame(self, fg_color=tema.COR_FUNDO, height=48)
         rodape.pack(fill="x", padx=24, pady=(0, 16))
@@ -363,69 +721,131 @@ class ListaPropriedades(ctk.CTkFrame):
     # -- carregamento / atualização ----------------------------------
 
     def _recarregar(self):
-        """Limpa e volta a desenhar a lista inteira — chamada na
-        abertura do ecrã, ao mexer em "Mostrar inativos", e depois
-        de qualquer criação/edição/desativação/reativação, para
-        refletir logo o resultado (mesmo princípio de
-        `PlantaLugares._recarregar_unidades`).
+        """Limpa e volta a desenhar a tabela de propriedades —
+        chamada na abertura do ecrã, ao mexer em "Mostrar inativos"
+        ou confirmar uma busca (Enter), e depois de qualquer
+        criação/edição/desativação/reativação de propriedade.
         """
         for widget in self.area_lista.winfo_children():
             widget.destroy()
 
         incluir_inativas = self.mostrar_inativos.get()
+        texto_busca = self.campo_busca.get().strip().lower()
         lista = propriedades.listar(incluir_inativas=incluir_inativas)
 
+        if texto_busca:
+            lista = [
+                prop
+                for prop in lista
+                if texto_busca in f"{prop['nome']} {prop['id']}".lower()
+            ]
+
         if not lista:
+            mensagem = (
+                "Nenhuma propriedade encontrada para a busca."
+                if texto_busca
+                else "Ainda não há propriedades cadastradas."
+            )
             ctk.CTkLabel(
                 self.area_lista,
-                text="Ainda não há propriedades cadastradas.",
+                text=mensagem,
                 text_color=tema.COR_TEXTO_SECUNDARIO,
                 font=ctk.CTkFont(size=13),
             ).pack(pady=40)
             return
 
+        # Fontes reais para medir texto (`_truncar_texto`) — criadas
+        # uma única vez por recarregamento, não por linha (ponto 12).
+        fonte_nome = tkfont.Font(size=13)
+        fonte_morada = tkfont.Font(size=12)
+
+        indice_zebra = 0
         for prop in lista:
-            self._desenhar_propriedade(prop, incluir_inativas)
+            tingida = prop["ativo"] and indice_zebra % 2 == 1
+            self._desenhar_propriedade(prop, fonte_nome, fonte_morada, tingida)
+            if prop["ativo"]:
+                indice_zebra += 1
 
     # -- desenho -------------------------------------------------------
 
-    def _desenhar_propriedade(self, prop, incluir_inativas):
+    def _desenhar_propriedade(self, prop, fonte_nome, fonte_morada, tingida):
+        """Desenha uma linha da tabela para uma propriedade. Cada
+        coluna é um único widget com largura fixa (`_LARGURA_*`),
+        lado a lado com `.pack(side="left")` — sem `CTkFrame`
+        aninhada nenhuma a combinar texto+chip, ao contrário da
+        versão anterior deste ecrã (ver ponto 10 do docstring do
+        módulo, sobre o bug do `pack_propagate` que isto evita por
+        construção). `tingida` decide o zebra striping (ponto 12).
+        """
         inativa = not prop["ativo"]
 
-        cartao = ctk.CTkFrame(
+        linha = ctk.CTkFrame(
             self.area_lista,
-            corner_radius=tema.RAIO_CARTAO,
-            fg_color=tema.COR_FUNDO,
-            border_width=1,
-            border_color=tema.COR_BORDA,
+            fg_color=tema.LINHA_ALTERNADA if tingida else "transparent",
         )
-        cartao.pack(fill="x", pady=8)
+        linha.pack(fill="x")
 
-        cabecalho = ctk.CTkFrame(cartao, fg_color="transparent")
-        cabecalho.pack(fill="x", padx=16, pady=(14, 6))
+        rotulo_id = ctk.CTkLabel(
+            linha,
+            text=prop["id"],
+            text_color=tema.AZUL_PRINCIPAL,
+            fg_color=tema.ID_CHIP_FUNDO,
+            corner_radius=6,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            width=_LARGURA_ID,
+            anchor="w",
+            cursor="hand2",
+        )
+        rotulo_id.pack(side="left", padx=(16, 8), pady=8)
+        # Único sítio que abre as unidades da propriedade — decisão
+        # do aluno, 07/09/2026 (ponto 10): nome e morada ficam só de
+        # leitura aqui, editar continua no botão "Editar" de sempre.
+        rotulo_id.bind(
+            "<Button-1>",
+            lambda evento: UnidadesDaPropriedadeModal(self, prop),
+        )
 
-        bloco_texto = ctk.CTkFrame(cabecalho, fg_color="transparent")
-        bloco_texto.pack(side="left", anchor="w")
-
-        nome = prop["nome"] + ("  (inativa)" if inativa else "")
         cor_nome = tema.COR_TEXTO_SECUNDARIO if inativa else tema.COR_TEXTO
+        largura_texto_nome = _LARGURA_NOME_PROPRIEDADE - _MARGEM_TRUNCAGEM
+        nome = _truncar_texto(fonte_nome, prop["nome"], largura_texto_nome)
+        texto_nome = f"{nome}\ninativa" if inativa else nome
         ctk.CTkLabel(
-            bloco_texto,
-            text=nome,
+            linha,
+            text=texto_nome,
             text_color=cor_nome,
-            font=ctk.CTkFont(size=15, weight="bold"),
+            font=ctk.CTkFont(size=13),
+            width=_LARGURA_NOME_PROPRIEDADE,
             anchor="w",
-        ).pack(anchor="w")
-        ctk.CTkLabel(
-            bloco_texto,
-            text=prop["morada"] or "sem morada",
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=11),
-            anchor="w",
-        ).pack(anchor="w")
+            justify="left",
+        ).pack(side="left", pady=8)
 
-        botoes = ctk.CTkFrame(cabecalho, fg_color="transparent")
-        botoes.pack(side="right")
+        largura_texto_morada = _LARGURA_MORADA - _MARGEM_TRUNCAGEM
+        morada = _truncar_texto(
+            fonte_morada, prop["morada"] or "sem morada", largura_texto_morada
+        )
+        ctk.CTkLabel(
+            linha,
+            text=morada,
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=12),
+            width=_LARGURA_MORADA,
+            anchor="w",
+        ).pack(side="left", pady=8)
+
+        # Espaçador transparente que absorve toda a folga da linha
+        # (07/09/2026, 6ª ronda, ponto 14) — empurra os botões para a
+        # margem direita em vez de os deixar coladas à Morada com um
+        # vazio enorme depois, na janela mais larga. `height=1` é
+        # obrigatório aqui: um CTkFrame sem altura explícita assume
+        # 200px por omissão, e isso esticava a linha toda na
+        # vertical (bug visto pelo aluno, corrigido nesta ronda) —
+        # `fill="x"` só estica a largura, nunca a altura.
+        ctk.CTkFrame(linha, height=1, fg_color="transparent").pack(
+            side="left", fill="x", expand=True
+        )
+
+        botoes = ctk.CTkFrame(linha, fg_color="transparent")
+        botoes.pack(side="left", padx=(0, 16), pady=8)
 
         if inativa:
             ctk.CTkButton(
@@ -462,137 +882,13 @@ class ListaPropriedades(ctk.CTkFrame):
                 text_color=tema.COR_TEXTO,
                 hover_color=tema.COR_BORDA,
                 command=lambda: EditarPropriedadeModal(self, prop),
-            ).pack(side="left", padx=(0, 6))
-            ctk.CTkButton(
-                botoes,
-                text="+ Unidade",
-                width=90,
-                height=26,
-                corner_radius=tema.RAIO_BOTAO,
-                fg_color=tema.AZUL_PRINCIPAL,
-                hover_color=tema.AZUL_CLARO,
-                command=lambda: NovaUnidadeModal(self, prop),
             ).pack(side="left")
 
-        unidades_prop = unidades.listar(
-            incluir_inativas=incluir_inativas,
-            propriedade_id=prop["id"],
+        ctk.CTkFrame(self.area_lista, height=1, fg_color=tema.COR_BORDA).pack(
+            fill="x"
         )
-        # Ativas primeiro, inativas sempre no final (pedido do aluno,
-        # 06/09/2026) — sort() é estável, por isso dentro de cada
-        # grupo mantém a ordem devolvida por unidades.listar().
-        unidades_prop.sort(key=lambda u: not u["ativo"])
-
-        if not unidades_prop:
-            ctk.CTkLabel(
-                cartao,
-                text="Sem unidades.",
-                text_color=tema.COR_TEXTO_SECUNDARIO,
-                font=ctk.CTkFont(size=11),
-            ).pack(anchor="w", padx=16, pady=(0, 14))
-            return
-
-        for uni in unidades_prop:
-            self._desenhar_unidade(cartao, uni, prop)
-
-        ctk.CTkFrame(cartao, fg_color="transparent", height=6).pack()
-
-    def _desenhar_unidade(self, master, uni, prop):
-        inativa = not uni["ativo"]
-
-        linha = ctk.CTkFrame(master, fg_color="transparent")
-        linha.pack(fill="x", padx=16, pady=3)
-
-        # Etiqueta de tipo só aparece na Airbnb — as unidades mensais
-        # continuam sem sufixo nenhum, exatamente como antes de este
-        # ecrã passar a mostrar também as Airbnb (06/09/2026).
-        etiqueta_tipo = "" if uni["tipo"] == "mensal" else "  · Airbnb"
-        nome = uni["nome"] + etiqueta_tipo + ("  (inativa)" if inativa else "")
-        cor_nome = tema.COR_TEXTO_SECUNDARIO if inativa else tema.COR_TEXTO
-        ctk.CTkLabel(
-            linha,
-            text=nome,
-            text_color=cor_nome,
-            font=ctk.CTkFont(size=13),
-            anchor="w",
-            width=160,
-        ).pack(side="left")
-
-        if inativa:
-            botoes = ctk.CTkFrame(linha, fg_color="transparent")
-            botoes.pack(side="right")
-            ctk.CTkButton(
-                botoes,
-                text="Reativar",
-                width=80,
-                height=24,
-                corner_radius=tema.RAIO_BOTAO,
-                fg_color=tema.VERDE,
-                hover_color=tema.VERDE,
-                command=lambda: self._reativar_unidade(uni),
-            ).pack(side="left")
-            return
-
-        estado_texto = unidades.estado(uni["id"], datetime.date.today())
-        fundo, texto = _cor_estado(estado_texto)
-
-        ctk.CTkLabel(
-            linha,
-            text=estado_texto,
-            text_color=texto,
-            fg_color=fundo,
-            corner_radius=8,
-            font=ctk.CTkFont(size=11, weight="bold"),
-            width=90,
-            height=22,
-        ).pack(side="left", padx=8)
-
-        botoes = ctk.CTkFrame(linha, fg_color="transparent")
-        botoes.pack(side="right")
-        ctk.CTkButton(
-            botoes,
-            text="Desativar",
-            width=72,
-            height=24,
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color="transparent",
-            text_color=tema.TEXTO_ERRO,
-            hover_color=tema.VERMELHO_ERRO,
-            command=lambda: self._desativar_unidade(uni),
-        ).pack(side="left", padx=(0, 6))
-        ctk.CTkButton(
-            botoes,
-            text="Editar",
-            width=60,
-            height=24,
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color="transparent",
-            border_width=1,
-            border_color=tema.COR_BORDA,
-            text_color=tema.COR_TEXTO,
-            hover_color=tema.COR_BORDA,
-            command=lambda: EditarUnidadeModal(self, uni, prop),
-        ).pack(side="left", padx=(0, 6))
-
-        # "Ver planta" só faz sentido no regime mensal — a Airbnb não
-        # usa quarto/lugar (decisão 5), não tem planta nenhuma para
-        # mostrar (06/09/2026, ao juntar a Airbnb a este ecrã).
-        if uni["tipo"] == "mensal":
-            ctk.CTkButton(
-                botoes,
-                text="Ver planta →",
-                width=100,
-                height=24,
-                corner_radius=tema.RAIO_BOTAO,
-                fg_color=tema.AZUL_PRINCIPAL,
-                hover_color=tema.AZUL_CLARO,
-                command=lambda: self._abrir_planta(uni["id"]),
-            ).pack(side="left")
 
     # -- ações -----------------------------------------------------------
-
-    def _abrir_planta(self, unidade_id):
-        self.controlador.mostrar_frame(PlantaLugares, unidade_id=unidade_id)
 
     def _desativar_propriedade(self, prop):
         ativas = unidades.listar(propriedade_id=prop["id"])
@@ -646,6 +942,429 @@ class ListaPropriedades(ctk.CTkFrame):
         componentes.mostrar_sucesso(f"Propriedade {prop['nome']} reativada.")
         self._recarregar()
 
+
+class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
+    """Popup com as unidades de UMA propriedade — mensais e Airbnb —,
+    aberto ao clicar no ID da propriedade na tabela de
+    `ListaPropriedades` (07/09/2026, ver ponto 10 do docstring do
+    módulo: as unidades deixaram de aparecer no ecrã principal,
+    passam a viver só aqui dentro, no formato de tabela que o aluno
+    gostou desde o primeiro mockup deste ecrã).
+
+    Busca, filtro de estado, "Mostrar inativas" e "+ Nova Unidade"
+    (antes no ecrã principal) mudaram-se todos para aqui — agem só
+    sobre as unidades desta propriedade. `NovaUnidadeModal` e
+    `EditarUnidadeModal` não mudaram nada: já recebiam `tela_lista` e
+    só chamam `tela_lista._recarregar()` no final, por isso aceitam
+    este popup como `tela_lista` sem precisar de saber que já não é
+    `ListaPropriedades`.
+    """
+
+    def __init__(self, tela_lista, prop):
+        super().__init__(tela_lista)
+        self.tela_lista = tela_lista
+        self.controlador = tela_lista.controlador
+        self.prop = prop
+
+        self.title(f"Unidades da Propriedade — {prop['nome']}")
+        self.geometry("780x580")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_lista)
+        _colocar_no_topo(self)
+
+        ctk.CTkLabel(
+            self,
+            text="UNIDADES DA PROPRIEDADE",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11, weight="bold"),
+        ).pack(anchor="w", padx=20, pady=(18, 0))
+        ctk.CTkLabel(
+            self,
+            text=prop["nome"],
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=17, weight="bold"),
+        ).pack(anchor="w", padx=20, pady=(0, 12))
+
+        barra = ctk.CTkFrame(self, fg_color="transparent")
+        barra.pack(fill="x", padx=20)
+
+        self.campo_busca = ctk.CTkEntry(
+            barra,
+            placeholder_text="Procurar por nome ou ID… (Enter)",
+            width=200,
+            corner_radius=tema.RAIO_CAMPO,
+        )
+        self.campo_busca.pack(side="left")
+        self.campo_busca.bind("<Return>", lambda evento: self._recarregar())
+
+        self.combo_estado = ctk.CTkOptionMenu(
+            barra,
+            values=["Todos"] + list(_ESTADOS_FILTRO),
+            command=lambda _valor: self._recarregar(),
+            width=140,
+        )
+        self.combo_estado.set("Todos")
+        self.combo_estado.pack(side="left", padx=(8, 0))
+
+        self.mostrar_inativas = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            barra,
+            text="Mostrar inativas",
+            variable=self.mostrar_inativas,
+            command=self._recarregar,
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(side="left", padx=(10, 0))
+
+        ctk.CTkButton(
+            barra,
+            text="+ Nova Unidade",
+            width=120,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.AZUL_PRINCIPAL,
+            hover_color=tema.AZUL_CLARO,
+            command=lambda: NovaUnidadeModal(self, self.prop),
+        ).pack(side="right")
+
+        # Mesmo cartão com borda + faixa de cabeçalho da tabela de
+        # propriedades (ver `ListaPropriedades.__init__`, ponto 12,
+        # 5ª ronda) — as duas tabelas seguem a mesma disciplina.
+        cartao_tabela = ctk.CTkFrame(
+            self,
+            corner_radius=tema.RAIO_CARTAO,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            fg_color=tema.COR_FUNDO,
+        )
+        cartao_tabela.pack(fill="both", expand=True, padx=16, pady=(10, 16))
+
+        cabecalho_tabela = ctk.CTkFrame(
+            cartao_tabela,
+            corner_radius=0,
+            fg_color=tema.CABECALHO_TABELA_FUNDO,
+        )
+        cabecalho_tabela.pack(fill="x")
+        cabecalho_interno = ctk.CTkFrame(
+            cabecalho_tabela, fg_color="transparent"
+        )
+        cabecalho_interno.pack(fill="x", padx=16, pady=9)
+        for texto, largura, ancora in (
+            ("ID", _LARGURA_ID, "w"),
+            ("NOME", _LARGURA_NOME_UNIDADE, "w"),
+            ("ESTADO", _LARGURA_ESTADO, "w"),
+            ("PREÇO", _LARGURA_PRECO, "e"),
+        ):
+            ctk.CTkLabel(
+                cabecalho_interno,
+                text=texto,
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=10, weight="bold"),
+                width=largura,
+                anchor=ancora,
+            ).pack(side="left")
+        ctk.CTkFrame(cartao_tabela, height=1, fg_color=tema.COR_BORDA).pack(
+            fill="x"
+        )
+
+        self.area_lista = ctk.CTkScrollableFrame(
+            cartao_tabela, fg_color="transparent"
+        )
+        self.area_lista.pack(fill="both", expand=True)
+
+        self._recarregar()
+
+    # -- carregamento / atualização ----------------------------------
+
+    def _estado_filtro_selecionado(self):
+        """Categoria escolhida no dropdown "Estado", ou None quando
+        é "Todos" (ausência de filtro — ver `_ESTADOS_FILTRO`).
+        """
+        return _ESTADOS_FILTRO.get(self.combo_estado.get())
+
+    def _recarregar(self):
+        """Limpa e volta a desenhar a tabela de unidades desta
+        propriedade — chamada na abertura do popup, ao mexer em
+        "Mostrar inativas"/busca/filtro de estado, e depois de
+        qualquer criação/edição/desativação/reativação/manutenção.
+        """
+        for widget in self.area_lista.winfo_children():
+            widget.destroy()
+
+        incluir_inativas = self.mostrar_inativas.get()
+        texto_busca = self.campo_busca.get().strip().lower()
+        estado_filtro = self._estado_filtro_selecionado()
+
+        lista = unidades.listar(
+            incluir_inativas=incluir_inativas,
+            propriedade_id=self.prop["id"],
+        )
+        # Ativas primeiro, inativas sempre no final (pedido do aluno,
+        # 06/09/2026) — sort() é estável, mantém a ordem devolvida
+        # por unidades.listar() dentro de cada grupo.
+        lista.sort(key=lambda u: not u["ativo"])
+
+        # Estado calculado uma única vez por unidade ativa — serve
+        # tanto para o filtro quanto para a etiqueta desenhada em
+        # `_desenhar_unidade`.
+        estados_por_unidade = {
+            uni["id"]: unidades.estado(uni["id"], datetime.date.today())
+            for uni in lista
+            if uni["ativo"]
+        }
+
+        visiveis = [
+            uni
+            for uni in lista
+            if self._unidade_passa_filtros(
+                uni,
+                texto_busca,
+                estado_filtro,
+                estados_por_unidade.get(uni["id"]),
+            )
+        ]
+
+        if not visiveis:
+            mensagem = (
+                "Sem unidades."
+                if not lista
+                else "Nenhuma unidade encontrada para os filtros " "aplicados."
+            )
+            ctk.CTkLabel(
+                self.area_lista,
+                text=mensagem,
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=13),
+            ).pack(pady=40)
+            return
+
+        # Fonte real para medir texto (`_truncar_texto`) — criada uma
+        # única vez por recarregamento, não por linha (ponto 12).
+        fonte_nome = tkfont.Font(size=13)
+
+        indice_zebra = 0
+        for uni in visiveis:
+            tingida = uni["ativo"] and indice_zebra % 2 == 1
+            self._desenhar_unidade(
+                uni, estados_por_unidade.get(uni["id"]), fonte_nome, tingida
+            )
+            if uni["ativo"]:
+                indice_zebra += 1
+
+    def _unidade_passa_filtros(
+        self, uni, texto_busca, estado_filtro, estado_texto
+    ):
+        """True quando a unidade sobrevive à busca de texto e ao
+        filtro de estado atuais. Unidades inativas não têm estado
+        calculado (`estado_texto` vem None para elas) — por isso um
+        filtro de estado escolhido as exclui sempre; a busca de
+        texto continua a aplicar-se-lhes na mesma.
+        """
+        if texto_busca:
+            alvo = f"{uni['nome']} {uni['id']}".lower()
+            if texto_busca not in alvo:
+                return False
+
+        if estado_filtro is not None:
+            if estado_texto is None:
+                return False
+
+            if _categoria_estado(estado_texto) != estado_filtro:
+                return False
+
+        return True
+
+    # -- desenho -------------------------------------------------------
+
+    def _desenhar_unidade(self, uni, estado_texto, fonte_nome, tingida):
+        """Desenha uma linha da tabela — mesma disciplina da tabela
+        de propriedades (`ListaPropriedades._desenhar_propriedade`):
+        cada coluna é um único widget com largura fixa, lado a lado,
+        sem frames aninhadas. `tingida` decide o zebra striping
+        (ponto 12).
+        """
+        inativa = not uni["ativo"]
+        em_manutencao = uni["em_manutencao"]
+
+        linha = ctk.CTkFrame(
+            self.area_lista,
+            fg_color=tema.LINHA_ALTERNADA if tingida else "transparent",
+        )
+        linha.pack(fill="x")
+
+        rotulo_id = ctk.CTkLabel(
+            linha,
+            text=uni["id"],
+            text_color=tema.TEXTO_INDISPONIVEL,
+            fg_color=tema.CINZA_INDISPONIVEL,
+            corner_radius=6,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            width=_LARGURA_ID,
+            anchor="w",
+        )
+        rotulo_id.pack(side="left", padx=(16, 8), pady=8)
+
+        # Etiqueta de tipo só aparece na Airbnb — as unidades mensais
+        # continuam sem sufixo nenhum (06/09/2026). "— em manutenção"
+        # continua a seguir ao nome, na mesma linha (mesmo padrão do
+        # ponto 9b); "(inativa)" passa a 2ª linha da célula, sem
+        # competir com "· Airbnb" no mesmo texto (ponto 12).
+        etiqueta_tipo = "" if uni["tipo"] == "mensal" else "  · Airbnb"
+        sufixo = "  — em manutenção" if (em_manutencao and not inativa) else ""
+        largura_texto_nome = _LARGURA_NOME_UNIDADE - _MARGEM_TRUNCAGEM
+        texto_bruto = uni["nome"] + etiqueta_tipo + sufixo
+        nome_base = _truncar_texto(fonte_nome, texto_bruto, largura_texto_nome)
+        texto_nome = f"{nome_base}\ninativa" if inativa else nome_base
+        cor_nome = (
+            tema.COR_TEXTO
+            if not (inativa or em_manutencao)
+            else tema.COR_TEXTO_SECUNDARIO
+        )
+        rotulo_nome = ctk.CTkLabel(
+            linha,
+            text=texto_nome,
+            text_color=cor_nome,
+            font=ctk.CTkFont(size=13),
+            width=_LARGURA_NOME_UNIDADE,
+            anchor="w",
+            justify="left",
+        )
+        rotulo_nome.pack(side="left", pady=8)
+
+        # Duplo clique no nome/ID abre "Editar Unidade" — mesmo
+        # atalho do ponto 9b, agora dentro do popup. Cada widget tem
+        # de ser ligado à parte: um clique num widget-filho não
+        # chega ao binding do pai, no Tkinter.
+        for widget in (rotulo_id, rotulo_nome):
+            widget.bind(
+                "<Double-Button-1>",
+                lambda evento: EditarUnidadeModal(self, uni, self.prop),
+            )
+
+        # Sem pílula quando inativa/em manutenção — "—" no lugar,
+        # mesma largura para a coluna Preço continuar alinhada.
+        if inativa or em_manutencao or estado_texto is None:
+            ctk.CTkLabel(
+                linha,
+                text="—",
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=11),
+                width=_LARGURA_ESTADO,
+                anchor="w",
+            ).pack(side="left", pady=8)
+        else:
+            fundo, texto = _cor_estado(estado_texto)
+            ctk.CTkLabel(
+                linha,
+                text=estado_texto,
+                text_color=texto,
+                fg_color=fundo,
+                corner_radius=8,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                width=_LARGURA_ESTADO,
+                height=22,
+                anchor="w",
+            ).pack(side="left", pady=8)
+
+        ctk.CTkLabel(
+            linha,
+            text=f"{uni['preco_base']:.2f} €",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=12),
+            width=_LARGURA_PRECO,
+            anchor="e",
+        ).pack(side="left", padx=(0, 8), pady=8)
+
+        # Mesmo espaçador da tabela de propriedades (ponto 14),
+        # `height=1` incluído pelo mesmo motivo — empurra Desativar/
+        # Editar/Abrir Mapa para a margem direita.
+        ctk.CTkFrame(linha, height=1, fg_color="transparent").pack(
+            side="left", fill="x", expand=True
+        )
+
+        botoes = ctk.CTkFrame(linha, fg_color="transparent")
+        botoes.pack(side="left", padx=(0, 16), pady=8)
+
+        if inativa:
+            ctk.CTkButton(
+                botoes,
+                text="Reativar",
+                width=80,
+                height=24,
+                corner_radius=tema.RAIO_BOTAO,
+                fg_color=tema.VERDE,
+                hover_color=tema.VERDE,
+                command=lambda: self._reativar_unidade(uni),
+            ).pack(side="left")
+        else:
+            ctk.CTkButton(
+                botoes,
+                text="Desativar",
+                width=72,
+                height=24,
+                corner_radius=tema.RAIO_BOTAO,
+                fg_color="transparent",
+                text_color=tema.TEXTO_ERRO,
+                hover_color=tema.VERMELHO_ERRO,
+                command=lambda: self._desativar_unidade(uni),
+            ).pack(side="left", padx=(0, 6))
+            ctk.CTkButton(
+                botoes,
+                text="Editar",
+                width=60,
+                height=24,
+                corner_radius=tema.RAIO_BOTAO,
+                fg_color="transparent",
+                border_width=1,
+                border_color=tema.COR_BORDA,
+                text_color=tema.COR_TEXTO,
+                hover_color=tema.COR_BORDA,
+                command=lambda: EditarUnidadeModal(self, uni, self.prop),
+            ).pack(side="left", padx=(0, 6))
+
+            # "Abrir Mapa" só faz sentido no regime mensal — a Airbnb
+            # não usa quarto/lugar (decisão 5), não tem planta
+            # nenhuma para mostrar. Renomeado de "Abrir" para "Abrir
+            # Mapa" (07/09/2026, 3ª ronda — deixa claro que é a
+            # planta de lugares que abre). O que este botão deve
+            # fazer numa unidade Airbnb fica para decisão futura
+            # (ponto 10 do docstring do módulo).
+            if uni["tipo"] == "mensal":
+                ctk.CTkButton(
+                    botoes,
+                    text="Abrir Mapa",
+                    width=92,
+                    height=24,
+                    corner_radius=tema.RAIO_BOTAO,
+                    fg_color=tema.AZUL_PRINCIPAL,
+                    hover_color=tema.AZUL_CLARO,
+                    command=lambda: self._abrir_planta(uni["id"]),
+                ).pack(side="left")
+
+        # Antes havia um "return" no ramo inativo que saltava esta
+        # linha divisória — corrigido na 5ª ronda, agora que os dois
+        # ramos convergem aqui: toda a linha da tabela fica sempre
+        # separada da seguinte, ativa ou não.
+        ctk.CTkFrame(self.area_lista, height=1, fg_color=tema.COR_BORDA).pack(
+            fill="x"
+        )
+
+    # -- ações -----------------------------------------------------------
+
+    def _abrir_planta(self, unidade_id):
+        # Fecha o popup de unidades e abre a Planta de Lugares como
+        # popup próprio (07/09/2026, 5ª ronda, ver ponto 13 do
+        # docstring do módulo) — antes trocava o ecrã principal por
+        # trás da barra lateral, escondendo de vez as unidades da
+        # propriedade. Guarda as referências ANTES de destruir: o
+        # próprio widget continua acessível depois do destroy() (só
+        # o Tk é desfeito, os atributos Python ficam), mas é mais
+        # claro assim.
+        tela_lista = self.tela_lista
+        prop = self.prop
+        self.destroy()
+        PlantaLugaresModal(tela_lista, prop, unidade_id)
+
     def _desativar_unidade(self, uni):
         ativas = contratos.listar(unidade_id=uni["id"])
 
@@ -697,6 +1416,95 @@ class ListaPropriedades(ctk.CTkFrame):
 
         componentes.mostrar_sucesso(f"Unidade {uni['nome']} reativada.")
         self._recarregar()
+
+
+class _ControladorPontePlanta:
+    """Usada só dentro de `PlantaLugaresModal`, passada como
+    `controlador` à `PlantaLugares` embrulhada (ver ponto 13 do
+    docstring do módulo).
+
+    `PlantaLugares._abrir_contrato` navega para `NovoContratoMensal`
+    chamando `self.controlador.mostrar_frame(...)` — ao clicar numa
+    cama livre/reservada. Se `PlantaLugares` estiver dentro deste
+    popup e essa chamada for direta ao controlador verdadeiro, o
+    popup ficava aberto, flutuando por cima da janela principal, que
+    trocava de ecrã lá atrás — esta ponte fecha primeiro o popup e
+    só depois repassa a chamada. Não muda nada em `gui_unidades.py`:
+    `PlantaLugares` continua a falar só com "o controlador", seja
+    lá que objeto for.
+    """
+
+    def __init__(self, popup, controlador_real):
+        self._popup = popup
+        self._controlador_real = controlador_real
+
+    def mostrar_frame(self, classe_frame, **kwargs):
+        self._popup.destroy()
+        self._controlador_real.mostrar_frame(classe_frame, **kwargs)
+
+
+class PlantaLugaresModal(ctk.CTkToplevel):
+    """Popup com a Planta de Lugares de uma unidade — aberto pelo
+    botão "Abrir Mapa" dentro de `UnidadesDaPropriedadeModal`
+    (07/09/2026, 5ª ronda, aprovado por mockup, ver ponto 13 do
+    docstring do módulo).
+
+    Reaproveita a `PlantaLugares` já existente (`gui/gui_unidades.
+    py`) sem lhe tocar — só a embrulha aqui dentro e acrescenta
+    "← Voltar", junto ao título, que fecha este popup e reabre
+    `UnidadesDaPropriedadeModal` da mesma propriedade. Antes, "Abrir
+    Mapa" trocava o ecrã principal por trás da barra lateral,
+    escondendo de vez as unidades da propriedade — agora fica na
+    mesma família de popups (propriedade → unidades → mapa).
+    """
+
+    def __init__(self, tela_lista, prop, unidade_id):
+        super().__init__(tela_lista)
+        self.tela_lista = tela_lista
+        self.prop = prop
+
+        self.title("Planta de Lugares")
+        self.geometry("900x640")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_lista)
+        _colocar_no_topo(self)
+
+        cabecalho = ctk.CTkFrame(self, fg_color="transparent")
+        cabecalho.pack(fill="x", padx=20, pady=(14, 0))
+        ctk.CTkButton(
+            cabecalho,
+            # "<" simples em vez de "←": o glifo Unicode da seta
+            # aparecia como um quadrado (tofu) no Windows do aluno —
+            # mesma família de bug do "Ver planta →" antigo (por
+            # isso "Abrir Mapa" já não usa seta nenhuma). "<" é ASCII
+            # puro, sem depender da fonte ter esse glifo.
+            text="< Voltar",
+            width=90,
+            height=26,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.ID_CHIP_FUNDO,
+            text_color=tema.AZUL_PRINCIPAL,
+            hover_color=tema.COR_BORDA,
+            command=self._voltar,
+        ).pack(side="left")
+
+        controlador_ponte = _ControladorPontePlanta(
+            self, tela_lista.controlador
+        )
+        planta = PlantaLugares(
+            self, controlador=controlador_ponte, unidade_id=unidade_id
+        )
+        planta.pack(fill="both", expand=True)
+
+        # Fechar pela X nativa da janela volta às unidades da
+        # propriedade, mesmo comportamento do botão "← Voltar" — só
+        # que disparado pelo gestor de janelas, não pelo Tkinter.
+        self.protocol("WM_DELETE_WINDOW", self._voltar)
+
+    def _voltar(self):
+        self.destroy()
+        UnidadesDaPropriedadeModal(self.tela_lista, self.prop)
 
 
 class NovaPropriedadeModal(ctk.CTkToplevel):
@@ -1024,6 +1832,15 @@ class EditarUnidadeModal(ctk.CTkToplevel):
     seletor de tipo aqui — só o rótulo, com o tipo real da unidade
     (06/09/2026: passou a poder ser "mensal" OU "airbnb", em vez de
     sempre "mensal" fixo no texto).
+
+    Ganhou o botão "Colocar em manutenção"/"Retirar manutenção"
+    (07/09/2026, 2ª ronda) — antes vivia como botão próprio na linha
+    da lista (`ListaPropriedades`), mas desalinhava "Ver planta →" e
+    competia com Desativar/Editar; o aluno pediu para mudar para
+    aqui dentro, agindo na hora (mesma confirmação de sempre para
+    "Colocar", sem confirmação para "Retirar" — mesma convenção de
+    `_reativar_unidade`) e fechando o modal a seguir, sem misturar
+    com o "Guardar" dos preços.
     """
 
     def __init__(self, tela_lista, uni, prop):
@@ -1032,7 +1849,7 @@ class EditarUnidadeModal(ctk.CTkToplevel):
         self.uni = uni
 
         self.title(f"Editar Unidade — {uni['nome']}")
-        self.geometry("380x520")
+        self.geometry("380x580")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
         self.transient(tela_lista)
@@ -1071,6 +1888,32 @@ class EditarUnidadeModal(ctk.CTkToplevel):
             command=self._ao_marcar_epoca_alta,
         ).pack(anchor="w", padx=20, pady=(14, 0))
 
+        ctk.CTkFrame(self, height=1, fg_color=tema.COR_BORDA).pack(
+            fill="x", padx=20, pady=(16, 12)
+        )
+
+        em_manutencao = uni["em_manutencao"]
+        cor_manutencao = (
+            tema.VERDE if em_manutencao else tema.TEXTO_INDISPONIVEL
+        )
+        fundo_hover = (
+            tema.VERDE_LIVRE if em_manutencao else tema.CINZA_INDISPONIVEL
+        )
+        ctk.CTkButton(
+            self,
+            text=(
+                "Retirar manutenção"
+                if em_manutencao
+                else "Colocar em manutenção"
+            ),
+            fg_color="transparent",
+            border_width=1,
+            border_color=cor_manutencao,
+            text_color=cor_manutencao,
+            hover_color=fundo_hover,
+            command=self._alternar_manutencao,
+        ).pack(anchor="w", padx=20)
+
         rodape = ctk.CTkFrame(self, fg_color="transparent")
         rodape.pack(fill="x", padx=20, pady=20, side="bottom")
         ctk.CTkButton(
@@ -1090,6 +1933,39 @@ class EditarUnidadeModal(ctk.CTkToplevel):
             hover_color=tema.AZUL_CLARO,
             command=self._guardar,
         ).pack(side="right")
+
+    def _alternar_manutencao(self):
+        if self.uni["em_manutencao"]:
+            try:
+                unidades.desmarcar_manutencao(self.uni["id"])
+            except ValueError as erro:
+                componentes.mostrar_erro(str(erro))
+                return
+
+            componentes.mostrar_sucesso(
+                f"Unidade {self.uni['nome']} retirada da manutenção."
+            )
+        else:
+            pergunta = (
+                f"Colocar a unidade {self.uni['nome']} "
+                f"({self.uni['id']}) em manutenção? Sai da oferta "
+                "até a retirares."
+            )
+            if not componentes.confirmar(pergunta):
+                return
+
+            try:
+                unidades.marcar_manutencao(self.uni["id"])
+            except ValueError as erro:
+                componentes.mostrar_erro(str(erro))
+                return
+
+            componentes.mostrar_sucesso(
+                f"Unidade {self.uni['nome']} em manutenção."
+            )
+
+        self.destroy()
+        self.tela_lista._recarregar()
 
     def _campo(self, rotulo, valor_inicial):
         ctk.CTkLabel(

@@ -5,14 +5,13 @@ from . import componentes
 from .gui_clientes import ListaClientes
 from .gui_contratos import ListaContratosMensais, ListaReservasAirbnb
 from .gui_propriedades import ListaPropriedades
-from .gui_unidades import PlantaLugares
 
 # Itens da barra lateral — lista simples, sem secções (decisão do
 # aluno, 07/09/2026: só 4 ecrãs por agora, secções ficam para quando
 # houver mais — Stock, Responsáveis, Dashboard). Ordem pensada pelo
-# fluxo de trabalho: primeiro o que se cadastra (Propriedades e
-# Unidades, Clientes), depois o que se consulta/usa a partir daí
-# (Planta de Lugares, Contrato Mensal, Reservas Airbnb).
+# fluxo de trabalho: primeiro o que se cadastra (Gestão de
+# Propriedades, Clientes), depois o que se consulta/usa a partir daí
+# (Contrato Mensal, Reservas Airbnb).
 #
 # 07/09/2026: "Novo Contrato Mensal" saiu da barra lateral — ficava
 # parecido demais com "Contrato Mensal" (a lista), um debaixo do
@@ -23,14 +22,22 @@ from .gui_unidades import PlantaLugares
 # saiu — decisão do aluno de separar em dois itens já filtrados,
 # "Contrato Mensal" e "Reservas Airbnb", em vez de escolher o tipo
 # lá dentro.
+#
+# 07/09/2026 (mesmo dia, ronda seguinte): "Propriedades e Unidades"
+# passou a "Gestão de Propriedades" e "Planta de Lugares" saiu da
+# lista — deixou de ser um ecrã à parte, só se chega lá pelo botão
+# "Abrir" de uma unidade mensal dentro do popup de unidades de
+# ListaPropriedades (ver ponto 10 do docstring de gui_propriedades.
+# py). PlantaLugares deixou de ser importada aqui — quem chama
+# `mostrar_frame(PlantaLugares, ...)` agora é o próprio
+# gui_propriedades.py, que já a importa para isso.
 ITENS_MENU = [
     {
         "tipo": "item",
-        "texto": "Propriedades e Unidades",
+        "texto": "Gestão de Propriedades",
         "ecra": ListaPropriedades,
     },
     {"tipo": "item", "texto": "Clientes", "ecra": ListaClientes},
-    {"tipo": "item", "texto": "Planta de Lugares", "ecra": PlantaLugares},
     {
         "tipo": "item",
         "texto": "Contrato Mensal",
@@ -59,8 +66,17 @@ class Aplicacao(ctk.CTk):
         super().__init__()
 
         self.title("Hostel Clean — Gestão de Alojamento")
-        self.geometry("900x700")
-        self.resizable(False, False)
+        # Janela redimensionável, com maximizar/minimizar (07/09/2026
+        # — pedido do aluno: o tamanho fixo, sem margem nenhuma, era
+        # parte do aperto que as tabelas sentiam para caber tudo).
+        # Tamanho de arranque um pouco maior do que o fixo de antes
+        # (900x700); `minsize` evita encolher a ponto de as colunas
+        # deixarem de caber — grid_columnconfigure(1, weight=1) logo
+        # abaixo já fazia a área de conteúdo esticar, só faltava
+        # permitir à própria janela esticar também.
+        self.geometry("1100x700")
+        self.minsize(950, 620)
+        self.resizable(True, True)
         self.configure(fg_color=tema.COR_FUNDO)
 
         self.grid_columnconfigure(1, weight=1)
@@ -86,7 +102,7 @@ class Aplicacao(ctk.CTk):
         self.frame_atual = None
 
         # Ecrã inicial ao arrancar a aplicação (decisão do aluno,
-        # 07/09/2026): Propriedades e Unidades — é o ponto de partida
+        # 07/09/2026): Gestão de Propriedades — é o ponto de partida
         # lógico do fluxo, enquanto não existir Dashboard.
         self.mostrar_frame(ListaPropriedades)
 
