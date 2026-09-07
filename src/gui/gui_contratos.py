@@ -93,6 +93,21 @@ dados falsos). Decisões tomadas nessa validação:
      nada (decisão 14: regra da casa, não imposição legal) e são
      calculados por `contratos.avisos_encerramento` — a regra fica
      no módulo de negócio, a GUI só a mostra.
+
+10. CancelarReservaModal (07/09/2026): botão "Cancelar" no cartão de
+   cada reserva Airbnb ativa (mesmo contorno cinzento do
+   "Encerrar", nunca vermelho — o vermelho fica só para o botão de
+   confirmação dentro do modal, mesma convenção do ponto anterior).
+   Mais simples que EncerrarContratoModal porque `contratos.
+   cancelar_airbnb` não pede nem altera nenhuma data (a reserva já
+   tem 'data_fim' desde a criação) nem tem avisos a calcular — só
+   o motivo, opcional, os mesmos campos do CLI
+   (cli.py:_cancelar_reserva_airbnb). O botão que fecha o modal sem
+   cancelar chama-se "Voltar", não "Cancelar" — única exceção ao
+   rótulo "Cancelar" usado para fechar em todos os outros modais do
+   projeto (NovoClienteModal, EditarClienteModal, _AnonimizarModal,
+   EncerrarContratoModal) — para não ficar ambíguo ao lado do botão
+   vermelho "Cancelar reserva", que é a ação de negócio em si.
 """
 
 import datetime
@@ -1274,6 +1289,110 @@ class EncerrarContratoModal(ctk.CTkToplevel):
         self.tela_lista._recarregar()
 
 
+class CancelarReservaModal(ctk.CTkToplevel):
+    """Popup de cancelamento de uma reserva Airbnb — 07/09/2026,
+    aberto pelo botão "Cancelar" de cada cartão ativo em
+    ListaReservasAirbnb.
+
+    Mesmo padrão dos modais curtos já existentes (_AnonimizarModal,
+    gui_clientes.py; EncerrarContratoModal, acima): resumo do
+    registo em cima, campo(s), rodapé com um botão para fechar sem
+    agir e a ação a vermelho à direita. Mais simples que
+    EncerrarContratoModal: `contratos.cancelar_airbnb` não pede nem
+    altera nenhuma data (a reserva já tem 'data_fim' desde a
+    criação) nem tem avisos a calcular — só o motivo, opcional, os
+    mesmos campos do CLI (cli.py:_cancelar_reserva_airbnb).
+
+    O botão que fecha sem cancelar chama-se "Voltar", não
+    "Cancelar" — ver ponto 10 da docstring do módulo.
+    """
+
+    def __init__(self, tela_lista, ocupacao):
+        super().__init__(tela_lista)
+        self.tela_lista = tela_lista
+        self.ocupacao = ocupacao
+
+        self.title("Cancelar reserva Airbnb")
+        self.geometry("420x300")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_lista)
+        _colocar_no_topo(self)
+
+        unidade = unidades.procurar(ocupacao["unidade_id"])
+        cliente = clientes.procurar(ocupacao["cliente_id"])
+        nome_unidade = _identificar_unidade(unidade, ocupacao["unidade_id"])
+        nome_cliente = _identificar_cliente(cliente, ocupacao["cliente_id"])
+        periodo = (
+            f"{_formatar_data(ocupacao['data_inicio'])} → "
+            f"{_formatar_data(ocupacao['data_fim'])}"
+        )
+
+        mensagem = (
+            f"Cancelar a reserva {ocupacao['id']}?\n"
+            f"{nome_cliente} · unidade {nome_unidade}\n"
+            f"Estadia: {periodo}"
+        )
+        ctk.CTkLabel(
+            self,
+            text=mensagem,
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=13),
+            wraplength=370,
+            justify="left",
+        ).pack(padx=20, pady=(24, 14), fill="x")
+
+        ctk.CTkLabel(
+            self,
+            text="Motivo do cancelamento (opcional)",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=20)
+
+        self.campo_motivo = ctk.CTkEntry(
+            self,
+            placeholder_text="ex.: hóspede desistiu",
+            corner_radius=tema.RAIO_CAMPO,
+        )
+        self.campo_motivo.pack(fill="x", padx=20, pady=(2, 10))
+
+        rodape = ctk.CTkFrame(self, fg_color="transparent")
+        rodape.pack(fill="x", padx=20, pady=20, side="bottom")
+        ctk.CTkButton(
+            rodape,
+            text="Voltar",
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="left")
+        ctk.CTkButton(
+            rodape,
+            text="Cancelar reserva",
+            fg_color=tema.TEXTO_ERRO,
+            hover_color=tema.VERMELHO_ERRO,
+            command=self._cancelar,
+        ).pack(side="right")
+
+    def _cancelar(self):
+        try:
+            ocupacao, airbnb = contratos.cancelar_airbnb(
+                self.ocupacao["id"],
+                motivo=self.campo_motivo.get().strip(),
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        componentes.mostrar_sucesso(
+            f"Reserva {ocupacao['id']} cancelada."
+        )
+        self.destroy()
+        self.tela_lista._recarregar()
+
+
 class _ListaOcupacoesBase(ctk.CTkFrame):
     """Base comum a ListaContratosMensais e ListaReservasAirbnb —
     07/09/2026, substitui a antiga ListaOcupacoes (um ecrã só, com
@@ -1303,9 +1422,10 @@ class _ListaOcupacoesBase(ctk.CTkFrame):
     seu modal — decisão de não entregar botões sem ação nenhuma por
     trás, para não confundir o aluno a testar. Em 07/09/2026,
     "Encerrar" passou a estar ligado em ListaContratosMensais
-    (EncerrarContratoModal), pelo gancho `_acoes_ativa`, o irmão do
-    `_botao_criar` para os botões de cada cartão ativo; "Cancelar"
-    (Airbnb) e "Editar" continuam por fazer.
+    (EncerrarContratoModal) e "Cancelar" em ListaReservasAirbnb
+    (CancelarReservaModal), ambos pelo gancho `_acoes_ativa`, o
+    irmão do `_botao_criar` para os botões de cada cartão ativo;
+    só "Editar" (nos dois regimes) continua por fazer.
     """
 
     # Strings vazias (não None) de propósito: cada subclasse
@@ -1362,10 +1482,9 @@ class _ListaOcupacoesBase(ctk.CTkFrame):
     def _acoes_ativa(self, bloco_direita, ocupacao):
         """Botões de ação de uma ocupação ATIVA (o "Reativar" das
         inativas continua a ser desenhado na base, porque é igual nos
-        dois regimes). Por omissão não desenha nada: só
-        ListaContratosMensais o usa, para o botão "Encerrar" —
-        "Cancelar" (Airbnb) entra aqui da mesma forma quando for
-        feito.
+        dois regimes). Por omissão não desenha nada —
+        ListaContratosMensais o usa para o botão "Encerrar" e
+        ListaReservasAirbnb para o botão "Cancelar".
         """
         return
 
@@ -1560,7 +1679,9 @@ class ListaReservasAirbnb(_ListaOcupacoesBase):
     lateral. Traz o botão fixo "+ Nova Reserva Airbnb" (verde, mesmo
     padrão do "+ Novo Contrato" em ListaContratosMensais, decisão do
     aluno em 07/09/2026), que abre NovaReservaAirbnbModal por cima
-    da própria lista.
+    da própria lista, e o botão "Cancelar" em cada cartão ativo, que
+    abre CancelarReservaModal (07/09/2026, ver ponto 10 da docstring
+    do módulo).
     """
 
     tipo = "airbnb"
@@ -1575,3 +1696,18 @@ class ListaReservasAirbnb(_ListaOcupacoesBase):
             hover_color=tema.VERDE,
             command=lambda: NovaReservaAirbnbModal(self),
         ).pack(side="left")
+
+    def _acoes_ativa(self, bloco_direita, ocupacao):
+        ctk.CTkButton(
+            bloco_direita,
+            text="Cancelar",
+            width=80,
+            height=26,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=lambda: CancelarReservaModal(self, ocupacao),
+        ).pack(side="left", padx=(10, 0))
