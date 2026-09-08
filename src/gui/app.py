@@ -5,6 +5,7 @@ from . import componentes
 from .gui_clientes import ListaClientes
 from .gui_contratos import ListaContratosMensais, ListaReservasAirbnb
 from .gui_calendario import Calendario
+from .gui_estoque import EcraStock
 from .gui_propriedades import ListaPropriedades
 
 # Itens da barra lateral — lista simples, sem secções (decisão do
@@ -55,6 +56,14 @@ ITENS_MENU = [
     # da semana abre em popup a partir daí, para não ficar presa à
     # largura da área de conteúdo (ver gui_calendario.py).
     {"tipo": "item", "texto": "Calendário", "ecra": Calendario},
+    # 08/09/2026: o item chama-se "Stock", e não "Requisições",
+    # porque o hub que ele abre já tem lá dentro um cartão
+    # "Requisições" — o mesmo nome nos dois sítios repetia o
+    # problema corrigido em 07/09 entre "Contrato Mensal" e
+    # "Novo Contrato Mensal". As outras quatro áreas do módulo
+    # (Aprovação, Devoluções, Produtos, Movimentos) estão
+    # desenhadas no hub mas ainda por implementar.
+    {"tipo": "item", "texto": "Stock", "ecra": EcraStock},
 ]
 
 

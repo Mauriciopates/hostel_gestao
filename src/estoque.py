@@ -386,6 +386,65 @@ def listar_alertas_stock():
     return alertas
 
 
+def avisos_requisicao(itens):
+    """Devolve os avisos de stock insuficiente de uma requisição, em
+    frases prontas a mostrar.
+
+    'itens' é a mesma lista que `criar_requisicao` recebe —
+    dicionários {"produto_id": ..., "quantidade_pedida": ...}. Para
+    cada produto cujo pedido ultrapasse o saldo atual do armazém,
+    devolve uma frase; produtos com saldo suficiente não geram
+    nada. Lista vazia significa "não há nada a assinalar".
+
+    Nenhum destes avisos bloqueia a requisição: pedir mais do que o
+    saldo atual não é erro nesta fase (decisão 9, envio parcial
+    permitido) — só se torna relevante quando o admin for enviar. A
+    função existe para a interface poder mostrar o aviso ANTES de
+    submeter, sem duplicar a comparação fora do módulo de negócio,
+    exatamente pela mesma razão que levou a `avisos_encerramento`
+    para dentro de contratos.py (07/09/2026).
+
+    Quantidades inválidas (não inteiras, nulas ou negativas) são
+    ignoradas em vez de levantarem erro: enquanto o utilizador está
+    a escrever no campo, o valor passa por estados intermédios sem
+    sentido, e não é aqui que isso se valida — é `criar_requisicao`
+    que os recusa na submissão.
+
+    Levanta ValueError se um produto não existir, com a mesma
+    mensagem de `saldo_produto`.
+    """
+    avisos = []
+
+    for item in itens:
+        produto = procurar_produto(item["produto_id"])
+
+        if produto is None:
+            raise ValueError(
+                f"O produto {item['produto_id']} não existe."
+            )
+
+        pedida = item.get("quantidade_pedida")
+
+        if not isinstance(pedida, int) or isinstance(pedida, bool):
+            continue
+
+        if pedida <= 0:
+            continue
+
+        saldo = saldo_produto(produto["id"])
+
+        if pedida <= saldo:
+            continue
+
+        avisos.append(
+            f"{produto['nome']}: pedidos {pedida} "
+            f"{produto['unidade_medida']}, existem {saldo} em "
+            f"armazém. O administrador terá de repor."
+        )
+
+    return avisos
+
+
 def _validar_inteiro(valor, nome):
     """Valida que 'valor' é um número inteiro (não bool) não nulo.
 

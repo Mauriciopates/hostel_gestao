@@ -455,6 +455,50 @@ _LARGURA_MORADA = 170
 _LARGURA_NOME_UNIDADE = 190
 _LARGURA_ESTADO = 90
 _LARGURA_PRECO = 80
+# As três ações passaram para dentro de um popup, aberto por um
+# único botão "Ações" (08/09/2026). A coluna encolheu de 240 para
+# 100px, e esse espaço foi para o nome e para o estado. A vantagem
+# maior não é o espaço: é que acrescentar uma quarta ação a uma
+# unidade deixa de ser um problema de largura de coluna.
+_LARGURA_ACOES = 100
+
+# Colunas da tabela de unidades do popup. A grelha manual que aqui
+# estava (uma tupla de pesos mais uma função que a aplicava ao
+# cabeçalho e a cada linha) passou para `componentes.Tabela`, que faz
+# o mesmo para todas as tabelas da aplicação — ver o docstring dessa
+# classe para o porquê. Aqui fica só a definição, que é a parte
+# específica deste ecrã.
+#
+# O peso distribui o espaço que sobra: NOME leva a maior fatia, ID e
+# AÇÕES não crescem.
+_COLUNAS_UNIDADE = (
+    componentes.Coluna("ID", minimo=_LARGURA_ID + 24, espaco=8),
+    componentes.Coluna("NOME", peso=3, minimo=_LARGURA_NOME_UNIDADE),
+    componentes.Coluna(
+        "ESTADO", peso=1, minimo=_LARGURA_ESTADO, alinhamento="centro"
+    ),
+    componentes.Coluna(
+        "PREÇO", peso=1, minimo=_LARGURA_PRECO, alinhamento="w", espaco=8
+    ),
+    componentes.Coluna("AÇÕES", minimo=_LARGURA_ACOES, alinhamento="centro"),
+)
+
+# Altura da linha. 44px chegam para as duas linhas da célula do
+# nome, que é o caso mais alto (nome + "inativa"). O mesmo valor
+# serve as duas tabelas, para as linhas terem o mesmo peso visual
+# quando se passa de um ecrã para o outro.
+_ALTURA_LINHA_UNIDADE = 44
+_ALTURA_LINHA_PROPRIEDADE = 44
+
+# Colunas da tabela de propriedades. Mesma disciplina da tabela de
+# unidades: NOME e MORADA repartem o espaço que sobra, ID e AÇÕES
+# não crescem.
+_COLUNAS_PROPRIEDADE = (
+    componentes.Coluna("ID", minimo=_LARGURA_ID + 24, espaco=8),
+    componentes.Coluna("NOME", peso=3, minimo=_LARGURA_NOME_PROPRIEDADE),
+    componentes.Coluna("MORADA", peso=3, minimo=_LARGURA_MORADA),
+    componentes.Coluna("AÇÕES", minimo=_LARGURA_ACOES, alinhamento="centro"),
+)
 
 # Margem interna subtraída à largura da coluna antes de decidir se
 # um texto precisa de reticências (`_truncar_texto`) — folga
@@ -660,50 +704,17 @@ class ListaPropriedades(ctk.CTkFrame):
             font=ctk.CTkFont(size=11),
         ).pack(side="right")
 
-        # Cartão com borda à volta de toda a tabela + faixa de fundo
-        # própria no cabeçalho (07/09/2026, 5ª ronda: colunas
-        # alinhadas por si só ainda não "lia" como tabela a sério aos
-        # olhos do aluno — faltava isto).
-        cartao_tabela = ctk.CTkFrame(
+        # Cartão, faixa de cabeçalho, divisórias e área com scroll
+        # vinham daqui escritos à mão, em dois blocos que tinham de
+        # concordar um com o outro. Agora é `componentes.Tabela`,
+        # como no popup de unidades (08/09/2026).
+        self.tabela = componentes.Tabela(
             self,
-            corner_radius=tema.RAIO_CARTAO,
-            border_width=1,
-            border_color=tema.COR_BORDA,
-            fg_color=tema.COR_FUNDO,
+            colunas=_COLUNAS_PROPRIEDADE,
+            altura_linha=_ALTURA_LINHA_PROPRIEDADE,
+            mensagem_vazia="Ainda não há propriedades cadastradas.",
         )
-        cartao_tabela.pack(fill="both", expand=True, padx=20, pady=(4, 12))
-
-        cabecalho_tabela = ctk.CTkFrame(
-            cartao_tabela,
-            corner_radius=0,
-            fg_color=tema.CABECALHO_TABELA_FUNDO,
-        )
-        cabecalho_tabela.pack(fill="x")
-        cabecalho_interno = ctk.CTkFrame(
-            cabecalho_tabela, fg_color="transparent"
-        )
-        cabecalho_interno.pack(fill="x", padx=16, pady=9)
-        for texto, largura in (
-            ("ID", _LARGURA_ID),
-            ("NOME", _LARGURA_NOME_PROPRIEDADE),
-            ("MORADA", _LARGURA_MORADA),
-        ):
-            ctk.CTkLabel(
-                cabecalho_interno,
-                text=texto,
-                text_color=tema.COR_TEXTO_SECUNDARIO,
-                font=ctk.CTkFont(size=10, weight="bold"),
-                width=largura,
-                anchor="w",
-            ).pack(side="left")
-        ctk.CTkFrame(cartao_tabela, height=1, fg_color=tema.COR_BORDA).pack(
-            fill="x"
-        )
-
-        self.area_lista = ctk.CTkScrollableFrame(
-            cartao_tabela, fg_color="transparent"
-        )
-        self.area_lista.pack(fill="both", expand=True)
+        self.tabela.pack(fill="both", expand=True, padx=20, pady=(4, 12))
 
         rodape = ctk.CTkFrame(self, fg_color=tema.COR_FUNDO, height=48)
         rodape.pack(fill="x", padx=24, pady=(0, 16))
@@ -726,8 +737,7 @@ class ListaPropriedades(ctk.CTkFrame):
         ou confirmar uma busca (Enter), e depois de qualquer
         criação/edição/desativação/reativação de propriedade.
         """
-        for widget in self.area_lista.winfo_children():
-            widget.destroy()
+        self.tabela.limpar()
 
         incluir_inativas = self.mostrar_inativos.get()
         texto_busca = self.campo_busca.get().strip().lower()
@@ -741,17 +751,11 @@ class ListaPropriedades(ctk.CTkFrame):
             ]
 
         if not lista:
-            mensagem = (
+            self.tabela.mostrar_vazio(
                 "Nenhuma propriedade encontrada para a busca."
                 if texto_busca
-                else "Ainda não há propriedades cadastradas."
+                else None
             )
-            ctk.CTkLabel(
-                self.area_lista,
-                text=mensagem,
-                text_color=tema.COR_TEXTO_SECUNDARIO,
-                font=ctk.CTkFont(size=13),
-            ).pack(pady=40)
             return
 
         # Fontes reais para medir texto (`_truncar_texto`) — criadas
@@ -759,31 +763,22 @@ class ListaPropriedades(ctk.CTkFrame):
         fonte_nome = tkfont.Font(size=13)
         fonte_morada = tkfont.Font(size=12)
 
-        indice_zebra = 0
         for prop in lista:
-            tingida = prop["ativo"] and indice_zebra % 2 == 1
-            self._desenhar_propriedade(prop, fonte_nome, fonte_morada, tingida)
-            if prop["ativo"]:
-                indice_zebra += 1
+            self._desenhar_propriedade(prop, fonte_nome, fonte_morada)
 
     # -- desenho -------------------------------------------------------
 
-    def _desenhar_propriedade(self, prop, fonte_nome, fonte_morada, tingida):
-        """Desenha uma linha da tabela para uma propriedade. Cada
-        coluna é um único widget com largura fixa (`_LARGURA_*`),
-        lado a lado com `.pack(side="left")` — sem `CTkFrame`
-        aninhada nenhuma a combinar texto+chip, ao contrário da
-        versão anterior deste ecrã (ver ponto 10 do docstring do
-        módulo, sobre o bug do `pack_propagate` que isto evita por
-        construção). `tingida` decide o zebra striping (ponto 12).
+    def _desenhar_propriedade(self, prop, fonte_nome, fonte_morada):
+        """Desenha uma linha da tabela para uma propriedade.
+
+        Cada célula é um widget criado com a linha como master e
+        colocado com `self.tabela.colocar`, que trata do grid, do
+        alinhamento e das folgas a partir de `_COLUNAS_PROPRIEDADE`.
+        A altura, as divisórias e o tom das linhas são da tabela.
         """
         inativa = not prop["ativo"]
 
-        linha = ctk.CTkFrame(
-            self.area_lista,
-            fg_color=tema.LINHA_ALTERNADA if tingida else "transparent",
-        )
-        linha.pack(fill="x")
+        linha = self.tabela.nova_linha()
 
         rotulo_id = ctk.CTkLabel(
             linha,
@@ -796,7 +791,7 @@ class ListaPropriedades(ctk.CTkFrame):
             anchor="w",
             cursor="hand2",
         )
-        rotulo_id.pack(side="left", padx=(16, 8), pady=8)
+        self.tabela.colocar(linha, 0, rotulo_id, esticar="w")
         # Único sítio que abre as unidades da propriedade — decisão
         # do aluno, 07/09/2026 (ponto 10): nome e morada ficam só de
         # leitura aqui, editar continua no botão "Editar" de sempre.
@@ -809,71 +804,47 @@ class ListaPropriedades(ctk.CTkFrame):
         largura_texto_nome = _LARGURA_NOME_PROPRIEDADE - _MARGEM_TRUNCAGEM
         nome = _truncar_texto(fonte_nome, prop["nome"], largura_texto_nome)
         texto_nome = f"{nome}\ninativa" if inativa else nome
-        ctk.CTkLabel(
+        self.tabela.colocar(
             linha,
-            text=texto_nome,
-            text_color=cor_nome,
-            font=ctk.CTkFont(size=13),
-            width=_LARGURA_NOME_PROPRIEDADE,
-            anchor="w",
-            justify="left",
-        ).pack(side="left", pady=8)
+            1,
+            ctk.CTkLabel(
+                linha,
+                text=texto_nome,
+                text_color=cor_nome,
+                font=ctk.CTkFont(size=13),
+                width=_LARGURA_NOME_PROPRIEDADE,
+                anchor="w",
+                justify="left",
+            ),
+        )
 
         largura_texto_morada = _LARGURA_MORADA - _MARGEM_TRUNCAGEM
         morada = _truncar_texto(
             fonte_morada, prop["morada"] or "sem morada", largura_texto_morada
         )
-        ctk.CTkLabel(
+        self.tabela.colocar(
             linha,
-            text=morada,
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=12),
-            width=_LARGURA_MORADA,
-            anchor="w",
-        ).pack(side="left", pady=8)
-
-        # Espaçador transparente que absorve toda a folga da linha
-        # (07/09/2026, 6ª ronda, ponto 14) — empurra os botões para a
-        # margem direita em vez de os deixar coladas à Morada com um
-        # vazio enorme depois, na janela mais larga. `height=1` é
-        # obrigatório aqui: um CTkFrame sem altura explícita assume
-        # 200px por omissão, e isso esticava a linha toda na
-        # vertical (bug visto pelo aluno, corrigido nesta ronda) —
-        # `fill="x"` só estica a largura, nunca a altura.
-        ctk.CTkFrame(linha, height=1, fg_color="transparent").pack(
-            side="left", fill="x", expand=True
+            2,
+            ctk.CTkLabel(
+                linha,
+                text=morada,
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=12),
+                width=_LARGURA_MORADA,
+                anchor="w",
+            ),
         )
 
-        botoes = ctk.CTkFrame(linha, fg_color="transparent")
-        botoes.pack(side="left", padx=(0, 16), pady=8)
-
-        if inativa:
+        # O espaçador com expand=True que aqui estava deixou de ser
+        # preciso: as ações são uma coluna da grelha, não um bloco
+        # empurrado para a margem. Um botão só, como nas unidades —
+        # ver `_AcoesPropriedadeModal`.
+        acoes = self.tabela.celula_acoes(linha, 3)
+        acoes.adicionar(
             ctk.CTkButton(
-                botoes,
-                text="Reativar",
-                width=80,
-                height=26,
-                corner_radius=tema.RAIO_BOTAO,
-                fg_color=tema.VERDE,
-                hover_color=tema.VERDE,
-                command=lambda: self._reativar_propriedade(prop),
-            ).pack(side="left")
-        else:
-            ctk.CTkButton(
-                botoes,
-                text="Desativar",
-                width=80,
-                height=26,
-                corner_radius=tema.RAIO_BOTAO,
-                fg_color="transparent",
-                text_color=tema.TEXTO_ERRO,
-                hover_color=tema.VERMELHO_ERRO,
-                command=lambda: self._desativar_propriedade(prop),
-            ).pack(side="left", padx=(0, 6))
-            ctk.CTkButton(
-                botoes,
-                text="Editar",
-                width=70,
+                acoes,
+                text="Gerir",
+                width=76,
                 height=26,
                 corner_radius=tema.RAIO_BOTAO,
                 fg_color="transparent",
@@ -881,11 +852,8 @@ class ListaPropriedades(ctk.CTkFrame):
                 border_color=tema.COR_BORDA,
                 text_color=tema.COR_TEXTO,
                 hover_color=tema.COR_BORDA,
-                command=lambda: EditarPropriedadeModal(self, prop),
-            ).pack(side="left")
-
-        ctk.CTkFrame(self.area_lista, height=1, fg_color=tema.COR_BORDA).pack(
-            fill="x"
+                command=lambda: _AcoesPropriedadeModal(self, prop),
+            )
         )
 
     # -- ações -----------------------------------------------------------
@@ -943,6 +911,136 @@ class ListaPropriedades(ctk.CTkFrame):
         self._recarregar()
 
 
+class _AcoesPropriedadeModal(ctk.CTkToplevel):
+    """Popup pequeno com as ações de uma propriedade.
+
+    Gémeo do `_AcoesUnidadeModal`: o mesmo padrão nos dois ecrãs,
+    para quem usa a aplicação não ter de aprender duas maneiras de
+    chegar às mesmas coisas. "Ver unidades" fica aqui como ação
+    principal porque, até agora, o único sítio que abria as unidades
+    era o clique no crachá do ID — que continua a funcionar, mas
+    ninguém adivinha que é clicável.
+    """
+
+    def __init__(self, tela_lista, prop):
+        super().__init__(tela_lista)
+        self.tela_lista = tela_lista
+        self.prop = prop
+
+        self.title(f"Ações — {prop['id']}")
+        self.geometry("300x230")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_lista)
+        self._centrar_sobre(tela_lista)
+        _colocar_no_topo(self)
+
+        ctk.CTkLabel(
+            self,
+            text=prop["nome"],
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            wraplength=260,
+        ).pack(padx=20, pady=(20, 2))
+
+        ctk.CTkLabel(
+            self,
+            text=prop["id"],
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(pady=(0, 14))
+
+        if not prop["ativo"]:
+            self._botao(
+                "Reativar",
+                text_color=tema.TEXTO_LIVRE,
+                hover_color=tema.VERDE_LIVRE,
+                acao=lambda: self.tela_lista._reativar_propriedade(prop),
+            )
+        else:
+            self._botao(
+                "Ver unidades",
+                text_color=tema.AZUL_PRINCIPAL,
+                hover_color=tema.ID_CHIP_FUNDO,
+                acao=lambda: UnidadesDaPropriedadeModal(self.tela_lista, prop),
+            )
+            self._botao(
+                "Editar",
+                text_color=tema.COR_TEXTO,
+                hover_color=tema.COR_BORDA,
+                acao=lambda: EditarPropriedadeModal(self.tela_lista, prop),
+            )
+            self._separador()
+            self._botao(
+                "Desativar",
+                text_color=tema.TEXTO_ERRO,
+                hover_color=tema.VERMELHO_ERRO,
+                acao=lambda: self.tela_lista._desativar_propriedade(prop),
+            )
+
+        ctk.CTkButton(
+            self,
+            text="Fechar",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(fill="x", padx=20, pady=(10, 16))
+
+    def _centrar_sobre(self, janela):
+        """Abre por cima da janela que o chamou.
+
+        Sem isto o Tk coloca o popup no canto superior esquerdo do
+        ecrã, longe do botão que acabou de ser clicado.
+        """
+        janela.update_idletasks()
+        x = janela.winfo_rootx() + (janela.winfo_width() - 300) // 2
+        y = janela.winfo_rooty() + (janela.winfo_height() - 230) // 2
+        self.geometry(f"300x230+{max(x, 0)}+{max(y, 0)}")
+
+    def _separador(self):
+        """Risco fino antes da ação destrutiva.
+
+        Não é decoração: separa o que se pode desfazer do que não se
+        desfaz, e dá uma pausa antes do último botão.
+        """
+        ctk.CTkFrame(self, height=1, fg_color=tema.COR_BORDA).pack(
+            fill="x", padx=20, pady=(8, 5)
+        )
+
+    def _botao(self, texto, text_color, hover_color, acao):
+        """Botão de ação: fecha este popup antes de agir.
+
+        A ordem importa. `_desativar_propriedade` faz `_recarregar`
+        na tabela por trás, e "Ver unidades" abre outro popup —
+        deixar este aberto por cima deixava-o pendurado sobre coisas
+        que entretanto mudaram.
+        """
+
+        def executar():
+            self.destroy()
+            acao()
+
+        # Os três botões partilham forma, altura e contorno; só a
+        # cor do texto muda. Num menu de opções nenhuma delas é mais
+        # importante do que as outras — antes havia um azul cheio,
+        # um com contorno e um solto sem nada, e a diferença de peso
+        # visual dizia uma coisa que não era verdade (08/09/2026).
+        ctk.CTkButton(
+            self,
+            text=texto,
+            height=34,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            hover_color=hover_color,
+            text_color=text_color,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            command=executar,
+        ).pack(fill="x", padx=20, pady=3)
+
+
 class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
     """Popup com as unidades de UMA propriedade — mensais e Airbnb —,
     aberto ao clicar no ID da propriedade na tabela de
@@ -967,7 +1065,12 @@ class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
         self.prop = prop
 
         self.title(f"Unidades da Propriedade — {prop['nome']}")
-        self.geometry("780x580")
+        # 780x580 -> 900x620 (08/09/2026): a linha de uma unidade
+        # mensal ativa precisa de 718px e a largura útil andava nos
+        # 715. Com escala de 125% no Windows, "Editar" e "Abrir
+        # Mapa" ficavam fora da janela e parecia que o mapa tinha
+        # desaparecido.
+        self.geometry("900x620")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
         self.transient(tela_lista)
@@ -1027,50 +1130,17 @@ class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
             command=lambda: NovaUnidadeModal(self, self.prop),
         ).pack(side="right")
 
-        # Mesmo cartão com borda + faixa de cabeçalho da tabela de
-        # propriedades (ver `ListaPropriedades.__init__`, ponto 12,
-        # 5ª ronda) — as duas tabelas seguem a mesma disciplina.
-        cartao_tabela = ctk.CTkFrame(
+        # Cartão, faixa de cabeçalho, divisória e área com scroll
+        # vinham daqui escritos à mão, em dois blocos que tinham de
+        # concordar um com o outro. Agora é `componentes.Tabela`, com
+        # a definição das colunas num sítio só (08/09/2026).
+        self.tabela = componentes.Tabela(
             self,
-            corner_radius=tema.RAIO_CARTAO,
-            border_width=1,
-            border_color=tema.COR_BORDA,
-            fg_color=tema.COR_FUNDO,
+            colunas=_COLUNAS_UNIDADE,
+            altura_linha=_ALTURA_LINHA_UNIDADE,
+            mensagem_vazia="Sem unidades.",
         )
-        cartao_tabela.pack(fill="both", expand=True, padx=16, pady=(10, 16))
-
-        cabecalho_tabela = ctk.CTkFrame(
-            cartao_tabela,
-            corner_radius=0,
-            fg_color=tema.CABECALHO_TABELA_FUNDO,
-        )
-        cabecalho_tabela.pack(fill="x")
-        cabecalho_interno = ctk.CTkFrame(
-            cabecalho_tabela, fg_color="transparent"
-        )
-        cabecalho_interno.pack(fill="x", padx=16, pady=9)
-        for texto, largura, ancora in (
-            ("ID", _LARGURA_ID, "w"),
-            ("NOME", _LARGURA_NOME_UNIDADE, "w"),
-            ("ESTADO", _LARGURA_ESTADO, "w"),
-            ("PREÇO", _LARGURA_PRECO, "e"),
-        ):
-            ctk.CTkLabel(
-                cabecalho_interno,
-                text=texto,
-                text_color=tema.COR_TEXTO_SECUNDARIO,
-                font=ctk.CTkFont(size=10, weight="bold"),
-                width=largura,
-                anchor=ancora,
-            ).pack(side="left")
-        ctk.CTkFrame(cartao_tabela, height=1, fg_color=tema.COR_BORDA).pack(
-            fill="x"
-        )
-
-        self.area_lista = ctk.CTkScrollableFrame(
-            cartao_tabela, fg_color="transparent"
-        )
-        self.area_lista.pack(fill="both", expand=True)
+        self.tabela.pack(fill="both", expand=True, padx=16, pady=(10, 16))
 
         self._recarregar()
 
@@ -1088,8 +1158,7 @@ class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
         "Mostrar inativas"/busca/filtro de estado, e depois de
         qualquer criação/edição/desativação/reativação/manutenção.
         """
-        for widget in self.area_lista.winfo_children():
-            widget.destroy()
+        self.tabela.limpar()
 
         incluir_inativas = self.mostrar_inativas.get()
         texto_busca = self.campo_busca.get().strip().lower()
@@ -1125,31 +1194,25 @@ class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
         ]
 
         if not visiveis:
-            mensagem = (
-                "Sem unidades."
+            self.tabela.mostrar_vazio(
+                None
                 if not lista
-                else "Nenhuma unidade encontrada para os filtros " "aplicados."
+                else "Nenhuma unidade encontrada para os filtros aplicados."
             )
-            ctk.CTkLabel(
-                self.area_lista,
-                text=mensagem,
-                text_color=tema.COR_TEXTO_SECUNDARIO,
-                font=ctk.CTkFont(size=13),
-            ).pack(pady=40)
             return
 
         # Fonte real para medir texto (`_truncar_texto`) — criada uma
         # única vez por recarregamento, não por linha (ponto 12).
         fonte_nome = tkfont.Font(size=13)
 
-        indice_zebra = 0
+        # O tom alternado deixou de ser contado aqui: é a própria
+        # `componentes.Tabela` que o faz. Muda um pormenor — antes só
+        # as unidades ativas entravam na contagem e as inativas
+        # ficavam sempre sem tom; agora alternam como as outras.
         for uni in visiveis:
-            tingida = uni["ativo"] and indice_zebra % 2 == 1
             self._desenhar_unidade(
-                uni, estados_por_unidade.get(uni["id"]), fonte_nome, tingida
+                uni, estados_por_unidade.get(uni["id"]), fonte_nome
             )
-            if uni["ativo"]:
-                indice_zebra += 1
 
     def _unidade_passa_filtros(
         self, uni, texto_busca, estado_filtro, estado_texto
@@ -1176,21 +1239,18 @@ class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
 
     # -- desenho -------------------------------------------------------
 
-    def _desenhar_unidade(self, uni, estado_texto, fonte_nome, tingida):
-        """Desenha uma linha da tabela — mesma disciplina da tabela
-        de propriedades (`ListaPropriedades._desenhar_propriedade`):
-        cada coluna é um único widget com largura fixa, lado a lado,
-        sem frames aninhadas. `tingida` decide o zebra striping
-        (ponto 12).
+    def _desenhar_unidade(self, uni, estado_texto, fonte_nome):
+        """Desenha uma linha da tabela.
+
+        Cada célula é um widget criado com a linha como master e
+        colocado com `self.tabela.colocar`, que trata do grid, do
+        alinhamento e das folgas a partir de `_COLUNAS_UNIDADE`. O
+        zebra striping, a altura e a divisória são da tabela.
         """
         inativa = not uni["ativo"]
         em_manutencao = uni["em_manutencao"]
 
-        linha = ctk.CTkFrame(
-            self.area_lista,
-            fg_color=tema.LINHA_ALTERNADA if tingida else "transparent",
-        )
-        linha.pack(fill="x")
+        linha = self.tabela.nova_linha()
 
         rotulo_id = ctk.CTkLabel(
             linha,
@@ -1202,7 +1262,7 @@ class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
             width=_LARGURA_ID,
             anchor="w",
         )
-        rotulo_id.pack(side="left", padx=(16, 8), pady=8)
+        self.tabela.colocar(linha, 0, rotulo_id, esticar="w")
 
         # Etiqueta de tipo só aparece na Airbnb — as unidades mensais
         # continuam sem sufixo nenhum (06/09/2026). "— em manutenção"
@@ -1229,7 +1289,7 @@ class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
             anchor="w",
             justify="left",
         )
-        rotulo_nome.pack(side="left", pady=8)
+        self.tabela.colocar(linha, 1, rotulo_nome)
 
         # Duplo clique no nome/ID abre "Editar Unidade" — mesmo
         # atalho do ponto 9b, agora dentro do popup. Cada widget tem
@@ -1244,17 +1304,17 @@ class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
         # Sem pílula quando inativa/em manutenção — "—" no lugar,
         # mesma largura para a coluna Preço continuar alinhada.
         if inativa or em_manutencao or estado_texto is None:
-            ctk.CTkLabel(
+            etiqueta_estado = ctk.CTkLabel(
                 linha,
                 text="—",
                 text_color=tema.COR_TEXTO_SECUNDARIO,
                 font=ctk.CTkFont(size=11),
                 width=_LARGURA_ESTADO,
                 anchor="w",
-            ).pack(side="left", pady=8)
+            )
         else:
             fundo, texto = _cor_estado(estado_texto)
-            ctk.CTkLabel(
+            etiqueta_estado = ctk.CTkLabel(
                 linha,
                 text=estado_texto,
                 text_color=texto,
@@ -1264,54 +1324,36 @@ class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
                 width=_LARGURA_ESTADO,
                 height=22,
                 anchor="w",
-            ).pack(side="left", pady=8)
+            )
 
-        ctk.CTkLabel(
+        self.tabela.colocar(linha, 2, etiqueta_estado)
+
+        self.tabela.colocar(
             linha,
-            text=f"{uni['preco_base']:.2f} €",
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=12),
-            width=_LARGURA_PRECO,
-            anchor="e",
-        ).pack(side="left", padx=(0, 8), pady=8)
-
-        # Mesmo espaçador da tabela de propriedades (ponto 14),
-        # `height=1` incluído pelo mesmo motivo — empurra Desativar/
-        # Editar/Abrir Mapa para a margem direita.
-        ctk.CTkFrame(linha, height=1, fg_color="transparent").pack(
-            side="left", fill="x", expand=True
+            3,
+            ctk.CTkLabel(
+                linha,
+                text=f"{uni['preco_base']:.2f} €",
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=12),
+                width=_LARGURA_PRECO,
+                anchor="w",
+            ),
         )
 
-        botoes = ctk.CTkFrame(linha, fg_color="transparent")
-        botoes.pack(side="left", padx=(0, 16), pady=8)
-
-        if inativa:
+        # Um botão só, que abre o popup com as ações da unidade. As
+        # três que aqui estavam lado a lado obrigavam a coluna a ter
+        # 240px e voltavam a rebentar sempre que se juntava mais uma.
+        #
+        # "Gerir" e não "Ações": o título da coluna já diz o que a
+        # coluna é, o botão deve dizer o que faz. Com a mesma
+        # palavra nos dois, lia-se "AÇÕES / Ações" na vertical.
+        acoes = self.tabela.celula_acoes(linha, 4)
+        acoes.adicionar(
             ctk.CTkButton(
-                botoes,
-                text="Reativar",
-                width=80,
-                height=24,
-                corner_radius=tema.RAIO_BOTAO,
-                fg_color=tema.VERDE,
-                hover_color=tema.VERDE,
-                command=lambda: self._reativar_unidade(uni),
-            ).pack(side="left")
-        else:
-            ctk.CTkButton(
-                botoes,
-                text="Desativar",
-                width=72,
-                height=24,
-                corner_radius=tema.RAIO_BOTAO,
-                fg_color="transparent",
-                text_color=tema.TEXTO_ERRO,
-                hover_color=tema.VERMELHO_ERRO,
-                command=lambda: self._desativar_unidade(uni),
-            ).pack(side="left", padx=(0, 6))
-            ctk.CTkButton(
-                botoes,
-                text="Editar",
-                width=60,
+                acoes,
+                text="Gerir",
+                width=76,
                 height=24,
                 corner_radius=tema.RAIO_BOTAO,
                 fg_color="transparent",
@@ -1319,35 +1361,12 @@ class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
                 border_color=tema.COR_BORDA,
                 text_color=tema.COR_TEXTO,
                 hover_color=tema.COR_BORDA,
-                command=lambda: EditarUnidadeModal(self, uni, self.prop),
-            ).pack(side="left", padx=(0, 6))
-
-            # "Abrir Mapa" só faz sentido no regime mensal — a Airbnb
-            # não usa quarto/lugar (decisão 5), não tem planta
-            # nenhuma para mostrar. Renomeado de "Abrir" para "Abrir
-            # Mapa" (07/09/2026, 3ª ronda — deixa claro que é a
-            # planta de lugares que abre). O que este botão deve
-            # fazer numa unidade Airbnb fica para decisão futura
-            # (ponto 10 do docstring do módulo).
-            if uni["tipo"] == "mensal":
-                ctk.CTkButton(
-                    botoes,
-                    text="Abrir Mapa",
-                    width=92,
-                    height=24,
-                    corner_radius=tema.RAIO_BOTAO,
-                    fg_color=tema.AZUL_PRINCIPAL,
-                    hover_color=tema.AZUL_CLARO,
-                    command=lambda: self._abrir_planta(uni["id"]),
-                ).pack(side="left")
-
-        # Antes havia um "return" no ramo inativo que saltava esta
-        # linha divisória — corrigido na 5ª ronda, agora que os dois
-        # ramos convergem aqui: toda a linha da tabela fica sempre
-        # separada da seguinte, ativa ou não.
-        ctk.CTkFrame(self.area_lista, height=1, fg_color=tema.COR_BORDA).pack(
-            fill="x"
+                command=lambda: _AcoesUnidadeModal(self, uni),
+            )
         )
+
+        # A divisória entre linhas passou a ser desenhada pela
+        # própria `componentes.Tabela`, em `nova_linha`.
 
     # -- ações -----------------------------------------------------------
 
@@ -1416,6 +1435,146 @@ class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
 
         componentes.mostrar_sucesso(f"Unidade {uni['nome']} reativada.")
         self._recarregar()
+
+
+class _AcoesUnidadeModal(ctk.CTkToplevel):
+    """Popup pequeno com as ações de uma unidade.
+
+    Substitui os três botões que estavam lado a lado na linha da
+    tabela (08/09/2026). Motivo: a coluna precisava de 240px fixos
+    para os acomodar, e cada ação nova era outra vez uma discussão
+    de largura de coluna — o "Abrir Mapa" chegou a ficar espremido
+    num círculo de 24px por causa disso. Com o popup, a linha fica
+    com um botão de 76px e as ações deixam de competir com o resto
+    da tabela pelo espaço.
+
+    As ações disponíveis dependem do estado da unidade, tal como
+    antes: uma unidade inativa só oferece "Reativar", e "Abrir Mapa"
+    só aparece no regime mensal, porque a Airbnb não usa
+    quarto/lugar (decisão 5) e não tem planta nenhuma para mostrar.
+    """
+
+    def __init__(self, tela_unidades, uni):
+        super().__init__(tela_unidades)
+        self.tela_unidades = tela_unidades
+        self.uni = uni
+
+        self.title(f"Ações — {uni['id']}")
+        self.geometry("300x230")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_unidades)
+        self._centrar_sobre(tela_unidades)
+        _colocar_no_topo(self)
+
+        ctk.CTkLabel(
+            self,
+            text=uni["nome"],
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=14, weight="bold"),
+        ).pack(padx=20, pady=(20, 2))
+
+        ctk.CTkLabel(
+            self,
+            text=uni["id"],
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(pady=(0, 14))
+
+        if not uni["ativo"]:
+            self._botao(
+                "Reativar",
+                text_color=tema.TEXTO_LIVRE,
+                hover_color=tema.VERDE_LIVRE,
+                acao=lambda: self.tela_unidades._reativar_unidade(uni),
+            )
+        else:
+            if uni["tipo"] == "mensal":
+                self._botao(
+                    "Abrir Mapa",
+                    text_color=tema.AZUL_PRINCIPAL,
+                    hover_color=tema.ID_CHIP_FUNDO,
+                    acao=lambda: self.tela_unidades._abrir_planta(uni["id"]),
+                )
+
+            self._botao(
+                "Editar",
+                text_color=tema.COR_TEXTO,
+                hover_color=tema.COR_BORDA,
+                acao=lambda: EditarUnidadeModal(
+                    self.tela_unidades, uni, self.tela_unidades.prop
+                ),
+            )
+            self._separador()
+            self._botao(
+                "Desativar",
+                text_color=tema.TEXTO_ERRO,
+                hover_color=tema.VERMELHO_ERRO,
+                acao=lambda: self.tela_unidades._desativar_unidade(uni),
+            )
+
+        ctk.CTkButton(
+            self,
+            text="Fechar",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(fill="x", padx=20, pady=(10, 16))
+
+    def _centrar_sobre(self, janela):
+        """Abre por cima da janela que o chamou.
+
+        Sem isto o Tk coloca o popup no canto superior esquerdo do
+        ecrã, longe do botão que acabou de ser clicado.
+        """
+        janela.update_idletasks()
+        x = janela.winfo_rootx() + (janela.winfo_width() - 300) // 2
+        y = janela.winfo_rooty() + (janela.winfo_height() - 230) // 2
+        self.geometry(f"300x230+{max(x, 0)}+{max(y, 0)}")
+
+    def _separador(self):
+        """Risco fino antes da ação destrutiva.
+
+        Não é decoração: separa o que se pode desfazer do que não se
+        desfaz, e dá uma pausa antes do último botão.
+        """
+        ctk.CTkFrame(self, height=1, fg_color=tema.COR_BORDA).pack(
+            fill="x", padx=20, pady=(8, 5)
+        )
+
+    def _botao(self, texto, text_color, hover_color, acao):
+        """Botão de ação: fecha este popup antes de agir.
+
+        A ordem importa. `_abrir_planta` destrói a janela das
+        unidades para abrir a planta, e `_desativar_unidade` faz
+        `_recarregar` na tabela por trás — em qualquer dos casos,
+        deixar este popup aberto por cima deixava-o órfão, agarrado
+        a uma janela que já não existe.
+        """
+
+        def executar():
+            self.destroy()
+            acao()
+
+        # Os três botões partilham forma, altura e contorno; só a
+        # cor do texto muda. Num menu de opções nenhuma delas é mais
+        # importante do que as outras — antes havia um azul cheio,
+        # um com contorno e um solto sem nada, e a diferença de peso
+        # visual dizia uma coisa que não era verdade (08/09/2026).
+        ctk.CTkButton(
+            self,
+            text=texto,
+            height=34,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            hover_color=hover_color,
+            text_color=text_color,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            command=executar,
+        ).pack(fill="x", padx=20, pady=3)
 
 
 class _ControladorPontePlanta:
