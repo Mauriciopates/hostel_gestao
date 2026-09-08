@@ -647,13 +647,23 @@ def estado(unidade_id, data):
     return _estado_airbnb(unidade_id, data)
 
 
-def _estado_mensal(unidade_id, data):
-    """Proporção "ocupados/capacidade" de uma unidade mensal numa
-    data (decisão 17: capacidade é a soma dos lugares dos quartos
-    ativos; um contrato sem lugar_id conta na mesma, ver secção 4).
+def _contagem_mensal(unidade_id, data):
+    """Devolve o par (ocupados, capacidade) de uma unidade mensal
+    numa data (decisão 17: capacidade é a soma dos lugares dos
+    quartos ativos; um contrato sem lugar_id conta na mesma, ver
+    secção 4).
 
     Conta as ocupações mensais ativas cuja vigência cobre 'data':
     data_inicio <= data e (data_fim nulo ou data_fim > data).
+
+    Extraída de `_estado_mensal` em 08/09/2026, ao chegar o ecrã
+    de Calendário: `estado()` devolve a proporção como texto
+    ("6/8"), e o calendário precisa dos dois números separados
+    para escolher a cor da célula. Partir a string na interface
+    seria pôr regra de negócio na camada errada, por isso a
+    contagem passou a viver aqui, num sítio só, e as duas funções
+    públicas (`estado` e `estado_detalhe`) formatam-na cada uma à
+    sua maneira.
     """
     capacidade = 0
 
@@ -673,6 +683,16 @@ def _estado_mensal(unidade_id, data):
             continue
 
         ocupados += 1
+
+    return ocupados, capacidade
+
+
+def _estado_mensal(unidade_id, data):
+    """Proporção "ocupados/capacidade" de uma unidade mensal numa
+    data, em texto — o formato que `estado()` sempre devolveu e
+    que o CLI e a Gestão de Propriedades já mostram tal e qual.
+    """
+    ocupados, capacidade = _contagem_mensal(unidade_id, data)
 
     return f"{ocupados}/{capacidade}"
 
@@ -701,3 +721,77 @@ def _estado_airbnb(unidade_id, data):
             tem_futura = True
 
     return "Reservado" if tem_futura else "Livre"
+
+
+# Tradução dos estados textuais de `_estado_airbnb` para as chaves
+# minúsculas que `estado_detalhe` devolve. Existe para o texto que a
+# interface antiga já mostra ("Ocupado", com maiúscula) continuar
+# intacto, sem obrigar quem consome o dicionário a comparar strings
+# com maiúsculas e acentos.
+_ESTADOS_AIRBNB = {
+    "Ocupado": "ocupado",
+    "Reservado": "reservado",
+    "Livre": "livre",
+}
+
+
+def estado_detalhe(unidade_id, data):
+    """Estado da unidade numa data, já classificado e com os números
+    separados — versão estruturada de `estado()`.
+
+    Devolve um dicionário com três chaves:
+
+    - 'estado': "livre", "parcial", "cheia", "reservado", "ocupado"
+      ou "manutencao". As três primeiras só aparecem no regime
+      mensal; "reservado" e "ocupado" só no Airbnb.
+    - 'ocupados' e 'capacidade': inteiros no regime mensal, None no
+      Airbnb — uma unidade Airbnb é indivisível, não tem proporção
+      nenhuma a mostrar (decisão 5), e None diz isso melhor do que
+      um zero que se confundiria com "vazia".
+
+    Acrescentada em 08/09/2026 para o ecrã de Calendário, que precisa
+    de escolher a cor de cada célula a partir do estado e de escrever
+    "6/8" a partir dos números. `estado()` continua a existir sem
+    alterações, para o CLI e a Gestão de Propriedades — as duas leem
+    a mesma contagem, em `_contagem_mensal`.
+
+    Em manutenção sobrepõe-se ao cálculo, tal como em `estado()`
+    (decisão 3): uma unidade em manutenção nunca está livre,
+    independentemente das ocupações.
+    """
+    unidade = procurar(unidade_id)
+
+    if unidade is None:
+        raise ValueError(f"A unidade {unidade_id} não existe.")
+
+    if unidade["em_manutencao"]:
+        return {
+            "estado": "manutencao",
+            "ocupados": None,
+            "capacidade": None,
+        }
+
+    if unidade["tipo"] != "mensal":
+        return {
+            "estado": _ESTADOS_AIRBNB[_estado_airbnb(unidade_id, data)],
+            "ocupados": None,
+            "capacidade": None,
+        }
+
+    ocupados, capacidade = _contagem_mensal(unidade_id, data)
+
+    # Capacidade zero é uma unidade mensal ainda sem quartos ou sem
+    # lugares ativos: não está cheia, está por preencher. Sem este
+    # caso, `ocupados >= capacidade` daria "cheia" para 0/0.
+    if capacidade == 0 or ocupados == 0:
+        classificacao = "livre"
+    elif ocupados >= capacidade:
+        classificacao = "cheia"
+    else:
+        classificacao = "parcial"
+
+    return {
+        "estado": classificacao,
+        "ocupados": ocupados,
+        "capacidade": capacidade,
+    }

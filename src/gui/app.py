@@ -4,6 +4,7 @@ from . import tema
 from . import componentes
 from .gui_clientes import ListaClientes
 from .gui_contratos import ListaContratosMensais, ListaReservasAirbnb
+from .gui_calendario import Calendario
 from .gui_propriedades import ListaPropriedades
 
 # Itens da barra lateral — lista simples, sem secções (decisão do
@@ -48,6 +49,12 @@ ITENS_MENU = [
         "texto": "Reservas Airbnb",
         "ecra": ListaReservasAirbnb,
     },
+    # 08/09/2026: "Calendário" entra como 5.º item, ainda sem
+    # secções (a lista simples continua a ser a decisão em vigor).
+    # O ecrã em si só mostra os dois cartões de regime — a grelha
+    # da semana abre em popup a partir daí, para não ficar presa à
+    # largura da área de conteúdo (ver gui_calendario.py).
+    {"tipo": "item", "texto": "Calendário", "ecra": Calendario},
 ]
 
 
@@ -105,7 +112,6 @@ class Aplicacao(ctk.CTk):
         # 07/09/2026): Gestão de Propriedades — é o ponto de partida
         # lógico do fluxo, enquanto não existir Dashboard.
         self.mostrar_frame(ListaPropriedades)
-
 
     def mostrar_frame(self, classe_frame, **kwargs):
         """Troca o ecrã atual pelo indicado em classe_frame.
