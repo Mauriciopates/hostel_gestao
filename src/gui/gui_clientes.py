@@ -239,6 +239,22 @@ class ListaClientes(ctk.CTkFrame):
 
         componentes.Cabecalho(self, titulo="Clientes").pack(fill="x")
 
+        # Botão de criação numa barra própria, logo abaixo do
+        # cabeçalho e a verde — mesmo padrão de Contrato Mensal e
+        # Reservas Airbnb (09/09/2026). Estava em baixo e a azul,
+        # o que o deixava fora do campo de visão em listas longas
+        # e sem se distinguir dos botões de ação das linhas.
+        barra_criar = ctk.CTkFrame(self, fg_color="transparent")
+        barra_criar.pack(fill="x", padx=24, pady=(4, 8))
+        ctk.CTkButton(
+            barra_criar,
+            text="+ Novo Cliente",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.VERDE,
+            hover_color=tema.VERDE,
+            command=lambda: NovoClienteModal(self),
+        ).pack(side="left")
+
         barra = ctk.CTkFrame(self, fg_color=tema.COR_FUNDO)
         barra.pack(fill="x", padx=20, pady=(0, 4))
 
@@ -263,17 +279,6 @@ class ListaClientes(ctk.CTkFrame):
 
         self.area_lista = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.area_lista.pack(fill="both", expand=True, padx=16, pady=(0, 8))
-
-        rodape = ctk.CTkFrame(self, fg_color=tema.COR_FUNDO, height=48)
-        rodape.pack(fill="x", padx=24, pady=(0, 16))
-        ctk.CTkButton(
-            rodape,
-            text="+ Novo Cliente",
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color=tema.AZUL_PRINCIPAL,
-            hover_color=tema.AZUL_CLARO,
-            command=lambda: NovoClienteModal(self),
-        ).pack(side="left")
 
         self._recarregar()
 

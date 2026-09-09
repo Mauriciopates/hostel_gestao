@@ -44,6 +44,7 @@ que é um alerta. `estoque.avisos_requisicao` devolve as frases
 prontas e `estoque.listar_alertas_stock` devolve os produtos a
 repor, já ordenados — a interface só as mostra.
 """
+
 import datetime
 
 import customtkinter as ctk
@@ -53,7 +54,6 @@ import responsaveis
 from . import componentes
 from . import sessao
 from . import tema
-
 
 # Áreas do hub. 'ecra' a None significa "ainda por implementar": o
 # cartão continua clicável, mas avisa em vez de navegar — assim o
@@ -261,9 +261,7 @@ class EcraStock(ctk.CTkFrame):
         ctk.CTkLabel(
             cartao,
             text=area["titulo"],
-            text_color=(
-                tema.COR_TEXTO if ativo else tema.TEXTO_INDISPONIVEL
-            ),
+            text_color=(tema.COR_TEXTO if ativo else tema.TEXTO_INDISPONIVEL),
             font=ctk.CTkFont(size=15, weight="bold"),
         ).pack(pady=(18, 4))
 
@@ -271,9 +269,7 @@ class EcraStock(ctk.CTkFrame):
             cartao,
             text=area["descricao"],
             text_color=(
-                tema.COR_TEXTO_SECUNDARIO
-                if ativo
-                else tema.TEXTO_INDISPONIVEL
+                tema.COR_TEXTO_SECUNDARIO if ativo else tema.TEXTO_INDISPONIVEL
             ),
             font=ctk.CTkFont(size=11),
         ).pack()
@@ -314,6 +310,22 @@ class ListaRequisicoes(ctk.CTkFrame):
         componentes.Cabecalho(self, titulo="Stock · Requisições").pack(
             fill="x"
         )
+
+        # Botão de criação numa barra própria, logo abaixo do
+        # cabeçalho e a verde — mesmo padrão de Contrato Mensal e
+        # Reservas Airbnb (09/09/2026). Estava em baixo e a azul,
+        # o que o deixava fora do campo de visão em listas longas
+        # e sem se distinguir dos botões de ação das linhas.
+        barra_criar = ctk.CTkFrame(self, fg_color="transparent")
+        barra_criar.pack(fill="x", padx=20, pady=(4, 8))
+        ctk.CTkButton(
+            barra_criar,
+            text="+ Nova requisição",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.VERDE,
+            hover_color=tema.VERDE,
+            command=lambda: NovaRequisicaoModal(self),
+        ).pack(side="left")
 
         barra = ctk.CTkFrame(self, fg_color="transparent")
         barra.pack(fill="x", padx=20, pady=(0, 6))
@@ -356,9 +368,7 @@ class ListaRequisicoes(ctk.CTkFrame):
 
         self.combo_responsavel = ctk.CTkOptionMenu(
             filtros,
-            values=(
-                [_OPCAO_TODOS_RESPONSAVEIS] + sorted(self.id_por_rotulo)
-            ),
+            values=([_OPCAO_TODOS_RESPONSAVEIS] + sorted(self.id_por_rotulo)),
             width=240,
             corner_radius=tema.RAIO_CAMPO,
             command=lambda _valor: self._recarregar(),
@@ -423,17 +433,6 @@ class ListaRequisicoes(ctk.CTkFrame):
         )
         self.area_lista.pack(fill="both", expand=True)
 
-        rodape = ctk.CTkFrame(self, fg_color=tema.COR_FUNDO, height=48)
-        rodape.pack(fill="x", padx=24, pady=(0, 16))
-        ctk.CTkButton(
-            rodape,
-            text="+ Nova requisição",
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color=tema.AZUL_PRINCIPAL,
-            hover_color=tema.AZUL_CLARO,
-            command=lambda: NovaRequisicaoModal(self),
-        ).pack(side="left")
-
         self._recarregar()
 
     # -- carregamento / atualização ----------------------------------
@@ -454,8 +453,7 @@ class ListaRequisicoes(ctk.CTkFrame):
         # Catálogo lido de uma vez: sem isto era um procurar_produto
         # por item, dezenas de consultas para desenhar uma lista.
         produtos = {
-            p["id"]: p
-            for p in estoque.listar_produtos(incluir_inativos=True)
+            p["id"]: p for p in estoque.listar_produtos(incluir_inativos=True)
         }
 
         requisicoes = estoque.listar_requisicoes(
@@ -474,9 +472,7 @@ class ListaRequisicoes(ctk.CTkFrame):
         )
 
         for indice, requisicao in enumerate(requisicoes):
-            self._desenhar_linha(
-                requisicao, produtos, indice % 2 == 1
-            )
+            self._desenhar_linha(requisicao, produtos, indice % 2 == 1)
 
         if not requisicoes:
             ctk.CTkLabel(
@@ -495,9 +491,7 @@ class ListaRequisicoes(ctk.CTkFrame):
         if requisicao["estado"] == "rejeitada":
             return f"motivo: {requisicao['motivo_rejeicao']}"
 
-        itens = estoque.listar_itens_requisicao(
-            requisicao_id=requisicao["id"]
-        )
+        itens = estoque.listar_itens_requisicao(requisicao_id=requisicao["id"])
 
         if not itens:
             return "sem produtos"
@@ -506,9 +500,7 @@ class ListaRequisicoes(ctk.CTkFrame):
 
         for item in itens[:3]:
             produto = produtos.get(item["produto_id"])
-            nomes.append(
-                produto["nome"] if produto else item["produto_id"]
-            )
+            nomes.append(produto["nome"] if produto else item["produto_id"])
 
         texto = ", ".join(nomes)
 
@@ -639,9 +631,7 @@ class ListaRequisicoes(ctk.CTkFrame):
             componentes.mostrar_erro(str(erro))
             return
 
-        componentes.mostrar_sucesso(
-            f"Requisição {requisicao['id']} fechada."
-        )
+        componentes.mostrar_sucesso(f"Requisição {requisicao['id']} fechada.")
         self._recarregar()
 
 
@@ -705,9 +695,7 @@ class _LinhaProduto:
         ).pack(side="left", padx=(10, 0))
 
     def produto_id(self):
-        return self.modal.id_por_rotulo_produto.get(
-            self.combo_produto.get()
-        )
+        return self.modal.id_por_rotulo_produto.get(self.combo_produto.get())
 
     def quantidade(self):
         """Quantidade escrita, ou None se ainda não for um inteiro.
@@ -751,9 +739,7 @@ class NovaRequisicaoModal(ctk.CTkToplevel):
         self.id_por_rotulo_produto = {
             _rotulo_produto(p): p["id"] for p in self.produtos_disponiveis
         }
-        self.produtos_por_id = {
-            p["id"]: p for p in self.produtos_disponiveis
-        }
+        self.produtos_por_id = {p["id"]: p for p in self.produtos_disponiveis}
 
         ctk.CTkLabel(
             self,
@@ -876,9 +862,7 @@ class NovaRequisicaoModal(ctk.CTkToplevel):
                 anchor="w",
             ).pack(side="left")
 
-        ctk.CTkFrame(cartao, height=1, fg_color=tema.COR_BORDA).pack(
-            fill="x"
-        )
+        ctk.CTkFrame(cartao, height=1, fg_color=tema.COR_BORDA).pack(fill="x")
 
         self.area_linhas = ctk.CTkFrame(cartao, fg_color="transparent")
         self.area_linhas.pack(fill="x", pady=(6, 8))
@@ -993,9 +977,7 @@ class NovaRequisicaoModal(ctk.CTkToplevel):
             linha.rotulo_armazem.configure(
                 text=f"{saldo} {unidade}".strip(),
                 text_color=(
-                    tema.TEXTO_ERRO
-                    if em_falta
-                    else tema.COR_TEXTO_SECUNDARIO
+                    tema.TEXTO_ERRO if em_falta else tema.COR_TEXTO_SECUNDARIO
                 ),
             )
 
@@ -1048,9 +1030,7 @@ class NovaRequisicaoModal(ctk.CTkToplevel):
         )
 
         if responsavel_id is None:
-            componentes.mostrar_erro(
-                "Escolha o responsável pela requisição."
-            )
+            componentes.mostrar_erro("Escolha o responsável pela requisição.")
             return
 
         itens = self._itens()

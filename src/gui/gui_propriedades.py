@@ -462,6 +462,7 @@ _LARGURA_PRECO = 80
 # unidade deixa de ser um problema de largura de coluna.
 _LARGURA_ACOES = 100
 
+
 # Colunas da tabela de unidades do popup. A grelha manual que aqui
 # estava (uma tupla de pesos mais uma função que a aplicava ao
 # cabeçalho e a cada linha) passou para `componentes.Tabela`, que faz
@@ -480,7 +481,9 @@ _COLUNAS_UNIDADE = (
     componentes.Coluna(
         "PREÇO", peso=1, minimo=_LARGURA_PRECO, alinhamento="w", espaco=8
     ),
-    componentes.Coluna("AÇÕES", minimo=_LARGURA_ACOES, alinhamento="centro"),
+    componentes.Coluna(
+        "AÇÕES", minimo=_LARGURA_ACOES, alinhamento="centro"
+    ),
 )
 
 # Altura da linha. 44px chegam para as duas linhas da célula do
@@ -495,9 +498,13 @@ _ALTURA_LINHA_PROPRIEDADE = 44
 # não crescem.
 _COLUNAS_PROPRIEDADE = (
     componentes.Coluna("ID", minimo=_LARGURA_ID + 24, espaco=8),
-    componentes.Coluna("NOME", peso=3, minimo=_LARGURA_NOME_PROPRIEDADE),
+    componentes.Coluna(
+        "NOME", peso=3, minimo=_LARGURA_NOME_PROPRIEDADE
+    ),
     componentes.Coluna("MORADA", peso=3, minimo=_LARGURA_MORADA),
-    componentes.Coluna("AÇÕES", minimo=_LARGURA_ACOES, alinhamento="centro"),
+    componentes.Coluna(
+        "AÇÕES", minimo=_LARGURA_ACOES, alinhamento="centro"
+    ),
 )
 
 # Margem interna subtraída à largura da coluna antes de decidir se
@@ -679,6 +686,22 @@ class ListaPropriedades(ctk.CTkFrame):
             fill="x"
         )
 
+        # Botão de criação numa barra própria, logo abaixo do
+        # cabeçalho e a verde — mesmo padrão de Contrato Mensal e
+        # Reservas Airbnb (09/09/2026). Estava em baixo e a azul,
+        # o que o deixava fora do campo de visão em listas longas
+        # e sem se distinguir dos botões de ação das linhas.
+        barra_criar = ctk.CTkFrame(self, fg_color="transparent")
+        barra_criar.pack(fill="x", padx=20, pady=(4, 8))
+        ctk.CTkButton(
+            barra_criar,
+            text="+ Nova Propriedade",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.VERDE,
+            hover_color=tema.VERDE,
+            command=lambda: NovaPropriedadeModal(self),
+        ).pack(side="left")
+
         barra = ctk.CTkFrame(self, fg_color=tema.COR_FUNDO)
         barra.pack(fill="x", padx=20, pady=(0, 4))
 
@@ -715,17 +738,6 @@ class ListaPropriedades(ctk.CTkFrame):
             mensagem_vazia="Ainda não há propriedades cadastradas.",
         )
         self.tabela.pack(fill="both", expand=True, padx=20, pady=(4, 12))
-
-        rodape = ctk.CTkFrame(self, fg_color=tema.COR_FUNDO, height=48)
-        rodape.pack(fill="x", padx=24, pady=(0, 16))
-        ctk.CTkButton(
-            rodape,
-            text="+ Nova Propriedade",
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color=tema.AZUL_PRINCIPAL,
-            hover_color=tema.AZUL_CLARO,
-            command=lambda: NovaPropriedadeModal(self),
-        ).pack(side="left")
 
         self._recarregar()
 
@@ -835,10 +847,11 @@ class ListaPropriedades(ctk.CTkFrame):
             ),
         )
 
-        # O espaçador com expand=True que aqui estava deixou de ser
-        # preciso: as ações são uma coluna da grelha, não um bloco
-        # empurrado para a margem. Um botão só, como nas unidades —
-        # ver `_AcoesPropriedadeModal`.
+        # Um botão só, que abre o popup com as ações da
+        # propriedade. Chegou a ser testado um menu de contexto com
+        # a biblioteca CTkMenuBar (08/09/2026) — cantos redondos e
+        # submenu "Mais" —, mas dava problemas no ecrã do aluno e foi
+        # revertido. O popup fica.
         acoes = self.tabela.celula_acoes(linha, 3)
         acoes.adicionar(
             ctk.CTkButton(
@@ -962,7 +975,9 @@ class _AcoesPropriedadeModal(ctk.CTkToplevel):
                 "Ver unidades",
                 text_color=tema.AZUL_PRINCIPAL,
                 hover_color=tema.ID_CHIP_FUNDO,
-                acao=lambda: UnidadesDaPropriedadeModal(self.tela_lista, prop),
+                acao=lambda: UnidadesDaPropriedadeModal(
+                    self.tela_lista, prop
+                ),
             )
             self._botao(
                 "Editar",
@@ -1125,8 +1140,8 @@ class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
             text="+ Nova Unidade",
             width=120,
             corner_radius=tema.RAIO_BOTAO,
-            fg_color=tema.AZUL_PRINCIPAL,
-            hover_color=tema.AZUL_CLARO,
+            fg_color=tema.VERDE,
+            hover_color=tema.VERDE,
             command=lambda: NovaUnidadeModal(self, self.prop),
         ).pack(side="right")
 
@@ -1494,7 +1509,9 @@ class _AcoesUnidadeModal(ctk.CTkToplevel):
                     "Abrir Mapa",
                     text_color=tema.AZUL_PRINCIPAL,
                     hover_color=tema.ID_CHIP_FUNDO,
-                    acao=lambda: self.tela_unidades._abrir_planta(uni["id"]),
+                    acao=lambda: self.tela_unidades._abrir_planta(
+                        uni["id"]
+                    ),
                 )
 
             self._botao(
