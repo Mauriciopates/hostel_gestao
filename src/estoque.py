@@ -1020,13 +1020,42 @@ def listar_devolucoes(estado=None, requisicao_id=None, responsavel_id=None):
         responsavel_id=responsavel_id,
     )
 
-def fechar_devolucao(devolucao_id, aceite_por_id, data_fecho):
+def fechar_devolucao(
+    devolucao_id,
+    aceite_por_id,
+    data_fecho,
+    quantidades_aceites=None,
+    motivo_ajuste="",
+):
     """Aceita uma devolução — pendente → fechada.
 
-    Gera um movimento de entrada por item (decisão 9, decisão 20) —
-    só agora se repõe o saldo de cada produto: enquanto a devolução
-    estava pendente, o material estava em trânsito, fora do armazém
-    e fora do saldo (ver `reportar_devolucao`).
+    Gera um movimento de entrada por item, com a quantidade
+    reportada (decisão 9, decisão 20) — só agora se repõe o saldo
+    de cada produto: enquanto a devolução estava pendente, o
+    material estava em trânsito, fora do armazém e fora do saldo
+    (ver `reportar_devolucao`). A entrada em si nunca muda de
+    valor: é o registo imutável do que foi reportado.
+
+    'quantidades_aceites' cobre o caso de o admin, ao aceitar,
+    verificar que a quantidade que voltou de facto é diferente da
+    reportada — para menos (reportaram 5, só vieram 2 boas, resto
+    ficou danificado) ou para mais (reportaram 2 por engano, vieram
+    5) — é um dicionário {produto_id: quantidade}, só precisa de
+    listar os produtos cuja quantidade aceite difere da reportada.
+    Omisso ou vazio, aceita-se tudo pelo valor reportado, sem gerar
+    nenhum ajuste (comportamento anterior a 09/09/2026, sem
+    alterações). O único limite da quantidade aceite é não ser
+    negativa — para mais ou para menos do que o reportado, é o
+    ajuste que corrige a diferença.
+
+    Cada diferença gera, além da entrada, um segundo movimento — de
+    "ajuste", com a diferença (positiva ou negativa) — em vez de
+    corrigir a entrada já registada: mesmo princípio já descrito em
+    `registar_movimento`, "uma correção a um movimento já registado
+    faz-se com um novo movimento de ajuste, nunca alterando o
+    antigo". Havendo pelo menos uma diferença, 'motivo_ajuste' é
+    obrigatório — tudo é validado antes de gerar qualquer
+    movimento, para a devolução nunca fechar a meio.
 
     Aceita-se a devolução toda de uma só vez — não há aceitação
     item a item (decisão 20), simétrico ao envio da requisição.
@@ -1056,6 +1085,48 @@ def fechar_devolucao(devolucao_id, aceite_por_id, data_fecho):
 
     itens = listar_itens_devolucao(devolucao_id=devolucao_id)
 
+    quantidades_aceites = quantidades_aceites or {}
+    motivo_ajuste = motivo_ajuste.strip()
+
+    produto_ids_da_devolucao = {item["produto_id"] for item in itens}
+
+    for produto_id in quantidades_aceites:
+        if produto_id not in produto_ids_da_devolucao:
+            raise ValueError(
+                f"O produto {produto_id} não faz parte da "
+                f"devolução {devolucao_id}."
+            )
+
+    ajustes = []
+
+    for item in itens:
+        produto_id = item["produto_id"]
+        reportado = item["quantidade"]
+
+        if produto_id not in quantidades_aceites:
+            continue
+
+        aceite_quantidade = _validar_inteiro(
+            quantidades_aceites[produto_id], "aceite"
+        )
+
+        if aceite_quantidade < 0:
+            raise ValueError(
+                f"A quantidade aceite do produto {produto_id} não "
+                "pode ser negativa."
+            )
+
+        diferenca = aceite_quantidade - reportado
+
+        if diferenca != 0:
+            ajustes.append((produto_id, diferenca))
+
+    if ajustes and not motivo_ajuste:
+        raise ValueError(
+            "O motivo é obrigatório quando a quantidade aceite é "
+            "diferente da reportada."
+        )
+
     for item in itens:
         registar_movimento(
             produto_id=item["produto_id"],
@@ -1064,6 +1135,17 @@ def fechar_devolucao(devolucao_id, aceite_por_id, data_fecho):
             data=data_fecho,
             responsavel_id=aceite["id"],
             requisicao_id=devolucao["requisicao_id"],
+        )
+
+    for produto_id, diferenca in ajustes:
+        registar_movimento(
+            produto_id=produto_id,
+            tipo="ajuste",
+            quantidade=diferenca,
+            data=data_fecho,
+            responsavel_id=aceite["id"],
+            requisicao_id=devolucao["requisicao_id"],
+            motivo=motivo_ajuste,
         )
 
     campos = {"estado": "fechada", "data_fecho": data_fecho}

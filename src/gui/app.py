@@ -1,7 +1,9 @@
 import customtkinter as ctk
 
+import responsaveis
 from . import tema
 from . import componentes
+from . import sessao
 from .gui_clientes import ListaClientes
 from .gui_contratos import ListaContratosMensais, ListaReservasAirbnb
 from .gui_calendario import Calendario
@@ -78,6 +80,134 @@ ITENS_MENU = [
 ]
 
 
+class SelecionarUtilizadorModal(ctk.CTkToplevel):
+    """"Quem está a usar a aplicação?" — obrigatório ao arrancar.
+
+    Substituto provisório de um ecrã de login a sério, enquanto não
+    existir um módulo `utilizadores.py` com conta e palavra-passe
+    próprios (decisão 09/09/2026: fica documentado aqui para não se
+    perder quando esse módulo chegar — a chamada a
+    `sessao.definir_responsavel_ativo` é o único ponto a substituir
+    então, o resto do ecrã pode manter-se).
+
+    Sem isto, a sessão arrancava sempre com
+    `sessao.obter_responsavel_ativo()` a devolver `None` — só se
+    resolvia navegando manualmente a Responsáveis → Gerir → "Definir
+    como responsável ativo" — e toda a gente esquecia esse passo,
+    vendo "Defina um responsável ativo..." na primeira ação que
+    exige um responsável (Confirmar requisição, Confirmar receção,
+    Rejeitar requisição, Reportar sobra, Aceitar devolução).
+
+    Modal a sério: `protocol("WM_DELETE_WINDOW", ...)` desativa o
+    "X" da janela, e só o botão "Entrar" fecha o popup — não dá para
+    passar à frente sem escolher (a não ser que ainda não exista
+    responsável nenhum, único caso em que "Continuar" aparece, para
+    não trancar quem está a arrancar a aplicação pela primeira vez).
+    """
+
+    def __init__(self, master):
+        super().__init__(master)
+        self.protocol("WM_DELETE_WINDOW", lambda: None)
+
+        self.responsaveis_disponiveis = responsaveis.listar()
+        largura = 380
+        altura = 230 if self.responsaveis_disponiveis else 190
+        self.title("Hostel Clean")
+        self.geometry(f"{largura}x{altura}")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(master)
+
+        x = self.winfo_screenwidth() // 2 - largura // 2
+        y = self.winfo_screenheight() // 2 - altura // 2
+        self.geometry(f"{largura}x{altura}+{x}+{y}")
+
+        ctk.CTkLabel(
+            self,
+            text="Quem está a usar a aplicação?",
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=15, weight="bold"),
+        ).pack(padx=20, pady=(24, 4))
+
+        if not self.responsaveis_disponiveis:
+            self._sem_responsaveis()
+        else:
+            self._escolher_responsavel()
+
+        self.after(
+            10,
+            lambda: (self.lift(), self.focus_force(), self.grab_set()),
+        )
+
+    def _sem_responsaveis(self):
+        """Ainda não há nenhum responsável criado — acontece só na
+        primeira utilização. "Continuar" evita trancar a aplicação
+        num ciclo sem saída: cria-se o primeiro responsável já
+        dentro do ecrã "Responsáveis", e da próxima vez que a
+        aplicação arrancar já há por quem escolher aqui.
+        """
+        ctk.CTkLabel(
+            self,
+            text=(
+                "Ainda não há nenhum responsável criado. Continue e "
+                "crie um em \"Responsáveis\" — da próxima vez que "
+                "abrir a aplicação já pode escolher aqui."
+            ),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=12),
+            wraplength=320,
+            justify="center",
+        ).pack(padx=20, pady=(8, 16))
+
+        ctk.CTkButton(
+            self,
+            text="Continuar",
+            height=36,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.AZUL_PRINCIPAL,
+            hover_color=tema.AZUL_CLARO,
+            command=self._sair_sem_escolher,
+        ).pack(padx=20, pady=(0, 20), fill="x")
+
+    def _escolher_responsavel(self):
+        rotulos = [r["nome"] for r in self.responsaveis_disponiveis]
+        self.id_por_rotulo = {
+            r["nome"]: r["id"] for r in self.responsaveis_disponiveis
+        }
+
+        self.combo = ctk.CTkOptionMenu(
+            self,
+            values=rotulos,
+            corner_radius=tema.RAIO_CAMPO,
+            width=300,
+        )
+        self.combo.set(rotulos[0])
+        self.combo.pack(padx=20, pady=(14, 20))
+
+        ctk.CTkButton(
+            self,
+            text="Entrar",
+            height=36,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.AZUL_PRINCIPAL,
+            hover_color=tema.AZUL_CLARO,
+            command=self._entrar,
+        ).pack(padx=20, pady=(0, 20), fill="x")
+
+    def _entrar(self):
+        escolhido_id = self.id_por_rotulo.get(self.combo.get())
+
+        if escolhido_id is not None:
+            sessao.definir_responsavel_ativo(escolhido_id)
+
+        self.grab_release()
+        self.destroy()
+
+    def _sair_sem_escolher(self):
+        self.grab_release()
+        self.destroy()
+
+
 class Aplicacao(ctk.CTk):
     """Janela principal da aplicação. Estrutura fixa: barra lateral
     de navegação à esquerda (altura toda da janela), área de
@@ -128,6 +258,16 @@ class Aplicacao(ctk.CTk):
 
         self.frame_atual = None
 
+        # "Quem está a usar a aplicação?" (decisão 09/09/2026, ver
+        # SelecionarUtilizadorModal acima): pergunta-se ANTES do
+        # ecrã inicial, e `wait_window` bloqueia o arranque até
+        # fechar — impede chegar a qualquer ecrã sem um responsável
+        # ativo definido, sem depender de ninguém se lembrar de ir a
+        # Responsáveis fazê-lo à mão.
+        self.update_idletasks()
+        popup_utilizador = SelecionarUtilizadorModal(self)
+        self.wait_window(popup_utilizador)
+
         # Ecrã inicial ao arrancar a aplicação (decisão do aluno,
         # 07/09/2026): Gestão de Propriedades — é o ponto de partida
         # lógico do fluxo, enquanto não existir Dashboard.
@@ -151,3 +291,19 @@ class Aplicacao(ctk.CTk):
             self.area_conteudo, controlador=self, **kwargs
         )
         self.frame_atual.pack(fill="both", expand=True)
+
+    def trocar_utilizador(self):
+        """Reabre o "Quem está a usar a aplicação?" a qualquer altura
+        (botão "Trocar utilizador" da barra lateral, 09/09/2026) —
+        mesmo popup do arranque, sem precisar de fechar e reabrir a
+        aplicação para mudar de responsável ativo.
+
+        Depois de fechar o popup, volta sempre a Gestão de
+        Propriedades, em vez de tentar reconstruir o ecrã em que a
+        pessoa estava: alguns ecrãs recebem argumentos próprios (ex.
+        uma unidade específica) que `mostrar_frame` não tem como
+        adivinhar aqui.
+        """
+        popup_utilizador = SelecionarUtilizadorModal(self)
+        self.wait_window(popup_utilizador)
+        self.mostrar_frame(ListaPropriedades)

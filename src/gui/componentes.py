@@ -63,6 +63,14 @@ class BarraLateral(ctk.CTkFrame):
     por mockup antes de codar, junto com os itens 2/3/5 do checklist
     de wireframes) — só decorativo, sem lógica nenhuma, por isso fica
     fixo aqui em vez de vir na lista `itens`.
+
+    Botão "Trocar utilizador" no rodapé, acima da versão (09/09/2026
+    — pedido explícito do aluno, "botão cinza"). Mesma ideia de
+    `mostrar_frame`: `controlador` tem de ter também um método
+    `trocar_utilizador()` — quem o chama é só este botão, por isso é
+    o único sítio que precisa dessa segunda parte do "contrato" com
+    o controlador (`Aplicacao.trocar_utilizador`, em app.py, reabre
+    `SelecionarUtilizadorModal`).
     """
 
     def __init__(self, master, controlador, itens):
@@ -118,6 +126,22 @@ class BarraLateral(ctk.CTkFrame):
             text_color=tema.COR_TEXTO_SIDEBAR_SECAO,
             font=ctk.CTkFont(size=9),
         ).pack(side="bottom", pady=10)
+
+        # Botão cinza, colado acima da versão (empacotado DEPOIS
+        # dela — em pack(side="bottom") cada widget novo fica por
+        # cima do anterior, não por baixo). Cinzento reaproveita
+        # COR_TEXTO_SIDEBAR_SECAO, já usado nesta mesma barra (versão
+        # e rótulos de secção) — sem cor nova em tema.py.
+        ctk.CTkButton(
+            self,
+            text="Trocar utilizador",
+            fg_color=tema.COR_TEXTO_SIDEBAR_SECAO,
+            text_color=tema.COR_TEXTO_SIDEBAR,
+            hover_color=tema.AZUL_CLARO,
+            corner_radius=tema.RAIO_BOTAO,
+            height=30,
+            command=controlador.trocar_utilizador,
+        ).pack(side="bottom", fill="x", padx=12, pady=(4, 0))
 
 
 class Cabecalho(ctk.CTkFrame):
@@ -406,7 +430,10 @@ class Tabela(ctk.CTkFrame):
             # divisória vertical pedia 200px de altura e esticava a
             # fila toda.
             ctk.CTkFrame(
-                self.grelha, width=1, height=1, corner_radius=0,
+                self.grelha,
+                width=1,
+                height=1,
+                corner_radius=0,
                 fg_color=tema.COR_BORDA,
             ).grid(row=fila, column=indice * 2 + 1, sticky="ns")
 
@@ -417,7 +444,9 @@ class Tabela(ctk.CTkFrame):
         self.grelha.grid_rowconfigure(fila, minsize=1)
 
         ctk.CTkFrame(
-            self.grelha, height=1, corner_radius=0,
+            self.grelha,
+            height=1,
+            corner_radius=0,
             fg_color=tema.COR_BORDA,
         ).grid(
             row=fila,
