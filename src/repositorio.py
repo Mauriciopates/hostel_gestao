@@ -756,6 +756,129 @@ def atualizar_responsavel(responsavel_id, campos):
         conexao.close()
 
 
+# --- atribuições (responsável <-> unidade) ---------------------------
+
+
+def inserir_atribuicao(atribuicao):
+    """Insere uma ligação nova entre um responsável e uma unidade.
+
+    Espera um dicionário com id, responsavel_id, unidade_id, ativo.
+    O par (responsavel_id, unidade_id) é UNIQUE na tabela — inserir
+    um par já existente dá erro do MySQL; para reativar uma ligação
+    que já existiu, usa `atualizar_atribuicao` sobre a linha
+    encontrada por `procurar_atribuicao`, não esta função.
+    """
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(
+            "INSERT INTO responsavel_unidade "
+            "(id, responsavel_id, unidade_id, ativo) "
+            "VALUES (%s, %s, %s, %s)",
+            (
+                atribuicao["id"],
+                atribuicao["responsavel_id"],
+                atribuicao["unidade_id"],
+                atribuicao["ativo"],
+            ),
+        )
+        conexao.commit()
+    finally:
+        conexao.close()
+
+
+def _normalizar_atribuicao(linha):
+    linha["ativo"] = bool(linha["ativo"])
+    return linha
+
+
+def procurar_atribuicao(responsavel_id, unidade_id):
+    """Procura a ligação entre um responsável e uma unidade, ativa
+    ou não.
+
+    Devolve a linha inativa também de propósito: é o que permite a
+    `unidades.atribuir_responsavel` reativar uma ligação que já
+    existiu, em vez de tentar inserir o mesmo par outra vez e
+    chocar com a restrição UNIQUE. Devolve None se o par nunca
+    tiver sido ligado.
+    """
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT * FROM responsavel_unidade "
+            "WHERE responsavel_id = %s AND unidade_id = %s",
+            (responsavel_id, unidade_id),
+        )
+        linha = cast(dict, cursor.fetchone())
+    finally:
+        conexao.close()
+
+    if linha is not None:
+        linha = _normalizar_atribuicao(linha)
+
+    return linha
+
+
+def listar_atribuicoes(
+    responsavel_id=None, unidade_id=None, incluir_inativas=False
+):
+    """Lista ligações responsável-unidade, filtráveis pelos dois
+    lados — mesmo padrão de `listar_itens_requisicao`: os filtros
+    aplicam-se na própria consulta SQL, e nenhum dos dois é
+    obrigatório.
+    """
+    condicoes = []
+    valores = []
+
+    if responsavel_id is not None:
+        condicoes.append("responsavel_id = %s")
+        valores.append(responsavel_id)
+
+    if unidade_id is not None:
+        condicoes.append("unidade_id = %s")
+        valores.append(unidade_id)
+
+    if not incluir_inativas:
+        condicoes.append("ativo = 1")
+
+    sql = "SELECT * FROM responsavel_unidade"
+    if condicoes:
+        sql += " WHERE " + " AND ".join(condicoes)
+
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor(dictionary=True)
+        cursor.execute(sql, valores)
+        linhas = cast(list, cursor.fetchall())
+    finally:
+        conexao.close()
+
+    return [_normalizar_atribuicao(linha) for linha in linhas]
+
+
+def atualizar_atribuicao(atribuicao_id, campos):
+    """Atualiza os campos indicados (dicionário nome -> valor novo)
+    de uma atribuição. Não faz nada se `campos` vier vazio.
+    """
+    if not campos:
+        return
+
+    colunas = ", ".join(f"{nome_campo} = %s" for nome_campo in campos)
+    valores = list(campos.values()) + [atribuicao_id]
+
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(
+            f"UPDATE responsavel_unidade SET {colunas} WHERE id = %s",
+            valores,
+        )
+        conexao.commit()
+    finally:
+        conexao.close()
+
+
 # --- clientes -------------------------------------------------------
 
 

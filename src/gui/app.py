@@ -6,6 +6,7 @@ from .gui_clientes import ListaClientes
 from .gui_contratos import ListaContratosMensais, ListaReservasAirbnb
 from .gui_calendario import Calendario
 from .gui_estoque import EcraStock
+from .gui_responsaveis import ListaResponsaveis
 from .gui_propriedades import ListaPropriedades
 
 # Itens da barra lateral — lista simples, sem secções (decisão do
@@ -64,6 +65,16 @@ ITENS_MENU = [
     # (Aprovação, Devoluções, Produtos, Movimentos) estão
     # desenhadas no hub mas ainda por implementar.
     {"tipo": "item", "texto": "Stock", "ecra": EcraStock},
+    # 09/09/2026: Gestão de Responsáveis. É também o único
+    # sítio da aplicação que chama sessao.definir_responsavel_
+    # ativo — até aqui o cabeçalho de todos os ecrãs dizia "sem
+    # responsável" e o "Confirmar receção" das requisições nunca
+    # podia aparecer.
+    {
+        "tipo": "item",
+        "texto": "Responsáveis",
+        "ecra": ListaResponsaveis,
+    },
 ]
 
 

@@ -28,6 +28,7 @@ import responsaveis
 PREFIXO = "UNI"
 PREFIXO_QUARTO = "QRT"
 PREFIXO_LUGAR = "LUG"
+PREFIXO_ATRIBUICAO = "ATR"
 
 
 def criar(
@@ -795,3 +796,117 @@ def estado_detalhe(unidade_id, data):
         "ocupados": ocupados,
         "capacidade": capacidade,
     }
+
+
+# --- atribuição de responsáveis a unidades ---------------------------
+#
+# Liga um responsável à gestão de uma ou mais unidades — quem faz a
+# limpeza, quem acompanha a manutenção, etc. Acrescentado em
+# 09/09/2026, a pedido do ecrã de Gestão de Responsáveis: o balão
+# que aparece ao passar o rato sobre o ID de um responsável mostra
+# as unidades que ele gere, e precisava de vir de algum lado.
+#
+# Não existia nenhuma ligação entre responsável e unidade até aqui —
+# confirmado antes de começar: `responsavel_id` só aparecia em
+# requisições, devoluções e movimentos, ou seja, o responsável
+# liga-se ao que FAZ, nunca a um sítio onde está colocado. Esta é a
+# primeira vez que essa ligação existe.
+#
+# Um responsável pode gerir várias unidades, e uma unidade pode ter
+# vários responsáveis — é a relação mais simples que cobre prédios
+# onde a limpeza é feita por mais do que uma pessoa. Uma ligação
+# nunca é apagada, só desativada (mesma convenção do resto do
+# sistema): perder o histórico de quem geriu o quê não seria
+# aceitável só porque a pessoa deixou de gerir aquela unidade hoje.
+
+
+def atribuir_responsavel(unidade_id, responsavel_id):
+    """Liga um responsável à gestão de uma unidade.
+
+    Se a ligação já tiver existido e tiver sido removida, reativa-a
+    em vez de inserir uma segunda linha — o par (responsavel_id,
+    unidade_id) é único na base de dados, e inserir o mesmo par
+    outra vez chocaria com essa restrição.
+
+    Levanta ValueError se a unidade ou o responsável não existirem,
+    ou se a ligação já estiver ativa.
+    """
+    unidade = procurar(unidade_id)
+
+    if unidade is None:
+        raise ValueError(f"A unidade {unidade_id} não existe.")
+
+    responsavel = responsaveis.procurar(responsavel_id)
+
+    if responsavel is None:
+        raise ValueError(f"O responsável {responsavel_id} não existe.")
+
+    existente = repositorio.procurar_atribuicao(responsavel_id, unidade_id)
+
+    if existente is not None:
+        if existente["ativo"]:
+            raise ValueError(
+                f"{responsavel['nome']} já gere a unidade "
+                f"{unidade['nome']}."
+            )
+
+        repositorio.atualizar_atribuicao(existente["id"], {"ativo": True})
+        existente["ativo"] = True
+
+        return existente
+
+    atribuicao = {
+        "id": repositorio.proximo_id(PREFIXO_ATRIBUICAO),
+        "responsavel_id": responsavel_id,
+        "unidade_id": unidade_id,
+        "ativo": True,
+    }
+    repositorio.inserir_atribuicao(atribuicao)
+
+    return atribuicao
+
+
+def remover_atribuicao(unidade_id, responsavel_id):
+    """Desliga um responsável da gestão de uma unidade.
+
+    Desativa a ligação em vez de a apagar, pela mesma razão que
+    nenhum outro registo do sistema é apagado a sério: o histórico
+    de quem geriu o quê fica gravado.
+
+    Levanta ValueError se a ligação não existir ou já estiver
+    inativa.
+    """
+    atribuicao = repositorio.procurar_atribuicao(responsavel_id, unidade_id)
+
+    if atribuicao is None or not atribuicao["ativo"]:
+        raise ValueError(
+            f"O responsável {responsavel_id} não gere atualmente a "
+            f"unidade {unidade_id}."
+        )
+
+    repositorio.atualizar_atribuicao(atribuicao["id"], {"ativo": False})
+
+
+def unidades_geridas_por(responsavel_id):
+    """Devolve as unidades (registos completos) que este responsável
+    gere atualmente.
+
+    Lista vazia significa que não gere nenhuma — não é erro nenhum,
+    é o estado normal de um responsável recém-criado.
+    """
+    atribuicoes = repositorio.listar_atribuicoes(
+        responsavel_id=responsavel_id
+    )
+
+    geridas = []
+
+    for atribuicao in atribuicoes:
+        unidade = procurar(atribuicao["unidade_id"])
+
+        # Uma unidade referenciada por uma atribuição nunca devia
+        # deixar de existir (não há apagamento a sério no sistema),
+        # mas salta-se em vez de rebentar caso aconteça.
+        if unidade is not None:
+            geridas.append(unidade)
+
+    return geridas
