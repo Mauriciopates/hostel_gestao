@@ -7,7 +7,7 @@ from . import sessao
 from .gui_clientes import ListaClientes
 from .gui_contratos import ListaContratosMensais, ListaReservasAirbnb
 from .gui_calendario import Calendario
-from .gui_estoque import EcraStock
+from .gui_est_hub import EcraStock
 from .gui_responsaveis import ListaResponsaveis
 from .gui_propriedades import ListaPropriedades
 

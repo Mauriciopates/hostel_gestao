@@ -1,5 +1,6 @@
 import collections
 import datetime
+import tkinter.font as tkfont
 from tkinter import messagebox
 
 import customtkinter as ctk
@@ -594,3 +595,86 @@ class Tabela(ctk.CTkFrame):
     @property
     def vazia(self):
         return self._desenhadas == 0
+
+    
+
+# =====================================================================
+# Helpers visuais genéricos — partilhados por todos os ecrãs
+#
+# Estavam copiados por 5 módulos da GUI (gui_propriedades, gui_clientes,
+# gui_contratos, gui_calendario, gui_estoque). Passam a viver aqui —
+# uma definição só, sem depender de quem importa quem.
+#
+# O prefixo "_" caiu de propósito: eram privados quando viviam dentro
+# de cada módulo, agora são API pública de componentes.py.
+# =====================================================================
+
+
+def colocar_no_topo(janela):
+    """Traz um popup (CTkToplevel) para a frente da janela principal.
+
+    Sem isto, o Windows (e alguns outros gestores de janelas) por
+    vezes abre o popup por baixo da janela principal, escondido.
+    `after(10, ...)` dá tempo ao Tk para mapear a janela antes de
+    `grab_set()` — chamado logo a seguir ao `super().__init__(...)`,
+    `grab_set()` falha com "grab failed: window not viewable" em
+    alguns sistemas.
+    """
+    janela.after(
+        10, lambda: (janela.lift(), janela.focus_force(), janela.grab_set())
+    )
+
+
+def centrar_sobre(janela, master, largura, altura):
+    """Centra um popup (CTkToplevel) sobre a janela que o abriu.
+
+    Sem isto o Tk coloca o popup no canto superior esquerdo do ecrã,
+    longe do botão que acabou de ser clicado.
+    """
+    master.update_idletasks()
+    x = master.winfo_rootx() + (master.winfo_width() - largura) // 2
+    y = master.winfo_rooty() + (master.winfo_height() - altura) // 2
+    janela.geometry(f"{largura}x{altura}+{max(x, 0)}+{max(y, 0)}")
+
+
+def tornar_cliclavel(widget, ao_clicar):
+    """Liga o clique (botão esquerdo) e o cursor de mão a um widget e
+    a todos os seus descendentes.
+
+    Em Tkinter, um clique num widget-filho não propaga sozinho para o
+    pai — por isso é preciso fazer o binding widget a widget. Usado
+    pelas caixas da Planta de Lugares, pelos cartões do hub de Stock,
+    e por qualquer sítio onde um "cartão" tem de reagir ao clique
+    mesmo quando se clica em cima do texto lá dentro.
+    """
+    widget.bind("<Button-1>", lambda evento: ao_clicar())
+    widget.configure(cursor="hand2")
+
+    for filho in widget.winfo_children():
+        tornar_cliclavel(filho, ao_clicar)
+
+
+def truncar_texto(fonte, texto, largura_max):
+    """Corta `texto` com reticências ("…") se a sua largura
+    renderizada (medida com `fonte`, um `tkinter.font.Font` real)
+    ultrapassar `largura_max` em pixels.
+
+    Existe para um nome ou morada fora do normal nunca mais empurrar
+    as colunas seguintes de uma tabela — as larguras das colunas
+    continuam fixas (definidas por `Coluna.minimo`), isto é só a
+    rede de segurança para o caso raro de um valor mais comprido.
+
+    Nota honesta: a fonte usada para medir (`tkinter.font.Font`) não
+    é pixel-a-pixel idêntica à que o CustomTkinter usa para desenhar
+    (`CTkFont`) — a diferença é cosmética (corta um caráter a mais ou
+    a menos no limite), nunca causa colisão nenhuma.
+    """
+    if fonte.measure(texto) <= largura_max:
+        return texto
+
+    reticencias = "…"
+    cortado = texto
+    while cortado and fonte.measure(cortado + reticencias) > largura_max:
+        cortado = cortado[:-1]
+
+    return (cortado + reticencias) if cortado else reticencias

@@ -29,7 +29,25 @@ procurar_item_devolucao, listar_itens_devolucao). O saldo de um
 produto (`saldo_produto`) passa a somar
 `repositorio.listar_movimentos(produto_id=...)` em vez de percorrer
 `dados["movimentos"]` à mão — mesma lógica, fonte diferente.
+
+ALTERAÇÕES 10/09/2026 (ecrãs Produtos e Movimentos da GUI):
+
+- `desativar_produto` ganhou `forcar` + `responsavel_id` — mesma
+  proteção de `propriedades.desativar` e `unidades.desativar`,
+  agora aplicada aos produtos. Um produto com movimentos, itens de
+  requisição ou itens de devolução associados exige forçar +
+  responsável que autorize, gravado em
+  `desativado_por_id`/`data_desativacao`.
+- `reativar_produto` limpa esses dois campos ao reativar.
+- `listar_movimentos(produto_id=None, tipo=None)` é nova — a GUI
+  do ecrã de Movimentos precisa de listar movimentos por produto
+  e por tipo, e não havia função pública para isso.
+- `contar_dependencias_produto(produto_id)` também é nova — a GUI
+  precisa de saber se o produto tem dependências antes de decidir
+  se pede forçar, sem falar com `repositorio` diretamente.
 """
+
+from datetime import date
 
 import repositorio
 import responsaveis
@@ -167,13 +185,27 @@ def atualizar_produto(
     return produto
 
 
-def desativar_produto(produto_id):
+def desativar_produto(produto_id, forcar=False, responsavel_id=None):
     """Marca o produto como inativo, sem o eliminar.
 
-    Um produto com movimentos ou requisições associadas não pode
-    desaparecer: o histórico de stock refere-se a ele (decisão 8).
-    Desativar mantém o registo e tira-o das listagens de escolha,
-    sem apagar o histórico.
+    Um produto com movimentos ou itens de requisição/devolução
+    associados não pode desaparecer: o histórico de stock refere-se
+    a ele (decisão 8). Desativar mantém o registo e tira-o das
+    listagens de escolha, sem apagar o histórico.
+
+    Recusa por omissão se existirem dependências ativas — passa
+    forcar=True para desativar mesmo assim, conscientemente. Mesma
+    proteção de `propriedades.desativar` e `unidades.desativar`,
+    agora aplicada aos produtos (decisão do aluno, 10/09/2026).
+
+    Forçar com dependências ativas exige `responsavel_id`: quem
+    contorna o aviso fica registado em `desativado_por_id`/
+    `data_desativacao`, validado por `responsaveis.validar_autoria`
+    (mesma autorização usada nos movimentos e na anonimização).
+
+    Sem dependências ativas, forcar=True não tem efeito nenhum
+    além de ignorar uma verificação que já ia passar — não exige
+    responsável nem grava nada nesses dois campos.
     """
 
     produto = procurar_produto(produto_id)
@@ -184,8 +216,29 @@ def desativar_produto(produto_id):
     if not produto["ativo"]:
         raise ValueError(f"O produto {produto_id} já está inativo.")
 
-    repositorio.atualizar_produto(produto_id, {"ativo": False})
-    produto["ativo"] = False
+    total_dependencias = contar_dependencias_produto(produto_id)
+    campos: dict = {"ativo": False}
+
+    if total_dependencias:
+        if not forcar:
+            raise ValueError(
+                f"O produto {produto_id} tem {total_dependencias} "
+                f"registo(s) associado(s) (movimentos, requisições ou "
+                f"devoluções) — forcar=True para desativar mesmo assim."
+            )
+
+        if not responsavel_id:
+            raise ValueError(
+                "É obrigatório indicar o responsável para forçar a "
+                "desativação com dependências ativas."
+            )
+
+        responsavel = responsaveis.validar_autoria(responsavel_id)
+        campos["desativado_por_id"] = responsavel["id"]
+        campos["data_desativacao"] = date.today()
+
+    repositorio.atualizar_produto(produto_id, campos)
+    produto.update(campos)
     return produto
 
 
@@ -193,7 +246,11 @@ def reativar_produto(produto_id):
     """Repõe um produto desativado como ativo.
 
     Existe porque a desativação por engano seria irreversível sem
-    ela. É a inversa exata da `desativar_produto`.
+    ela. É a inversa exata da `desativar_produto` — inclui limpar
+    `desativado_por_id`/`data_desativacao`, quando a desativação
+    tinha sido forçada, para não deixar rasto de uma desativação
+    que já não está em vigor (mesma convenção de
+    `propriedades.reativar`).
     """
 
     produto = procurar_produto(produto_id)
@@ -204,9 +261,39 @@ def reativar_produto(produto_id):
     if produto["ativo"]:
         raise ValueError(f"O produto {produto_id} já está ativo.")
 
-    repositorio.atualizar_produto(produto_id, {"ativo": True})
-    produto["ativo"] = True
+    campos = {
+        "ativo": True,
+        "desativado_por_id": "",
+        "data_desativacao": None,
+    }
+    repositorio.atualizar_produto(produto_id, campos)
+    produto.update(campos)
     return produto
+
+
+def contar_dependencias_produto(produto_id):
+    """Devolve o total de dependências ativas de um produto:
+    movimentos, itens de requisição e itens de devolução.
+
+    Usada pela GUI (ecrã de Produtos) para decidir se a desativação
+    tem de ser forçada, sem falar com `repositorio` diretamente
+    (decisão 7). Vive aqui, e não no `repositorio`, porque é uma
+    contagem de negócio — o que conta como dependência ativa é uma
+    decisão de domínio, não de persistência.
+
+    Levanta ValueError se o produto não existir, com a mesma
+    mensagem de `procurar_produto`.
+    """
+    produto = procurar_produto(produto_id)
+
+    if produto is None:
+        raise ValueError(f"O produto {produto_id} não existe.")
+
+    return (
+        repositorio.contar_movimentos_produto(produto_id)
+        + repositorio.contar_itens_requisicao_produto(produto_id)
+        + repositorio.contar_itens_devolucao_produto(produto_id)
+    )
 
 
 TIPOS_MOVIMENTO = ("entrada", "saida", "ajuste")
@@ -297,6 +384,20 @@ def registar_movimento(
     return movimento
 
 
+def listar_movimentos(produto_id=None, tipo=None):
+    """Devolve os movimentos de stock, filtráveis por produto e por
+    tipo — usado pelo ecrã de Movimentos da GUI.
+
+    A filtragem e a ordenação (data decrescente, mais recentes
+    primeiro) são feitas em SQL, em `repositorio.listar_movimentos`;
+    esta função só reencaminha. Existe para a GUI falar sempre com
+    `estoque` e nunca com `repositorio` diretamente (decisão 7).
+
+    Devolve lista nova, já ordenada — não é reordenada aqui.
+    """
+    return repositorio.listar_movimentos(produto_id=produto_id, tipo=tipo)
+
+
 def saldo_produto(produto_id):
     """Calcula o saldo atual de um produto, a partir dos movimentos.
 
@@ -320,6 +421,7 @@ def saldo_produto(produto_id):
             total += m["quantidade"]
 
     return total
+
 
 def abaixo_do_minimo(produto_id):
     """Indica se o saldo do produto está abaixo do limiar de reposição.
@@ -717,6 +819,7 @@ def enviar_requisicao(
 
     return requisicao
 
+
 def rejeitar_requisicao(requisicao_id, responsavel_id, motivo):
     """Rejeita uma requisição pendente — pendente → rejeitada.
 
@@ -766,6 +869,7 @@ def rejeitar_requisicao(requisicao_id, responsavel_id, motivo):
     requisicao.update(campos)
 
     return requisicao
+
 
 def confirmar_rececao_requisicao(requisicao_id, responsavel_id, data_fecho):
     """Confirma a receção de uma requisição — enviada → fechada.
@@ -818,6 +922,7 @@ def confirmar_rececao_requisicao(requisicao_id, responsavel_id, data_fecho):
     requisicao.update(campos)
 
     return requisicao
+
 
 def reportar_devolucao(
     requisicao_id,
@@ -1001,6 +1106,7 @@ def procurar_devolucao(devolucao_id):
     """
     return repositorio.procurar_devolucao(devolucao_id)
 
+
 def listar_devolucoes(estado=None, requisicao_id=None, responsavel_id=None):
     """Devolve as devoluções, filtráveis por estado, requisição e
     responsável.
@@ -1019,6 +1125,7 @@ def listar_devolucoes(estado=None, requisicao_id=None, responsavel_id=None):
         requisicao_id=requisicao_id,
         responsavel_id=responsavel_id,
     )
+
 
 def fechar_devolucao(
     devolucao_id,
@@ -1153,6 +1260,7 @@ def fechar_devolucao(
     devolucao.update(campos)
 
     return devolucao
+
 
 def listar_requisicoes(estado=None, responsavel_id=None, produto_id=None):
     """Devolve as requisições, filtráveis por estado, responsável e

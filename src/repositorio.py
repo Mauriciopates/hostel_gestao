@@ -15,9 +15,9 @@ terem nenhum consumidor — nem `main.py`/`cli.py` nem nenhum módulo
 de negócio (grep confirmado em todo o projeto antes da remoção).
 
 Módulos já migrados: propriedades, unidades (unidades, quartos,
-lugares), responsaveis, clientes, contratos (ocupacoes, ocupacoes_mensal,
-ocupacoes_airbnb), estoque (produtos, movimentos, requisicoes,
-itens_requisicao, devolucoes, itens_devolucao).
+lugares), responsaveis, clientes, contratos (ocupacoes,
+ocupacoes_mensal, ocupacoes_airbnb), estoque (produtos, movimentos,
+requisicoes, itens_requisicao, devolucoes, itens_devolucao).
 
 `dados/contadores.json` continua ativo — `proximo_id()` ainda lê e
 grava ali (decisão 1: é uma operação atómica sobre um ficheiro
@@ -27,6 +27,21 @@ próprio, não sobre a estrutura de dados que foi retirada).
 da base MySQL via `mysqldump` (antes copiavam `dados.json`, que já
 não existe) — ver docstring de `criar_backup()` para o porquê da
 escolha e os requisitos (binário `mysqldump` no PATH).
+
+ALTERAÇÕES 10/09/2026 (ecrãs Produtos e Movimentos da GUI):
+
+- `inserir_produto`/`_normalizar_produto`/`atualizar_produto`
+  passam a lidar com `desativado_por_id`/`data_desativacao` —
+  duas colunas novas em `produtos`, para registar quem autorizou
+  uma desativação forçada (mesma convenção de `propriedades` e
+  `unidades`).
+- `contar_movimentos_produto`, `contar_itens_requisicao_produto` e
+  `contar_itens_devolucao_produto` são novas — usadas por
+  `estoque.desativar_produto` para decidir se a desativação tem
+  de ser forçada.
+- `listar_movimentos` ganhou filtro por `tipo` e passou a ordenar
+  em SQL (data decrescente) — o ecrã de Movimentos da GUI precisa
+  das duas coisas.
 """
 
 import json
@@ -1422,22 +1437,26 @@ def atualizar_ocupacao_airbnb(ocupacao_id, campos):
 def inserir_produto(produto):
     """Insere um produto novo na base de dados.
 
-    Espera um dicionário com id, nome, unidade_medida, stock_minimo,
-    ativo — o mesmo formato que `estoque.criar_produto` já construía
-    para a estrutura em memória.
+    Passou a gravar também `desativado_por_id`/`data_desativacao`
+    (a NULL na criação — só fazem sentido quando um produto é
+    desativado com dependências ativas). Ver
+    `estoque.desativar_produto`.
     """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor()
         cursor.execute(
             "INSERT INTO produtos (id, nome, unidade_medida, "
-            "stock_minimo, ativo) VALUES (%s, %s, %s, %s, %s)",
+            "stock_minimo, ativo, desativado_por_id, data_desativacao) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
             (
                 produto["id"],
                 produto["nome"],
                 produto["unidade_medida"],
                 produto["stock_minimo"],
                 produto["ativo"],
+                produto.get("desativado_por_id") or None,
+                produto.get("data_desativacao"),
             ),
         )
         conexao.commit()
@@ -1446,7 +1465,16 @@ def inserir_produto(produto):
 
 
 def _normalizar_produto(linha):
+    """Converte os BOOLEAN para bool e repõe "" em
+    `desativado_por_id` quando vier NULL — mesma convenção de string
+    vazia usada em todo o sistema para "sem valor" (aplicada às
+    tabelas de ocupações e clientes desde a v1.1.0).
+    """
     linha["ativo"] = bool(linha["ativo"])
+
+    if linha.get("desativado_por_id") is None:
+        linha["desativado_por_id"] = ""
+
     return linha
 
 
@@ -1483,11 +1511,18 @@ def listar_produtos(incluir_inativos=False):
 
 
 def atualizar_produto(produto_id, campos):
-    """Atualiza os campos indicados (dicionário nome -> valor novo) do
-    produto. Não faz nada se `campos` vier vazio.
+    """Atualiza os campos indicados de um produto. Converte "" para
+    NULL em `desativado_por_id` — é FK para `responsaveis`, e ""
+    não é um id válido (mesmo caso já resolvido em
+    `atualizar_ocupacao_mensal`).
     """
     if not campos:
         return
+
+    campos = dict(campos)
+
+    if "desativado_por_id" in campos:
+        campos["desativado_por_id"] = campos["desativado_por_id"] or None
 
     colunas = ", ".join(f"{nome_campo} = %s" for nome_campo in campos)
     valores = list(campos.values()) + [produto_id]
@@ -1495,10 +1530,69 @@ def atualizar_produto(produto_id, campos):
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor()
-        cursor.execute(f"UPDATE produtos SET {colunas} WHERE id = %s", valores)
+        cursor.execute(
+            f"UPDATE produtos SET {colunas} WHERE id = %s", valores
+        )
         conexao.commit()
     finally:
         conexao.close()
+
+
+def contar_movimentos_produto(produto_id):
+    """Conta os movimentos associados a um produto.
+
+    Usada por `estoque.desativar_produto` para decidir se a
+    desativação tem de ser forçada — mesma função da
+    `contar_unidades_ativas` (propriedades), agora para produtos.
+    """
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(
+            "SELECT COUNT(*) FROM movimentos WHERE produto_id = %s",
+            (produto_id,),
+        )
+        total = cast(tuple, cursor.fetchone())[0]
+    finally:
+        conexao.close()
+
+    return total
+
+
+def contar_itens_requisicao_produto(produto_id):
+    """Conta os itens de requisição que referem este produto.
+
+    Usada por `estoque.desativar_produto` para a mesma decisão de
+    dependências ativas.
+    """
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(
+            "SELECT COUNT(*) FROM itens_requisicao WHERE produto_id = %s",
+            (produto_id,),
+        )
+        total = cast(tuple, cursor.fetchone())[0]
+    finally:
+        conexao.close()
+
+    return total
+
+
+def contar_itens_devolucao_produto(produto_id):
+    """Conta os itens de devolução que referem este produto."""
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(
+            "SELECT COUNT(*) FROM itens_devolucao WHERE produto_id = %s",
+            (produto_id,),
+        )
+        total = cast(tuple, cursor.fetchone())[0]
+    finally:
+        conexao.close()
+
+    return total
 
 
 # --- movimentos -----------------------------------------------------
@@ -1548,17 +1642,36 @@ def _normalizar_movimento(linha):
     return linha
 
 
-def listar_movimentos(produto_id=None):
-    """Devolve os movimentos de stock, filtráveis por produto — usada
-    por `estoque.saldo_produto` para somar o histórico de um produto,
-    em vez de percorrer `dados["movimentos"]` à mão.
+def listar_movimentos(produto_id=None, tipo=None):
+    """Devolve os movimentos de stock, filtráveis por produto e por
+    tipo — usado por `estoque.listar_movimentos` (para o ecrã de
+    Movimentos) e por `estoque.saldo_produto` (que só filtra por
+    produto).
+
+    Os filtros aplicam-se na própria consulta SQL, em vez de em
+    Python sobre a lista em memória — mesma convenção dos outros
+    `listar` do ficheiro.
+
+    Ordenada por data decrescente (mais recentes primeiro) — a
+    ordenação também vem da consulta, para o resultado já chegar
+    pronto a desenhar.
     """
-    sql = "SELECT * FROM movimentos"
+    condicoes = []
     valores = []
 
     if produto_id is not None:
-        sql += " WHERE produto_id = %s"
+        condicoes.append("produto_id = %s")
         valores.append(produto_id)
+
+    if tipo is not None:
+        condicoes.append("tipo = %s")
+        valores.append(tipo)
+
+    sql = "SELECT * FROM movimentos"
+    if condicoes:
+        sql += " WHERE " + " AND ".join(condicoes)
+
+    sql += " ORDER BY data DESC, id DESC"
 
     conexao = obter_conexao()
     try:
