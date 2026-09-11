@@ -1,13 +1,13 @@
 """Ecrã "Planta de Lugares": mostra visualmente os quartos e lugares
 de uma unidade mensal, com o estado de ocupação de cada lugar à
-data de hoje.
+data de hoje — e permite criar, editar, desativar e reativar quartos
+e lugares sem sair do ecrã.
 
 Cada lugar aparece como uma caixa cujo tamanho depende do
-'tipo_cama' (decisão de 06/09/2026, ao chegar este ecrã) — maior
-para "casal", pequena para "solteiro". As caixas de "beliche"
-aparecem em pares empilhados, porque um beliche físico são sempre
-dois lugares distintos de capacidade 1 cada, nunca um só de
-capacidade 2 (decisão 17); esse emparelhamento é só visual — sem
+'tipo_cama' — maior para "casal", pequena para "solteiro". As caixas
+de "beliche" aparecem em pares empilhados, porque um beliche físico
+são sempre dois lugares distintos de capacidade 1 cada, nunca um só
+de capacidade 2 (decisão 17); esse emparelhamento é só visual — sem
 nenhum campo na base de dados que ligue formalmente as duas camas
 de um beliche, agrupa pela palavra de lado no nome ("esquerdo" com
 "esquerdo", "direito" com "direito") quando existe, e cai para a
@@ -21,27 +21,69 @@ pode mostrar dois ocupantes na mesma caixa.
 Um lugar sem ocupante atual mas já com um contrato futuro registado
 (início ainda por chegar) aparece como "Reservado", em cinzento —
 indisponibilidade, distinta tanto do aviso/parcial (amarelo) como
-do erro/ocupado (vermelho) — em vez de "Livre" (decisão de
-06/09/2026, ao validar o mockup). Ver `CINZA_INDISPONIVEL` em
-tema.py.
+do erro/ocupado (vermelho) — em vez de "Livre".
 
 Só se aplica a unidades do regime mensal — uma reserva Airbnb ocupa
 a unidade inteira, sem 'lugar_id' (decisão 5), por isso não há
 estado de ocupação por lugar para mostrar numa unidade Airbnb.
 
-Ainda não existe um ecrã de lista de unidades (é um dos ecrãs "por
-ordem de necessidade" a seguir a este), por isso este ecrã traz o
-seu próprio seletor de unidade em vez de depender de uma escolha já
-feita noutro sítio.
+Clique — cada ação tem o seu sítio próprio, sem se cruzarem:
 
-Clicar numa caixa livre ou reservada abre o Novo Contrato Mensal
-(gui/gui_contratos.py) já pré-preenchido com esta unidade e esse
-lugar — decisão tomada na Parte 3 (06/09/2026), concretizada em
-07/09/2026 quando os ecrãs passaram a partilhar o mesmo controlador
-através da barra lateral (gui/app.py). Caixas parciais/ocupadas não
-são clicáveis (decisão original: só faz sentido abrir um contrato
-novo quando o lugar ainda pode receber alguém agora ou está à
-espera de quem já reservou).
+- ⋮ (canto inferior direito)  → abre o Gerir lugar (editar /
+  desativar / reativar). O ⋮ não está no percurso de clique do
+  corpo da caixa, por isso o clique nele nunca dispara a ação do
+  estado.
+- Corpo da caixa (nome, estado, nomes dos ocupantes):
+    Livre     → pergunta "Deseja criar um contrato mensal neste
+                lugar?" e, se sim, abre o Novo Contrato Mensal já
+                pré-preenchido.
+    Reservado → abre o Detalhe do lugar, com chip amarelo e faixa
+                amarela a avisar da reserva futura.
+    Ocupado   → abre o Detalhe do lugar, com chip vermelho.
+
+ACRESCENTADO 11/09/2026 — gestão completa a partir deste ecrã:
+
+- Botão "+ Novo quarto" no topo, com popup "Deseja criar lugares?"
+  a seguir (opção A: quarto e lugares são operações independentes
+  — se o utilizador cancelar o 2º lugar, o quarto fica criado).
+- Botões "+ Novo lugar" e "Gerir quarto" no rodapé de cada cartão
+  de quarto.
+- Botão ⋮ no canto inferior direito de cada caixa de lugar, que
+  abre o modal "Gerir lugar".
+- Modais Editar Quarto, Editar Lugar, Detalhe do lugar (Ocupado e
+  Reservado) e Confirmar Criação de Contrato — todos no padrão de
+  modais da aplicação (título, campos, rodapé com Cancelar/ação).
+
+ALTERAÇÕES 11/09/2026 (ronda seguinte, aprovada por mockup HTML):
+
+- `_DetalheOcupadoModal` passou a `_DetalheLugarModal` e serve os
+  dois estados — Ocupado (chip vermelho, sem faixa) e Reservado
+  (chip amarelo + faixa amarela "Reservado para dd/mm/aaaa"). O
+  botão principal é "Abrir contrato" nos dois casos.
+- Caixa Reservado deixa de abrir o Novo Contrato Mensal
+  pré-preenchido: passa a abrir o Detalhe do lugar, com o aviso
+  da reserva — antes, clicar abria o formulário de criação como
+  se o lugar estivesse livre, o que contradizia a informação
+  mostrada na própria caixa.
+- Clique no ⋮ e clique no corpo deixam de competir: o ⋮ abre só
+  o Gerir lugar; o corpo abre a ação do estado. `_tornar_clicavel`
+  passou a ser chamado só nos filhos do `conteudo`, nunca na
+  `caixa` nem no próprio `conteudo` — o ⋮ fica naturalmente fora
+  do percurso do clique do corpo, sem precisar de `"break"` nem
+  de listas de exclusão.
+- Botões dos modais `_NovoQuartoModal`, `_NovoLugarModal`,
+  `_GerirQuartoModal` e `_GerirLugarModal` passam a ter a mesma
+  receita do `_EditarQuartoModal` (que estava correto): `width`
+  fixa, `height=34`, sem `pady` vertical — antes ficavam
+  encolhidos ao lado dos campos.
+- Botões "Abrir contrato" e "Fechar" do `_DetalheLugarModal`
+  passam a ter largura fixa, um à esquerda e um à direita — antes
+  estavam com `expand=True` e `fill="x"` e ficavam esticados de
+  ponta a ponta como uma barra.
+- Janela do `_DetalheLugarModal` passa de 520x420 para 560x480 —
+  o conteúdo no caso Reservado (chip + faixa amarela + cartão do
+  contrato) ficava apertado. Aplica-se aos dois estados, para a
+  janela não mudar de tamanho entre um e outro.
 
 Segue a mesma separação de camadas do resto do sistema (decisão 7):
 só fala com `unidades`, `contratos` e `clientes` — nunca com
@@ -66,9 +108,9 @@ LARGURA_CAIXA = {
 }
 
 ALTURA_CAIXA = {
-    "solteiro": 120,
-    "casal": 150,
-    "beliche": 64,
+    "solteiro": 130,
+    "casal": 160,
+    "beliche": 74,
 }
 
 # Número máximo de caracteres de um nome (lugar ou ocupante) em cada
@@ -80,6 +122,27 @@ LIMITE_CARATERES = {
     "beliche": 18,
 }
 
+# Receita única dos botões de rodapé dos modais de formulário
+# (Novo Quarto, Novo Lugar, Gerir Quarto, Gerir Lugar, Editar
+# Quarto, Editar Lugar). Estavam minúsculos porque ficavam com
+# `pady` vertical a comprimir e sem `width` explícito; agora usam
+# a mesma receita do `_EditarQuartoModal`, que já estava correta.
+_LARGURA_BOTAO_MODAL = 150
+_ALTURA_BOTAO_MODAL = 34
+
+# Botões do rodapé do Detalhe do lugar — um à esquerda, um à
+# direita, ambos com a mesma largura fixa. Sem `expand=True` nem
+# `fill="x"`, que os esticavam de ponta a ponta como uma barra.
+_LARGURA_BOTAO_DETALHE = 150
+
+# Geometria da janela do Detalhe do lugar. Passou de 520x420 para
+# 560x480 (11/09/2026) — o conteúdo no caso Reservado (chip amarelo
+# + faixa amarela + cartão do contrato) ficava apertado, e a faixa
+# amarela em particular encostava às bordas. Aumentada para os dois
+# estados para a janela não mudar de tamanho entre um e outro.
+_LARGURA_DETALHE = 560
+_ALTURA_DETALHE = 480
+
 
 def _chave_lado(nome):
     """Procura "esquerdo"/"direito" (ou variações, ex. "esquerda")
@@ -87,9 +150,7 @@ def _chave_lado(nome):
 
     Devolve "esquerdo", "direito" ou None se o nome não indicar
     lado nenhum — usado para emparelhar beliches por lado, em vez
-    de só pela ordem de inserção: um quarto cadastrado "por andar"
-    (Superior Esquerdo, Superior Direito, Inferior Esquerdo,
-    Inferior Direito) ficaria emparelhado errado só pela ordem.
+    de só pela ordem de inserção.
     """
     nome_lower = nome.lower()
 
@@ -119,11 +180,9 @@ def _agrupar_para_planta(lugares):
 
     Um lugar de "solteiro" ou "casal" forma o seu próprio grupo, com
     uma caixa só. Os de "beliche" são emparelhados dois a dois — por
-    palavra de lado no nome quando existe ("esquerdo" com
-    "esquerdo", "direito" com "direito"); os restantes (sem essa
-    palavra) são emparelhados pela ordem em que chegam. Um beliche
-    que sobre sozinho (número ímpar) fica num grupo de um, para não
-    desaparecer da planta.
+    palavra de lado no nome quando existe; os restantes são
+    emparelhados pela ordem em que chegam. Um beliche que sobre
+    sozinho fica num grupo de um, para não desaparecer da planta.
 
     Devolve uma lista de tuplos: (lugar,) ou (lugar_cima, lugar_baixo).
     """
@@ -172,13 +231,8 @@ def _agrupar_para_planta(lugares):
 
 
 def _ocupantes_atuais(ocupacoes_mensais, lugar_id, hoje):
-    """Filtra, de uma lista de ocupações mensais, as que estão em
-    vigor no lugar indicado, na data indicada.
-
-    Mesma regra de `unidades._estado_mensal`: em vigor não é só
-    'ativo' — o início já tem de ter chegado e o fim (quando existe)
-    ainda não. Sem este filtro de datas, um contrato ainda por
-    começar apareceria como "ocupado" na planta de hoje.
+    """Filtra as ocupações mensais em vigor no lugar indicado, na
+    data indicada.
     """
     atuais = []
 
@@ -198,13 +252,7 @@ def _ocupantes_atuais(ocupacoes_mensais, lugar_id, hoje):
 
 
 def _proxima_reserva(ocupacoes_mensais, lugar_id, hoje):
-    """Devolve a ocupação futura mais próxima desse lugar (a de
-    'data_inicio' mais cedo, ainda por começar), ou None.
-
-    Serve para o estado "reservado": um lugar sem ocupante atual mas
-    já com um contrato à espera de começar mostra a data em vez de
-    "Livre".
-    """
+    """Devolve a ocupação futura mais próxima desse lugar, ou None."""
     futuras = [
         o
         for o in ocupacoes_mensais
@@ -218,12 +266,7 @@ def _proxima_reserva(ocupacoes_mensais, lugar_id, hoje):
 
 
 def _nomes_ocupantes(ocupacoes):
-    """Devolve os nomes dos clientes de uma lista de ocupações.
-
-    Um cliente inexistente (não devia acontecer, mas `procurar`
-    nunca lança erro) aparece como "Cliente desconhecido", em vez de
-    rebentar o ecrã inteiro.
-    """
+    """Devolve os nomes dos clientes de uma lista de ocupações."""
     nomes = []
 
     for ocupacao in ocupacoes:
@@ -235,12 +278,7 @@ def _nomes_ocupantes(ocupacoes):
 
 def _estado_ocupacao(total_ocupantes, capacidade, tem_reserva_futura):
     """Classifica a ocupação de um lugar em livre / reservado /
-    parcial / ocupado, para escolher a cor da caixa na planta.
-
-    "Reservado" só se aplica quando não há NENHUM ocupante atual —
-    se já há gente lá (mesmo que não a lotação toda), o estado é
-    "parcial", não "reservado" (a caixa mostra quem está lá agora,
-    não quem vem a seguir).
+    parcial / ocupado.
     """
     if total_ocupantes == 0:
         return "reservado" if tem_reserva_futura else "livre"
@@ -252,13 +290,7 @@ def _estado_ocupacao(total_ocupantes, capacidade, tem_reserva_futura):
 
 
 def _texto_estado(estado, ocupantes, capacidade, reserva):
-    """Formata a linha de estado da caixa: "Livre", "Reservado ·
-    data" (casal e solteiro — têm espaço para o texto todo), ou
-    "Ocupado"/"Parcial · X/capacidade". As caixas de beliche não
-    passam por aqui — têm o seu próprio texto curto, em
-    `_desenhar_beliche`, por serem pequenas demais para "Reservado
-    · data".
-    """
+    """Formata a linha de estado da caixa."""
     if estado == "livre":
         return "Livre"
 
@@ -271,12 +303,7 @@ def _texto_estado(estado, ocupantes, capacidade, reserva):
 
 
 def _truncar(texto, limite):
-    """Corta um texto no limite indicado, com reticências.
-
-    As caixas da planta têm largura fixa (decisão de 06/09/2026,
-    conforme o tipo de cama) — um nome comprido tem de ser cortado
-    aqui, e não deixado a transbordar para fora da caixa.
-    """
+    """Corta um texto no limite indicado, com reticências."""
     if len(texto) <= limite:
         return texto
 
@@ -284,16 +311,7 @@ def _truncar(texto, limite):
 
 
 def _cores_estado(estado):
-    """Devolve (cor_fundo, cor_texto) da caixa, consoante o estado de
-    ocupação.
-
-    "Livre", "parcial" e "ocupado" reaproveitam a paleta de
-    avisos/erros já definida em tema.py. "Reservado" usa
-    CINZA_INDISPONIVEL — cinzento, para não se confundir nem com o
-    amarelo de "parcial" nem com o vermelho de "ocupado" (decisão de
-    06/09/2026, a pedido: cinzento lê-se melhor como
-    "indisponível").
-    """
+    """Devolve (cor_fundo, cor_texto) da caixa."""
     if estado == "livre":
         return tema.COR_FUNDO, tema.VERDE
 
@@ -310,10 +328,15 @@ def _tornar_clicavel(widget, ao_clicar):
     """Liga um clique (botão esquerdo) a um widget e a todos os seus
     descendentes — precisa de ser feito widget a widget porque, em
     Tkinter, um clique num CTkLabel não propaga sozinho para o
-    CTkFrame pai. Muda também o cursor para "mão", sinal visual de
-    que a caixa é clicável (decisão de 07/09/2026, ao ligar a planta
-    ao Novo Contrato Mensal — só as caixas livres/reservadas passam
-    por aqui, nunca as parciais/ocupadas).
+    CTkFrame pai.
+
+    Nesta planta, o `_tornar_clicavel` é chamado só nos filhos do
+    `conteudo` de cada caixa (nome, estado, nomes dos ocupantes) —
+    NUNCA no `caixa` nem no próprio `conteudo`. Assim o ⋮, que
+    fica fora desse percurso (é colocado com `.place()` na `caixa`,
+    não no `conteudo`), tem naturalmente o seu clique isolado, e o
+    problema de o clique do ⋮ disparar a ação do corpo desaparece
+    por construção. Não há `"break"` nenhum a fazer aqui.
     """
     widget.configure(cursor="hand2")
     widget.bind("<Button-1>", lambda evento: ao_clicar())
@@ -336,11 +359,9 @@ class PlantaLugares(ctk.CTkFrame):
         self.unidade_id = unidade_id
         self._opcoes_unidade = {}  # rótulo mostrado -> id da unidade
 
-        componentes.Cabecalho(self, titulo="Planta de Lugares").pack(
-            fill="x"
-        )
+        componentes.Cabecalho(self, titulo="Planta de Lugares").pack(fill="x")
 
-        self._montar_seletor()
+        self._montar_barra_unidade()
 
         self.area_planta = ctk.CTkScrollableFrame(
             self, fg_color=tema.COR_FUNDO
@@ -349,12 +370,11 @@ class PlantaLugares(ctk.CTkFrame):
 
         self._recarregar_unidades()
 
-    def _montar_seletor(self):
-        """Monta a barra com o seletor de unidade e o botão de
-        atualizar, por baixo do cabeçalho.
-        """
+    # -- barra de unidade (topo) -------------------------------------
+
+    def _montar_barra_unidade(self):
         barra = ctk.CTkFrame(self, fg_color=tema.COR_FUNDO)
-        barra.pack(fill="x", padx=20, pady=(0, 10))
+        barra.pack(fill="x", padx=20, pady=(0, 12))
 
         ctk.CTkLabel(
             barra,
@@ -384,14 +404,19 @@ class PlantaLugares(ctk.CTkFrame):
             command=self._recarregar_unidades,
         ).pack(side="left", padx=(10, 0))
 
-    def _recarregar_unidades(self):
-        """Lê as unidades mensais ativas e povoa o seletor.
+        ctk.CTkButton(
+            barra,
+            text="+ Novo quarto",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.VERDE,
+            hover_color=tema.VERDE,
+            command=lambda: _NovoQuartoModal(self),
+        ).pack(side="right")
 
-        Chamada na abertura do ecrã e sempre que "Atualizar" é
-        premido — uma unidade criada, ou um contrato registado
-        noutro ecrã (ou na CLI, enquanto a GUI está aberta), só
-        aparece aqui depois disto correr de novo.
-        """
+    # -- carregamento da lista de unidades --------------------------
+
+    def _recarregar_unidades(self):
+        """Lê as unidades mensais ativas e povoa o seletor."""
         unidades_mensais = unidades.listar(tipo="mensal")
 
         self._opcoes_unidade = {
@@ -428,17 +453,31 @@ class PlantaLugares(ctk.CTkFrame):
         self.unidade_id = self._opcoes_unidade.get(rotulo)
         self._desenhar_planta()
 
+    # -- abertura de contrato (a partir de uma caixa) ----------------
+
+    def _pedir_contrato(self, lugar_id):
+        """Pergunta se quer criar contrato, e se sim, abre o
+        formulário. Chamada só para caixas Livres.
+        """
+        if not componentes.confirmar(
+            f"Deseja criar um contrato mensal neste lugar " f"({lugar_id})?",
+            titulo="Lugar disponível",
+        ):
+            return
+
+        self._abrir_contrato(lugar_id)
+
     def _abrir_contrato(self, lugar_id):
         """Abre o Novo Contrato Mensal já pré-preenchido com a
-        unidade atual e o lugar clicado — só chamado a partir de
-        caixas livres ou reservadas (ver `_tornar_clicavel`, chamado
-        em `_desenhar_caixa`/`_desenhar_beliche`).
+        unidade atual e o lugar clicado.
         """
         self.controlador.mostrar_frame(
             NovoContratoMensal,
             unidade_id=self.unidade_id,
             lugar_id=lugar_id,
         )
+
+    # -- desenho da planta ------------------------------------------
 
     def _limpar_planta(self):
         for widget in self.area_planta.winfo_children():
@@ -470,10 +509,6 @@ class PlantaLugares(ctk.CTkFrame):
             )
             return
 
-        # Defesa extra: o seletor só lista unidades mensais, e o tipo
-        # nunca se altera depois de criado (unidades.atualizar não o
-        # permite) — mas um futuro ecrã que abra este diretamente com
-        # outro unidade_id não deve rebentar por isso.
         if unidade["tipo"] != "mensal":
             self._mostrar_mensagem(
                 "A planta de lugares aplica-se apenas a unidades do "
@@ -484,7 +519,10 @@ class PlantaLugares(ctk.CTkFrame):
         quartos = unidades.listar_quartos(unidade_id=self.unidade_id)
 
         if not quartos:
-            self._mostrar_mensagem("Esta unidade ainda não tem quartos.")
+            self._mostrar_mensagem(
+                "Esta unidade ainda não tem quartos. "
+                'Use o botão "+ Novo quarto" para criar o primeiro.'
+            )
             return
 
         ocupacoes_mensais = contratos.listar(
@@ -497,7 +535,8 @@ class PlantaLugares(ctk.CTkFrame):
 
     def _desenhar_quarto(self, quarto, ocupacoes_mensais, hoje):
         """Desenha o cartão de um quarto: cabeçalho com o nome e os
-        indicadores, seguido da fila de caixas dos seus lugares.
+        indicadores, fila de caixas de lugares, e rodapé com os
+        botões de criação/gestão.
         """
         cartao = ctk.CTkFrame(
             self.area_planta,
@@ -508,6 +547,7 @@ class PlantaLugares(ctk.CTkFrame):
         )
         cartao.pack(fill="x", pady=(0, 16))
 
+        # Cabeçalho
         cabecalho_quarto = ctk.CTkFrame(cartao, fg_color="transparent")
         cabecalho_quarto.pack(fill="x", padx=16, pady=(12, 4))
 
@@ -534,10 +574,11 @@ class PlantaLugares(ctk.CTkFrame):
                 font=ctk.CTkFont(size=11),
             ).pack(side="left", padx=(8, 0))
 
-        lugares = unidades.listar_lugares(quarto_id=quarto["id"])
-
+        # Corpo com as caixas — scroll horizontal próprio do cartão
         linha_lugares = ctk.CTkFrame(cartao, fg_color="transparent")
-        linha_lugares.pack(fill="x", padx=16, pady=(4, 16))
+        linha_lugares.pack(fill="x", padx=16, pady=(4, 12))
+
+        lugares = unidades.listar_lugares(quarto_id=quarto["id"])
 
         if not lugares:
             ctk.CTkLabel(
@@ -546,23 +587,59 @@ class PlantaLugares(ctk.CTkFrame):
                 text_color=tema.COR_TEXTO_SECUNDARIO,
                 font=ctk.CTkFont(size=11),
             ).pack(side="left")
-            return
+        else:
+            for grupo in _agrupar_para_planta(lugares):
+                if len(grupo) == 2:
+                    self._desenhar_beliche(
+                        linha_lugares, grupo, ocupacoes_mensais, hoje
+                    )
+                else:
+                    self._desenhar_caixa(
+                        linha_lugares, grupo[0], ocupacoes_mensais, hoje
+                    )
 
-        for grupo in _agrupar_para_planta(lugares):
-            if len(grupo) == 2:
-                self._desenhar_beliche(
-                    linha_lugares, grupo, ocupacoes_mensais, hoje
-                )
-            else:
-                self._desenhar_caixa(
-                    linha_lugares, grupo[0], ocupacoes_mensais, hoje
-                )
+        # Rodapé com os dois botões
+        rodape = ctk.CTkFrame(cartao, fg_color="transparent")
+        rodape.pack(fill="x", padx=16, pady=(0, 12))
+
+        ctk.CTkButton(
+            rodape,
+            text="+ Novo lugar",
+            width=120,
+            height=28,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.VERDE,
+            hover_color=tema.VERDE,
+            command=lambda: _NovoLugarModal(self, quarto),
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            rodape,
+            text="Gerir quarto",
+            width=120,
+            height=28,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=lambda: _GerirQuartoModal(self, quarto),
+        ).pack(side="left", padx=(8, 0))
+
+    # -- desenho de uma caixa (solteiro/casal) ----------------------
 
     def _desenhar_caixa(self, master, lugar, ocupacoes_mensais, hoje):
-        """Desenha a caixa de um lugar "solteiro" ou "casal" — o
-        tamanho vem de LARGURA_CAIXA/ALTURA_CAIXA, indexado pelo
-        'tipo_cama' (decisão de 06/09/2026): só decide a aparência,
-        nunca a capacidade real do lugar.
+        """Desenha a caixa de um lugar "solteiro" ou "casal".
+
+        Estrutura de clique:
+        - O ⋮ é colocado com `.place()` na `caixa` (não no
+          `conteudo`), por isso fica fora do percurso de clique do
+          corpo — o seu `command` abre só o Gerir lugar.
+        - O corpo (`conteudo` e os seus filhos) é ligado ao
+          `_tornar_clicavel` só depois de tudo montado, para a ação
+          do estado. O `conteudo` e a `caixa` NÃO são ligados,
+          para não haver dois sítios a disparar a mesma coisa.
         """
         ocupantes = _ocupantes_atuais(ocupacoes_mensais, lugar["id"], hoje)
         reserva = _proxima_reserva(ocupacoes_mensais, lugar["id"], hoje)
@@ -586,22 +663,19 @@ class PlantaLugares(ctk.CTkFrame):
         caixa.pack(side="left", padx=10, pady=10)
         caixa.pack_propagate(False)
 
-        # Frame de conteúdo com a sua própria margem interna — em vez
-        # de confiar só no wraplength, para o texto nunca tocar a
-        # borda mesmo num nome perto do limite (decisão de 06/09/2026,
-        # a pedido).
         conteudo = ctk.CTkFrame(caixa, fg_color="transparent")
-        conteudo.pack(expand=True, fill="both", padx=12, pady=10)
+        conteudo.pack(expand=True, fill="both", padx=10, pady=8)
 
-        ctk.CTkLabel(
+        etiqueta_nome = ctk.CTkLabel(
             conteudo,
             text=_truncar(lugar["nome"], limite_nomes),
             text_color=tema.COR_TEXTO,
             font=ctk.CTkFont(size=12, weight="bold"),
             wraplength=largura - 30,
-        ).pack(pady=(0, 4))
+        )
+        etiqueta_nome.pack(pady=(0, 4))
 
-        ctk.CTkLabel(
+        etiqueta_estado = ctk.CTkLabel(
             conteudo,
             text=_texto_estado(
                 estado, ocupantes, lugar["capacidade"], reserva
@@ -609,30 +683,65 @@ class PlantaLugares(ctk.CTkFrame):
             text_color=cor_texto,
             font=ctk.CTkFont(size=10),
             wraplength=largura - 30,
-        ).pack(pady=(0, 4))
+        )
+        etiqueta_estado.pack(pady=(0, 4))
+
+        etiquetas_ocupantes = []
 
         for nome in _nomes_ocupantes(ocupantes):
-            ctk.CTkLabel(
+            etiqueta = ctk.CTkLabel(
                 conteudo,
                 text=_truncar(nome, limite_nomes),
                 text_color=tema.COR_TEXTO_SECUNDARIO,
                 font=ctk.CTkFont(size=9),
                 wraplength=largura - 30,
-            ).pack()
-
-        if estado in ("livre", "reservado"):
-            _tornar_clicavel(
-                caixa,
-                lambda lugar_id=lugar["id"]: self._abrir_contrato(lugar_id),
             )
+            etiqueta.pack()
+            etiquetas_ocupantes.append(etiqueta)
+
+        # Botão ⋮ — colocado na `caixa` (fora do `conteudo`), por
+        # isso o clique nele não passa pelo binding do corpo.
+        self._botao_tres_pontos(caixa, lugar)
+
+        # Clique no corpo — só nas etiquetas dentro do `conteudo`.
+        # O `conteudo` em si e a `caixa` não são ligados, para não
+        # haver dois sítios com o mesmo binding (o clique no ⋮ fica
+        # fora do percurso, porque está na `caixa` e não no
+        # `conteudo`).
+        widgets_corpo = [etiqueta_nome, etiqueta_estado] + etiquetas_ocupantes
+
+        if estado == "livre":
+            for widget in widgets_corpo:
+                _tornar_clicavel(
+                    widget,
+                    lambda lugar_id=lugar["id"]: self._pedir_contrato(
+                        lugar_id
+                    ),
+                )
+        elif estado == "reservado":
+            for widget in widgets_corpo:
+                _tornar_clicavel(
+                    widget,
+                    lambda lugar=lugar, reserva=reserva, estado=estado: (
+                        _DetalheLugarModal(self, lugar, reserva, estado)
+                    ),
+                )
+        elif estado == "ocupado":
+            for widget in widgets_corpo:
+                _tornar_clicavel(
+                    widget,
+                    lambda lugar=lugar, ocupantes=ocupantes, estado=estado: (
+                        _DetalheLugarModal(self, lugar, ocupantes[0], estado)
+                    ),
+                )
 
     def _desenhar_beliche(self, master, par, ocupacoes_mensais, hoje):
         """Desenha um par de lugares "beliche" como duas caixas
-        pequenas empilhadas dentro de um contentor comum, para se
-        lerem como uma cama só na planta, mesmo sendo dois lugares
-        distintos na base de dados (decisão 17). A ordem dentro do
-        par vem de `_ordenar_par` — quem tem "inferior" no nome fica
-        sempre em baixo.
+        pequenas empilhadas dentro de um contentor comum.
+
+        Mesma estrutura de clique da `_desenhar_caixa`: o ⋮ fica na
+        `caixa`, fora do `conteudo`; o corpo (etiquetas dentro do
+        `conteudo`) é que reage à ação do estado.
         """
         contentor = ctk.CTkFrame(master, fg_color="transparent")
         contentor.pack(side="left", padx=10, pady=10)
@@ -641,9 +750,7 @@ class PlantaLugares(ctk.CTkFrame):
         limite = LIMITE_CARATERES["beliche"]
 
         for lugar in par:
-            ocupantes = _ocupantes_atuais(
-                ocupacoes_mensais, lugar["id"], hoje
-            )
+            ocupantes = _ocupantes_atuais(ocupacoes_mensais, lugar["id"], hoje)
             reserva = _proxima_reserva(ocupacoes_mensais, lugar["id"], hoje)
             estado = _estado_ocupacao(
                 len(ocupantes), lugar["capacidade"], reserva is not None
@@ -663,40 +770,1080 @@ class PlantaLugares(ctk.CTkFrame):
             caixa.pack_propagate(False)
 
             conteudo = ctk.CTkFrame(caixa, fg_color="transparent")
-            conteudo.pack(expand=True, fill="both", padx=10, pady=6)
+            conteudo.pack(expand=True, fill="both", padx=10, pady=4)
 
-            ctk.CTkLabel(
+            etiqueta_nome = ctk.CTkLabel(
                 conteudo,
                 text=_truncar(lugar["nome"], limite),
                 text_color=cor_texto,
                 font=ctk.CTkFont(size=10, weight="bold"),
                 wraplength=largura - 24,
-            ).pack(expand=True)
+            )
+            etiqueta_nome.pack(expand=True)
 
             nomes = _nomes_ocupantes(ocupantes)
+            etiquetas_corpo = [etiqueta_nome]
 
             if nomes:
-                ctk.CTkLabel(
+                etiqueta_nome_ocupante = ctk.CTkLabel(
                     conteudo,
                     text=_truncar(nomes[0], limite),
                     text_color=cor_texto,
                     font=ctk.CTkFont(size=9),
                     wraplength=largura - 24,
-                ).pack(expand=True)
+                )
+                etiqueta_nome_ocupante.pack(expand=True)
+                etiquetas_corpo.append(etiqueta_nome_ocupante)
             elif estado == "reservado" and reserva is not None:
-                # Caixa pequena demais para "Reservado · data" — só a
-                # data, curta (decisão de 06/09/2026, a pedido).
-                ctk.CTkLabel(
+                etiqueta_data = ctk.CTkLabel(
                     conteudo,
                     text=reserva["data_inicio"].strftime("%d/%m"),
                     text_color=cor_texto,
                     font=ctk.CTkFont(size=9),
-                ).pack(expand=True)
-
-            if estado in ("livre", "reservado"):
-                _tornar_clicavel(
-                    caixa,
-                    lambda lugar_id=lugar["id"]: self._abrir_contrato(
-                        lugar_id
-                    ),
                 )
+                etiqueta_data.pack(expand=True)
+                etiquetas_corpo.append(etiqueta_data)
+
+            # ⋮ na `caixa`, fora do `conteudo`.
+            self._botao_tres_pontos(caixa, lugar, tamanho=18)
+
+            # Corpo — só nas etiquetas.
+            if estado == "livre":
+                for widget in etiquetas_corpo:
+                    _tornar_clicavel(
+                        widget,
+                        lambda lugar_id=lugar["id"]: self._pedir_contrato(
+                            lugar_id
+                        ),
+                    )
+            elif estado == "reservado":
+                for widget in etiquetas_corpo:
+                    _tornar_clicavel(
+                        widget,
+                        lambda lugar=lugar, reserva=reserva, estado=estado: (
+                            _DetalheLugarModal(self, lugar, reserva, estado)
+                        ),
+                    )
+            elif estado == "ocupado":
+                for widget in etiquetas_corpo:
+                    _tornar_clicavel(
+                        widget,
+                        lambda lugar=lugar, ocupantes=ocupantes, estado=estado: (
+                            _DetalheLugarModal(
+                                self, lugar, ocupantes[0], estado
+                            )
+                        ),
+                    )
+
+    def _botao_tres_pontos(self, caixa, lugar, tamanho=22):
+        """Coloca um botão ⋮ no canto inferior direito de uma caixa.
+
+        Colocado com `.place()` na `caixa` — NÃO no `conteudo`.
+        Assim fica fora do percurso do `_tornar_clicavel` (que só
+        liga as etiquetas dentro do `conteudo`), e o seu clique
+        dispara só o próprio `command`, sem passar pela ação do
+        corpo. É esta separação de sítios que resolve o problema
+        do clique a passar para trás — sem `"break"` nenhum.
+        """
+        fonte_tamanho = 14 if tamanho >= 22 else 11
+
+        ctk.CTkButton(
+            caixa,
+            text="⋮",
+            width=tamanho,
+            height=tamanho,
+            corner_radius=tamanho // 2,
+            fg_color=tema.COR_FUNDO,
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            hover_color=tema.COR_BORDA,
+            font=ctk.CTkFont(size=fonte_tamanho, weight="bold"),
+            command=lambda: _GerirLugarModal(self, lugar),
+        ).place(relx=1.0, rely=1.0, x=-4, y=-4, anchor="se")
+
+
+# =====================================================================
+# Modais de gestão
+# =====================================================================
+
+
+class _NovoQuartoModal(ctk.CTkToplevel):
+    """Modal de criação de um quarto — só nome, privativo e limpeza
+    incluída (o mesmo que `unidades.criar_quarto` recebe).
+
+    Botões do rodapé com a mesma receita do `_EditarQuartoModal` —
+    `width=150`, `height=34`, sem `pady` vertical a comprimir.
+    """
+
+    def __init__(self, tela_planta):
+        super().__init__(tela_planta)
+        self.tela_planta = tela_planta
+
+        self.title("Novo Quarto")
+        self.geometry("440x360")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_planta)
+        componentes.colocar_no_topo(self)
+
+        unidade = unidades.procurar(tela_planta.unidade_id)
+        nome_unidade = (
+            f"{unidade['nome']} ({unidade['id']})"
+            if unidade
+            else tela_planta.unidade_id
+        )
+
+        ctk.CTkLabel(
+            self,
+            text="Novo Quarto",
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=16, weight="bold"),
+        ).pack(anchor="w", padx=24, pady=(20, 4))
+
+        ctk.CTkLabel(
+            self,
+            text=f"Unidade: {nome_unidade}",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24, pady=(0, 16))
+
+        ctk.CTkLabel(
+            self,
+            text="Nome do quarto *",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        self.campo_nome = ctk.CTkEntry(
+            self,
+            corner_radius=tema.RAIO_CAMPO,
+            placeholder_text="ex.: Quarto 3 — Vista Jardim",
+        )
+        self.campo_nome.pack(fill="x", padx=24, pady=(2, 12))
+
+        ctk.CTkLabel(
+            self,
+            text="Privativo",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        self.combo_privativo = ctk.CTkOptionMenu(
+            self,
+            values=["Não — partilhado", "Sim — privativo"],
+            corner_radius=tema.RAIO_CAMPO,
+        )
+        self.combo_privativo.set("Não — partilhado")
+        self.combo_privativo.pack(fill="x", padx=24, pady=(2, 12))
+
+        ctk.CTkLabel(
+            self,
+            text="Limpeza incluída no cálculo de roupa?",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        self.combo_limpeza = ctk.CTkOptionMenu(
+            self,
+            values=["Sim", "Não"],
+            corner_radius=tema.RAIO_CAMPO,
+        )
+        self.combo_limpeza.set("Sim")
+        self.combo_limpeza.pack(fill="x", padx=24, pady=(2, 12))
+
+        rodape = ctk.CTkFrame(self, fg_color="transparent")
+        rodape.pack(fill="x", padx=24, pady=(10, 20), side="bottom")
+
+        ctk.CTkButton(
+            rodape,
+            text="Cancelar",
+            width=_LARGURA_BOTAO_MODAL,
+            height=_ALTURA_BOTAO_MODAL,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            rodape,
+            text="Criar quarto",
+            width=_LARGURA_BOTAO_MODAL,
+            height=_ALTURA_BOTAO_MODAL,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.VERDE,
+            hover_color=tema.VERDE,
+            command=self._criar,
+        ).pack(side="right")
+
+        self.campo_nome.focus_set()
+
+    def _criar(self):
+        privativo = self.combo_privativo.get() == "Sim — privativo"
+        limpeza_incluida = self.combo_limpeza.get() == "Sim"
+
+        try:
+            quarto = unidades.criar_quarto(
+                self.tela_planta.unidade_id,
+                self.campo_nome.get(),
+                privativo=privativo,
+                limpeza_incluida=limpeza_incluida,
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        self.destroy()
+        self.tela_planta._desenhar_planta()
+
+        if componentes.confirmar(
+            f"Quarto criado com sucesso: {quarto['id']}.\n\n"
+            f"Deseja criar os lugares deste quarto agora?",
+            titulo="Criar lugares",
+        ):
+            _NovoLugarModal(self.tela_planta, quarto)
+
+
+class _NovoLugarModal(ctk.CTkToplevel):
+    """Modal de criação de um lugar — nome, tipo de cama, capacidade.
+
+    Botões do rodapé com a mesma receita do `_EditarQuartoModal`.
+    """
+
+    def __init__(self, tela_planta, quarto):
+        super().__init__(tela_planta)
+        self.tela_planta = tela_planta
+        self.quarto = quarto
+
+        self.title("Novo Lugar")
+        self.geometry("440x360")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_planta)
+        componentes.colocar_no_topo(self)
+
+        ctk.CTkLabel(
+            self,
+            text="Novo Lugar",
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=16, weight="bold"),
+        ).pack(anchor="w", padx=24, pady=(20, 4))
+
+        ctk.CTkLabel(
+            self,
+            text=f"Quarto: {quarto['nome']} ({quarto['id']})",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24, pady=(0, 16))
+
+        ctk.CTkLabel(
+            self,
+            text="Nome do lugar *",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        self.campo_nome = ctk.CTkEntry(
+            self,
+            corner_radius=tema.RAIO_CAMPO,
+            placeholder_text="ex.: Cama 3 — janela",
+        )
+        self.campo_nome.pack(fill="x", padx=24, pady=(2, 12))
+
+        ctk.CTkLabel(
+            self,
+            text="Tipo de cama *",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        self.combo_tipo_cama = ctk.CTkOptionMenu(
+            self,
+            values=["solteiro", "casal", "beliche"],
+            corner_radius=tema.RAIO_CAMPO,
+        )
+        self.combo_tipo_cama.set("solteiro")
+        self.combo_tipo_cama.pack(fill="x", padx=24, pady=(2, 12))
+
+        ctk.CTkLabel(
+            self,
+            text="Capacidade",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        self.campo_capacidade = ctk.CTkEntry(
+            self,
+            corner_radius=tema.RAIO_CAMPO,
+            placeholder_text="Enter para 1",
+        )
+        self.campo_capacidade.pack(fill="x", padx=24, pady=(2, 12))
+        self.campo_capacidade.insert(0, "1")
+
+        rodape = ctk.CTkFrame(self, fg_color="transparent")
+        rodape.pack(fill="x", padx=24, pady=(10, 20), side="bottom")
+
+        ctk.CTkButton(
+            rodape,
+            text="Cancelar",
+            width=_LARGURA_BOTAO_MODAL,
+            height=_ALTURA_BOTAO_MODAL,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            rodape,
+            text="Criar lugar",
+            width=_LARGURA_BOTAO_MODAL,
+            height=_ALTURA_BOTAO_MODAL,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.VERDE,
+            hover_color=tema.VERDE,
+            command=self._criar,
+        ).pack(side="right")
+
+        self.campo_nome.focus_set()
+
+    def _criar(self):
+        texto_capacidade = self.campo_capacidade.get().strip()
+
+        if not texto_capacidade:
+            capacidade = 1
+        elif texto_capacidade.isdigit():
+            capacidade = int(texto_capacidade)
+        else:
+            componentes.mostrar_erro(
+                "A capacidade tem de ser um número inteiro."
+            )
+            return
+
+        try:
+            lugar = unidades.criar_lugar(
+                self.quarto["id"],
+                self.campo_nome.get(),
+                self.combo_tipo_cama.get(),
+                capacidade=capacidade,
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        self.destroy()
+        self.tela_planta._desenhar_planta()
+
+        if componentes.confirmar(
+            f"Lugar criado: {lugar['id']} — {lugar['nome']}.\n\n"
+            f"Sobrou mais algum lugar para criar neste quarto?",
+            titulo="Criar lugar",
+        ):
+            _NovoLugarModal(self.tela_planta, self.quarto)
+
+
+class _GerirQuartoModal(ctk.CTkToplevel):
+    """Popup com as ações de um quarto — Editar ou Desativar.
+
+    Botões com a mesma receita do `_EditarQuartoModal` — largura
+    fixa, altura 34.
+    """
+
+    def __init__(self, tela_planta, quarto):
+        super().__init__(tela_planta)
+        self.tela_planta = tela_planta
+        self.quarto = quarto
+
+        self.title(f"Gerir quarto — {quarto['id']}")
+        self.geometry("340x280")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_planta)
+        componentes.colocar_no_topo(self)
+
+        ctk.CTkLabel(
+            self,
+            text=quarto["nome"],
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=14, weight="bold"),
+        ).pack(pady=(20, 2))
+
+        privativo = "Privativo" if quarto["privativo"] else "Partilhado"
+        limpeza = " · Limpeza incluída" if quarto["limpeza_incluida"] else ""
+        ctk.CTkLabel(
+            self,
+            text=f"{quarto['id']} · {privativo}{limpeza}",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(pady=(0, 14))
+
+        if quarto["ativo"]:
+            self._botao(
+                "Editar quarto",
+                text_color=tema.COR_TEXTO,
+                hover_color=tema.COR_BORDA,
+                acao=lambda: _EditarQuartoModal(tela_planta, quarto),
+            )
+            self._separador()
+            self._botao(
+                "Desativar quarto",
+                text_color=tema.TEXTO_ERRO,
+                hover_color=tema.VERMELHO_ERRO,
+                acao=lambda: self._desativar(),
+            )
+        else:
+            self._botao(
+                "Reativar quarto",
+                text_color=tema.TEXTO_LIVRE,
+                hover_color=tema.VERDE_LIVRE,
+                acao=lambda: self._reativar(),
+            )
+
+        ctk.CTkButton(
+            self,
+            text="Fechar",
+            width=_LARGURA_BOTAO_MODAL,
+            height=_ALTURA_BOTAO_MODAL,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="bottom", pady=(10, 16))
+
+    def _separador(self):
+        ctk.CTkFrame(self, height=1, fg_color=tema.COR_BORDA).pack(
+            fill="x", padx=20, pady=(8, 5)
+        )
+
+    def _botao(self, texto, text_color, hover_color, acao):
+        def executar():
+            self.destroy()
+            acao()
+
+        ctk.CTkButton(
+            self,
+            text=texto,
+            width=_LARGURA_BOTAO_MODAL,
+            height=_ALTURA_BOTAO_MODAL,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            hover_color=hover_color,
+            text_color=text_color,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            command=executar,
+        ).pack(fill="x", padx=20, pady=3)
+
+    def _desativar(self):
+        if not componentes.confirmar(
+            f"Desativar o quarto {self.quarto['nome']}?",
+            titulo="Desativar quarto",
+        ):
+            return
+
+        try:
+            unidades.desativar_quarto(self.quarto["id"])
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        componentes.mostrar_sucesso(
+            f"Quarto {self.quarto['nome']} desativado."
+        )
+        self.tela_planta._desenhar_planta()
+
+    def _reativar(self):
+        try:
+            unidades.reativar_quarto(self.quarto["id"])
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        componentes.mostrar_sucesso(f"Quarto {self.quarto['nome']} reativado.")
+        self.tela_planta._desenhar_planta()
+
+
+class _EditarQuartoModal(ctk.CTkToplevel):
+    """Modal de edição de um quarto — mesmos campos do Novo Quarto,
+    pré-preenchidos. A receita dos botões deste modal é a referência
+    para todos os outros (é o que está no print do aluno).
+    """
+
+    def __init__(self, tela_planta, quarto):
+        super().__init__(tela_planta)
+        self.tela_planta = tela_planta
+        self.quarto = quarto
+
+        self.title(f"Editar quarto — {quarto['id']}")
+        self.geometry("440x360")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_planta)
+        componentes.colocar_no_topo(self)
+
+        ctk.CTkLabel(
+            self,
+            text=f"Editar {quarto['nome']}",
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=16, weight="bold"),
+        ).pack(anchor="w", padx=24, pady=(20, 16))
+
+        ctk.CTkLabel(
+            self,
+            text="Nome do quarto *",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        self.campo_nome = ctk.CTkEntry(self, corner_radius=tema.RAIO_CAMPO)
+        self.campo_nome.pack(fill="x", padx=24, pady=(2, 12))
+        self.campo_nome.insert(0, quarto["nome"])
+
+        ctk.CTkLabel(
+            self,
+            text="Privativo",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        self.combo_privativo = ctk.CTkOptionMenu(
+            self,
+            values=["Não — partilhado", "Sim — privativo"],
+            corner_radius=tema.RAIO_CAMPO,
+        )
+        self.combo_privativo.set(
+            "Sim — privativo" if quarto["privativo"] else "Não — partilhado"
+        )
+        self.combo_privativo.pack(fill="x", padx=24, pady=(2, 12))
+
+        ctk.CTkLabel(
+            self,
+            text="Limpeza incluída no cálculo de roupa?",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        self.combo_limpeza = ctk.CTkOptionMenu(
+            self,
+            values=["Sim", "Não"],
+            corner_radius=tema.RAIO_CAMPO,
+        )
+        self.combo_limpeza.set("Sim" if quarto["limpeza_incluida"] else "Não")
+        self.combo_limpeza.pack(fill="x", padx=24, pady=(2, 12))
+
+        rodape = ctk.CTkFrame(self, fg_color="transparent")
+        rodape.pack(fill="x", padx=24, pady=(10, 20), side="bottom")
+
+        ctk.CTkButton(
+            rodape,
+            text="Cancelar",
+            width=_LARGURA_BOTAO_MODAL,
+            height=_ALTURA_BOTAO_MODAL,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            rodape,
+            text="Guardar",
+            width=_LARGURA_BOTAO_MODAL,
+            height=_ALTURA_BOTAO_MODAL,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.AZUL_PRINCIPAL,
+            hover_color=tema.AZUL_CLARO,
+            command=self._guardar,
+        ).pack(side="right")
+
+    def _guardar(self):
+        privativo = self.combo_privativo.get() == "Sim — privativo"
+        limpeza_incluida = self.combo_limpeza.get() == "Sim"
+
+        try:
+            unidades.atualizar_quarto(
+                self.quarto["id"],
+                nome=self.campo_nome.get(),
+                privativo=privativo,
+                limpeza_incluida=limpeza_incluida,
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        componentes.mostrar_sucesso(f"Quarto {self.quarto['id']} atualizado.")
+        self.destroy()
+        self.tela_planta._desenhar_planta()
+
+
+class _GerirLugarModal(ctk.CTkToplevel):
+    """Popup com as ações de um lugar — Editar, Desativar ou Reativar.
+
+    Botões com a mesma receita do `_EditarQuartoModal`.
+    """
+
+    def __init__(self, tela_planta, lugar):
+        super().__init__(tela_planta)
+        self.tela_planta = tela_planta
+        self.lugar = lugar
+
+        self.title(f"Gerir lugar — {lugar['id']}")
+        self.geometry("340x280")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_planta)
+        componentes.colocar_no_topo(self)
+
+        ctk.CTkLabel(
+            self,
+            text=lugar["nome"],
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=14, weight="bold"),
+        ).pack(pady=(20, 2))
+
+        ctk.CTkLabel(
+            self,
+            text=(
+                f"{lugar['id']} · {lugar['tipo_cama']} · "
+                f"capacidade {lugar['capacidade']}"
+            ),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(pady=(0, 14))
+
+        if lugar["ativo"]:
+            self._botao(
+                "Editar lugar",
+                text_color=tema.COR_TEXTO,
+                hover_color=tema.COR_BORDA,
+                acao=lambda: _EditarLugarModal(tela_planta, lugar),
+            )
+            self._separador()
+            self._botao(
+                "Desativar lugar",
+                text_color=tema.TEXTO_ERRO,
+                hover_color=tema.VERMELHO_ERRO,
+                acao=lambda: self._desativar(),
+            )
+        else:
+            self._botao(
+                "Reativar lugar",
+                text_color=tema.TEXTO_LIVRE,
+                hover_color=tema.VERDE_LIVRE,
+                acao=lambda: self._reativar(),
+            )
+
+        ctk.CTkButton(
+            self,
+            text="Fechar",
+            width=_LARGURA_BOTAO_MODAL,
+            height=_ALTURA_BOTAO_MODAL,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="bottom", pady=(10, 16))
+
+    def _separador(self):
+        ctk.CTkFrame(self, height=1, fg_color=tema.COR_BORDA).pack(
+            fill="x", padx=20, pady=(8, 5)
+        )
+
+    def _botao(self, texto, text_color, hover_color, acao):
+        def executar():
+            self.destroy()
+            acao()
+
+        ctk.CTkButton(
+            self,
+            text=texto,
+            width=_LARGURA_BOTAO_MODAL,
+            height=_ALTURA_BOTAO_MODAL,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            hover_color=hover_color,
+            text_color=text_color,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            command=executar,
+        ).pack(fill="x", padx=20, pady=3)
+
+    def _desativar(self):
+        if not componentes.confirmar(
+            f"Desativar o lugar {self.lugar['nome']}?",
+            titulo="Desativar lugar",
+        ):
+            return
+
+        try:
+            unidades.desativar_lugar(self.lugar["id"])
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        componentes.mostrar_sucesso(f"Lugar {self.lugar['nome']} desativado.")
+        self.tela_planta._desenhar_planta()
+
+    def _reativar(self):
+        try:
+            unidades.reativar_lugar(self.lugar["id"])
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        componentes.mostrar_sucesso(f"Lugar {self.lugar['nome']} reativado.")
+        self.tela_planta._desenhar_planta()
+
+
+class _EditarLugarModal(ctk.CTkToplevel):
+    """Modal de edição de um lugar — nome, tipo de cama, capacidade.
+
+    Botões com a mesma receita do `_EditarQuartoModal`.
+    """
+
+    def __init__(self, tela_planta, lugar):
+        super().__init__(tela_planta)
+        self.tela_planta = tela_planta
+        self.lugar = lugar
+
+        self.title(f"Editar lugar — {lugar['id']}")
+        self.geometry("440x360")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_planta)
+        componentes.colocar_no_topo(self)
+
+        ctk.CTkLabel(
+            self,
+            text=f"Editar {lugar['nome']}",
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=16, weight="bold"),
+        ).pack(anchor="w", padx=24, pady=(20, 16))
+
+        ctk.CTkLabel(
+            self,
+            text="Nome do lugar *",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        self.campo_nome = ctk.CTkEntry(self, corner_radius=tema.RAIO_CAMPO)
+        self.campo_nome.pack(fill="x", padx=24, pady=(2, 12))
+        self.campo_nome.insert(0, lugar["nome"])
+
+        ctk.CTkLabel(
+            self,
+            text="Tipo de cama *",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        self.combo_tipo_cama = ctk.CTkOptionMenu(
+            self,
+            values=["solteiro", "casal", "beliche"],
+            corner_radius=tema.RAIO_CAMPO,
+        )
+        self.combo_tipo_cama.set(lugar["tipo_cama"])
+        self.combo_tipo_cama.pack(fill="x", padx=24, pady=(2, 12))
+
+        ctk.CTkLabel(
+            self,
+            text="Capacidade",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        self.campo_capacidade = ctk.CTkEntry(
+            self, corner_radius=tema.RAIO_CAMPO
+        )
+        self.campo_capacidade.pack(fill="x", padx=24, pady=(2, 12))
+        self.campo_capacidade.insert(0, str(lugar["capacidade"]))
+
+        rodape = ctk.CTkFrame(self, fg_color="transparent")
+        rodape.pack(fill="x", padx=24, pady=(10, 20), side="bottom")
+
+        ctk.CTkButton(
+            rodape,
+            text="Cancelar",
+            width=_LARGURA_BOTAO_MODAL,
+            height=_ALTURA_BOTAO_MODAL,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            rodape,
+            text="Guardar",
+            width=_LARGURA_BOTAO_MODAL,
+            height=_ALTURA_BOTAO_MODAL,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.AZUL_PRINCIPAL,
+            hover_color=tema.AZUL_CLARO,
+            command=self._guardar,
+        ).pack(side="right")
+
+    def _guardar(self):
+        texto_capacidade = self.campo_capacidade.get().strip()
+
+        if not texto_capacidade:
+            componentes.mostrar_erro("A capacidade é obrigatória.")
+            return
+
+        if not texto_capacidade.isdigit():
+            componentes.mostrar_erro(
+                "A capacidade tem de ser um número inteiro."
+            )
+            return
+
+        try:
+            unidades.atualizar_lugar(
+                self.lugar["id"],
+                nome=self.campo_nome.get(),
+                tipo_cama=self.combo_tipo_cama.get(),
+                capacidade=int(texto_capacidade),
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        componentes.mostrar_sucesso(f"Lugar {self.lugar['id']} atualizado.")
+        self.destroy()
+        self.tela_planta._desenhar_planta()
+
+
+class _DetalheLugarModal(ctk.CTkToplevel):
+    """Popup com o detalhe de um lugar ocupado OU reservado.
+
+    Serve os dois estados desde 11/09/2026 (antes chamava-se
+    `_DetalheOcupadoModal` e só servia o Ocupado). A diferença é
+    visual:
+
+    - Ocupado: chip vermelho "Ocupado", sem faixa.
+    - Reservado: chip amarelo "Reservado" + faixa amarela a dizer
+      "Reservado para dd/mm/aaaa" — o mesmo tom de aviso usado em
+      toda a aplicação (AMARELO_AVISO/TEXTO_AVISO).
+
+    O botão principal é "Abrir contrato" nos dois casos — é o
+    contrato (o que está em vigor, ou o que vai entrar em vigor)
+    que interessa a quem clica.
+
+    Botões do rodapé com largura fixa, um à esquerda e um à
+    direita — antes estavam com `expand=True` e `fill="x"` e
+    ficavam esticados de ponta a ponta como uma barra.
+
+    Janela com 560x480 — o conteúdo no caso Reservado (chip +
+    faixa amarela + cartão do contrato) ficava apertado em 520x420.
+    Aplica-se aos dois estados, para a janela não mudar de tamanho
+    entre um e outro.
+    """
+
+    def __init__(self, tela_planta, lugar, ocupacao, estado):
+        super().__init__(tela_planta)
+        self.tela_planta = tela_planta
+        self.lugar = lugar
+        self.ocupacao = ocupacao
+        self.estado = estado
+
+        titulo_janela = (
+            "Detalhe — reservado"
+            if estado == "reservado"
+            else "Detalhe — ocupado"
+        )
+        self.title(f"{titulo_janela} · {lugar['id']}")
+        self.geometry(f"{_LARGURA_DETALHE}x{_ALTURA_DETALHE}")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_planta)
+        componentes.colocar_no_topo(self)
+
+        # Título + subtítulo
+        ctk.CTkLabel(
+            self,
+            text=f"{lugar['id']} · {lugar['nome']}",
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=15, weight="bold"),
+        ).pack(anchor="w", padx=24, pady=(20, 2))
+
+        if estado == "reservado":
+            subtitulo = (
+                f"Reserva a partir de "
+                f"{ocupacao['data_inicio'].strftime('%d/%m/%Y')}"
+            )
+        else:
+            subtitulo = (
+                f"Ocupado desde "
+                f"{ocupacao['data_inicio'].strftime('%d/%m/%Y')}"
+            )
+
+        ctk.CTkLabel(
+            self,
+            text=subtitulo,
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24, pady=(0, 12))
+
+        # Chip de estado
+        if estado == "reservado":
+            chip_fundo = tema.AMARELO_AVISO
+            chip_texto = tema.TEXTO_AVISO
+            chip_label = "Reservado"
+        else:
+            chip_fundo = tema.VERMELHO_ERRO
+            chip_texto = tema.TEXTO_ERRO
+            chip_label = "Ocupado"
+
+        ctk.CTkLabel(
+            self,
+            text=chip_label,
+            text_color=chip_texto,
+            fg_color=chip_fundo,
+            corner_radius=8,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            width=90,
+            height=22,
+        ).pack(anchor="w", padx=24, pady=(0, 14))
+
+        # Faixa amarela, só no caso Reservado
+        if estado == "reservado":
+            faixa = ctk.CTkFrame(
+                self,
+                fg_color=tema.AMARELO_AVISO,
+                corner_radius=tema.RAIO_CAMPO,
+            )
+            faixa.pack(fill="x", padx=24, pady=(0, 14))
+
+            ctk.CTkLabel(
+                faixa,
+                text=(
+                    f"⚠  Este lugar já tem uma reserva para "
+                    f"{ocupacao['data_inicio'].strftime('%d/%m/%Y')}. "
+                    f"Não é possível criar um contrato mensal para "
+                    f"esta data."
+                ),
+                text_color=tema.TEXTO_AVISO,
+                font=ctk.CTkFont(size=11),
+                wraplength=480,
+                justify="left",
+                anchor="w",
+            ).pack(fill="x", padx=14, pady=10)
+
+        # Cartão do contrato
+        cartao = ctk.CTkFrame(
+            self,
+            fg_color=tema.COR_FUNDO,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            corner_radius=tema.RAIO_CAMPO,
+        )
+        cartao.pack(fill="x", padx=24, pady=(0, 14))
+
+        ctk.CTkLabel(
+            cartao,
+            text=f"{ocupacao['id']} — contrato mensal",
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            anchor="w",
+        ).pack(anchor="w", padx=16, pady=(12, 8))
+
+        cliente = clientes.procurar(ocupacao["cliente_id"])
+        nome_cliente = (
+            f"{cliente['nome']} ({cliente['id']})"
+            if cliente
+            else ocupacao["cliente_id"]
+        )
+
+        self._linha_detalhe(cartao, "Inquilino", nome_cliente)
+        self._linha_detalhe(
+            cartao,
+            "Início",
+            ocupacao["data_inicio"].strftime("%d/%m/%Y"),
+        )
+        self._linha_detalhe(
+            cartao,
+            "Renda mensal",
+            self._formatar_valor(ocupacao.get("renda_praticada")),
+        )
+        self._linha_detalhe(
+            cartao,
+            "Dia de vencimento",
+            str(ocupacao.get("dia_vencimento") or "—"),
+        )
+
+        # Rodapé — largura fixa nos dois botões, um à esquerda, um à
+        # direita. Sem `expand=True` nem `fill="x"`.
+        rodape = ctk.CTkFrame(self, fg_color="transparent")
+        rodape.pack(fill="x", padx=24, pady=16, side="bottom")
+
+        ctk.CTkButton(
+            rodape,
+            text="Abrir contrato",
+            width=_LARGURA_BOTAO_DETALHE,
+            height=_ALTURA_BOTAO_MODAL,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.AZUL_PRINCIPAL,
+            hover_color=tema.AZUL_CLARO,
+            command=self._abrir_contrato,
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            rodape,
+            text="Fechar",
+            width=_LARGURA_BOTAO_DETALHE,
+            height=_ALTURA_BOTAO_MODAL,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="right")
+
+    def _linha_detalhe(self, master, rotulo, valor):
+        linha = ctk.CTkFrame(master, fg_color="transparent")
+        linha.pack(fill="x", padx=16, pady=2)
+
+        ctk.CTkLabel(
+            linha,
+            text=rotulo,
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+            width=140,
+            anchor="w",
+        ).pack(side="left")
+
+        ctk.CTkLabel(
+            linha,
+            text=valor,
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=12),
+            anchor="w",
+        ).pack(side="left")
+
+    def _formatar_valor(self, valor):
+        if valor is None:
+            return "—"
+        return f"{valor:.2f} €".replace(".", ",")
+
+    def _abrir_contrato(self):
+        self.destroy()
+        self.tela_planta.controlador.mostrar_frame(
+            __import__(
+                "gui.gui_contratos", fromlist=["ListaContratosMensais"]
+            ).ListaContratosMensais
+        )
