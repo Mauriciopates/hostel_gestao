@@ -10,6 +10,7 @@ __pycache__/
 dados/
 backups/
 logs/
+contratos_gerados/
 *.db
 *.sqlite3
 *.env*
