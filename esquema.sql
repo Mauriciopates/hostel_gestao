@@ -361,6 +361,8 @@ CREATE TABLE `requisicoes` (
   `responsavel_rejeicao_id` varchar(10) DEFAULT NULL,
   `motivo_rejeicao` varchar(255) DEFAULT NULL,
   `observacoes` varchar(255) DEFAULT NULL,
+  `observacao_rececao` text,
+  `origem` varchar(20) DEFAULT 'pedido',
   PRIMARY KEY (`id`),
   KEY `responsavel_id` (`responsavel_id`),
   KEY `responsavel_rejeicao_id` (`responsavel_rejeicao_id`),
@@ -442,4 +444,4 @@ CREATE TABLE `unidades` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-09-13 16:11:23
+-- Dump completed on 2026-09-13 20:03:14
