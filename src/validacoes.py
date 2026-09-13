@@ -7,6 +7,14 @@ registo como incompleto, para aparecer na listagem própria.
 Não conhece a interface: recebe valores, devolve resultado, sinaliza erro
 com `raise ValueError`. A conversão de texto para Decimal ou date é
 responsabilidade de quem chama.
+
+ALTERAÇÕES 13/09/2026 (IBAN da propriedade, para a impressão do
+contrato mensal):
+
+- `validar_iban` é nova — o algoritmo do módulo 97, que é o
+  mecanismo oficial de controlo do IBAN (ISO 13616). Não confirma
+  que a conta existe; confirma só que o número não tem erros de
+  digitação. Chamada pelo `gui_propriedades.py` antes de gravar.
 """
 
 # O que muda aqui mudar o modelo de negício
@@ -311,3 +319,65 @@ def validar_tipo_cama(tipo_cama):
 
     if tipo_cama not in TIPOS_CAMA:
         raise ValueError(f"Tipo de cama desconhecido: {tipo_cama}")
+
+
+def validar_iban(iban):
+    """Verifica um IBAN pelo algoritmo do módulo 97 (ISO 13616).
+
+    Não confirma que a conta existe — confirma só que o número não
+    tem erros de digitação, o que já apanha a grande maioria dos
+    enganos. É o mesmo tipo de validação que `nif_valido` faz para
+    o NIF: algoritmo de controlo, sem consultar nenhum serviço
+    externo.
+
+    Aceita o IBAN cru (sem espaços), que é o formato canónico usado
+    na base de dados. Se vier com espaços, o erro é dado — a
+    limpeza de espaços é responsabilidade de quem chama (a GUI, que
+    formata na apresentação).
+
+    Devolve True se for válido, False caso contrário — mesma
+    convenção de `nif_valido` (ao contrário de `validar_cliente`,
+    que levanta ValueError; o gui_propriedades.py decide o que fazer
+    com o False).
+
+    Um IBAN vazio é considerado válido — a propriedade pode não ter
+    IBAN conhecido (opcional, ver `propriedades.criar`). Quem chama
+    é que decide se a ausência é aceitável no contexto (no cadastro
+    é; na hora de imprimir o contrato, a GUI mostra "—").
+    """
+    if not iban:
+        return True
+
+    # Passo 1 — rejeitar caracteres que não sejam letras nem dígitos.
+    # O IBAN canónico tem 2 letras (país) + 2 dígitos (controlo) +
+    # até 30 alfanuméricos. Sem esta verificação, um IBAN com
+    # espaços ou símbolos passava a validação do módulo 97 com
+    # resultados sem sentido (o `int()` do Python só aceita dígitos
+    # puros, e o `.isdigit()` a seguir ia rebentar).
+    if not iban.isalnum():
+        return False
+
+    # Comprimento mínimo internacional: 15 caracteres. Máximo: 34
+    # (o maior IBAN conhecido, da Noruega, tem 15; o maior de todos
+    # tem 34 na norma ISO).
+    if not 15 <= len(iban) <= 34:
+        return False
+
+    # Passo 2 — mover os 4 primeiros caracteres para o fim.
+    # "PT5000020123..." → "00020123...PT50"
+    reformulado = iban[4:] + iban[:4]
+
+    # Passo 3 — substituir cada letra pelo seu valor numérico
+    # (A=10, B=11, ..., Z=35), mantendo os dígitos como estão.
+    # "PT50" vira "25232950"; concatenado com o resto, dá o número
+    # gigante sobre o qual se aplica o módulo 97.
+    convertido = "".join(
+        str(ord(caractere) - ord("A") + 10) if caractere.isalpha()
+        else caractere
+        for caractere in reformulado
+    )
+
+    # Passo 4 — o IBAN é válido se o resto da divisão inteira por 97
+    # for 1. O `int()` do Python tem precisão arbitrária, não há
+    # overflow, não há biblioteca extra a usar.
+    return int(convertido) % 97 == 1

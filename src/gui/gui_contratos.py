@@ -7,8 +7,8 @@ Novo Contrato" / "+ Nova Reserva Airbnb" e popup, ver docstring de
 _ListaOcupacoesBase).
 
 Só fala com os módulos de negócio (unidades, clientes, responsaveis,
-contratos, validacoes) — nunca com repositorio diretamente, mesma
-disciplina de gui/gui_unidades.py.
+contratos, validacoes, impressao) — nunca com repositorio
+diretamente, mesma disciplina de gui/gui_unidades.py.
 
 Mockup validado com o aluno em 06/09/2026 (capturas
 screenshot_contrato_vazio.png / screenshot_contrato_preenchido.png,
@@ -108,9 +108,108 @@ dados falsos). Decisões tomadas nessa validação:
    projeto (NovoClienteModal, EditarClienteModal, _AnonimizarModal,
    EncerrarContratoModal) — para não ficar ambíguo ao lado do botão
    vermelho "Cancelar reserva", que é a ação de negócio em si.
+
+11. REESTRUTURAÇÃO DO ECRÃ "CONTRATO MENSAL" (13/09/2026) — decisão
+   do aluno, mockup HTML aprovado em duas rondas antes de codar:
+
+   - O ecrã deixa de desenhar cartões empilhados (o que tinha desde
+     07/09) e passa a ser uma TABELA igual à de Gestão de
+     Propriedades (o "padrão base" do sistema). Colunas: ID,
+     NOME UNIDADE, NOME DO CLIENTE, DATA, STATUS, AÇÕES — a
+     mesma estrutura de `componentes.Tabela` já usada por
+     Propriedades, Produtos, Movimentos, Responsáveis, Devoluções,
+     Requisições e Unidades da Propriedade. Deixa de ter cartões e
+     passa a ser uma linha por contrato.
+   - O botão "Encerrar" que estava em cada cartão sai da linha —
+     a linha passa a ter só um botão "Gerir", que abre um popup
+     (`_AcoesContratoModal`, padrão do `_AcoesPropriedadeModal`).
+   - O popup "Gerir contrato" tem três ações: Encerrar (só se
+     ativo), Reativar (só se encerrado) e Imprimir contrato. A
+     única que já não existia era Imprimir — ver ponto 12.
+   - `_ListaOcupacoesBase` deixa de existir: agora que Contrato
+     Mensal é tabela e Reservas Airbnb continua com cartões (o
+     aluno confirmou que só o mensal muda — Pergunta 1a), a base
+     comum só um dos dois usava na forma original. `ListaReservas
+     Airbnb` passa a ser autónoma, com o `_desenhar_ocupacao` que
+     já tinha via a base, copiado para dentro dele. Não há
+     herança nem fator comum a manter entre os dois.
+
+12. IMPRIMIR CONTRATO (13/09/2026) — nova funcionalidade, a
+   pedido do aluno, baseada na minuta
+   `Minuta-Contrato-de-Arrendamento-de-Quarto.pdf` que ele forneceu.
+   Decisões tomadas em conversa antes de codar:
+
+   - O PDF é gerado num módulo novo, `impressao.py` (raiz de
+     `src/`, não dentro de `gui/`) — módulo puro, recebe
+     dicionários e devolve o caminho do ficheiro, não fala com
+     base de dados. O `gui_contratos.py` é que faz as leituras
+     (`contratos.detalhes_mensal`, `clientes.procurar`,
+     `unidades.procurar`, `propriedades.procurar`,
+     `responsaveis.procurar`) e passa tudo ao `impressao.
+     gerar_contrato_pdf`. Escolha "b" (dois módulos) em vez de
+     "a" (tudo em `gui_contratos.py`) — quando o módulo de
+     Relatórios chegar, vai usar o mesmo `impressao.py`, e fazia
+     sentido que ele já estivesse fora da GUI.
+   - O botão "Imprimir contrato" abre um popup próprio
+     (`_ImprimirContratoModal`), ANTES de gerar o PDF. O popup
+     pede duas coisas: o SENHORIO (dropdown de responsáveis — é
+     a pessoa que assina do lado do senhorio, e que a minuta
+     chama "Primeiro Contraente") e o LOCAL (caixa de texto
+     livre — a cidade, porque não existe em lado nenhum do
+     sistema). O "Segundo Contraente" é o cliente do contrato,
+     que já lá está — não se escolhe.
+   - Cliente anonimizado NÃO pode imprimir (decisão do aluno,
+     confirmada). O botão "Imprimir contrato" não aparece de todo
+     dentro do `_AcoesContratoModal` quando o cliente está
+     anonimizado — em vez dele, uma linha de texto cinzenta a
+     explicar porquê. Isto evita a situação ridícula de gerar um
+     PDF com dados pessoais de um titular cujos dados foram
+     apagados por RGPD.
+   - O IBAN que sai na Cláusula 3ª é o da PROPRIEDADE (não do
+     cliente, como tínhamos planeado antes de a conversa evoluir)
+     — porque na minuta original o NIB/IBAN é para onde o
+     inquilino paga a renda, e isso é do senhorio, não do
+     cliente. `propriedades.criar` e `propriedades.atualizar`
+     ganharam o campo `iban` (opcional) e o
+     `gui_propriedades.py` ganhou o campo nos dois modais.
+   - Nome do ficheiro: `CNT-003_2026-09-13_15h42.pdf` na pasta
+     `contratos_gerados/` na raiz do projeto (fora do controlo
+     de versões, mesma convenção dos backups — decisão 13). A
+     hora no nome resolve o caso de gerar o mesmo contrato duas
+     vezes no mesmo dia.
+   - Texto do PDF é fiel à minuta original, com as correções das
+     gralhas tipográficas óbvias aprovadas pelo aluno (documentadas
+     no próprio `impressao.py`).
+   - Datas com espaços à volta das barras ("13 / 09 / 2026"),
+     números só com algarismos ("350,00 euros") — sem extenso.
+   - Parágrafo de abertura a identificar as partes e zona de
+     assinaturas no fim foram ACRESCENTADOS (não estão na minuta
+     original, que começa direto na Cláusula 1ª e acaba na linha
+     local/data, sem sítio para assinar). Confirmado pelo aluno
+     — sem eles, o senhorio e o inquilino nunca apareceriam com
+     nome no PDF.
+
+13. PÓS-ENTREGA (13/09/2026, mesmo dia, ao testar no PC do aluno):
+
+   a) PDF abria só com aviso "ficou guardado em...", sem abrir o
+      ficheiro. Corrigido: depois de gerar, `_ImprimirContratoModal.
+      _abrir_no_sistema(caminho)` chama a função nativa de cada SO
+      (`os.startfile` no Windows, `open` no macOS, `xdg-open` no
+      Linux). Se falhar, o PDF continua gravado e a mensagem de
+      sucesso continua a mostrar o caminho — não rebenta.
+
+   b) Popups ficavam abertos depois de gerar o PDF. Corrigido:
+      o `_ImprimirContratoModal` recebe agora o popup pai (o
+      `_AcoesContratoModal`) como parâmetro opcional `popup_pai`, e
+      fecha-o explicitamente no fim do `_gerar_pdf` — para além de
+      se fechar a si próprio. Fica a interface a voltar à tabela
+      sem nada pendurado em cima.
 """
 
 import datetime
+import os
+import subprocess
+import sys
 from decimal import Decimal, InvalidOperation
 
 import customtkinter as ctk
@@ -118,6 +217,8 @@ import customtkinter as ctk
 import clientes
 import config
 import contratos
+import impressao
+import propriedades
 import responsaveis
 import unidades
 import validacoes
@@ -517,8 +618,8 @@ class NovoContratoMensal(ctk.CTkFrame):
         escolhida (é comum criar vários contratos seguidos na mesma
         unidade); tudo o resto volta ao valor por omissão, e as
         listas de lugares/clientes/responsáveis são recarregadas,
-        para refletirem o contrato que acabou de ser criado (ex.:
-        o lugar escolhido já aparece com um ocupante a mais).
+        para refletirem o contrato que acabou de ser criado (ex.: o
+        lugar escolhido já aparece com um ocupante a mais).
         """
         self.campo_data_inicio.delete(0, "end")
         self.campo_dia_vencimento.delete(0, "end")
@@ -545,9 +646,7 @@ def _formatar_data(valor):
 def _identificar_unidade(unidade, unidade_id):
     """Devolve "nome (ID)" para mostrar num cartão de ocupação, ou só
     o ID se a unidade não existir — mesma convenção de
-    cli.py:_identificar_unidade (decisão 8 de
-    Pendencias_Antes_v1.0.0.txt: o nome sozinho não chega para
-    rastrear, os ecrãs precisam também do código).
+    cli.py:_identificar_unidade.
     """
     if unidade is None:
         return unidade_id
@@ -564,8 +663,7 @@ def _identificar_cliente(cliente, cliente_id):
 def _colocar_no_topo(janela):
     """Traz um popup para a frente da janela principal — mesma
     função de gui/gui_clientes.py e gui/gui_propriedades.py, repetida
-    aqui porque cada módulo da GUI já a define localmente (não há,
-    ainda, um sítio comum para ela em componentes.py).
+    aqui porque cada módulo da GUI já a define localmente.
     """
     janela.after(
         10, lambda: (janela.lift(), janela.focus_force(), janela.grab_set())
@@ -573,26 +671,7 @@ def _colocar_no_topo(janela):
 
 
 class NovoContratoModal(ctk.CTkToplevel):
-    """Popup com o formulário de Novo Contrato Mensal — 07/09/2026,
-    substituindo o item "Novo Contrato Mensal" que a barra lateral
-    tinha antes (decisão do aluno: ficava parecido demais com
-    "Contrato Mensal", a lista; ao mover para um botão fixo dentro
-    da própria lista, deixa de haver os dois nomes lado a lado).
-
-    Reaproveita a classe NovoContratoMensal tal e qual — ela já traz
-    o seu próprio cabeçalho, cartões e botão "Criar contrato"; esta
-    janela só a encaixa num popup, mesmo padrão de NovoClienteModal/
-    EditarClienteModal em gui_clientes.py (CTkToplevel, geometria
-    fixa, _colocar_no_topo). Nenhuma lógica do formulário foi
-    duplicada nem alterada.
-
-    A lista por trás (`tela_lista`) só recarrega quando a janela
-    fecha, não a cada contrato criado — de propósito: o próprio
-    NovoContratoMensal já se limpa sozinho depois de cada sucesso
-    para permitir criar vários contratos seguidos na mesma unidade
-    (decisão da Parte 3 de 06/09/2026); fechar o popup é o sinal de
-    "terminei", e é aí que a lista precisa de estar atualizada.
-    """
+    """Popup com o formulário de Novo Contrato Mensal."""
 
     def __init__(self, tela_lista, unidade_id=None, lugar_id=None):
         super().__init__(tela_lista)
@@ -619,34 +698,7 @@ class NovoContratoModal(ctk.CTkToplevel):
 
 
 class NovaReservaAirbnb(ctk.CTkFrame):
-    """Formulário de registo de uma reserva Airbnb — 07/09/2026,
-    mesmo espírito de NovoContratoMensal (cartões, tudo sempre
-    visível, popup de erro/sucesso, formulário que se limpa sozinho
-    depois de um registo com sucesso), adaptado aos campos de
-    `contratos.registar_airbnb`.
-
-    Diferenças de propósito em relação ao Contrato Mensal:
-
-    - Sem "Lugar": o regime Airbnb nunca usa quarto/lugar (decisão
-      da Fase 2, item 3 de Decisoes_Pendentes_Fase2.txt) — só o
-      mensal usa essa hierarquia para capacidade.
-    - Sem "Nacionalidade"/"Data de nascimento": não são campos da
-      reserva, são campos da ficha do cliente — já validados
-      (incondicionalmente, por agora) em `validacoes.py` quando o
-      cliente é criado/atualizado no regime Airbnb.
-    - "Preço calculado" não tem um combo único (como a Unidade) que
-      dispare um evento — recalcula ao sair de qualquer um dos dois
-      campos de data (evento <FocusOut>), quando as duas já estão
-      preenchidas e válidas. Mockup validado com o aluno,
-      07/09/2026.
-    - "Multa calculada" só depende da unidade escolhida (vem de
-      unidade["multa_check_in_tardio"]), por isso recalcula já
-      junto com a própria escolha da unidade — não precisa de
-      esperar por nenhuma data.
-    - Cliente já vem pré-selecionado com o primeiro da lista, mesmo
-      comportamento do Contrato Mensal (consistência entre os dois
-      formulários, decisão do aluno, 07/09/2026).
-    """
+    """Formulário de registo de uma reserva Airbnb."""
 
     def __init__(self, master, controlador, unidade_id=None):
         super().__init__(master, fg_color=tema.COR_FUNDO)
@@ -1025,12 +1077,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         self._limpar_formulario()
 
     def _limpar_formulario(self):
-        """Mesma ideia de NovoContratoMensal._limpar_formulario: repõe
-        o formulário para o próximo registo, mantendo a unidade
-        escolhida (comum registar várias reservas seguidas na mesma
-        unidade Airbnb) e recarregando cliente/responsáveis, para já
-        refletirem a reserva acabada de criar.
-        """
+        """Mesma ideia de NovoContratoMensal._limpar_formulario."""
         self.campo_data_inicio.delete(0, "end")
         self.campo_data_fim.delete(0, "end")
         self.campo_preco_praticado.delete(0, "end")
@@ -1045,15 +1092,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
 
 
 class NovaReservaAirbnbModal(ctk.CTkToplevel):
-    """Popup com o formulário de Nova Reserva Airbnb — 07/09/2026,
-    mesmo padrão de NovoContratoModal (CTkToplevel, geometria fixa,
-    _colocar_no_topo, a lista só recarrega quando a janela fecha).
-
-    Ao contrário do NovoContratoModal, não embrulha um formulário já
-    existente — NovaReservaAirbnb é construído de raiz nesta mesma
-    entrega (contratos.registar_airbnb já existia, mas não havia
-    nenhum ecrã de GUI para lá chegar).
-    """
+    """Popup com o formulário de Nova Reserva Airbnb."""
 
     def __init__(self, tela_lista):
         super().__init__(tela_lista)
@@ -1077,23 +1116,7 @@ class NovaReservaAirbnbModal(ctk.CTkToplevel):
 
 
 class EncerrarContratoModal(ctk.CTkToplevel):
-    """Popup de encerramento de um contrato mensal — 07/09/2026,
-    aberto pelo botão "Encerrar" de cada cartão ativo em
-    ListaContratosMensais.
-
-    Mesmo padrão dos modais curtos já existentes (_AnonimizarModal,
-    gui_clientes.py): resumo do registo em cima, campos, rodapé com
-    Cancelar à esquerda e a ação à direita. Pede exatamente o que
-    `contratos.encerrar_mensal` recebe — data de fim (obrigatória) e
-    motivo (opcional) — sem nada a mais.
-
-    A caixa amarela de avisos é recalculada ao sair do campo da data
-    (<FocusOut>, mesma convenção do "Preço calculado" em
-    NovaReservaAirbnb) e só aparece quando há mesmo algum aviso a
-    dar. Não bloqueia nada: o botão encerra na mesma, porque a
-    duração mínima e o aviso prévio são regra da casa e não
-    imposição legal (decisão 14) — ficam registados no contrato.
-    """
+    """Popup de encerramento de um contrato mensal."""
 
     def __init__(self, tela_lista, ocupacao):
         super().__init__(tela_lista)
@@ -1202,8 +1225,7 @@ class EncerrarContratoModal(ctk.CTkToplevel):
 
     def _ler_data_fim(self):
         """Devolve a data escrita, ou None se estiver vazia ou com
-        formato inválido — o erro de formato só é dado ao submeter
-        (mesma convenção de NovaReservaAirbnb._ler_data).
+        formato inválido.
         """
         texto = self.campo_data_fim.get().strip()
 
@@ -1290,22 +1312,7 @@ class EncerrarContratoModal(ctk.CTkToplevel):
 
 
 class CancelarReservaModal(ctk.CTkToplevel):
-    """Popup de cancelamento de uma reserva Airbnb — 07/09/2026,
-    aberto pelo botão "Cancelar" de cada cartão ativo em
-    ListaReservasAirbnb.
-
-    Mesmo padrão dos modais curtos já existentes (_AnonimizarModal,
-    gui_clientes.py; EncerrarContratoModal, acima): resumo do
-    registo em cima, campo(s), rodapé com um botão para fechar sem
-    agir e a ação a vermelho à direita. Mais simples que
-    EncerrarContratoModal: `contratos.cancelar_airbnb` não pede nem
-    altera nenhuma data (a reserva já tem 'data_fim' desde a
-    criação) nem tem avisos a calcular — só o motivo, opcional, os
-    mesmos campos do CLI (cli.py:_cancelar_reserva_airbnb).
-
-    O botão que fecha sem cancelar chama-se "Voltar", não
-    "Cancelar" — ver ponto 10 da docstring do módulo.
-    """
+    """Popup de cancelamento de uma reserva Airbnb."""
 
     def __init__(self, tela_lista, ocupacao):
         super().__init__(tela_lista)
@@ -1393,58 +1400,55 @@ class CancelarReservaModal(ctk.CTkToplevel):
         self.tela_lista._recarregar()
 
 
-class _ListaOcupacoesBase(ctk.CTkFrame):
-    """Base comum a ListaContratosMensais e ListaReservasAirbnb —
-    07/09/2026, substitui a antiga ListaOcupacoes (um ecrã só, com
-    dropdown de tipo Todos/Mensal/Airbnb misturando os dois regimes)
-    por dois itens separados na barra lateral, cada um já filtrado
-    por tipo — decisão do aluno: mais direto do que abrir um ecrã e
-    ainda ter de escolher o tipo lá dentro.
+class ListaContratosMensais(ctk.CTkFrame):
+    """Lista dos contratos mensais — ecrã "Contrato Mensal" da barra
+    lateral.
 
-    Cada subclasse só define `tipo` ("mensal"/"airbnb") e `titulo`
-    (cabeçalho do ecrã); o resto — filtros, cartões, Reativar — é
-    igual nos dois. `_botao_criar` é um "gancho" que por omissão não
-    desenha nada: só ListaContratosMensais o usa, para o botão fixo
-    "+ Novo Contrato" (Registar reserva Airbnb ainda não existe).
+    Reestruturado em 13/09/2026 (ver ponto 11 do docstring do
+    módulo): deixou de desenhar cartões empilhados e passa a ser uma
+    TABELA igual à de Gestão de Propriedades (o "padrão base" do
+    sistema). Colunas: ID, NOME UNIDADE, NOME DO CLIENTE, DATA,
+    STATUS, AÇÕES.
 
-    Mesmos filtros do CLI (`_listar_ocupacoes`, cli.py) — mostrar
-    inativas/encerradas, aviso de documento. Filtro por unidade/
-    cliente (que no CLI pede o ID por texto livre) fica de fora: os
-    ecrãs da GUI não pedem para escrever IDs à mão, só selecionam
-    registos existentes.
+    Cada linha tem um único botão "Gerir" (mesmo padrão do
+    `_AcoesPropriedadeModal`), que abre `_AcoesContratoModal` — o
+    popup com Encerrar / Reativar / Imprimir contrato.
 
-    Cada cartão identifica a unidade e o cliente por "nome (ID)"
-    (mesma convenção do CLI, decisão 8) e mostra o período, o estado
-    (Ativa / Encerrada / Cancelada) e o aviso de documento, quando
-    aplicável. Só "Reativar" está ligado — não precisa de formulário,
-    só confirmação (mesmo padrão de Clientes/Propriedades). Editar/
-    Encerrar/Cancelar ficam para as próximas entregas, cada um com o
-    seu modal — decisão de não entregar botões sem ação nenhuma por
-    trás, para não confundir o aluno a testar. Em 07/09/2026,
-    "Encerrar" passou a estar ligado em ListaContratosMensais
-    (EncerrarContratoModal) e "Cancelar" em ListaReservasAirbnb
-    (CancelarReservaModal), ambos pelo gancho `_acoes_ativa`, o
-    irmão do `_botao_criar` para os botões de cada cartão ativo;
-    só "Editar" (nos dois regimes) continua por fazer.
+    A lista já não partilha base com `ListaReservasAirbnb`: o aluno
+    confirmou que só o Contrato Mensal passa a tabela, e o Airbnb
+    mantém os cartões (Pergunta 1a da conversa de 13/09/2026).
     """
-
-    # Strings vazias (não None) de propósito: cada subclasse
-    # substitui pelo valor real, e assim o Pylance não acusa
-    # falso positivo em `self.titulo.lower()` (str sempre tem
-    # `.lower()`; None não).
-    tipo: str = ""
-    titulo: str = ""
 
     def __init__(self, master, controlador):
         super().__init__(master, fg_color=tema.COR_FUNDO)
         self.controlador = controlador
 
-        componentes.Cabecalho(self, titulo=self.titulo).pack(fill="x")
+        componentes.Cabecalho(self, titulo="Contrato Mensal").pack(fill="x")
 
-        barra = ctk.CTkFrame(self, fg_color=tema.COR_FUNDO)
-        barra.pack(fill="x", padx=20, pady=(8, 4))
+        # Botão de criação numa barra própria, logo abaixo do
+        # cabeçalho e a verde — mesmo padrão de Contratos e Reservas.
+        barra_criar = ctk.CTkFrame(self, fg_color="transparent")
+        barra_criar.pack(fill="x", padx=20, pady=(4, 8))
+        ctk.CTkButton(
+            barra_criar,
+            text="+ Novo Contrato",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.VERDE,
+            hover_color=tema.VERDE,
+            command=lambda: NovoContratoModal(self),
+        ).pack(side="left")
 
-        self._botao_criar(barra)
+        barra = ctk.CTkFrame(self, fg_color="transparent")
+        barra.pack(fill="x", padx=20, pady=(0, 4))
+
+        self.combo_aviso = ctk.CTkOptionMenu(
+            barra,
+            values=["Todos", "Com aviso", "Sem aviso"],
+            command=lambda _valor: self._recarregar(),
+            width=130,
+        )
+        self.combo_aviso.set("Todos")
+        self.combo_aviso.pack(side="right")
 
         self.mostrar_inativas = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
@@ -1456,6 +1460,762 @@ class _ListaOcupacoesBase(ctk.CTkFrame):
             font=ctk.CTkFont(size=11),
         ).pack(side="right", padx=(12, 0))
 
+        self.tabela = componentes.Tabela(
+            self,
+            colunas=(
+                componentes.Coluna("ID", minimo=110, espaco=8),
+                componentes.Coluna(
+                    "NOME UNIDADE", peso=3, minimo=180
+                ),
+                componentes.Coluna(
+                    "NOME DO CLIENTE", peso=3, minimo=180
+                ),
+                componentes.Coluna(
+                    "DATA", peso=2, minimo=180, alinhamento="w"
+                ),
+                componentes.Coluna(
+                    "STATUS",
+                    peso=1,
+                    minimo=110,
+                    alinhamento="centro",
+                ),
+                componentes.Coluna(
+                    "AÇÕES", minimo=90, alinhamento="centro"
+                ),
+            ),
+            altura_linha=52,
+            mensagem_vazia="Nenhum contrato mensal encontrado.",
+            tom_alternado=True,
+        )
+        self.tabela.pack(fill="both", expand=True, padx=20, pady=(4, 12))
+
+        self._recarregar()
+
+    # -- carregamento / atualização ----------------------------------
+
+    def _aviso_selecionado(self):
+        return {"Todos": None, "Com aviso": True, "Sem aviso": False}[
+            self.combo_aviso.get()
+        ]
+
+    def _recarregar(self):
+        """Limpa e volta a desenhar a tabela — chamada na abertura
+        do ecrã, ao mexer nos filtros, e depois de qualquer criação/
+        encerramento/reativação de contrato.
+        """
+        self.tabela.limpar()
+
+        lista = contratos.listar(
+            incluir_inativas=self.mostrar_inativas.get(),
+            tipo="mensal",
+            aviso_documento=self._aviso_selecionado(),
+        )
+
+        if not lista:
+            self.tabela.mostrar_vazio()
+            return
+
+        for ocupacao in lista:
+            self._desenhar_ocupacao(ocupacao)
+
+    # -- desenho -------------------------------------------------------
+
+    def _desenhar_ocupacao(self, ocupacao):
+        """Desenha uma linha da tabela para um contrato mensal.
+
+        Cada célula é um widget criado com a linha como master e
+        colocado com `self.tabela.colocar`, que trata do grid, do
+        alinhamento e das folgas. A altura, as divisórias e o tom
+        das linhas são da tabela.
+        """
+        inativa = not ocupacao["ativo"]
+
+        unidade = unidades.procurar(ocupacao["unidade_id"])
+        cliente = clientes.procurar(ocupacao["cliente_id"])
+
+        nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
+        id_unidade = ocupacao["unidade_id"]
+
+        nome_cliente = (
+            cliente["nome"] if cliente else ocupacao["cliente_id"]
+        )
+        id_cliente = ocupacao["cliente_id"]
+
+        linha = self.tabela.nova_linha()
+
+        # Coluna ID — chip, como nas outras tabelas do sistema.
+        self.tabela.colocar(
+            linha,
+            0,
+            ctk.CTkLabel(
+                linha,
+                text=ocupacao["id"],
+                text_color=tema.AZUL_PRINCIPAL,
+                fg_color=tema.ID_CHIP_FUNDO,
+                corner_radius=6,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                width=110,
+                anchor="w",
+            ),
+            esticar="w",
+        )
+
+        # Coluna NOME UNIDADE — nome grande, ID pequeno por baixo.
+        bloco_unidade = ctk.CTkFrame(linha, fg_color="transparent")
+        ctk.CTkLabel(
+            bloco_unidade,
+            text=nome_unidade,
+            text_color=(
+                tema.TEXTO_INDISPONIVEL if inativa else tema.COR_TEXTO
+            ),
+            font=ctk.CTkFont(size=13, weight="bold"),
+            anchor="w",
+        ).pack(fill="x")
+        ctk.CTkLabel(
+            bloco_unidade,
+            text=id_unidade,
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+            anchor="w",
+        ).pack(fill="x")
+        self.tabela.colocar(linha, 1, bloco_unidade)
+
+        # Coluna NOME DO CLIENTE — mesma estrutura (nome + ID).
+        bloco_cliente = ctk.CTkFrame(linha, fg_color="transparent")
+        ctk.CTkLabel(
+            bloco_cliente,
+            text=nome_cliente,
+            text_color=(
+                tema.TEXTO_INDISPONIVEL if inativa else tema.COR_TEXTO
+            ),
+            font=ctk.CTkFont(size=13),
+            anchor="w",
+        ).pack(fill="x")
+        ctk.CTkLabel(
+            bloco_cliente,
+            text=id_cliente,
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+            anchor="w",
+        ).pack(fill="x")
+        self.tabela.colocar(linha, 2, bloco_cliente)
+
+        # Coluna DATA — início → fim, ou "em aberto" se ainda não
+        # encerrou. Fonte secundária (é metadado, não identidade).
+        data_inicio = _formatar_data(ocupacao["data_inicio"])
+        data_fim = _formatar_data(ocupacao["data_fim"])
+        self.tabela.colocar(
+            linha,
+            3,
+            ctk.CTkLabel(
+                linha,
+                text=f"{data_inicio} → {data_fim}",
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=11),
+                anchor="w",
+            ),
+        )
+
+        # Coluna STATUS — chip "Ativa" ou "Encerrado", e o chip de
+        # aviso de documento a acompanhar quando aplicável.
+        bloco_status = ctk.CTkFrame(linha, fg_color="transparent")
+
+        if inativa:
+            ctk.CTkLabel(
+                bloco_status,
+                text="Encerrado",
+                text_color=tema.TEXTO_INDISPONIVEL,
+                fg_color=tema.CINZA_INDISPONIVEL,
+                corner_radius=8,
+                font=ctk.CTkFont(size=10, weight="bold"),
+                width=90,
+                height=22,
+            ).pack(side="left")
+
+            if ocupacao["aviso_documento"]:
+                ctk.CTkLabel(
+                    bloco_status,
+                    text="Doc. a expirar",
+                    text_color=tema.TEXTO_AVISO,
+                    fg_color=tema.AMARELO_AVISO,
+                    corner_radius=8,
+                    font=ctk.CTkFont(size=10, weight="bold"),
+                    width=100,
+                    height=22,
+                ).pack(side="left", padx=(6, 0))
+        else:
+            ctk.CTkLabel(
+                bloco_status,
+                text="Ativa",
+                text_color=tema.TEXTO_LIVRE,
+                fg_color=tema.VERDE_LIVRE,
+                corner_radius=8,
+                font=ctk.CTkFont(size=10, weight="bold"),
+                width=70,
+                height=22,
+            ).pack(side="left")
+
+            if ocupacao["aviso_documento"]:
+                ctk.CTkLabel(
+                    bloco_status,
+                    text="Doc. a expirar",
+                    text_color=tema.TEXTO_AVISO,
+                    fg_color=tema.AMARELO_AVISO,
+                    corner_radius=8,
+                    font=ctk.CTkFont(size=10, weight="bold"),
+                    width=100,
+                    height=22,
+                ).pack(side="left", padx=(6, 0))
+
+        self.tabela.colocar(linha, 4, bloco_status)
+
+        # Coluna AÇÕES — um único botão "Gerir", que abre o popup
+        # com todas as ações (Encerrar / Reativar / Imprimir).
+        acoes = self.tabela.celula_acoes(linha, 5)
+        acoes.adicionar(
+            ctk.CTkButton(
+                acoes,
+                text="Gerir",
+                width=76,
+                height=26,
+                corner_radius=tema.RAIO_BOTAO,
+                fg_color="transparent",
+                border_width=1,
+                border_color=tema.COR_BORDA,
+                text_color=tema.COR_TEXTO,
+                hover_color=tema.COR_BORDA,
+                command=lambda: _AcoesContratoModal(self, ocupacao),
+            )
+        )
+
+    # -- ações -------------------------------------------------------
+
+    def _reativar(self, ocupacao):
+        pergunta = f"Reativar o contrato {ocupacao['id']}?"
+        if not componentes.confirmar(pergunta):
+            return
+
+        try:
+            contratos.reativar(ocupacao["id"])
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        componentes.mostrar_sucesso(
+            f"Contrato {ocupacao['id']} reativado."
+        )
+        self._recarregar()
+
+
+class _AcoesContratoModal(ctk.CTkToplevel):
+    """Popup pequeno com as ações de um contrato mensal — aberto
+    pelo botão "Gerir" de cada linha em `ListaContratosMensais`
+    (13/09/2026, ver ponto 11 do docstring do módulo).
+
+    Mesmo padrão dos popups de propriedade, unidade e produto:
+    título com nome da unidade, subtítulo com o ID do contrato e o
+    cliente, botões com a mesma forma, separador antes da ação
+    destrutiva.
+
+    Três ações:
+    - Encerrar contrato (só se ativo) — abre EncerrarContratoModal.
+    - Reativar contrato (só se encerrado) — direto, sem modal.
+    - Imprimir contrato — abre `_ImprimirContratoModal`. Se o
+      cliente estiver anonimizado, o botão NÃO aparece; em vez
+      dele, uma linha cinzenta a explicar porquê (decisão do
+      aluno, ponto 12 do docstring do módulo).
+    """
+
+    def __init__(self, tela_lista, ocupacao):
+        super().__init__(tela_lista)
+        self.tela_lista = tela_lista
+        self.ocupacao = ocupacao
+
+        unidade = unidades.procurar(ocupacao["unidade_id"])
+        cliente = clientes.procurar(ocupacao["cliente_id"])
+        nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
+        nome_cliente = (
+            cliente["nome"] if cliente else ocupacao["cliente_id"]
+        )
+
+        self.title(f"Ações — {ocupacao['id']}")
+        self.geometry("340x300")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_lista)
+        _colocar_no_topo(self)
+
+        ctk.CTkLabel(
+            self,
+            text=nome_unidade,
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            wraplength=280,
+        ).pack(padx=20, pady=(20, 2))
+
+        ctk.CTkLabel(
+            self,
+            text=f"{ocupacao['id']} · {nome_cliente}",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+            wraplength=280,
+        ).pack(pady=(0, 14))
+
+        # As ações variam com o estado do contrato.
+        if ocupacao["ativo"]:
+            self._botao(
+                "Encerrar contrato",
+                text_color=tema.COR_TEXTO,
+                hover_color=tema.COR_BORDA,
+                acao=lambda: EncerrarContratoModal(
+                    self.tela_lista, ocupacao
+                ),
+            )
+        else:
+            self._botao(
+                "Reativar contrato",
+                text_color=tema.TEXTO_LIVRE,
+                hover_color=tema.VERDE_LIVRE,
+                acao=lambda: self.tela_lista._reativar(ocupacao),
+            )
+
+        # Imprimir contrato — bloqueado se cliente anonimizado.
+        # Quando bloqueado, em vez de um botão que não fazia nada,
+        # fica uma linha cinzenta a explicar porquê (decisão do
+        # aluno, ponto 12 do docstring do módulo).
+        cliente_anonimizado = bool(
+            cliente and cliente["anonimizado"]
+        )
+
+        if cliente_anonimizado:
+            ctk.CTkLabel(
+                self,
+                text=(
+                    "Impressão indisponível — o cliente deste "
+                    "contrato foi anonimizado (RGPD), e os dados "
+                    "pessoais foram apagados."
+                ),
+                text_color=tema.TEXTO_INDISPONIVEL,
+                font=ctk.CTkFont(size=10),
+                wraplength=280,
+                justify="left",
+                anchor="w",
+            ).pack(fill="x", padx=20, pady=(10, 6))
+        else:
+            ctk.CTkFrame(
+                self, height=1, fg_color=tema.COR_BORDA
+            ).pack(fill="x", padx=20, pady=(8, 5))
+
+            self._botao(
+                "Imprimir contrato",
+                text_color=tema.AZUL_PRINCIPAL,
+                hover_color=tema.ID_CHIP_FUNDO,
+                # Passa-se `self` como terceiro argumento — o
+                # `_ImprimirContratoModal` guarda-o em `popup_pai`
+                # e fecha-o no fim do `_gerar_pdf`, para não ficar
+                # pendurado em cima da tabela depois de gerar.
+                acao=lambda: _ImprimirContratoModal(
+                    self.tela_lista, ocupacao, self
+                ),
+            )
+
+        ctk.CTkButton(
+            self,
+            text="Fechar",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="bottom", fill="x", padx=20, pady=(10, 16))
+
+    def _botao(self, texto, text_color, hover_color, acao):
+        """Botão de ação: fecha este popup antes de agir.
+
+        A ordem importa — as ações abrem outro popup ou fazem
+        `_recarregar` na tabela por trás; deixar este aberto por
+        cima deixava-o pendurado sobre coisas que entretanto
+        mudaram.
+        """
+
+        def executar():
+            self.destroy()
+            acao()
+
+        ctk.CTkButton(
+            self,
+            text=texto,
+            height=34,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            hover_color=hover_color,
+            text_color=text_color,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            command=executar,
+        ).pack(fill="x", padx=20, pady=3)
+
+
+class _ImprimirContratoModal(ctk.CTkToplevel):
+    """Popup intermédio do "Imprimir contrato" — pede o senhorio e o
+    local, antes de gerar o PDF (13/09/2026, ver ponto 12 do
+    docstring do módulo).
+
+    Só dois campos:
+
+    - **Senhorio / Primeiro Contraente** (dropdown de responsáveis)
+      — é a pessoa que assina do lado do senhorio, e a que a
+      minuta chama "Primeiro Contraente". O aluno confirmou que
+      Senhorio e Primeiro Contraente são a mesma pessoa, por isso
+      há um só dropdown — não dois.
+    - **Local** (caixa de texto) — a cidade onde o contrato é
+      assinado. Vai para a linha final, onde a minuta tem
+      "... (local), ... / ... / ...". Não existe em lado nenhum
+      do sistema, por isso é escrito à mão a cada impressão.
+
+    O Segundo Contraente é o cliente do contrato — já está lá,
+    não se escolhe. Este popup não pergunta nada sobre ele.
+
+    Recebe opcionalmente `popup_pai` — o `_AcoesContratoModal` que
+    o abriu. Ao gerar o PDF, fecha esse popup pai a seguir a fechar
+    a si mesmo, para a interface voltar à tabela sem nada pendurado
+    em cima (decisão do aluno, 13/09/2026, ponto 13b do docstring
+    do módulo).
+    """
+
+    def __init__(self, tela_lista, ocupacao, popup_pai=None):
+        super().__init__(tela_lista)
+        self.tela_lista = tela_lista
+        self.ocupacao = ocupacao
+        self.popup_pai = popup_pai
+
+        unidade = unidades.procurar(ocupacao["unidade_id"])
+        cliente = clientes.procurar(ocupacao["cliente_id"])
+        nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
+        nome_cliente = (
+            cliente["nome"] if cliente else ocupacao["cliente_id"]
+        )
+
+        self.title(f"Imprimir contrato — {ocupacao['id']}")
+        self.geometry("460x400")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_lista)
+        _colocar_no_topo(self)
+
+        ctk.CTkLabel(
+            self,
+            text="Identificar as partes do contrato",
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=15, weight="bold"),
+        ).pack(anchor="w", padx=24, pady=(22, 2))
+
+        ctk.CTkLabel(
+            self,
+            text=f"{ocupacao['id']} · {nome_unidade} · {nome_cliente}",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+            wraplength=410,
+            justify="left",
+        ).pack(anchor="w", padx=24, pady=(0, 18))
+
+        # ---- Senhorio ------------------------------------------------
+        ctk.CTkLabel(
+            self,
+            text="Senhorio / Primeiro Contraente",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        self.responsaveis_disponiveis = responsaveis.listar()
+        nomes = ["— Escolher responsável —"] + [
+            f"{r['id']} · {r['nome']}"
+            for r in self.responsaveis_disponiveis
+        ]
+        self.combo_senhorio = ctk.CTkOptionMenu(
+            self, values=nomes, corner_radius=tema.RAIO_CAMPO
+        )
+        self.combo_senhorio.set(nomes[0])
+        self.combo_senhorio.pack(fill="x", padx=24, pady=(2, 2))
+
+        ctk.CTkLabel(
+            self,
+            text=(
+                "Assina do lado do senhorio. Aparece no PDF como "
+                "\"Primeiro Contraente\"."
+            ),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+            wraplength=410,
+            justify="left",
+        ).pack(anchor="w", padx=24, pady=(0, 12))
+
+        # ---- Local ---------------------------------------------------
+        ctk.CTkLabel(
+            self,
+            text="Local",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        self.campo_local = ctk.CTkEntry(
+            self,
+            corner_radius=tema.RAIO_CAMPO,
+            placeholder_text="ex.: Porto",
+        )
+        self.campo_local.pack(fill="x", padx=24, pady=(2, 2))
+
+        ctk.CTkLabel(
+            self,
+            text=(
+                "Cidade onde o contrato é assinado. Aparece na "
+                "linha final do PDF."
+            ),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+            wraplength=410,
+            justify="left",
+        ).pack(anchor="w", padx=24, pady=(0, 12))
+
+        # ---- rodapé --------------------------------------------------
+        rodape = ctk.CTkFrame(self, fg_color="transparent")
+        rodape.pack(fill="x", padx=24, pady=(16, 20), side="bottom")
+
+        ctk.CTkButton(
+            rodape,
+            text="Cancelar",
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            rodape,
+            text="Gerar PDF",
+            fg_color=tema.AZUL_PRINCIPAL,
+            hover_color=tema.AZUL_CLARO,
+            command=self._gerar_pdf,
+        ).pack(side="right")
+
+    # -- ação --------------------------------------------------------
+
+    def _responsavel_escolhido_id(self):
+        indice = self.combo_senhorio.cget("values").index(
+            self.combo_senhorio.get()
+        )
+        if indice == 0:
+            return ""
+        return self.responsaveis_disponiveis[indice - 1]["id"]
+
+    def _gerar_pdf(self):
+        """Valida os dois campos, vai buscar todos os dados do
+        contrato e chama `impressao.gerar_contrato_pdf`. O
+        `impressao.py` é que desenha o PDF — este método só faz as
+        leituras e trata do resultado.
+
+        Depois de gerar com sucesso, abre o PDF no visualizador
+        predefinido do sistema, e fecha este popup mais o popup
+        "Gerir contrato" que o abriu — para a interface voltar à
+        tabela, sem ficar nada pendurado em cima (ponto 13 do
+        docstring do módulo).
+        """
+        senhorio_id = self._responsavel_escolhido_id()
+
+        if not senhorio_id:
+            componentes.mostrar_erro(
+                "Escolhe o senhorio que assina pelo lado do Primeiro "
+                "Contraente."
+            )
+            return
+
+        local = self.campo_local.get().strip()
+
+        if not local:
+            componentes.mostrar_erro(
+                "Escreve o local (cidade) onde o contrato é assinado."
+            )
+            return
+
+        # Leituras que o impressao.py não faz — é este ecrã que
+        # vai buscar os dados todos, e passa-os prontos (o
+        # impressao.py é módulo puro, ver docstring dele).
+        senhorio = responsaveis.procurar(senhorio_id)
+
+        if senhorio is None:
+            componentes.mostrar_erro(
+                f"O responsável {senhorio_id} já não existe."
+            )
+            return
+
+        mensal = contratos.detalhes_mensal(self.ocupacao["id"])
+
+        if mensal is None:
+            componentes.mostrar_erro(
+                "Faltam os dados mensais deste contrato (inconsistência "
+                "nos dados)."
+            )
+            return
+
+        unidade = unidades.procurar(self.ocupacao["unidade_id"])
+
+        if unidade is None:
+            componentes.mostrar_erro(
+                "A unidade deste contrato já não existe."
+            )
+            return
+
+        propriedade = propriedades.procurar(unidade["propriedade_id"])
+
+        if propriedade is None:
+            componentes.mostrar_erro(
+                "A propriedade desta unidade já não existe."
+            )
+            return
+
+        cliente = clientes.procurar(self.ocupacao["cliente_id"])
+
+        if cliente is None:
+            componentes.mostrar_erro(
+                "O cliente deste contrato já não existe."
+            )
+            return
+
+        # Se o cliente for anonimizado, o botão nem chegou a
+        # aparecer no popup anterior (`_AcoesContratoModal`). Esta
+        # verificação é uma segunda linha de defesa, caso alguém
+        # chegue aqui por outro caminho no futuro.
+        if cliente["anonimizado"]:
+            componentes.mostrar_erro(
+                "Não é possível imprimir um contrato cujo cliente "
+                "foi anonimizado (RGPD)."
+            )
+            return
+
+        try:
+            caminho = impressao.gerar_contrato_pdf(
+                ocupacao=self.ocupacao,
+                mensal=mensal,
+                cliente=cliente,
+                unidade=unidade,
+                propriedade=propriedade,
+                senhorio=senhorio,
+                local=local,
+            )
+        except Exception as erro:
+            # O gerador é um módulo puro e não devia rebentar, mas
+            # se o fpdf2 se queixar de algo, mostramos a mensagem
+            # em vez de deixar a exceção subir e derrubar a GUI.
+            componentes.mostrar_erro(
+                f"Erro ao gerar o PDF: {erro}"
+            )
+            return
+
+        # ---- fechar os popups antes de abrir o PDF ------------------
+        # Fecha este popup (o "Imprimir contrato") e, se houver,
+        # o que o abriu (o "Gerir contrato"). A ordem importa: as
+        # destruições correm antes de abrir o PDF, para o
+        # utilizador voltar à tabela antes de o visualizador tomar
+        # o foco.
+        popup_pai = self.popup_pai
+        self.destroy()
+
+        if popup_pai is not None:
+            try:
+                if popup_pai.winfo_exists():
+                    popup_pai.destroy()
+            except Exception:
+                # Se o popup pai já foi destruído entretanto (por
+                # exemplo, o `_botao` do `_AcoesContratoModal` já
+                # fez `self.destroy()` antes de chamar esta ação),
+                # não há nada a fazer.
+                pass
+
+        # ---- abrir o PDF no visualizador do sistema -----------------
+        self._abrir_no_sistema(caminho)
+
+        # ---- mostrar confirmação ------------------------------------
+        # Só DEPOIS de abrir o PDF é que aparece o popup de
+        # sucesso — assim o utilizador vê primeiro o contrato e
+        # depois o "ficou guardado em..." (o pedido era "abrir já
+        # o PDF, não só avisar onde ficou").
+        componentes.mostrar_sucesso(
+            f"Contrato gerado e aberto:\n{caminho}"
+        )
+
+    @staticmethod
+    def _abrir_no_sistema(caminho):
+        """Abre um ficheiro no programa predefinido do sistema
+        operativo (no caso do PDF, o leitor de PDF).
+
+        Usa a função nativa de cada SO: `os.startfile` no Windows,
+        `open` no macOS, `xdg-open` no Linux. Se falhar — por
+        exemplo, uma máquina sem leitor de PDF associado, ou sem
+        `xdg-open` instalado — não deixa a exceção subir; o
+        utilizador continua a ver o caminho na mensagem de
+        sucesso, e abre-o à mão.
+
+        Não usa `subprocess.run(check=True)`: se o comando não
+        existir, o `FileNotFoundError` é tratado; se existir mas o
+        SO não tiver nenhuma app associada, o erro fica do lado do
+        SO e não do programa — o utilizador continua a poder abrir
+        o PDF à mão.
+        """
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(str(caminho))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(caminho)])
+            else:
+                subprocess.Popen(["xdg-open", str(caminho)])
+        except (FileNotFoundError, OSError):
+            # Não há nada a fazer — o ficheiro está gravado, o
+            # utilizador tem o caminho na mensagem de sucesso.
+            pass
+
+
+class ListaReservasAirbnb(ctk.CTkFrame):
+    """Lista das reservas Airbnb — ecrã "Reservas Airbnb" da barra
+    lateral.
+
+    Ao contrário de `ListaContratosMensais`, este ecrã mantém os
+    cartões empilhados que já tinha antes (decisão do aluno,
+    13/09/2026, Pergunta 1a da conversa: só o Contrato Mensal passa
+    a tabela; o Airbnb fica com o formato original).
+
+    Antes, os dois ecrãs partilhavam a base `_ListaOcupacoesBase`
+    (que tinha filtros comuns e um `_desenhar_ocupacao` genérico).
+    Ao separar, esta classe passa a ser autónoma — tem o seu próprio
+    `__init__`, os seus próprios filtros, e o seu próprio
+    `_desenhar_ocupacao` (o mesmo de antes, sem alterações).
+
+    Botões do cartão ativo: "Cancelar" (abre CancelarReservaModal).
+    O ecrã não tem "Imprimir" — a impressão é só do contrato mensal
+    (decisão do aluno, 13/09/2026).
+    """
+
+    def __init__(self, master, controlador):
+        super().__init__(master, fg_color=tema.COR_FUNDO)
+        self.controlador = controlador
+
+        componentes.Cabecalho(self, titulo="Reservas Airbnb").pack(fill="x")
+
+        barra_criar = ctk.CTkFrame(self, fg_color="transparent")
+        barra_criar.pack(fill="x", padx=20, pady=(4, 8))
+        ctk.CTkButton(
+            barra_criar,
+            text="+ Nova Reserva Airbnb",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.VERDE,
+            hover_color=tema.VERDE,
+            command=lambda: NovaReservaAirbnbModal(self),
+        ).pack(side="left")
+
+        barra = ctk.CTkFrame(self, fg_color="transparent")
+        barra.pack(fill="x", padx=20, pady=(0, 4))
+
         self.combo_aviso = ctk.CTkOptionMenu(
             barra,
             values=["Todos", "Com aviso", "Sem aviso"],
@@ -1465,28 +2225,22 @@ class _ListaOcupacoesBase(ctk.CTkFrame):
         self.combo_aviso.set("Todos")
         self.combo_aviso.pack(side="right")
 
+        self.mostrar_inativas = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            barra,
+            text="Mostrar inativas/encerradas",
+            variable=self.mostrar_inativas,
+            command=self._recarregar,
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(side="right", padx=(12, 0))
+
         self.area_lista = ctk.CTkScrollableFrame(
             self, fg_color="transparent"
         )
         self.area_lista.pack(fill="both", expand=True, padx=16, pady=(8, 16))
 
         self._recarregar()
-
-    # -- gancho para o botão de criação (só ListaContratosMensais) --
-
-    def _botao_criar(self, barra):
-        return
-
-    # -- gancho para os botões de cada cartão ativo ------------------
-
-    def _acoes_ativa(self, bloco_direita, ocupacao):
-        """Botões de ação de uma ocupação ATIVA (o "Reativar" das
-        inativas continua a ser desenhado na base, porque é igual nos
-        dois regimes). Por omissão não desenha nada —
-        ListaContratosMensais o usa para o botão "Encerrar" e
-        ListaReservasAirbnb para o botão "Cancelar".
-        """
-        return
 
     # -- carregamento / atualização ----------------------------------
 
@@ -1497,23 +2251,22 @@ class _ListaOcupacoesBase(ctk.CTkFrame):
 
     def _recarregar(self):
         """Limpa e volta a desenhar a lista inteira — chamada na
-        abertura do ecrã, ao mexer nos filtros, depois de reativar
-        uma ocupação, e ao fechar o popup de Novo Contrato (mesmo
-        princípio de ListaClientes._recarregar).
+        abertura do ecrã, ao mexer nos filtros, depois de cancelar
+        uma reserva, e ao fechar o popup de Nova Reserva.
         """
         for widget in self.area_lista.winfo_children():
             widget.destroy()
 
         lista = contratos.listar(
             incluir_inativas=self.mostrar_inativas.get(),
-            tipo=self.tipo,
+            tipo="airbnb",
             aviso_documento=self._aviso_selecionado(),
         )
 
         if not lista:
             ctk.CTkLabel(
                 self.area_lista,
-                text=f"Nenhum(a) {self.titulo.lower()} encontrado(a).",
+                text="Nenhuma reserva Airbnb encontrada.",
                 text_color=tema.COR_TEXTO_SECUNDARIO,
                 font=ctk.CTkFont(size=13),
             ).pack(pady=40)
@@ -1525,6 +2278,11 @@ class _ListaOcupacoesBase(ctk.CTkFrame):
     # -- desenho -------------------------------------------------------
 
     def _desenhar_ocupacao(self, ocupacao):
+        """Desenha o cartão de uma reserva Airbnb. Mesmo formato que
+        o ecrã tinha antes da reestruturação de 13/09/2026 — copiado
+        da antiga `_ListaOcupacoesBase._desenhar_ocupacao`, sem
+        alterações.
+        """
         inativa = not ocupacao["ativo"]
 
         unidade = unidades.procurar(ocupacao["unidade_id"])
@@ -1572,12 +2330,9 @@ class _ListaOcupacoesBase(ctk.CTkFrame):
         bloco_direita.pack(side="right")
 
         if inativa:
-            rotulo_estado = (
-                "Encerrado" if ocupacao["tipo"] == "mensal" else "Cancelada"
-            )
             self._etiqueta(
                 bloco_direita,
-                rotulo_estado,
+                "Cancelada",
                 tema.CINZA_INDISPONIVEL,
                 tema.TEXTO_INDISPONIVEL,
             )
@@ -1606,7 +2361,19 @@ class _ListaOcupacoesBase(ctk.CTkFrame):
                 command=lambda: self._reativar(ocupacao),
             ).pack(side="left", padx=(10, 0))
         else:
-            self._acoes_ativa(bloco_direita, ocupacao)
+            ctk.CTkButton(
+                bloco_direita,
+                text="Cancelar",
+                width=80,
+                height=26,
+                corner_radius=tema.RAIO_BOTAO,
+                fg_color="transparent",
+                border_width=1,
+                border_color=tema.COR_BORDA,
+                text_color=tema.COR_TEXTO,
+                hover_color=tema.COR_BORDA,
+                command=lambda: CancelarReservaModal(self, ocupacao),
+            ).pack(side="left", padx=(10, 0))
 
     def _etiqueta(self, master, texto, fundo, cor_texto):
         ctk.CTkLabel(
@@ -1620,10 +2387,10 @@ class _ListaOcupacoesBase(ctk.CTkFrame):
             height=22,
         ).pack(side="left", padx=(6, 0))
 
-    # -- ações -----------------------------------------------------------
+    # -- ações -------------------------------------------------------
 
     def _reativar(self, ocupacao):
-        pergunta = f"Reativar a ocupação {ocupacao['id']}?"
+        pergunta = f"Reativar a reserva {ocupacao['id']}?"
         if not componentes.confirmar(pergunta):
             return
 
@@ -1633,81 +2400,5 @@ class _ListaOcupacoesBase(ctk.CTkFrame):
             componentes.mostrar_erro(str(erro))
             return
 
-        componentes.mostrar_sucesso(f"Ocupação {ocupacao['id']} reativada.")
+        componentes.mostrar_sucesso(f"Reserva {ocupacao['id']} reativada.")
         self._recarregar()
-
-
-class ListaContratosMensais(_ListaOcupacoesBase):
-    """Lista só os contratos mensais — item "Contrato Mensal" na
-    barra lateral. Traz o botão fixo "+ Novo Contrato" (verde,
-    decisão do aluno, 07/09/2026), que abre NovoContratoModal por
-    cima da própria lista, e o botão "Encerrar" em cada cartão
-    ativo, que abre EncerrarContratoModal.
-    """
-
-    tipo = "mensal"
-    titulo = "Contrato Mensal"
-
-    def _botao_criar(self, barra):
-        ctk.CTkButton(
-            barra,
-            text="+ Novo Contrato",
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color=tema.VERDE,
-            hover_color=tema.VERDE,
-            command=lambda: NovoContratoModal(self),
-        ).pack(side="left")
-
-    def _acoes_ativa(self, bloco_direita, ocupacao):
-        ctk.CTkButton(
-            bloco_direita,
-            text="Encerrar",
-            width=80,
-            height=26,
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color="transparent",
-            border_width=1,
-            border_color=tema.COR_BORDA,
-            text_color=tema.COR_TEXTO,
-            hover_color=tema.COR_BORDA,
-            command=lambda: EncerrarContratoModal(self, ocupacao),
-        ).pack(side="left", padx=(10, 0))
-
-
-class ListaReservasAirbnb(_ListaOcupacoesBase):
-    """Lista só as reservas Airbnb — item "Reservas Airbnb" na barra
-    lateral. Traz o botão fixo "+ Nova Reserva Airbnb" (verde, mesmo
-    padrão do "+ Novo Contrato" em ListaContratosMensais, decisão do
-    aluno em 07/09/2026), que abre NovaReservaAirbnbModal por cima
-    da própria lista, e o botão "Cancelar" em cada cartão ativo, que
-    abre CancelarReservaModal (07/09/2026, ver ponto 10 da docstring
-    do módulo).
-    """
-
-    tipo = "airbnb"
-    titulo = "Reservas Airbnb"
-
-    def _botao_criar(self, barra):
-        ctk.CTkButton(
-            barra,
-            text="+ Nova Reserva Airbnb",
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color=tema.VERDE,
-            hover_color=tema.VERDE,
-            command=lambda: NovaReservaAirbnbModal(self),
-        ).pack(side="left")
-
-    def _acoes_ativa(self, bloco_direita, ocupacao):
-        ctk.CTkButton(
-            bloco_direita,
-            text="Cancelar",
-            width=80,
-            height=26,
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color="transparent",
-            border_width=1,
-            border_color=tema.COR_BORDA,
-            text_color=tema.COR_TEXTO,
-            hover_color=tema.COR_BORDA,
-            command=lambda: CancelarReservaModal(self, ocupacao),
-        ).pack(side="left", padx=(10, 0))

@@ -4,6 +4,10 @@
 # Fase 2
 mysql-connector-python==26.7.0
 customtkinter==6.0.0
+python-dotenv==1.0.1
+
+# GUI — geração de PDF (13/09/2026, impressão do contrato mensal)
+fpdf2==2.8.1
 
 # Fase 3 (planeado, ainda não usado)
 # django

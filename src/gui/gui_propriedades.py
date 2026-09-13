@@ -353,6 +353,37 @@ do aluno), antes deste ficheiro:
       seta nenhuma). "<" é ASCII puro, sem depender da fonte ter
       esse glifo.
 
+15. IBAN DA PROPRIEDADE (13/09/2026) — alteração pedida para a
+    impressão do contrato mensal: a Cláusula 3ª da minuta mostra o
+    IBAN para onde o inquilino paga a renda. Decisão do aluno (em
+    conversa): o IBAN é do SENHORIO, não do cliente — por isso vive
+    na propriedade (é a propriedade que tem conta bancária própria,
+    não o inquilino que lá mora).
+
+    - `propriedades.py` ganhou `criar(nome, morada="", iban="")` e
+      `atualizar(..., iban=None)`. É opcional (o aluno decidiu, para
+      não rebentar com as propriedades que já existem na base sem
+      IBAN) — o PDF do contrato mostra "—" quando não existir.
+    - `validacoes.validar_iban` (nova) faz o algoritmo do módulo 97
+      (ISO 13616) — apanha erros de digitação, não confirma que a
+      conta existe (mesmo tipo de validação do `nif_valido`).
+    - Guardado cru, sem espaços ("PT50000201231234567890154") — o
+      formato canónico, mesma convenção das datas em ISO no
+      repositório (decisão 4). A formatação com espaços de 4 em 4
+      ("PT50 0002 0123 1234 5678 9015 4") é feita na apresentação
+      (`_formatar_iban`, abaixo), tanto no `EditarPropriedadeModal`
+      quanto — mais tarde — no PDF do contrato mensal.
+    - `NovaPropriedadeModal` e `EditarPropriedadeModal` ganharam o
+      campo "IBAN (opcional)", com a mesma ajuda por baixo que os
+      outros campos opcionais já têm. O Editar mostra formatado (com
+      espaços) para facilitar a leitura a olho, mas limpa os espaços
+      antes de gravar — a base recebe sempre o cru.
+    - `ALTER TABLE propriedades ADD COLUMN iban VARCHAR(34)` fica
+      documentado para correr na base (ver claude/esquema_mysql.sql),
+      mas o aluno combinou só o correr quando todos os ficheiros
+      desta ronda estiverem entregues — para a aplicação não
+      rebentar a meio.
+
 Segue a mesma disciplina de camadas do resto da GUI (decisão 7): só
 fala com `propriedades` e `unidades` — nunca com `repositorio`
 diretamente.
@@ -368,6 +399,7 @@ import contratos
 import propriedades
 import responsaveis
 import unidades
+import validacoes
 from . import componentes
 from . import tema
 from .gui_unidades import PlantaLugares
@@ -555,6 +587,26 @@ def _ler_decimal(texto, nome_campo):
         return Decimal(texto.strip().replace(",", "."))
     except InvalidOperation:
         raise ValueError(f"{nome_campo} tem um valor inválido.")
+
+
+def _formatar_iban(iban):
+    """Formata um IBAN cru (sem espaços) com espaços de 4 em 4,
+    só para apresentação — o valor gravado é sempre o cru (decisão
+    do aluno, 13/09/2026).
+
+    Exemplo: "PT50000201231234567890154" →
+             "PT50 0002 0123 1234 5678 9015 4"
+
+    Um IBAN vazio devolve "—" (mesmo texto neutro de `formatar_data`
+    e `formatar_valor` para valores ausentes — mesma convenção em
+    toda a aplicação).
+    """
+    if not iban:
+        return "—"
+
+    return " ".join(
+        iban[i : i + 4] for i in range(0, len(iban), 4)
+    )
 
 
 def _colocar_no_topo(janela):
@@ -1684,8 +1736,11 @@ class PlantaLugaresModal(ctk.CTkToplevel):
 
 
 class NovaPropriedadeModal(ctk.CTkToplevel):
-    """Modal de criação de uma propriedade — só nome e morada
-    (`propriedades.criar` não pede mais nada).
+    """Modal de criação de uma propriedade — nome, morada e IBAN
+    (opcional). O IBAN foi acrescentado em 13/09/2026 para a
+    impressão do contrato mensal: a Cláusula 3ª mostra o IBAN para
+    onde o inquilino paga a renda, e é a propriedade que o guarda
+    (não o cliente — decisão do aluno, ver conversa).
     """
 
     def __init__(self, tela_lista):
@@ -1693,7 +1748,7 @@ class NovaPropriedadeModal(ctk.CTkToplevel):
         self.tela_lista = tela_lista
 
         self.title("Nova Propriedade")
-        self.geometry("380x260")
+        self.geometry("380x360")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
         self.transient(tela_lista)
@@ -1724,6 +1779,31 @@ class NovaPropriedadeModal(ctk.CTkToplevel):
         self.campo_morada = ctk.CTkEntry(self, corner_radius=tema.RAIO_CAMPO)
         self.campo_morada.pack(fill="x", padx=20, pady=(2, 10))
 
+        ctk.CTkLabel(
+            self,
+            text="IBAN (opcional)",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=20)
+        self.campo_iban = ctk.CTkEntry(
+            self,
+            corner_radius=tema.RAIO_CAMPO,
+            placeholder_text="ex.: PT50000201231234567890154",
+        )
+        self.campo_iban.pack(fill="x", padx=20, pady=(2, 2))
+
+        ctk.CTkLabel(
+            self,
+            text=(
+                "Sem espaços. Aparece formatado no contrato mensal, "
+                "para o inquilino saber para onde pagar."
+            ),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+            wraplength=340,
+            justify="left",
+        ).pack(anchor="w", padx=20, pady=(0, 10))
+
         rodape = ctk.CTkFrame(self, fg_color="transparent")
         rodape.pack(fill="x", padx=20, pady=20, side="bottom")
         ctk.CTkButton(
@@ -1745,9 +1825,18 @@ class NovaPropriedadeModal(ctk.CTkToplevel):
         ).pack(side="right")
 
     def _criar(self):
+        iban = self.campo_iban.get().strip()
+
+        if iban and not validacoes.validar_iban(iban):
+            componentes.mostrar_erro(
+                "IBAN inválido — confirma o número. Se tiveres "
+                "espaços, tira-os antes de gravar."
+            )
+            return
+
         try:
             propriedade = propriedades.criar(
-                self.campo_nome.get(), self.campo_morada.get()
+                self.campo_nome.get(), self.campo_morada.get(), iban=iban
             )
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
@@ -1762,7 +1851,14 @@ class NovaPropriedadeModal(ctk.CTkToplevel):
 
 class EditarPropriedadeModal(ctk.CTkToplevel):
     """Modal de edição de uma propriedade existente — mesmos campos
-    de NovaPropriedadeModal, pré-preenchidos.
+    de `NovaPropriedadeModal`, pré-preenchidos.
+
+    O IBAN aparece formatado com espaços de 4 em 4 (mais fácil de
+    conferir a olho nu do que a string crua de 25 caracteres), mas
+    ao gravar é sempre mandado cru, sem espaços — o formato
+    canónico que a base de dados guarda (decisão do aluno,
+    13/09/2026). O utilizador pode escrever com ou sem espaços; a
+    limpeza acontece aqui, antes de chamar `propriedades.atualizar`.
     """
 
     def __init__(self, tela_lista, prop):
@@ -1771,7 +1867,7 @@ class EditarPropriedadeModal(ctk.CTkToplevel):
         self.prop = prop
 
         self.title(f"Editar Propriedade — {prop['nome']}")
-        self.geometry("380x260")
+        self.geometry("380x360")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
         self.transient(tela_lista)
@@ -1804,6 +1900,34 @@ class EditarPropriedadeModal(ctk.CTkToplevel):
         self.campo_morada.insert(0, prop["morada"])
         self.campo_morada.pack(fill="x", padx=20, pady=(2, 10))
 
+        ctk.CTkLabel(
+            self,
+            text="IBAN (opcional)",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=20)
+        self.campo_iban = ctk.CTkEntry(
+            self,
+            corner_radius=tema.RAIO_CAMPO,
+            placeholder_text="ex.: PT50000201231234567890154",
+        )
+        # Mostra formatado com espaços, para leitura — mas o que se
+        # grava é o cru, limpo no `_guardar`.
+        self.campo_iban.insert(0, _formatar_iban(prop["iban"]))
+        self.campo_iban.pack(fill="x", padx=20, pady=(2, 2))
+
+        ctk.CTkLabel(
+            self,
+            text=(
+                "Podes escrever com ou sem espaços. Guardado sempre "
+                "sem espaços (formato canónico)."
+            ),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+            wraplength=340,
+            justify="left",
+        ).pack(anchor="w", padx=20, pady=(0, 10))
+
         rodape = ctk.CTkFrame(self, fg_color="transparent")
         rodape.pack(fill="x", padx=20, pady=20, side="bottom")
         ctk.CTkButton(
@@ -1825,11 +1949,23 @@ class EditarPropriedadeModal(ctk.CTkToplevel):
         ).pack(side="right")
 
     def _guardar(self):
+        # Limpa espaços antes de validar/gravar. O utilizador pode
+        # ter escrito o IBAN com espaços de 4 em 4 (o que se vê na
+        # caixa ao abrir), e a base de dados guarda sempre o cru.
+        iban = self.campo_iban.get().strip().replace(" ", "")
+
+        if iban and not validacoes.validar_iban(iban):
+            componentes.mostrar_erro(
+                "IBAN inválido — confirma o número."
+            )
+            return
+
         try:
             propriedades.atualizar(
                 self.prop["id"],
                 nome=self.campo_nome.get(),
                 morada=self.campo_morada.get(),
+                iban=iban,
             )
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))

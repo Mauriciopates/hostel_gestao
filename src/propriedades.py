@@ -9,6 +9,20 @@ estrutura `dados` em memória — fala diretamente com o `repositorio`,
 que faz o INSERT/SELECT/UPDATE na base de dados. Continua a não
 aceder a ficheiros nem à base de dados diretamente (só através do
 repositorio), e continua a sinalizar erro com `raise ValueError`.
+
+ALTERAÇÕES 13/09/2026 (IBAN da propriedade, para a impressão do
+contrato mensal):
+
+- `criar` passa a aceitar `iban=""` — opcional, como o `morada`
+  (a propriedade pode não ter IBAN conhecido no momento do
+  cadastro). O valor é guardado cru, sem espaços (formato
+  canónico), e a interface é que formata na apresentação.
+- `atualizar` passa a aceitar `iban=None`. Um None significa não
+  alterar; uma string vazia significa apagar o conteúdo (mesma
+  convenção do `morada`).
+- A validação do formato do IBAN (módulo 97) NÃO vive aqui — vive
+  em `validacoes.py`, tal como o NIF e as datas. Este módulo só
+  guarda o que lhe chega.
 """
 
 from datetime import date
@@ -20,12 +34,19 @@ import responsaveis
 PREFIXO = "PRO"
 
 
-def criar(nome, morada=""):
+def criar(nome, morada="", iban=""):
     """Cria uma propriedade e grava-a imediatamente na base de dados.
 
     Devolve o registo criado. Ao contrário da versão antiga (em
     memória), aqui já não há gravação separada: cada função grava a
     sua própria operação assim que a validação passa.
+
+    'iban' é opcional (por omissão, ""), mesma convenção do 'morada'
+    — uma propriedade pode não ter IBAN conhecido no momento do
+    cadastro. O valor é guardado cru, sem espaços, porque é o
+    formato canónico que o módulo de negócio aceita; a formatação
+    com espaços de 4 em 4 fica para quem apresenta (a GUI, o PDF do
+    contrato).
     """
     nome = nome.strip()
 
@@ -36,6 +57,7 @@ def criar(nome, morada=""):
         "id": repositorio.proximo_id(PREFIXO),
         "nome": nome,
         "morada": morada.strip(),
+        "iban": iban.strip(),
         "ativo": True,
     }
 
@@ -59,11 +81,18 @@ def listar(incluir_inativas=False):
     return repositorio.listar_propriedades(incluir_inativas=incluir_inativas)
 
 
-def atualizar(propriedade_id, nome=None, morada=None):
-    """Altera o nome ou a morada de uma propriedade existente.
+def atualizar(propriedade_id, nome=None, morada=None, iban=None):
+    """Altera o nome, a morada ou o IBAN de uma propriedade existente.
 
     Um parâmetro a None significa não alterar; uma cadeia vazia
-    significa apagar o conteúdo. A morada pode ficar vazia, o nome não.
+    significa apagar o conteúdo. A morada e o IBAN podem ficar
+    vazios, o nome não.
+
+    O IBAN é guardado cru, sem espaços — mesma convenção do 'criar'.
+    Um utilizador que escreva "PT50 0002 0123 1234 5678 9015 4" com
+    espaços deve ter isso limpo antes de chegar aqui (é trabalho da
+    GUI, que já trata da formatação na apresentação — o módulo de
+    negócio só aceita o formato canónico).
     """
     propriedade = procurar(propriedade_id)
 
@@ -80,6 +109,9 @@ def atualizar(propriedade_id, nome=None, morada=None):
 
     if morada is not None:
         campos["morada"] = morada.strip()
+
+    if iban is not None:
+        campos["iban"] = iban.strip()
 
     if campos:
         repositorio.atualizar_propriedade(propriedade_id, campos)

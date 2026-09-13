@@ -42,6 +42,19 @@ ALTERAÇÕES 10/09/2026 (ecrãs Produtos e Movimentos da GUI):
 - `listar_movimentos` ganhou filtro por `tipo` e passou a ordenar
   em SQL (data decrescente) — o ecrã de Movimentos da GUI precisa
   das duas coisas.
+
+ALTERAÇÕES 13/09/2026 (IBAN da propriedade, para a impressão do
+contrato mensal):
+
+- `propriedades` ganha uma coluna `iban` (VARCHAR) — o IBAN do
+  senhorio, para onde o inquilino paga a renda. É o campo que a
+  Cláusula 3ª do contrato mensal imprime.
+- `inserir_propriedade` grava-o; `_normalizar_propriedade` (nova)
+  repõe "" quando vier NULL, mesma convenção de string vazia usada
+  em todo o sistema; `procurar_propriedade` e `listar_propriedades`
+  passam a chamar a normalização.
+- `atualizar_propriedade` não muda: já aceita qualquer campo, e o
+  `iban` é apenas mais um.
 """
 
 import json
@@ -266,25 +279,42 @@ def obter_conexao():
 def inserir_propriedade(propriedade):
     """Insere uma propriedade nova na base de dados.
 
-    Espera um dicionário com id, nome, morada, ativo — o mesmo formato
-    que `propriedades.criar` já construía para a estrutura em memória.
+    Espera um dicionário com id, nome, morada, iban, ativo. O `iban`
+    é opcional (ver docstring do módulo) — quando não vier no
+    dicionário, grava-se NULL.
     """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor()
         cursor.execute(
-            "INSERT INTO propriedades (id, nome, morada, ativo) "
-            "VALUES (%s, %s, %s, %s)",
+            "INSERT INTO propriedades (id, nome, morada, iban, ativo) "
+            "VALUES (%s, %s, %s, %s, %s)",
             (
                 propriedade["id"],
                 propriedade["nome"],
                 propriedade["morada"],
+                propriedade.get("iban") or None,
                 propriedade["ativo"],
             ),
         )
         conexao.commit()
     finally:
         conexao.close()
+
+
+def _normalizar_propriedade(linha):
+    """Converte o BOOLEAN (0/1 no MySQL) para bool e repõe "" em
+    `iban` quando vier NULL — mesma convenção de string vazia usada
+    em todo o sistema para "sem valor" (aplicada às tabelas de
+    unidades, quartos, lugares, responsáveis, clientes, ocupações e
+    produtos desde a v1.1.0).
+    """
+    linha["ativo"] = bool(linha["ativo"])
+
+    if linha.get("iban") is None:
+        linha["iban"] = ""
+
+    return linha
 
 
 def procurar_propriedade(propriedade_id):
@@ -300,7 +330,7 @@ def procurar_propriedade(propriedade_id):
         conexao.close()
 
     if linha is not None:
-        linha["ativo"] = bool(linha["ativo"])
+        linha = _normalizar_propriedade(linha)
 
     return linha
 
@@ -318,18 +348,25 @@ def listar_propriedades(incluir_inativas=False):
     finally:
         conexao.close()
 
-    for linha in linhas:
-        linha["ativo"] = bool(linha["ativo"])
-
-    return linhas
+    return [_normalizar_propriedade(linha) for linha in linhas]
 
 
 def atualizar_propriedade(propriedade_id, campos):
     """Atualiza os campos indicados (dicionário nome -> valor novo) da
     propriedade. Não faz nada se `campos` vier vazio.
+
+    Converte "" para NULL em `iban` quando presente nos campos —
+    mesma convenção já aplicada a `responsavel_desconto_renda_id`,
+    `desativado_por_id`, etc.: string vazia nunca vai para a base,
+    vai NULL.
     """
     if not campos:
         return
+
+    campos = dict(campos)
+
+    if "iban" in campos:
+        campos["iban"] = campos["iban"] or None
 
     colunas = ", ".join(f"{nome_campo} = %s" for nome_campo in campos)
     valores = list(campos.values()) + [propriedade_id]
