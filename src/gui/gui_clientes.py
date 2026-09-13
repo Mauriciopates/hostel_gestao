@@ -1,23 +1,46 @@
-"""Ecrã "Clientes": lista os clientes (mensais e Airbnb) com o
-estado de cada um (ativo/inativo, incompleto, anonimizado) e ações
-de criar/editar/desativar/reativar/anonimizar.
+"""Ecrã "Clientes": lista os clientes (mensais e Airbnb) em tabela
+padrão — a mesma estrutura da Gestão de Propriedades — com o estado
+de cada um (ativo/inativo, incompleto, anonimizado) e um botão
+"Gerir" por linha que abre o popup com as ações.
 
-Escolhido pelo aluno como o quinto ecrã da GUI, 06/09/2026, entre 4
-opções apresentadas — o maior buraco a fechar: para testar o Novo
-Contrato Mensal era preciso criar clientes primeiro pelo CLI.
+REESTRUTURAÇÃO 13/09/2026 — decisão do aluno, mockup HTML aprovado
+antes de codar. A lista deixou de desenhar cartões empilhados e
+passou a ser uma tabela igual à de Gestão de Propriedades (o "padrão
+base" do sistema). Colunas: ID, NOME DO CLIENTE (nome + subtítulo com
+documento/NIF por baixo), ESTADO, AÇÕES. Cada linha tem um único
+botão "Gerir" (mesmo padrão do `_AcoesPropriedadeModal`), que abre
+`_AcoesClienteModal` — o popup com as ações.
 
-Validado por mockup (Xvfb + CustomTkinter real, dados falsos, sem
-tocar no MySQL do aluno) — cinco capturas (lista, novo cliente
-vazio, modal de anonimização, lista com inativos, edição de um
-cliente existente) — e por um teste de submissão real, com
-`clientes.py`/`responsaveis.py` reais e só o `repositorio.py`
-monkey-patchado: 10 cenários (recusa de mensal sem NIF, recusa de
-NIF duplicado, data em formato inválido, criação incompleta com
-aviso, criação completa sem aviso, edição completando os campos em
-falta, anonimização sem/com responsável, desativar com confirmação,
-reativar recusado por NIF já usado) — TODOS OS TESTES PASSARAM.
+O subtítulo dentro da coluna NOME DO CLIENTE (linha de baixo, dentro
+da mesma célula) substitui o antigo subtítulo do cartão: mostra
+"{tipo_documento} {numero_documento} · NIF {nif}" quando há NIF, só
+"{tipo_documento} {numero_documento}" quando não há, e
+"Dados pessoais removidos (anonimizado)" quando o cliente foi
+anonimizado — exatamente o mesmo critério que já existia no cartão.
 
-Decisões de desenho:
+O popup "Gerir" varia com o estado do cliente:
+
+- Cliente ATIVO → Editar · Anonimizar (irreversível) — separador —
+  Desativar.
+- Cliente INATIVO → Reativar · Anonimizar (irreversível).
+- Cliente ANONIMIZADO → sem ações; só texto a explicar que os dados
+  foram removidos por RGPD.
+
+A anonimização aparece nos dois estados (ativo e inativo) porque a
+regra de negócio (`clientes.anonimizar`) permite anonimizar um
+cliente já inativo — confirmado pelo aluno, 13/09/2026.
+
+As duas convenções seguintes mantêm-se do ecrã antigo, agora
+aplicadas ao popup novo:
+
+1. Botões com a mesma forma, altura e contorno; só a cor do texto
+   muda. Num menu de opções nenhuma delas é mais importante do que
+   as outras.
+2. Risco fino antes da ação destrutiva (Desativar / Anonimizar),
+   para dar uma pausa antes do último botão.
+
+Decisões anteriores que continuam em vigor (do ecrã antigo,
+07/09/2026):
 
 1. 'regime' NÃO é campo do cliente (clientes.criar/atualizar já não
    o guardam) — serve só para saber, no momento da chamada, que
@@ -30,10 +53,7 @@ Decisões de desenho:
    o cliente já existe sem regime gravado: o seletor arranca em
    "Mensal" se o cliente já tiver NIF preenchido (sinal de que foi
    criado nesse regime), senão "Airbnb" — só um valor por omissão,
-   sempre alterável antes de guardar. Pergunta feita ao aluno em
-   06/09/2026 sem resposta; assumida esta opção (a recomendada, em
-   vez de arrancar sempre em "Airbnb" como o CLI faz por omissão em
-   `atualizar()`) — a rever se o aluno preferir a outra.
+   sempre alterável antes de guardar.
 
 2. Todos os campos sempre visíveis, obrigatoriedade só validada ao
    submeter — mesma convenção fixada em Novo Contrato Mensal (parte
@@ -58,70 +78,27 @@ Decisões de desenho:
    aviso + dropdown de Responsável obrigatório + botão vermelho
    "Anonimizar (irreversível)". A data usa sempre a data de hoje, sem
    campo próprio — decisão do aluno, 06/09/2026 (o CLI permite
-   escolher outra data; não é exposto na GUI). Botão só aparece em
-   clientes ainda não anonimizados (ativos ou inativos — a regra de
-   negócio permite anonimizar um cliente já inativo).
+   escolher outra data; não é exposto na GUI).
 
 6. Um cliente anonimizado não pode ser editado nem reativado
-   (clientes.atualizar/reativar recusam) — por isso o cartão de um
-   cliente anonimizado não mostra nenhum botão de ação, só a
-   etiqueta "Anonimizado".
+   (clientes.atualizar/reativar recusam) — por isso o popup de um
+   cliente anonimizado não mostra nenhum botão de ação, só o aviso.
 
-7. Etiquetas do cartão: "Anonimizado" (cinza indisponível) tem
-   prioridade sobre "Incompleto" (amarelo aviso) — um cliente
-   anonimizado fica sempre incompleto=True internamente (dados
-   apagados), mas mostrar as duas seria redundante.
-
-8. Filtro de completude (Todos/Incompletos/Completos), ao lado de
+7. Filtro de completude (Todos/Incompletos/Completos), ao lado de
    "Mostrar inativos" — mesmas duas opções de filtro que
    `_listar_clientes` já tem no CLI (decisão 11: tem de existir
    listagem de incompletos, senão o aviso não produz efeito).
 
-9. Depois de testar no PC real (06/09/2026), o aluno pediu três
-   ajustes, com pesquisa prévia obrigatória antes de codar (pedido
-   explícito: "antes de codar me traga os resultados e pergunte se
-   tiver que tomar decisões"):
+8. Email em formato simples validado (tem de ter um nome, um "@" e
+   um domínio com pelo menos um ponto), só no ecrã Clientes — a
+   mesma regra do formulário antigo, mantida intacta. O email
+   continua opcional (decisão 11 antiga): a regra só corre quando o
+   campo não está vazio.
 
-   a) Modal de Novo/Editar Cliente mais largo (460→620) — com 13
-      campos, mais o seletor de Regime e o campo composto de
-      Nacionalidade, ficava apertado.
-
-   b) Formato de email validado: tem de ter um nome, um "@" e um
-      domínio com pelo menos um ponto (ex.: nome@dominio.com) — a
-      mesma regra simples que a generalidade dos sistemas usa para
-      apanhar erros de digitação óbvios (não confirma que a caixa
-      de correio existe de facto). Pergunta feita ao aluno: onde
-      aplicar a regra — só respondeu "Só no ecrã Clientes
-      (recomendado por agora)", por isso fica só aqui, sem tocar em
-      validacoes.py/clientes.py/cli.py. O email continua opcional
-      (decisão 11 antiga): a regra só corre quando o campo não está
-      vazio.
-
-   c) Nacionalidade com seletor: pesquisadas as bibliotecas
-      pycountry, babel, country_converter e pycountry-convert —
-      nenhuma traz gentílicos em português (só nomes de país, ex.
-      "Portugal", nunca "Portuguesa"), por isso nenhuma serve para
-      preencher automaticamente uma lista de nacionalidades como as
-      que aparecem num documento de identificação. Pergunta feita
-      ao aluno — respondeu "Lista curta + 'Outra' (recomendado)" —
-      por isso o campo passa a ser um seletor com uma lista curta
-      de nacionalidades comuns mais "Outra", por cima de uma caixa
-      de texto: escolher um valor da lista preenche a caixa; a caixa
-      continua a ser o valor realmente gravado — o seletor é só um
-      atalho.
-
-   d) Ajuste ao ponto (c), pedido pelo aluno ao ver uma captura de
-      ecrã do resultado ("SÓ APARECER QUANDO TIVER QUE COLOCAR
-      OUTRO, FICA OCULTO PARA NAO PARECER DOIS BRASILEIRA"): a caixa
-      de texto deixa de estar sempre visível quando o valor vem da
-      lista — mostrar "Brasileira" no seletor E na caixa por baixo
-      era redundante. Agora a caixa começa ESCONDIDA; escolher uma
-      nacionalidade da lista preenche-a mas mantém-na escondida (só
-      o seletor mostra o valor); só escolher "Outra" é que a revela,
-      vazia, para escrita livre. Exceção pontual à decisão 2 do
-      módulo ("todos os campos sempre visíveis") — aceite porque
-      aqui não há obrigatoriedade condicional nenhuma escondida, é
-      só um valor mostrado em duplicado a menos.
+9. Nacionalidade com seletor — lista curta de nacionalidades comuns
+   mais "Outra", com a caixa de texto escondida por omissão e só
+   revelada em "Outra". Mesmo comportamento do formulário antigo,
+   mantido intacto.
 
 Segue a mesma disciplina de camadas do resto da GUI (decisão 7): só
 fala com `clientes` e `responsaveis` — nunca com `repositorio`
@@ -138,7 +115,6 @@ import responsaveis
 import validacoes
 from . import componentes
 from . import tema
-
 
 NACIONALIDADES = (
     "Portuguesa",
@@ -175,6 +151,30 @@ NACIONALIDADE_PLACEHOLDER = "— Escolher —"
 OUTRA_NACIONALIDADE = "Outra (escrever ao lado)"
 
 _PADRAO_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+# =====================================================================
+# Larguras fixas das colunas da tabela (mesma disciplina de
+# gui_propriedades.py, ponto 12): uma constante por coluna, lida
+# tanto pelo cabeçalho como pelas linhas, para os dois nunca poderem
+# desalinhar por um número esquecido num dos dois sítios.
+# =====================================================================
+
+_LARGURA_ID = 90
+_LARGURA_NOME = 260
+_LARGURA_ESTADO = 120
+_LARGURA_ACOES = 100
+
+_ALTURA_LINHA = 52
+
+_COLUNAS_CLIENTE = (
+    componentes.Coluna("ID", minimo=_LARGURA_ID + 24, espaco=8),
+    componentes.Coluna("NOME DO CLIENTE", peso=3, minimo=_LARGURA_NOME),
+    componentes.Coluna(
+        "ESTADO", peso=1, minimo=_LARGURA_ESTADO, alinhamento="centro"
+    ),
+    componentes.Coluna("AÇÕES", minimo=_LARGURA_ACOES, alinhamento="centro"),
+)
 
 
 def _formatar_data(valor):
@@ -229,8 +229,8 @@ def _colocar_no_topo(janela):
 
 
 class ListaClientes(ctk.CTkFrame):
-    """Ecrã principal: lista os clientes, com ações de criar/editar/
-    desativar/reativar/anonimizar.
+    """Ecrã principal: lista os clientes em tabela padrão, com um
+    único botão "Gerir" por linha que abre o popup de ações.
     """
 
     def __init__(self, master, controlador):
@@ -241,11 +241,9 @@ class ListaClientes(ctk.CTkFrame):
 
         # Botão de criação numa barra própria, logo abaixo do
         # cabeçalho e a verde — mesmo padrão de Contrato Mensal e
-        # Reservas Airbnb (09/09/2026). Estava em baixo e a azul,
-        # o que o deixava fora do campo de visão em listas longas
-        # e sem se distinguir dos botões de ação das linhas.
+        # Reservas Airbnb (09/09/2026).
         barra_criar = ctk.CTkFrame(self, fg_color="transparent")
-        barra_criar.pack(fill="x", padx=24, pady=(4, 8))
+        barra_criar.pack(fill="x", padx=20, pady=(4, 8))
         ctk.CTkButton(
             barra_criar,
             text="+ Novo Cliente",
@@ -277,8 +275,14 @@ class ListaClientes(ctk.CTkFrame):
         self.combo_completude.set("Todos")
         self.combo_completude.pack(side="right")
 
-        self.area_lista = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self.area_lista.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+        self.tabela = componentes.Tabela(
+            self,
+            colunas=_COLUNAS_CLIENTE,
+            altura_linha=_ALTURA_LINHA,
+            mensagem_vazia="Ainda não há clientes cadastrados.",
+            tom_alternado=True,
+        )
+        self.tabela.pack(fill="both", expand=True, padx=20, pady=(4, 12))
 
         self._recarregar()
 
@@ -290,13 +294,12 @@ class ListaClientes(ctk.CTkFrame):
         ]
 
     def _recarregar(self):
-        """Limpa e volta a desenhar a lista inteira — chamada na
-        abertura do ecrã, ao mexer nos filtros, e depois de qualquer
-        criação/edição/desativação/reativação/anonimização (mesmo
-        princípio de ListaPropriedades._recarregar).
+        """Limpa e volta a desenhar a tabela — chamada na abertura do
+        ecrã, ao mexer nos filtros, e depois de qualquer criação/
+        edição/desativação/reativação/anonimização (mesmo princípio
+        de ListaPropriedades._recarregar).
         """
-        for widget in self.area_lista.winfo_children():
-            widget.destroy()
+        self.tabela.limpar()
 
         lista = clientes.listar(
             incluir_inativos=self.mostrar_inativos.get(),
@@ -304,147 +307,139 @@ class ListaClientes(ctk.CTkFrame):
         )
 
         if not lista:
-            ctk.CTkLabel(
-                self.area_lista,
-                text="Ainda não há clientes cadastrados.",
-                text_color=tema.COR_TEXTO_SECUNDARIO,
-                font=ctk.CTkFont(size=13),
-            ).pack(pady=40)
+            self.tabela.mostrar_vazio()
             return
 
         for cliente in lista:
             self._desenhar_cliente(cliente)
 
-    # -- desenho ---------------------------------------------------------
+    # -- desenho -------------------------------------------------------
 
     def _desenhar_cliente(self, cliente):
+        """Desenha uma linha da tabela para um cliente.
+
+        Cada célula é um widget criado com a linha como master e
+        colocado com `self.tabela.colocar`, que trata do grid, do
+        alinhamento e das folgas. A altura, as divisórias e o tom
+        das linhas são da tabela.
+        """
         inativo = not cliente["ativo"]
+        anonimizado = cliente["anonimizado"]
 
-        cartao = ctk.CTkFrame(
-            self.area_lista,
-            corner_radius=tema.RAIO_CARTAO,
-            fg_color=tema.COR_FUNDO,
-            border_width=1,
-            border_color=tema.COR_BORDA,
+        linha = self.tabela.nova_linha()
+
+        # ---- ID (chip, igual a Propriedades) ----
+        cor_id = (
+            tema.TEXTO_INDISPONIVEL if anonimizado else tema.AZUL_PRINCIPAL
         )
-        cartao.pack(fill="x", pady=6)
+        self.tabela.colocar(
+            linha,
+            0,
+            ctk.CTkLabel(
+                linha,
+                text=cliente["id"],
+                text_color=cor_id,
+                fg_color=tema.ID_CHIP_FUNDO,
+                corner_radius=6,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                width=_LARGURA_ID,
+                anchor="w",
+            ),
+            esticar="w",
+        )
 
-        linha = ctk.CTkFrame(cartao, fg_color="transparent")
-        linha.pack(fill="x", padx=16, pady=12)
+        # ---- NOME DO CLIENTE (nome + subtítulo com documento/NIF) ----
+        cor_nome = (
+            tema.TEXTO_INDISPONIVEL
+            if anonimizado
+            else (tema.COR_TEXTO_SECUNDARIO if inativo else tema.COR_TEXTO)
+        )
 
-        bloco_texto = ctk.CTkFrame(linha, fg_color="transparent")
-        bloco_texto.pack(side="left", anchor="w")
-
-        nome = cliente["nome"] + ("  (inativo)" if inativo else "")
-        cor_nome = tema.COR_TEXTO_SECUNDARIO if inativo else tema.COR_TEXTO
-        ctk.CTkLabel(
-            bloco_texto,
-            text=nome,
-            text_color=cor_nome,
-            font=ctk.CTkFont(size=14, weight="bold"),
-            anchor="w",
-        ).pack(anchor="w")
-
-        if cliente["anonimizado"]:
+        if anonimizado:
             subtitulo = "Dados pessoais removidos (anonimizado)"
         else:
             subtitulo = (
-                f"{cliente['tipo_documento']} {cliente['numero_documento']}"
+                f"{cliente['tipo_documento']} "
+                f"{cliente['numero_documento']}"
             )
             if cliente["nif"]:
                 subtitulo += f" · NIF {cliente['nif']}"
 
+        bloco_nome = ctk.CTkFrame(linha, fg_color="transparent")
         ctk.CTkLabel(
-            bloco_texto,
+            bloco_nome,
+            text=cliente["nome"],
+            text_color=cor_nome,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            anchor="w",
+        ).pack(fill="x")
+        ctk.CTkLabel(
+            bloco_nome,
             text=subtitulo,
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=11),
             anchor="w",
-        ).pack(anchor="w")
+        ).pack(fill="x")
+        self.tabela.colocar(linha, 1, bloco_nome)
 
-        bloco_direita = ctk.CTkFrame(linha, fg_color="transparent")
-        bloco_direita.pack(side="right")
-
-        if cliente["anonimizado"]:
-            self._etiqueta(
-                bloco_direita,
-                "Anonimizado",
+        # ---- ESTADO (chip colorido) ----
+        if anonimizado:
+            chip_texto, chip_fundo, chip_cor = (
+                "anonimizado",
                 tema.CINZA_INDISPONIVEL,
                 tema.TEXTO_INDISPONIVEL,
             )
-            return
-
-        if cliente["incompleto"]:
-            self._etiqueta(
-                bloco_direita,
-                "Incompleto",
+        elif inativo:
+            chip_texto, chip_fundo, chip_cor = (
+                "inativo",
+                tema.CINZA_INDISPONIVEL,
+                tema.TEXTO_INDISPONIVEL,
+            )
+        elif cliente["incompleto"]:
+            chip_texto, chip_fundo, chip_cor = (
+                "incompleto",
                 tema.AMARELO_AVISO,
                 tema.TEXTO_AVISO,
             )
-
-        botoes = ctk.CTkFrame(bloco_direita, fg_color="transparent")
-        botoes.pack(side="left", padx=(10, 0))
-
-        if inativo:
-            ctk.CTkButton(
-                botoes,
-                text="Reativar",
-                width=80,
-                height=26,
-                corner_radius=tema.RAIO_BOTAO,
-                fg_color=tema.VERDE,
-                hover_color=tema.VERDE,
-                command=lambda: self._reativar(cliente),
-            ).pack(side="left", padx=(0, 6))
         else:
+            chip_texto, chip_fundo, chip_cor = (
+                "ativo",
+                tema.VERDE_LIVRE,
+                tema.TEXTO_LIVRE,
+            )
+
+        self.tabela.colocar(
+            linha,
+            2,
+            ctk.CTkLabel(
+                linha,
+                text=chip_texto,
+                text_color=chip_cor,
+                fg_color=chip_fundo,
+                corner_radius=8,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                width=_LARGURA_ESTADO,
+                height=22,
+            ),
+        )
+
+        # ---- AÇÕES (um único botão "Gerir") ----
+        acoes = self.tabela.celula_acoes(linha, 3)
+        acoes.adicionar(
             ctk.CTkButton(
-                botoes,
-                text="Desativar",
-                width=80,
+                acoes,
+                text="Gerir",
+                width=76,
                 height=26,
                 corner_radius=tema.RAIO_BOTAO,
                 fg_color="transparent",
-                text_color=tema.TEXTO_ERRO,
-                hover_color=tema.VERMELHO_ERRO,
-                command=lambda: self._desativar(cliente),
-            ).pack(side="left", padx=(0, 6))
-
-        ctk.CTkButton(
-            botoes,
-            text="Editar",
-            width=70,
-            height=26,
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color="transparent",
-            border_width=1,
-            border_color=tema.COR_BORDA,
-            text_color=tema.COR_TEXTO,
-            hover_color=tema.COR_BORDA,
-            command=lambda: EditarClienteModal(self, cliente),
-        ).pack(side="left", padx=(0, 6))
-
-        ctk.CTkButton(
-            botoes,
-            text="Anonimizar",
-            width=90,
-            height=26,
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color=tema.TEXTO_ERRO,
-            hover_color=tema.VERMELHO_ERRO,
-            command=lambda: _AnonimizarModal(self, cliente),
-        ).pack(side="left")
-
-    def _etiqueta(self, master, texto, fundo, cor_texto):
-        ctk.CTkLabel(
-            master,
-            text=texto,
-            text_color=cor_texto,
-            fg_color=fundo,
-            corner_radius=8,
-            font=ctk.CTkFont(size=11, weight="bold"),
-            width=90,
-            height=22,
-        ).pack(side="left")
+                border_width=1,
+                border_color=tema.COR_BORDA,
+                text_color=tema.COR_TEXTO,
+                hover_color=tema.COR_BORDA,
+                command=lambda: _AcoesClienteModal(self, cliente),
+            )
+        )
 
     # -- ações -------------------------------------------------------------
 
@@ -473,12 +468,208 @@ class ListaClientes(ctk.CTkFrame):
         self._recarregar()
 
 
+class _AcoesClienteModal(ctk.CTkToplevel):
+    """Popup pequeno com as ações de um cliente — aberto pelo botão
+    "Gerir" de cada linha em `ListaClientes` (13/09/2026, ver
+    docstring do módulo).
+
+    Mesmo padrão dos popups de propriedade, unidade e responsável:
+    nome/ID no topo, botões de ação com a mesma forma e contorno (só
+    a cor do texto muda), separador antes da ação destrutiva,
+    "Fechar" no fim.
+
+    As ações variam com o estado do cliente:
+
+    - Cliente ATIVO → Editar · Anonimizar (irreversível) — separador —
+      Desativar.
+    - Cliente INATIVO → Reativar · Anonimizar (irreversível).
+    - Cliente ANONIMIZADO → sem ações; só texto a explicar que os
+      dados foram removidos por RGPD.
+
+    A anonimização aparece nos dois estados (ativo e inativo) porque
+    `clientes.anonimizar` permite anonimizar um cliente já inativo —
+    confirmado pelo aluno, 13/09/2026. Num cliente anonimizado, a
+    edição, a reativação e a nova anonimização não fazem sentido
+    nenhum: os dados pessoais já foram apagados e não há para onde
+    voltar (o próprio `clientes.atualizar`/`reativar` recusariam).
+    """
+
+    def __init__(self, tela_lista, cliente):
+        super().__init__(tela_lista)
+        self.tela_lista = tela_lista
+        self.cliente = cliente
+
+        anonimizado = cliente["anonimizado"]
+        inativo = not cliente["ativo"]
+
+        # Altura consoante o número de ações — a mesma lógica do
+        # `_AcoesResponsavelModal`, evita uma janela com espaço a mais
+        # no caso anonimizado (só o texto explicativo).
+        if anonimizado:
+            altura = 220
+        elif inativo:
+            altura = 250
+        else:
+            altura = 290
+
+        self.title(f"Ações — {cliente['id']}")
+        self.geometry(f"320x{altura}")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_lista)
+        self._centrar_sobre(tela_lista, altura)
+        _colocar_no_topo(self)
+
+        # ---- Título + subtítulo ----
+        ctk.CTkLabel(
+            self,
+            text=cliente["nome"],
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            wraplength=280,
+        ).pack(padx=20, pady=(20, 2))
+
+        if anonimizado:
+            subtitulo = f"{cliente['id']} · anonimizado"
+        elif inativo:
+            subtitulo = f"{cliente['id']} · inativo"
+        elif cliente["incompleto"]:
+            subtitulo = f"{cliente['id']} · incompleto"
+        else:
+            subtitulo = f"{cliente['id']} · ativo"
+
+        ctk.CTkLabel(
+            self,
+            text=subtitulo,
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(pady=(0, 14))
+
+        # ---- Ações (variam com o estado) ----
+        if anonimizado:
+            # Sem ações — só o aviso. Mesma ideia do aviso de
+            # impressão bloqueada em `_AcoesContratoModal`.
+            ctk.CTkLabel(
+                self,
+                text=(
+                    "Os dados pessoais foram removidos (RGPD).\n"
+                    "Sem ações disponíveis."
+                ),
+                text_color=tema.TEXTO_INDISPONIVEL,
+                font=ctk.CTkFont(size=11),
+                justify="center",
+            ).pack(padx=20, pady=(10, 20))
+
+        elif inativo:
+            # Cliente inativo: Reativar + Anonimizar. A ordem põe
+            # primeiro a ação positiva (Reativar), depois a
+            # irreversível — mesma convenção do `_AcoesResponsavelModal`
+            # (que põe "Reativar" isolado no ramo inativo).
+            self._botao(
+                "Reativar",
+                text_color=tema.TEXTO_LIVRE,
+                hover_color=tema.VERDE_LIVRE,
+                acao=lambda: self.tela_lista._reativar(cliente),
+            )
+            self._botao(
+                "Anonimizar (irreversível)",
+                text_color=tema.TEXTO_ERRO,
+                hover_color=tema.VERMELHO_ERRO,
+                acao=lambda: _AnonimizarModal(self.tela_lista, cliente),
+            )
+
+        else:
+            # Cliente ativo: Editar + Anonimizar — separador —
+            # Desativar. A ação destrutiva fica sozinha em baixo do
+            # separador, como em `_AcoesPropriedadeModal` e
+            # `_AcoesUnidadeModal`.
+            self._botao(
+                "Editar",
+                text_color=tema.COR_TEXTO,
+                hover_color=tema.COR_BORDA,
+                acao=lambda: EditarClienteModal(tela_lista, cliente),
+            )
+            self._botao(
+                "Anonimizar (irreversível)",
+                text_color=tema.TEXTO_ERRO,
+                hover_color=tema.VERMELHO_ERRO,
+                acao=lambda: _AnonimizarModal(self.tela_lista, cliente),
+            )
+            self._separador()
+            self._botao(
+                "Desativar",
+                text_color=tema.TEXTO_ERRO,
+                hover_color=tema.VERMELHO_ERRO,
+                acao=lambda: self.tela_lista._desativar(cliente),
+            )
+
+        ctk.CTkButton(
+            self,
+            text="Fechar",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="bottom", fill="x", padx=20, pady=(10, 16))
+
+    def _centrar_sobre(self, janela, altura):
+        """Abre por cima da janela que o chamou.
+
+        Sem isto o Tk coloca o popup no canto superior esquerdo do
+        ecrã, longe do botão que acabou de ser clicado.
+        """
+        janela.update_idletasks()
+        x = janela.winfo_rootx() + (janela.winfo_width() - 320) // 2
+        y = janela.winfo_rooty() + (janela.winfo_height() - altura) // 2
+        self.geometry(f"320x{altura}+{max(x, 0)}+{max(y, 0)}")
+
+    def _separador(self):
+        """Risco fino antes da ação destrutiva.
+
+        Não é decoração: separa o que se pode desfazer do que não se
+        desfaz, e dá uma pausa antes do último botão.
+        """
+        ctk.CTkFrame(self, height=1, fg_color=tema.COR_BORDA).pack(
+            fill="x", padx=20, pady=(8, 5)
+        )
+
+    def _botao(self, texto, text_color, hover_color, acao):
+        """Botão de ação: fecha este popup antes de agir.
+
+        A ordem importa — as ações abrem outro popup (Editar,
+        Anonimizar) ou fazem `_recarregar` na tabela por trás
+        (Desativar, Reativar); deixar este aberto por cima deixava-o
+        pendurado sobre coisas que entretanto mudaram.
+        """
+
+        def executar():
+            self.destroy()
+            acao()
+
+        ctk.CTkButton(
+            self,
+            text=texto,
+            height=34,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            hover_color=hover_color,
+            text_color=text_color,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            command=executar,
+        ).pack(fill="x", padx=20, pady=3)
+
+
 class _FormularioCliente(ctk.CTkToplevel):
     """Base comum a NovoClienteModal e EditarClienteModal — monta os
     13 campos + o seletor de Regime, sempre na mesma ordem do CLI
     (_criar_cliente/_atualizar_cliente). As duas subclasses só
     diferem no título, na pré-preenchida dos campos e no que
     acontece ao guardar.
+
+    Inalterada desde 06/09/2026, quando foi validada por mockup e
+    por um teste de submissão real.
     """
 
     def __init__(self, tela_lista, titulo):
@@ -823,6 +1014,8 @@ class _AnonimizarModal(ctk.CTkToplevel):
     Propriedades e Unidades: mensagem de aviso + dropdown de
     Responsável obrigatório + botão vermelho de confirmação. A data
     usa sempre datetime.date.today() (sem campo próprio).
+
+    Inalterada desde 06/09/2026.
     """
 
     def __init__(self, tela_lista, cliente):
