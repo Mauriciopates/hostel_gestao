@@ -55,6 +55,19 @@ contrato mensal):
   passam a chamar a normalização.
 - `atualizar_propriedade` não muda: já aceita qualquer campo, e o
   `iban` é apenas mais um.
+
+ALTERAÇÕES 13/09/2026 (Aprovação de Requisições + cancelamento):
+
+- `requisicoes` ganha duas colunas novas: `observacao_rececao`
+  (TEXT) e `origem` (VARCHAR com DEFAULT 'pedido').
+- `inserir_requisicao` passa a gravá-las explicitamente (ambas
+  vêm sempre preenchidas do `estoque.criar_requisicao`).
+- `_normalizar_requisicao` repõe "" em `observacao_rececao` e
+  `origem` quando vierem NULL — por simetria com as outras
+  colunas de texto (na prática `origem` nunca vem NULL, porque a
+  coluna tem DEFAULT e o negócio preenche-a sempre).
+- `atualizar_requisicao` não muda: já aceita qualquer campo, e
+  os dois novos são apenas mais dois.
 """
 
 import json
@@ -1549,8 +1562,8 @@ def listar_produtos(incluir_inativos=False):
 
 def atualizar_produto(produto_id, campos):
     """Atualiza os campos indicados de um produto. Converte "" para
-    NULL em `desativado_por_id` — é FK para `responsaveis`, e ""
-    não é um id válido (mesmo caso já resolvido em
+    NULL em `desativado_por_id` — é FK para `responsaveis`, e "" não
+    é um id válido (mesmo caso já resolvido em
     `atualizar_ocupacao_mensal`).
     """
     if not campos:
@@ -1727,6 +1740,11 @@ def listar_movimentos(produto_id=None, tipo=None):
 def inserir_requisicao(requisicao):
     """Insere uma requisição nova, no estado inicial "pendente".
 
+    Passa a gravar também `observacao_rececao` e `origem` — as duas
+    colunas novas de 13/09/2026 (ver docstring do módulo). Ambas
+    vêm sempre preenchidas do `estoque.criar_requisicao` (a primeira
+    com "" por omissão, a segunda com "pedido" ou "rol").
+
     'responsavel_rejeicao_id' não entra no INSERT — só existe a
     partir de `rejeitar_requisicao`, muito depois da criação — e
     fica NULL por omissão, tal como a coluna permite. As restantes
@@ -1739,7 +1757,8 @@ def inserir_requisicao(requisicao):
         cursor.execute(
             "INSERT INTO requisicoes (id, responsavel_id, estado, "
             "data_pedido, data_envio, data_fecho, motivo_rejeicao, "
-            "observacoes) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            "observacoes, observacao_rececao, origem) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 requisicao["id"],
                 requisicao["responsavel_id"],
@@ -1749,6 +1768,8 @@ def inserir_requisicao(requisicao):
                 requisicao["data_fecho"],
                 requisicao["motivo_rejeicao"],
                 requisicao["observacoes"],
+                requisicao.get("observacao_rececao", ""),
+                requisicao.get("origem") or "pedido",
             ),
         )
         conexao.commit()
@@ -1757,11 +1778,23 @@ def inserir_requisicao(requisicao):
 
 
 def _normalizar_requisicao(linha):
-    """Repõe "" em 'responsavel_rejeicao_id', 'motivo_rejeicao' e
-    'observacoes' quando vierem NULL — mesma convenção de string
-    vazia usada em todo o sistema para "sem valor".
+    """Repõe "" em 'responsavel_rejeicao_id', 'motivo_rejeicao',
+    'observacoes', 'observacao_rececao' e 'origem' quando vierem
+    NULL — mesma convenção de string vazia usada em todo o sistema
+    para "sem valor".
+
+    'origem' tem DEFAULT 'pedido' na tabela e o negócio preenche-a
+    sempre, por isso na prática nunca vem NULL — mas fica na lista
+    por simetria, e para proteger o dia em que a coluna perca esse
+    DEFAULT.
     """
-    for campo in ("responsavel_rejeicao_id", "motivo_rejeicao", "observacoes"):
+    for campo in (
+        "responsavel_rejeicao_id",
+        "motivo_rejeicao",
+        "observacoes",
+        "observacao_rececao",
+        "origem",
+    ):
         if linha[campo] is None:
             linha[campo] = ""
 
@@ -1824,6 +1857,11 @@ def atualizar_requisicao(requisicao_id, campos):
     NULL em 'responsavel_rejeicao_id' quando presente nos campos — é
     FK para `responsaveis` (mesmo caso de
     `atualizar_ocupacao_mensal`).
+
+    Não trata `observacao_rececao` nem `origem` de forma especial —
+    são colunas de texto, e uma string vazia é um valor legítimo
+    nelas (tal como `motivo_rejeicao` ou `observacoes`, que já
+    passam cruas).
     """
     if not campos:
         return

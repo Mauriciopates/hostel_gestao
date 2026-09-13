@@ -103,6 +103,28 @@ Decisões anteriores que continuam em vigor (do ecrã antigo,
 Segue a mesma disciplina de camadas do resto da GUI (decisão 7): só
 fala com `clientes` e `responsaveis` — nunca com `repositorio`
 diretamente.
+
+CONSOLIDAÇÃO DE HELPERS EM componentes.py (13/09/2026) — o helper
+visual que estava duplicado localmente passou a viver só no
+`componentes.py`:
+
+- `_colocar_no_topo` local → `componentes.colocar_no_topo`
+  (alias no topo, mesmo nome antigo, para o corpo do ficheiro não
+  ter de ser reescrito). O resto do ficheiro não mudou.
+
+CORREÇÃO 13/09/2026 — fecho do `NovoClienteModal` / `EditarClienteModal`
+quando abertos de dentro de um formulário de contrato/reserva:
+
+- O botão "+ Novo cliente" existe em três sítios: na `ListaClientes`
+  e nos cartões "Cliente" do `NovoContratoMensal` e do
+  `NovaReservaAirbnb` (gui_contratos.py). O `NovoClienteModal` não
+  sabia disto e chamava sempre `self.tela_lista._recarregar()` no
+  fim — quando a `tela_lista` era o contrato ou a reserva, esse
+  método não existe e rebentava com `AttributeError` (bug apanhado
+  pelo aluno, 13/09/2026). Agora a chamada tolera os dois casos: usa
+  `_recarregar` se existir, senão `_recarregar_clientes`. O
+  `EditarClienteModal` ganhou a mesma defesa por consistência,
+  mesmo não sendo aberto a partir dos contratos hoje.
 """
 
 import datetime
@@ -115,6 +137,14 @@ import responsaveis
 import validacoes
 from . import componentes
 from . import tema
+
+# Alias local para o helper que vivia neste ficheiro e passou a
+# viver em componentes.py. Mantém-se o nome antigo com "_" para o
+# corpo do ficheiro não ter de ser reescrito — mesma técnica já
+# usada no gui_propriedades.py, gui_contratos.py, gui_calendario.py,
+# gui_unidades.py, gui_responsaveis.py e gui_est_requisicoes.py.
+_colocar_no_topo = componentes.colocar_no_topo
+
 
 NACIONALIDADES = (
     "Portuguesa",
@@ -217,15 +247,32 @@ def _email_valido(email):
     return bool(_PADRAO_EMAIL.match(email))
 
 
-def _colocar_no_topo(janela):
-    """Traz um popup para a frente da janela principal — mesma
-    função de gui/gui_propriedades.py, repetida aqui porque cada módulo
-    da GUI já a define localmente (não há, ainda, um sítio comum
-    para ela em componentes.py).
+def _recarregar_tela_lista(tela_lista):
+    """Recarrega a lista por trás de um modal de cliente.
+
+    O `NovoClienteModal` e o `EditarClienteModal` são abertos em
+    dois contextos diferentes:
+
+    - A partir da `ListaClientes` (o ecrã "Clientes", botão
+      "+ Novo Cliente" e "Gerir → Editar") — a `tela_lista` é uma
+      `ListaClientes`, que tem `_recarregar`.
+
+    - A partir do botão "+ Novo cliente" do `NovoContratoMensal` ou
+      do `NovaReservaAirbnb` (gui_contratos.py) — a `tela_lista` é
+      um desses formulários, que têm `_recarregar_clientes`, não
+      `_recarregar`.
+
+    Chamar `tela_lista._recarregar()` sem pensar rebentava com
+    `AttributeError` no segundo caso (bug apanhado pelo aluno,
+    13/09/2026). Esta função resolve os dois casos sem o modal
+    precisar de saber de onde foi aberto.
     """
-    janela.after(
-        10, lambda: (janela.lift(), janela.focus_force(), janela.grab_set())
-    )
+    recarregar = getattr(tela_lista, "_recarregar", None)
+
+    if recarregar is not None:
+        recarregar()
+    else:
+        tela_lista._recarregar_clientes()
 
 
 class ListaClientes(ctk.CTkFrame):
@@ -928,7 +975,12 @@ class NovoClienteModal(_FormularioCliente):
 
         componentes.mostrar_sucesso(mensagem)
         self.destroy()
-        self.tela_lista._recarregar()
+        # A `tela_lista` tanto pode ser a `ListaClientes` (que tem
+        # `_recarregar`) como o `NovoContratoMensal` / o
+        # `NovaReservaAirbnb` (que têm `_recarregar_clientes`) — o
+        # botão "+ Novo cliente" existe nos três sítios. Ver
+        # `_recarregar_tela_lista`, no topo do módulo.
+        _recarregar_tela_lista(self.tela_lista)
 
 
 class EditarClienteModal(_FormularioCliente):
@@ -1005,7 +1057,12 @@ class EditarClienteModal(_FormularioCliente):
             f"Cliente {self.cliente['id']} atualizado."
         )
         self.destroy()
-        self.tela_lista._recarregar()
+        # Mesma defesa do `NovoClienteModal._guardar` — ver
+        # `_recarregar_tela_lista`, no topo do módulo. Hoje o
+        # "Editar" só é aberto a partir da `ListaClientes`, mas a
+        # defesa fica para o caso de o botão se estender aos
+        # contratos no futuro.
+        _recarregar_tela_lista(self.tela_lista)
 
 
 class _AnonimizarModal(ctk.CTkToplevel):

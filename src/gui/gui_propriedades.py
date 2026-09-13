@@ -116,8 +116,8 @@ do aluno), antes deste ficheiro:
 
    "Época alta ativa" só faz sentido na Airbnb: fui conferir
    `contratos.py` antes de mexer e `criar_mensal` usa sempre
-   `preco_base` — nunca olha para `epoca_alta_ativa`/
-   `preco_epoca_alta`; quem lê os dois é só
+   `preco_base` — nunca olha para `epoca_alta_ativa`/`preco_epoca_alta`;
+   quem lê os dois é só
    `contratos._preco_calculado_airbnb` (usado nas reservas
    Airbnb). Por isso marcar essa caixa com "Mensal" escolhido (ou
    trocar para "Mensal" com a caixa já marcada) desmarca-a sozinha
@@ -384,6 +384,17 @@ do aluno), antes deste ficheiro:
       desta ronda estiverem entregues — para a aplicação não
       rebentar a meio.
 
+16. CONSOLIDAÇÃO DE HELPERS EM componentes.py (13/09/2026) — os
+    helpers visuais que estavam duplicados localmente passaram a
+    viver só no `componentes.py`:
+
+    - `_truncar_texto` local → `componentes.truncar_texto`. O
+      parâmetro `fonte` mantém-se (a fonte é criada uma vez por
+      recarregamento, não a cada linha — é a mesma otimização que
+      já estava em prática).
+    - `_colocar_no_topo` local → `componentes.colocar_no_topo`.
+    - O resto do ficheiro não mudou.
+
 Segue a mesma disciplina de camadas do resto da GUI (decisão 7): só
 fala com `propriedades` e `unidades` — nunca com `repositorio`
 diretamente.
@@ -403,6 +414,13 @@ import validacoes
 from . import componentes
 from . import tema
 from .gui_unidades import PlantaLugares
+
+# Aliases locais para os helpers que viviam neste ficheiro e passaram
+# a viver em componentes.py. Mantêm-se os nomes antigos com "_" para
+# o corpo do ficheiro não ter de ser reescrito — mesma técnica já
+# usada no gui_est_requisicoes.py para os helpers do gui_est_comum.
+_truncar_texto = componentes.truncar_texto
+_colocar_no_topo = componentes.colocar_no_topo
 
 
 def _categoria_estado(texto_estado):
@@ -513,9 +531,7 @@ _COLUNAS_UNIDADE = (
     componentes.Coluna(
         "PREÇO", peso=1, minimo=_LARGURA_PRECO, alinhamento="w", espaco=8
     ),
-    componentes.Coluna(
-        "AÇÕES", minimo=_LARGURA_ACOES, alinhamento="centro"
-    ),
+    componentes.Coluna("AÇÕES", minimo=_LARGURA_ACOES, alinhamento="centro"),
 )
 
 # Altura da linha. 44px chegam para as duas linhas da célula do
@@ -530,43 +546,15 @@ _ALTURA_LINHA_PROPRIEDADE = 44
 # não crescem.
 _COLUNAS_PROPRIEDADE = (
     componentes.Coluna("ID", minimo=_LARGURA_ID + 24, espaco=8),
-    componentes.Coluna(
-        "NOME", peso=3, minimo=_LARGURA_NOME_PROPRIEDADE
-    ),
+    componentes.Coluna("NOME", peso=3, minimo=_LARGURA_NOME_PROPRIEDADE),
     componentes.Coluna("MORADA", peso=3, minimo=_LARGURA_MORADA),
-    componentes.Coluna(
-        "AÇÕES", minimo=_LARGURA_ACOES, alinhamento="centro"
-    ),
+    componentes.Coluna("AÇÕES", minimo=_LARGURA_ACOES, alinhamento="centro"),
 )
 
 # Margem interna subtraída à largura da coluna antes de decidir se
 # um texto precisa de reticências (`_truncar_texto`) — folga
 # pequena para não cortar um texto que já cabe "à justa".
 _MARGEM_TRUNCAGEM = 10
-
-
-def _truncar_texto(fonte, texto, largura_max):
-    """Corta `texto` com reticências ("…") se a sua largura
-    renderizada (medida com `fonte`, um `tkinter.font.Font` real —
-    ver `import tkinter.font as tkfont` no topo do módulo)
-    ultrapassar `largura_max` em pixels.
-
-    Existe para um nome ou morada fora do normal nunca mais
-    empurrar as colunas seguintes (bug relatado pelo aluno,
-    07/09/2026, 4ª ronda: "MYSQL AIRBNB · Airbnb (inativa)—" colado
-    à coluna seguinte) — as larguras das colunas continuam fixas
-    (`_LARGURA_*`, dimensionadas para o conteúdo normal), isto é só
-    a rede de segurança para o caso raro de um valor mais comprido.
-    """
-    if fonte.measure(texto) <= largura_max:
-        return texto
-
-    reticencias = "…"
-    cortado = texto
-    while cortado and fonte.measure(cortado + reticencias) > largura_max:
-        cortado = cortado[:-1]
-
-    return (cortado + reticencias) if cortado else reticencias
 
 
 def _formatar_valor(valor):
@@ -604,25 +592,7 @@ def _formatar_iban(iban):
     if not iban:
         return "—"
 
-    return " ".join(
-        iban[i : i + 4] for i in range(0, len(iban), 4)
-    )
-
-
-def _colocar_no_topo(janela):
-    """Traz um popup (CTkToplevel) para a frente da janela principal.
-
-    Sem isto, o Windows (e alguns outros gestores de janelas) por
-    vezes abre o popup por baixo da janela principal, escondido —
-    bug reportado pelo aluno, 06/09/2026 (tarde), em todos os
-    popups deste ecrã. `after(10, ...)` dá tempo ao Tk para mapear
-    a janela antes de `grab_set()` — chamado já a seguir a
-    `super().__init__(...)`, `grab_set()` falha com "grab failed:
-    window not viewable" em alguns sistemas.
-    """
-    janela.after(
-        10, lambda: (janela.lift(), janela.focus_force(), janela.grab_set())
-    )
+    return " ".join(iban[i : i + 4] for i in range(0, len(iban), 4))
 
 
 class _ConfirmarForcarModal(ctk.CTkToplevel):
@@ -1027,9 +997,7 @@ class _AcoesPropriedadeModal(ctk.CTkToplevel):
                 "Ver unidades",
                 text_color=tema.AZUL_PRINCIPAL,
                 hover_color=tema.ID_CHIP_FUNDO,
-                acao=lambda: UnidadesDaPropriedadeModal(
-                    self.tela_lista, prop
-                ),
+                acao=lambda: UnidadesDaPropriedadeModal(self.tela_lista, prop),
             )
             self._botao(
                 "Editar",
@@ -1561,9 +1529,7 @@ class _AcoesUnidadeModal(ctk.CTkToplevel):
                     "Abrir Mapa",
                     text_color=tema.AZUL_PRINCIPAL,
                     hover_color=tema.ID_CHIP_FUNDO,
-                    acao=lambda: self.tela_unidades._abrir_planta(
-                        uni["id"]
-                    ),
+                    acao=lambda: self.tela_unidades._abrir_planta(uni["id"]),
                 )
 
             self._botao(
@@ -1955,9 +1921,7 @@ class EditarPropriedadeModal(ctk.CTkToplevel):
         iban = self.campo_iban.get().strip().replace(" ", "")
 
         if iban and not validacoes.validar_iban(iban):
-            componentes.mostrar_erro(
-                "IBAN inválido — confirma o número."
-            )
+            componentes.mostrar_erro("IBAN inválido — confirma o número.")
             return
 
         try:

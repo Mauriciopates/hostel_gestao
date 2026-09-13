@@ -80,10 +80,17 @@ ALTERAÇÕES 11/09/2026 (ronda seguinte, aprovada por mockup HTML):
   passam a ter largura fixa, um à esquerda e um à direita — antes
   estavam com `expand=True` e `fill="x"` e ficavam esticados de
   ponta a ponta como uma barra.
-- Janela do `_DetalheLugarModal` passa de 520x420 para 560x480 —
-  o conteúdo no caso Reservado (chip + faixa amarela + cartão do
+- Janela do `_DetalheLugarModal` passa de 520x420 para 560x480 — o
+  conteúdo no caso Reservado (chip + faixa amarela + cartão do
   contrato) ficava apertado. Aplica-se aos dois estados, para a
   janela não mudar de tamanho entre um e outro.
+
+CONSOLIDAÇÃO DE HELPERS EM componentes.py (13/09/2026) — os
+helpers visuais duplicados localmente passaram a viver só no
+`componentes.py`:
+
+- `_tornar_clicavel` local → `componentes.tornar_cliclavel`.
+- O resto do ficheiro não mudou.
 
 Segue a mesma separação de camadas do resto do sistema (decisão 7):
 só fala com `unidades`, `contratos` e `clientes` — nunca com
@@ -100,6 +107,14 @@ import unidades
 from . import componentes
 from . import tema
 from .gui_contratos import NovoContratoMensal
+
+# Alias local para o helper que vivia neste ficheiro e passou a
+# viver em componentes.py. Mantém-se o nome antigo com "_" para o
+# corpo do ficheiro não ter de ser reescrito — mesma técnica já
+# usada no gui_propriedades.py, gui_contratos.py, gui_calendario.py e
+# gui_est_requisicoes.py.
+_tornar_clicavel = componentes.tornar_cliclavel
+
 
 LARGURA_CAIXA = {
     "solteiro": 120,
@@ -322,27 +337,6 @@ def _cores_estado(estado):
         return tema.CINZA_INDISPONIVEL, tema.TEXTO_INDISPONIVEL
 
     return tema.VERMELHO_ERRO, tema.TEXTO_ERRO
-
-
-def _tornar_clicavel(widget, ao_clicar):
-    """Liga um clique (botão esquerdo) a um widget e a todos os seus
-    descendentes — precisa de ser feito widget a widget porque, em
-    Tkinter, um clique num CTkLabel não propaga sozinho para o
-    CTkFrame pai.
-
-    Nesta planta, o `_tornar_clicavel` é chamado só nos filhos do
-    `conteudo` de cada caixa (nome, estado, nomes dos ocupantes) —
-    NUNCA no `caixa` nem no próprio `conteudo`. Assim o ⋮, que
-    fica fora desse percurso (é colocado com `.place()` na `caixa`,
-    não no `conteudo`), tem naturalmente o seu clique isolado, e o
-    problema de o clique do ⋮ disparar a ação do corpo desaparece
-    por construção. Não há `"break"` nenhum a fazer aqui.
-    """
-    widget.configure(cursor="hand2")
-    widget.bind("<Button-1>", lambda evento: ao_clicar())
-
-    for filho in widget.winfo_children():
-        _tornar_clicavel(filho, ao_clicar)
 
 
 class PlantaLugares(ctk.CTkFrame):

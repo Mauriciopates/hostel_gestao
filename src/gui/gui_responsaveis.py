@@ -38,6 +38,14 @@ Decisões desta entrega (09/09/2026):
    responsável não é hóspede: o prazo de conservação do RGPD não se
    lhe aplica, e desativar é a saída de quem deixa a operação, não
    um apagamento.
+
+CONSOLIDAÇÃO DE HELPERS EM componentes.py (13/09/2026) — o helper
+visual que estava duplicado localmente passou a viver só no
+`componentes.py`:
+
+- `_colocar_no_topo` local → `componentes.colocar_no_topo`
+  (alias no topo, mesmo nome antigo, para o corpo do ficheiro não
+  ter de ser reescrito). O resto do ficheiro não mudou.
 """
 import customtkinter as ctk
 
@@ -46,6 +54,14 @@ import unidades
 from . import componentes
 from . import sessao
 from . import tema
+
+
+# Aliases locais para os helpers que viviam neste ficheiro e passaram
+# a viver em componentes.py. Mantêm-se os nomes antigos com "_" para
+# o corpo do ficheiro não ter de ser reescrito — mesma técnica já
+# usada no gui_propriedades.py, gui_contratos.py, gui_calendario.py,
+# gui_unidades.py e gui_est_requisicoes.py.
+_colocar_no_topo = componentes.colocar_no_topo
 
 
 _LARGURA_ID = 70
@@ -79,18 +95,6 @@ _ALTURA_LINHA = 44
 
 # Quantas unidades o balão mostra antes de resumir o resto.
 _MAX_UNIDADES_BALAO = 6
-
-
-def _colocar_no_topo(janela):
-    """Traz um popup para a frente da janela principal.
-
-    Mesma função dos outros módulos da interface. `after(10, ...)`
-    dá tempo ao Tk para mapear a janela antes de `grab_set()`, que
-    de outro modo falha com "grab failed: window not viewable".
-    """
-    janela.after(
-        10, lambda: (janela.lift(), janela.focus_force(), janela.grab_set())
-    )
 
 
 class _BalaoUnidades:

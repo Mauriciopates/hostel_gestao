@@ -6,6 +6,34 @@ As regras vivem nos módulos correspondentes (`unidades.py`, `clientes.py`,
 
 Montantes em Decimal e datas em `date` (decisão 4). A conversão de e para
 texto ISO é responsabilidade do `repositorio.py`.
+
+ALTERAÇÕES 13/09/2026 (fluxo de Stock com Aprovação de Requisições):
+
+- `Requisicao` ganha dois campos novos — `observacao_rececao` e
+  `origem` — e um estado novo, `cancelada`, a acrescentar aos quatro
+  que já existiam (pendente/enviada/fechada/rejeitada). Os dois
+  campos vieram de duas decisões do fluxo de Stock, tomadas na
+  mesma ronda:
+
+  * `observacao_rececao` — texto livre que o responsável que pediu
+    escreve ao confirmar a receção, para informar faltas. Não mexe
+    no stock (decisão de 13/09/2026: "o Maurício só informa a falta
+    em observação, o Tiago é que decide se corrige o stock"). Fica
+    gravado na própria requisição.
+
+  * `origem` — distingue requisições normais ('pedido') das criadas
+    por Rol de Lavanderia ('rol'). O Rol cria e envia numa só
+    operação (não passa por Aprovação, porque o admin é quem decide
+    e quem envia — não há nada a aprovar), mas precisa de se
+    distinguir na lista, senão o responsável vê uma requisição que
+    não pediu, sem explicação.
+
+  * `cancelada` — estado novo, no mesmo espírito de `rejeitada`, mas
+    com autor diferente: `rejeitada` é o admin a recusar uma
+    pendente; `cancelada` é o próprio autor a desistir de uma
+    pendente (antes de o admin a ver). Só existe enquanto a
+    requisição está pendente — uma vez enviada, já saiu stock, e a
+    correção faz-se com movimento de ajuste, não com cancelamento.
 """
 
 from dataclasses import dataclass
@@ -32,8 +60,8 @@ class Propriedade:
 class Unidade:
     """Alojamento contratável. Pertence a uma propriedade.
     O tipo é restrição rígida: mensal não aceita reserva Airbnb e vice-versa.
-    Livre, ocupado e Reservado não são guardados - calculam-se a partir dos 
-    contratos para uma data(decisão 3). Só 'em_manutencao' persiste, 
+    Livre, ocupado e Reservado não são guardados - calculam-se a partir dos
+    contratos para uma data(decisão 3). Só 'em_manutencao' persiste,
     pois é uma decisão da gestão da unidade.
 
     """
@@ -53,9 +81,9 @@ class Unidade:
 @dataclass
 class Quarto:
     """Divisão de uma unidade que agrupa lugares.
-    Os dois indicadores são independentes: 'privativo' 
+    Os dois indicadores são independentes: 'privativo'
     restringe quem ocupar, 'limpeza_incluida' deterrmina
-    se o quarto entra no calculo da roupa de cama e enviar 
+    se o quarto entra no calculo da roupa de cama e enviar
     (decisão 17).
 
     """
@@ -89,12 +117,13 @@ class Lugar:
     capacidade: int = 1
     ativo: bool = True
 
+
 @dataclass
 class Cliente:
     """Pessoa que contrata alojamento.
-    Concentra os dados pessoais do sistema e é alvo da 
+    Concentra os dados pessoais do sistema e é alvo da
     anonimização prevista no RGPD (decisão 8). A nacionalidade
-    é conservada na anonimização por não identificar e 
+    é conservada na anonimização por não identificar e
     ter valor estatistico.
 
     """
@@ -117,9 +146,9 @@ class Cliente:
     data_anonimizado: date | None = None
     responsavel_anonimizado_id: str = ""
     ativo: bool = (
-        True  
-        # bool = True se o cliente está ativo no sistema, 
-        #False se foi desativado (ex: por pedido de anonimização).
+        True
+        # bool = True se o cliente está ativo no sistema,
+        # False se foi desativado (ex: por pedido de anonimização).
     )
 
 
@@ -127,7 +156,7 @@ class Cliente:
 class Responsavel:
     """PEssoa que opera o sistema.
 
-    Antecipado para a Fase 1 sem credenciais  (decisão 10): 
+    Antecipado para a Fase 1 sem credenciais  (decisão 10):
     serve para atribuir autoria a operações - requisições de stock,
     anonimizações, alterações de configuração. Login e permissões
     chegam na Fase 2.
@@ -144,10 +173,10 @@ class Responsavel:
 class OcupacaoMensal:
     """Dados especificos de um contrato de arrendamento mensal.
     Liga-se a 'Ocupacao' pelo mesmo ID. A caução é calculada a partir
-    da renda praticda, não é montante fixo (decisão 14).: 
+    da renda praticda, não é montante fixo (decisão 14).:
     O sistema sugere uma renda, aceita até duas, recusa acima.
 
-    Conserva 'renda_calculada' e 'renda_praticada' para que a 
+    Conserva 'renda_calculada' e 'renda_praticada' para que a
     diferença fique visivel - nunca se guarda um total.
 
     """
@@ -171,10 +200,10 @@ class OcupacaoAirbnb:
     """Dados especificos de uma reserva de estadia curtam.
 
     Liga-se á 'Ocupacao' pelo mesmo ID. O preço é por noite, calculado
-    a partir da unidade: 'preco_epoca_alta' só se aplica quando o 
-    indicador manual da unidade esta ativo E a data cai no periodo 
+    a partir da unidade: 'preco_epoca_alta' só se aplica quando o
+    indicador manual da unidade esta ativo E a data cai no periodo
     da época alta.
-    A multa de check-in tardio só existe quando 'check_in_tardio' 
+    A multa de check-in tardio só existe quando 'check_in_tardio'
     é True(decisão 15).
 
     Quando 'preco_praticado' fica abaixo de 'preco_calculado' (ou
@@ -200,14 +229,14 @@ class OcupacaoAirbnb:
 
 @dataclass
 class Produto:
-    """ Catalogo de material do armazem central.
-    
+    """Catalogo de material do armazem central.
+
     Definifo uma unica vez: o nome, a unidade de medida e stock minimo
     vivem aqui, não se repetem em cada movimento (decisão 9).
-    
+
     Não tem campo de quantidade. O saldo é a soma de movimentos,
     nunca um valor guardado.
-    
+
     """
 
     id: str
@@ -215,6 +244,7 @@ class Produto:
     unidade_medida: str
     stock_minimo: int = 0
     ativo: bool = True
+
 
 @dataclass
 class Requisicao:
@@ -227,26 +257,40 @@ class Requisicao:
     itens, tal como 'Ocupacao' já separava dados comuns dos
     especificos de cada regime).
 
-    Percorre quatro estados: pendente -> enviada -> fechada, com
-    'rejeitada' como saida alternativa a partir de pendente
-    (decisão 9, revista na decisão 19). Os estados são sempre da
-    requisição inteira, nunca de um item isolado: não há aprovação
-    nem receção item a item — envia-se e recebe-se a requisição
-    toda de uma vez (decisão 20).
+    Percorre cinco estados: pendente -> enviada -> fechada, com
+    'rejeitada' e 'cancelada' como saídas alternativas a partir de
+    pendente (decisão 9, revista na decisão 19; 'cancelada' chegou
+    em 13/09/2026, ao separar a Aprovação de Requisições num ecrã
+    próprio). Os estados são sempre da requisição inteira, nunca de
+    um item isolado: não há aprovação nem receção item a item —
+    envia-se e recebe-se a requisição toda de uma vez (decisão 20).
 
     pendente — o responsável registou o pedido. Nada saiu do armazém
-    ainda.
+    ainda. É aqui que o autor pode 'cancelar' (desistir antes de o
+    admin ver), se se enganou em algum item — mais simples do que
+    editar a requisição depois de criada.
 
     enviada — o admin aprovou e enviou. Gera um movimento de saída
-    por item, dá baixa no saldo de cada produto.
+    por item, dá baixa no saldo de cada produto. Já não se cancela:
+    para corrigir, o admin faz um movimento de ajuste. É este o
+    momento em que o responsável que pediu vê o que foi enviado e
+    pode confirmar a receção.
 
     fechada — o responsável confirma que o material chegou. Esta
     confirmação é dele, não do admin: quem pede é quem sabe se
-    recebeu. O fecho é automático nesse momento — não espera por
-    nenhuma devolução (decisão 19).
+    recebeu. Pode deixar uma 'observacao_rececao' (texto livre) a
+    informar faltas — não mexe no stock, é só informação para o
+    admin tratar depois, no ecrã de Movimentos ou de Devoluções.
 
     rejeitada — saída alternativa a partir de pendente. O admin
-    recusou o pedido, com motivo.
+    recusou o pedido, com motivo. Distinta de 'cancelada' pela
+    autoria: 'rejeitada' é o admin a recusar; 'cancelada' é o
+    autor a desistir.
+
+    cancelada — saída alternativa a partir de pendente. O próprio
+    autor desistiu do pedido antes de o admin o ver. Só existe
+    enquanto pendente (nada saiu ainda; cancelar não gera nenhum
+    movimento de stock).
 
     Sobra de material devolvida ao armazém é tratada à parte, pela
     entidade 'Devolucao' — nem toda requisição gera sobra, por isso
@@ -256,6 +300,13 @@ class Requisicao:
     detetado depois corrige-se com um movimento de ajuste, não com
     uma alteração a este registo (decisão 20, por analogia com a
     imutabilidade dos movimentos da decisão 9).
+
+    'origem' distingue as requisições pedidas pelo staff ('pedido',
+    por omissão) das criadas pelo admin no fluxo de Rol de
+    Lavanderia ('rol'). As duas vivem na mesma tabela e no mesmo
+    fluxo a partir do momento em que são enviadas; só se distinguem
+    pela origem, para o responsável perceber, na lista dele, porque
+    apareceu ali uma requisição que ele não pediu.
     """
 
     id: str
@@ -267,6 +318,8 @@ class Requisicao:
     responsavel_rejeicao_id: str = ""
     motivo_rejeicao: str = ""
     observacoes: str = ""
+    observacao_rececao: str = ""
+    origem: str = "pedido"
 
 
 @dataclass
@@ -364,6 +417,7 @@ class Movimento:
     requisicao_id: str = ""
     motivo: str = ""
 
+
 @dataclass
 class Configuracao:
     """Valor de configuração global, guardado como par chave/valor.
@@ -374,14 +428,15 @@ class Configuracao:
 
     Os valores iniciais estão em `config.py`; esta classe é o que fica
     gravado depois de alguém os alterar.
-    É a única classe do modelo sem id. Uma chave de configuração é um 
-    identificador técnico, escolhido por quem programa, 
+    É a única classe do modelo sem id. Uma chave de configuração é um
+    identificador técnico, escolhido por quem programa,
     não um nome de negócio.
     """
 
     chave: str
     valor: str
     descricao: str = ""
+
 
 @dataclass
 class ConfiguracaoHistorico:
@@ -401,6 +456,7 @@ class ConfiguracaoHistorico:
     data: date
     responsavel_id: str
     motivo: str = ""
+
 
 @dataclass
 class Ocupacao:

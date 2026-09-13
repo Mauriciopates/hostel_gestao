@@ -1,7 +1,7 @@
 """Gestão do stock — o armazém central que serve os responsáveis.
 
 Seis entidades neste módulo: Produto (catálogo), Requisicao (pedido
-do responsável, cabeçalho com quatro estados) e ItemRequisicao (um
+do responsável, cabeçalho com cinco estados) e ItemRequisicao (um
 produto e uma quantidade dentro dela), Devolucao (sobra devolvida
 ao armazém, cabeçalho, entidade própria desde a decisão 19) e
 ItemDevolucao (um produto e uma quantidade dentro dela), e
@@ -45,6 +45,27 @@ ALTERAÇÕES 10/09/2026 (ecrãs Produtos e Movimentos da GUI):
 - `contar_dependencias_produto(produto_id)` também é nova — a GUI
   precisa de saber se o produto tem dependências antes de decidir
   se pede forçar, sem falar com `repositorio` diretamente.
+
+ALTERAÇÕES 13/09/2026 (Aprovação de Requisições + cancelamento):
+
+- `cancelar_requisicao(requisicao_id, responsavel_id)` é nova — o
+  autor desiste de uma requisição pendente, antes de o admin a ver.
+  Estado novo: `cancelada`. Só se aplica a pendentes (uma vez
+  enviada, já saiu stock; corrigir aí é movimento de ajuste, não
+  cancelamento). Só o autor pode cancelar. Não gera nenhum
+  movimento de stock (nada saiu ainda).
+
+- `confirmar_rececao_requisicao` aceita `observacao_rececao=""` —
+  texto livre que o responsável que pediu escreve ao confirmar,
+  para informar faltas. Fica gravado na requisição. NÃO mexe no
+  stock: o admin lê a observação depois e decide o que fazer (com
+  um movimento de ajuste, se for caso disso).
+
+- `criar_requisicao` aceita `origem="pedido"` — distingue as
+  requisições normais ('pedido') das criadas pelo Rol de Lavanderia
+  ('rol'). O Rol cria e envia numa só operação (não passa por
+  Aprovação), mas a marca deixa o responsável perceber, na lista
+  dele, porque apareceu ali uma requisição que ele não pediu.
 """
 
 from datetime import date
@@ -58,6 +79,24 @@ PREFIXO_REQUISICAO = "REQ"
 PREFIXO_ITEM_REQUISICAO = "ITR"
 PREFIXO_DEVOLUCAO = "DEV"
 PREFIXO_ITEM_DEVOLUCAO = "ITD"
+
+
+# Estados possíveis de uma requisição. Acrescentado "cancelada" em
+# 13/09/2026 (o autor desiste antes de o admin a ver) — os cinco
+# vivem na mesma coluna `estado`.
+_ESTADOS_REQUISICAO = (
+    "pendente",
+    "enviada",
+    "fechada",
+    "rejeitada",
+    "cancelada",
+)
+
+# Origens possíveis de uma requisição. 'pedido' é o fluxo normal
+# (staff pede, admin aprova). 'rol' é o atalho do Rol de Lavanderia
+# (admin cria e envia, sem aprovação — não há nada a aprovar porque
+# o admin é quem decide).
+_ORIGENS_REQUISICAO = ("pedido", "rol")
 
 
 def criar_produto(nome, unidade_medida, stock_minimo=0):
@@ -93,7 +132,7 @@ def criar_produto(nome, unidade_medida, stock_minimo=0):
     if stock_minimo < 0:
         raise ValueError(
             f"O stock mínimo não pode ser negativo: {stock_minimo}."
-            )
+        )
 
     produto = {
         "id": repositorio.proximo_id(PREFIXO),
@@ -168,7 +207,8 @@ def atualizar_produto(
     if stock_minimo is not None:
         if not isinstance(stock_minimo, int) or isinstance(stock_minimo, bool):
             raise ValueError(
-            f"O stock mínimo tem de ser um número inteiro: " f"{stock_minimo}"
+                f"O stock mínimo tem de ser um número inteiro: "
+                f"{stock_minimo}"
             )
 
         if stock_minimo < 0:
@@ -521,9 +561,7 @@ def avisos_requisicao(itens):
         produto = procurar_produto(item["produto_id"])
 
         if produto is None:
-            raise ValueError(
-                f"O produto {item['produto_id']} não existe."
-            )
+            raise ValueError(f"O produto {item['produto_id']} não existe.")
 
         pedida = item.get("quantidade_pedida")
 
@@ -562,8 +600,7 @@ def _validar_inteiro(valor, nome):
 
     if not isinstance(valor, int) or isinstance(valor, bool):
         raise ValueError(
-            f"A quantidade {nome} tem de ser um número inteiro: "
-            f"{valor}"
+            f"A quantidade {nome} tem de ser um número inteiro: " f"{valor}"
         )
 
     return valor
@@ -574,14 +611,16 @@ def criar_requisicao(
     itens,
     data_pedido,
     observacoes="",
+    origem="pedido",
 ):
     """Cria uma requisição de material, no estado inicial "pendente".
 
-    Primeiro dos quatro estados do fluxo (decisão 9, revista nas
-    decisões 19 e 20): pendente → enviada → fechada, com "rejeitada"
-    como saída alternativa a partir de pendente. Nada sai do
-    armazém ainda — só quando `enviar_requisicao` aprovar o pedido
-    é que se gera o primeiro movimento.
+    Primeiro dos cinco estados do fluxo (decisão 9, revista nas
+    decisões 19 e 20; 'cancelada' chegou em 13/09/2026):
+    pendente → enviada → fechada, com "rejeitada" e "cancelada" como
+    saídas alternativas a partir de pendente. Nada sai do armazém
+    ainda — só quando `enviar_requisicao` aprovar o pedido é que se
+    gera o primeiro movimento.
 
     'itens' é uma lista de dicionários no formato
     {"produto_id": ..., "quantidade_pedida": ...} — uma requisição
@@ -594,6 +633,13 @@ def criar_requisicao(
     de existir e estar ativo, porque é ele quem assume a autoria do
     pedido (decisão 10) — mesma verificação que a anonimização de
     um cliente já exige a quem a regista.
+
+    'origem' distingue as requisições normais ('pedido', por
+    omissão) das criadas pelo Rol de Lavanderia ('rol'). As duas
+    vivem na mesma tabela e no mesmo fluxo a partir do momento em
+    que são enviadas; a origem só serve para o responsável perceber,
+    na lista dele, porque apareceu ali uma requisição que ele não
+    pediu (13/09/2026).
 
     Não valida se há saldo suficiente dos produtos: o envio parcial
     é permitido (decisão 9), por isso pedir mais do que o stock
@@ -639,6 +685,11 @@ def criar_requisicao(
     if data_pedido is None:
         raise ValueError("A data do pedido é obrigatória.")
 
+    origem = (origem or "pedido").strip().lower()
+
+    if origem not in _ORIGENS_REQUISICAO:
+        raise ValueError(f"Origem de requisição desconhecida: {origem}")
+
     requisicao = {
         "id": repositorio.proximo_id(PREFIXO_REQUISICAO),
         "responsavel_id": responsavel["id"],
@@ -649,6 +700,8 @@ def criar_requisicao(
         "responsavel_rejeicao_id": "",
         "motivo_rejeicao": "",
         "observacoes": observacoes.strip(),
+        "observacao_rececao": "",
+        "origem": origem,
     }
 
     repositorio.inserir_requisicao(requisicao)
@@ -775,9 +828,7 @@ def enviar_requisicao(
         _validar_inteiro(quantidade, "enviada")
 
         if quantidade <= 0:
-            raise ValueError(
-                "A quantidade enviada tem de ser positiva."
-            )
+            raise ValueError("A quantidade enviada tem de ser positiva.")
 
         if quantidade > item["quantidade_pedida"]:
             raise ValueError(
@@ -871,7 +922,67 @@ def rejeitar_requisicao(requisicao_id, responsavel_id, motivo):
     return requisicao
 
 
-def confirmar_rececao_requisicao(requisicao_id, responsavel_id, data_fecho):
+def cancelar_requisicao(requisicao_id, responsavel_id):
+    """Cancela uma requisição pendente — pendente → cancelada.
+
+    Saída alternativa a partir de "pendente", distinta de
+    `rejeitar_requisicao` pela autoria: aqui é o PRÓPRIO AUTOR que
+    desiste do pedido, antes de o admin o ver (13/09/2026). Faz
+    sentido sobretudo para o caso em que a pessoa se enganou em
+    algum item e prefere cancelar e criar uma nova, em vez de pedir
+    a alguém que a edite.
+
+    Só se aplica a pendentes. Uma vez enviada, já saiu stock — para
+    corrigir aí, o caminho é um movimento de ajuste (decisão 9),
+    não cancelar. Fechadas, rejeitadas e canceladas também não se
+    recancelam.
+
+    Só o autor pode cancelar: `responsavel_id` tem de corresponder
+    ao `responsavel_id` gravado em `criar_requisicao`, não a
+    qualquer responsável ativo. Mesma verificação que
+    `confirmar_rececao_requisicao` faz, pela mesma razão de
+    autoria.
+
+    Não gera nenhum movimento de stock — nada saiu do armazém
+    ainda. É só mudança de estado.
+
+    Grava de imediato via repositório — mesma convenção dos outros
+    módulos de negócio.
+    """
+    requisicao = procurar_requisicao(requisicao_id)
+
+    if requisicao is None:
+        raise ValueError(f"A requisição {requisicao_id} não existe.")
+
+    if requisicao["estado"] != "pendente":
+        raise ValueError(
+            f"A requisição {requisicao_id} não está pendente "
+            f"(estado atual: {requisicao['estado']}) — só se cancela "
+            f"uma requisição ainda não aprovada."
+        )
+
+    responsavel = responsaveis.validar_autoria(responsavel_id)
+
+    if responsavel["id"] != requisicao["responsavel_id"]:
+        raise ValueError(
+            f"Só o responsável que pediu "
+            f"({requisicao['responsavel_id']}) pode cancelar esta "
+            f"requisição."
+        )
+
+    campos = {"estado": "cancelada"}
+    repositorio.atualizar_requisicao(requisicao_id, campos)
+    requisicao.update(campos)
+
+    return requisicao
+
+
+def confirmar_rececao_requisicao(
+    requisicao_id,
+    responsavel_id,
+    data_fecho,
+    observacao_rececao="",
+):
     """Confirma a receção de uma requisição — enviada → fechada.
 
     Só o responsável que pediu confirma a receção (decisão 9,
@@ -881,6 +992,13 @@ def confirmar_rececao_requisicao(requisicao_id, responsavel_id, data_fecho):
     'responsavel_id' gravado em `criar_requisicao`, não a qualquer
     responsável ativo — ao contrário de `enviar_requisicao`, em que
     'enviado_por_id' podia ser qualquer um.
+
+    'observacao_rececao' é texto livre, opcional — o responsável
+    escreve aí o que faltou, se faltou (13/09/2026). Fica gravado
+    na requisição, mas NÃO mexe no stock: o admin lê depois e
+    decide o que fazer (movimento de ajuste, se for caso disso).
+    Sem esta separação, o responsável estaria a mexer no stock, o
+    que não é o papel dele.
 
     O fecho é automático nesse momento (decisão 19): a requisição
     deixa de ficar à espera de devolução. Se sobrar material, isso
@@ -917,7 +1035,11 @@ def confirmar_rececao_requisicao(requisicao_id, responsavel_id, data_fecho):
     if data_fecho is None:
         raise ValueError("A data de receção é obrigatória.")
 
-    campos = {"estado": "fechada", "data_fecho": data_fecho}
+    campos = {
+        "estado": "fechada",
+        "data_fecho": data_fecho,
+        "observacao_rececao": (observacao_rececao or "").strip(),
+    }
     repositorio.atualizar_requisicao(requisicao_id, campos)
     requisicao.update(campos)
 
@@ -1268,7 +1390,7 @@ def listar_requisicoes(estado=None, responsavel_id=None, produto_id=None):
 
     Não tem filtro de "incluir_inativos" — Requisicao não tem campo
     'ativo' (decisão 8 não se aplica aqui): o ciclo de vida é o
-    estado, um dos quatro valores do fluxo, nunca uma requisição
+    estado, um dos cinco valores do fluxo, nunca uma requisição
     "desativada". 'estado' e 'responsavel_id' filtram por um valor
     exato quando indicados; None (omisso) não filtra — mesma
     convenção do 'incompleto' em clientes.listar e do 'tipo' em

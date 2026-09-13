@@ -62,11 +62,21 @@ para modal próprio:
   popups empilhados (detalhe + calendário), pela mesma razão que
   levou o `PlantaLugaresModal` a fechar-se antes de navegar.
 
-Imports acrescentados nesta ronda: `clientes` e `contratos` (usados
-pelo `DetalheDiaModal` para ler o hóspede da reserva e o detalhe
-Airbnb). `responsaveis` NÃO é preciso — o nome do hóspede vem do
+CONSOLIDAÇÃO DE HELPERS EM componentes.py (13/09/2026) — os
+helpers visuais que estavam duplicados localmente passaram a viver
+só no `componentes.py`:
+
+- `_tornar_clicavel` local → `componentes.tornar_cliclavel`.
+- `_colocar_no_topo` local → `componentes.colocar_no_topo`.
+- `_formatar_valor` local → `componentes.formatar_valor`.
+- O resto do ficheiro não mudou.
+
+Imports mantidos: `clientes` e `contratos` são usados pelo
+`DetalheDiaModal` para ler o hóspede da reserva e o detalhe
+Airbnb. `responsaveis` NÃO é preciso — o nome do hóspede vem do
 `clientes.procurar`, não do responsável.
 """
+
 import datetime
 
 import customtkinter as ctk
@@ -78,14 +88,33 @@ import unidades
 from . import componentes
 from . import tema
 
+# Aliases locais para os helpers que viviam neste ficheiro e passaram
+# a viver em componentes.py. Mantêm-se os nomes antigos com "_" para
+# o corpo do ficheiro não ter de ser reescrito — mesma técnica já
+# usada no gui_propriedades.py, gui_contratos.py e
+# gui_est_requisicoes.py.
+_tornar_clicavel = componentes.tornar_cliclavel
+_colocar_no_topo = componentes.colocar_no_topo
+_formatar_valor = componentes.formatar_valor
+
 
 # Cabeçalhos das colunas. Índice 0 = segunda-feira, a mesma ordem
 # que `datetime.date.weekday()` devolve.
 _DIAS_SEMANA = ("SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM")
 
 _MESES = (
-    "jan", "fev", "mar", "abr", "mai", "jun",
-    "jul", "ago", "set", "out", "nov", "dez",
+    "jan",
+    "fev",
+    "mar",
+    "abr",
+    "mai",
+    "jun",
+    "jul",
+    "ago",
+    "set",
+    "out",
+    "nov",
+    "dez",
 )
 
 # Nomes por extenso, usados só no cabeçalho do DetalheDiaModal. Ficam
@@ -104,8 +133,18 @@ _DIAS_SEMANA_EXTENSO = (
 )
 
 _MESES_EXTENSO = (
-    "janeiro", "fevereiro", "março", "abril", "maio", "junho",
-    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+    "janeiro",
+    "fevereiro",
+    "março",
+    "abril",
+    "maio",
+    "junho",
+    "julho",
+    "agosto",
+    "setembro",
+    "outubro",
+    "novembro",
+    "dezembro",
 )
 
 # Larguras fixas, como nas tabelas de Gestão de Propriedades: com
@@ -151,35 +190,6 @@ _ESTADOS_COM_VAGA = ("livre", "parcial")
 
 _OPCAO_TODAS = "Todas as propriedades"
 _OPCOES_DISPONIBILIDADE = ("Todas as unidades", "Só com disponibilidade")
-
-
-def _colocar_no_topo(janela):
-    """Traz um popup (CTkToplevel) para a frente da janela principal.
-
-    Mesma função de gui_propriedades.py, repetida aqui para o módulo
-    não depender de um ecrã de negócio diferente só por causa de um
-    detalhe de janelas. `after(10, ...)` dá tempo ao Tk para mapear a
-    janela antes de `grab_set()`, que de outro modo falha com "grab
-    failed: window not viewable" em alguns sistemas.
-    """
-    janela.after(
-        10, lambda: (janela.lift(), janela.focus_force(), janela.grab_set())
-    )
-
-
-def _tornar_clicavel(widget, ao_clicar):
-    """Liga o clique e o cursor de mão a um widget e a todos os seus
-    descendentes.
-
-    Mesmo padrão das caixas da Planta de Lugares: sem isto, clicar em
-    cima da etiqueta de texto dentro do cartão não conta como clicar
-    no cartão, porque o evento fica no filho.
-    """
-    widget.bind("<Button-1>", lambda evento: ao_clicar())
-    widget.configure(cursor="hand2")
-
-    for filho in widget.winfo_children():
-        _tornar_clicavel(filho, ao_clicar)
 
 
 def _segunda_feira(data):
@@ -514,9 +524,7 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
         legenda = ctk.CTkFrame(self, fg_color="transparent")
         legenda.pack(fill="x", padx=24)
 
-        itens = (
-            _LEGENDA_MENSAL if self.tipo == "mensal" else _LEGENDA_AIRBNB
-        )
+        itens = _LEGENDA_MENSAL if self.tipo == "mensal" else _LEGENDA_AIRBNB
 
         for estado, texto in itens:
             fundo, cor_texto = _CORES_ESTADO[estado]
@@ -544,9 +552,7 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
                 "capacidade. Clicar abre o detalhe do dia."
             )
         else:
-            nota = (
-                "Cada célula é uma noite. Clicar abre o detalhe do dia."
-            )
+            nota = "Cada célula é uma noite. Clicar abre o detalhe do dia."
 
         ctk.CTkLabel(
             self,
@@ -570,9 +576,7 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
 
     def _recarregar(self):
         """Limpa e volta a desenhar a grelha da semana atual."""
-        self.rotulo_semana.configure(
-            text=_texto_intervalo(self.inicio_semana)
-        )
+        self.rotulo_semana.configure(text=_texto_intervalo(self.inicio_semana))
 
         for indice, rotulo in enumerate(self.rotulos_dias):
             dia = self.inicio_semana + datetime.timedelta(days=indice)
@@ -975,9 +979,7 @@ class DetalheDiaModal(ctk.CTkToplevel):
                         f"Tardio · {airbnb['hora_chegada']}",
                     )
                 else:
-                    _linha_cartao(
-                        corpo_cartao, "Check-in", "Automatizado"
-                    )
+                    _linha_cartao(corpo_cartao, "Check-in", "Automatizado")
 
                 _linha_cartao(
                     corpo_cartao,
@@ -991,9 +993,7 @@ class DetalheDiaModal(ctk.CTkToplevel):
         # e existir mesmo uma janela futura. Sem isto, a faixa
         # aparecia vazia (ou pior: com um intervalo inventado).
         if self.estado in ("ocupado", "reservado"):
-            janela = _proxima_disponibilidade_segura(
-                self.uni["id"], self.dia
-            )
+            janela = _proxima_disponibilidade_segura(self.uni["id"], self.dia)
 
             if janela is not None:
                 inicio, fim = janela
@@ -1015,9 +1015,7 @@ class DetalheDiaModal(ctk.CTkToplevel):
                 ).pack(fill="x", padx=14, pady=(10, 2))
 
                 if fim is None:
-                    texto_periodo = (
-                        f"a partir de {inicio.strftime('%d/%m')}"
-                    )
+                    texto_periodo = f"a partir de {inicio.strftime('%d/%m')}"
                     texto_sub = "sem fim previsto"
                 else:
                     texto_periodo = (
@@ -1094,7 +1092,6 @@ class DetalheDiaModal(ctk.CTkToplevel):
             return "Abrir reserva"
 
         return "Abrir unidade"
-
 
     def _executar_acao_principal(self):
         """Navega para o destino correspondente e fecha os dois
@@ -1184,11 +1181,9 @@ class DetalheDiaModal(ctk.CTkToplevel):
         # `tela_lista` ao popup é o que faz o botão "Voltar" e o
         # `_recarregar` funcionarem como se o popup tivesse sido
         # aberto a partir do clique no ID da propriedade.
-        UnidadesDaPropriedadeModal(
-            controlador.frame_atual, propriedade
-        )
+        UnidadesDaPropriedadeModal(controlador.frame_atual, propriedade)
 
- 
+
 # =====================================================================
 # Helpers do DetalheDiaModal
 #
@@ -1307,23 +1302,6 @@ def _linha_cartao(
     ).pack(side="left", fill="x", expand=True)
 
 
-def _formatar_valor(valor):
-    """Formata um Decimal em PT-PT, com vírgula decimal e "€".
-
-    Mesma convenção do `cli.formatar_valor` e do `_formatar_valor`
-    de gui_contratos.py — não se importa de lá porque cada módulo
-    da GUI já tem a sua cópia local, e o `gui_calendario.py` não
-    deve depender do `cli.py` (que é a camada de linha de comandos).
-    """
-    if valor is None:
-        return "—"
-
-    texto = f"{valor:,.2f}"
-    texto = texto.replace(",", "X").replace(".", ",").replace("X", ".")
-
-    return f"{texto} €"
-
-
 def _ocupacao_ativa_no_dia(unidade_id, dia):
     """Devolve a ocupação Airbnb ativa da unidade que cobre 'dia',
     ou None se a unidade estiver livre.
@@ -1338,13 +1316,8 @@ def _ocupacao_ativa_no_dia(unidade_id, dia):
     """
     fim_janela = dia + datetime.timedelta(days=1)
 
-    for ocupacao in contratos.listar(
-        unidade_id=unidade_id, tipo="airbnb"
-    ):
-        if (
-            ocupacao["data_inicio"] < fim_janela
-            and dia < ocupacao["data_fim"]
-        ):
+    for ocupacao in contratos.listar(unidade_id=unidade_id, tipo="airbnb"):
+        if ocupacao["data_inicio"] < fim_janela and dia < ocupacao["data_fim"]:
             return ocupacao
 
     return None

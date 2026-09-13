@@ -47,6 +47,17 @@ CORREÇÃO — fecho do popup de Nova Reserva depois de registar. O
 `_registar` deixa de fazer `_limpar_formulario()` e passa a pedir
 ao popup (`popup_pai._fechar()`) para se fechar.
 
+CONSOLIDAÇÃO DE HELPERS EM componentes.py (13/09/2026) — os
+helpers visuais duplicados localmente passaram a viver só no
+`componentes.py`:
+
+- `_formatar_valor` local → `componentes.formatar_valor`. Diferença
+  visível: o helper do `componentes.py` devolve "—" para `None` em
+  vez de rebentar com `TypeError`; nos valores normais o resultado
+  é idêntico.
+- `_colocar_no_topo` local → `componentes.colocar_no_topo`.
+- O resto do ficheiro não mudou.
+
 Segue a mesma disciplina de camadas do resto da GUI (decisão 7): só
 fala com `unidades`, `clientes`, `responsaveis`, `contratos`,
 `validacoes`, `impressao` — nunca com `repositorio` diretamente.
@@ -70,9 +81,12 @@ import unidades
 import validacoes
 from gui import componentes, tema
 
-
-def _formatar_valor(valor):
-    return f"{valor:.2f} €".replace(".", ",")
+# Aliases locais para os helpers que viviam neste ficheiro e passaram
+# a viver em componentes.py. Mantêm-se os nomes antigos com "_" para
+# o corpo do ficheiro não ter de ser reescrito — mesma técnica já
+# usada no gui_propriedades.py e no gui_est_requisicoes.py.
+_formatar_valor = componentes.formatar_valor
+_colocar_no_topo = componentes.colocar_no_topo
 
 
 def _rotulo_lugar(lugar, ocupantes, capacidade):
@@ -579,16 +593,6 @@ def _identificar_cliente(cliente, cliente_id):
     if cliente is None:
         return cliente_id
     return f"{cliente['nome']} ({cliente['id']})"
-
-
-def _colocar_no_topo(janela):
-    """Traz um popup para a frente da janela principal — mesma
-    função de gui/gui_clientes.py e gui/gui_propriedades.py, repetida
-    aqui porque cada módulo da GUI já a define localmente.
-    """
-    janela.after(
-        10, lambda: (janela.lift(), janela.focus_force(), janela.grab_set())
-    )
 
 
 class NovoContratoModal(ctk.CTkToplevel):

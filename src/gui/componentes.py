@@ -596,7 +596,6 @@ class Tabela(ctk.CTkFrame):
     def vazia(self):
         return self._desenhadas == 0
 
-    
 
 # =====================================================================
 # Helpers visuais genéricos — partilhados por todos os ecrãs
@@ -607,6 +606,24 @@ class Tabela(ctk.CTkFrame):
 #
 # O prefixo "_" caiu de propósito: eram privados quando viviam dentro
 # de cada módulo, agora são API pública de componentes.py.
+#
+# ALTERAÇÕES 13/09/2026 — consolidação final:
+# - `formatar_valor` é nova aqui. Existia em três sítios diferentes
+#   (gui_contratos.py, gui_calendario.py, gui_unidades.py), cada um
+#   com a sua cópia local com o mesmo nome. Passa a viver aqui, para
+#   todas as GUI usarem a mesma formatação PT-PT (vírgula decimal,
+#   ponto de milhar, "€" no fim).
+# - As cópias locais de `colocar_no_topo` (com prefixo "_") em
+#   gui_propriedades, gui_clientes, gui_contratos, gui_calendario e
+#   gui_responsaveis foram removidas — todos passaram a chamar
+#   `componentes.colocar_no_topo`.
+# - As cópias locais de `tornar_cliclavel` em gui_calendario e
+#   gui_unidades foram removidas — todas passaram a chamar
+#   `componentes.tornar_cliclavel`.
+# - A cópia local de `_truncar_texto` em gui_propriedades foi
+#   removida — passou a chamar `componentes.truncar_texto`, mantendo
+#   o parâmetro `fonte` (a fonte é criada uma vez por recarregamento,
+#   não a cada linha).
 # =====================================================================
 
 
@@ -664,6 +681,12 @@ def truncar_texto(fonte, texto, largura_max):
     continuam fixas (definidas por `Coluna.minimo`), isto é só a
     rede de segurança para o caso raro de um valor mais comprido.
 
+    A fonte é passada de fora, e não criada aqui dentro, por uma
+    razão prática: quem chama já a cria uma vez por recarregamento
+    (não a cada linha), e criar `tkinter.font.Font` a cada célula
+    era mais lento sem nenhum ganho. Ver `gui_propriedades.py`,
+    onde isto é usado em série.
+
     Nota honesta: a fonte usada para medir (`tkinter.font.Font`) não
     é pixel-a-pixel idêntica à que o CustomTkinter usa para desenhar
     (`CTkFont`) — a diferença é cosmética (corta um caráter a mais ou
@@ -678,3 +701,35 @@ def truncar_texto(fonte, texto, largura_max):
         cortado = cortado[:-1]
 
     return (cortado + reticencias) if cortado else reticencias
+
+
+def formatar_valor(valor):
+    """Formata um Decimal em texto PT-PT, com vírgula decimal,
+    ponto de milhar e símbolo "€" no fim.
+
+    Mesma convenção do `cli.formatar_valor` (a camada de linha de
+    comandos) — a formatação tem de ser a mesma nos dois sítios,
+    senão o mesmo valor aparece escrito de duas maneiras diferentes
+    consoante o sítio de onde se olha.
+
+    Estava duplicada em gui_contratos.py, gui_calendario.py e
+    gui_unidades.py, cada uma com a sua própria cópia local. Passou
+    a viver aqui em 13/09/2026, na consolidação dos helpers.
+
+    Um valor ausente (`None`) devolve "—" — mesma convenção neutra
+    que o `cli.formatar_valor` usa, para não obrigar a aprender dois
+    símbolos diferentes para "não há valor aqui".
+
+    Sempre com duas casas decimais ("45,00 €", nunca "45 €") — é
+    dinheiro, e dinheiro apresenta-se sempre com duas casas em
+    PT-PT. A troca de ponto de milhar com vírgula decimal é feita em
+    dois passos com um marcador temporário, para as duas trocas não
+    se atropelarem uma à outra.
+    """
+    if valor is None:
+        return "—"
+
+    texto = f"{valor:,.2f}"
+    texto = texto.replace(",", "X").replace(".", ",").replace("X", ".")
+
+    return f"{texto} €"
