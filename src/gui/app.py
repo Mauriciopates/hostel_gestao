@@ -1,42 +1,82 @@
 import customtkinter as ctk
 
+from pathlib import Path
+from PIL import Image
+
 import responsaveis
 from . import tema
 from . import componentes
 from . import sessao
+from .gui_dashboard import Dashboard
 from .gui_clientes import ListaClientes
 from .gui_contratos import ListaContratosMensais, ListaReservasAirbnb
 from .gui_calendario import Calendario
 from .gui_est_hub import EcraStock
 from .gui_responsaveis import ListaResponsaveis
 from .gui_propriedades import ListaPropriedades
+from .gui_relatorios import Relatorios
+from .gui_configuracoes import Configuracoes
 
-# Itens da barra lateral — lista simples, sem secções (decisão do
-# aluno, 07/09/2026: só 4 ecrãs por agora, secções ficam para quando
-# houver mais — Stock, Responsáveis, Dashboard). Ordem pensada pelo
-# fluxo de trabalho: primeiro o que se cadastra (Gestão de
-# Propriedades, Clientes), depois o que se consulta/usa a partir daí
-# (Contrato Mensal, Reservas Airbnb).
+# =====================================================================
+# Caminho do ícone da janela
+#
+# O `img/` está na raiz do projeto, e este ficheiro está em
+# `src/gui/`. Mesmo esquema do `componentes.py`: calcula-se a partir
+# de `__file__` (o caminho DESTE ficheiro), não de um caminho
+# relativo frágil.
+#
+# O ícone (`ico_hostel.png`) aparece na barra de título da janela e
+# na barra de tarefas do sistema operativo. É diferente do logo da
+# sidebar (`ico_hostel_transparente.png`): este é quadrado, pensado
+# para ficar bem num espaço quadrado pequeno.
+# =====================================================================
+
+_PASTA_IMG = Path(__file__).resolve().parent.parent.parent / "img"
+
+_ICONE_JANELA = _PASTA_IMG / "ico_hostel.png"
+
+
+# Itens da barra lateral, organizados em secções (decisão do
+# aluno, 13/09/2026, ao desenhar o Dashboard): a lista simples
+# deixou de caber quando os ecrãs passaram de 4 a 10. As secções
+# agrupam por função — PAINEL (o que se vê ao abrir), GESTÃO (o
+# que se cadastra), OPERAÇÃO (o dia-a-dia), SISTEMA (o que ainda
+# por implementar). O widget `componentes.BarraLateral` já
+# suportava `tipo: "secao"` desde o início — esta é a primeira
+# vez que é usado.
+#
+# Ordem dentro de cada secção pensada pelo fluxo:
+#
+# - PAINEL: Dashboard primeiro — é o ecrã de arranque, o que a
+#   pessoa vê assim que escolhe o responsável ativo.
+# - GESTÃO: primeiro o que se cadastra (Propriedades, Clientes),
+#   depois o que se consulta/usa a partir daí (Contratos Mensais,
+#   Reservas Airbnb).
+# - OPERAÇÃO: Calendário antes de Stock — o calendário é consulta
+#   diária, o stock é mais esporádico.
+# - SISTEMA: Relatórios e Configurações, ambos por implementar
+#   (os ecrãs abrem e dizem isso mesmo — ver gui_relatorios.py e
+#   gui_configuracoes.py).
+#
+# Notas de decisões anteriores que continuam em vigor:
 #
 # 07/09/2026: "Novo Contrato Mensal" saiu da barra lateral — ficava
 # parecido demais com "Contrato Mensal" (a lista), um debaixo do
-# outro, só a palavra "Novo" a distinguir. Agora só é acessível pelo
-# botão "+ Novo Contrato" dentro do próprio ecrã "Contrato Mensal"
-# (ver ListaContratosMensais/NovoContratoModal, gui_contratos.py).
-# "Contratos e Reservas" (um ecrã só, com dropdown de tipo) também
-# saiu — decisão do aluno de separar em dois itens já filtrados,
-# "Contrato Mensal" e "Reservas Airbnb", em vez de escolher o tipo
-# lá dentro.
+# outro, só a palavra "Novo" a distinguir. Continua acessível pelo
+# botão "+ Novo Contrato" dentro do próprio ecrã "Contrato Mensal".
 #
-# 07/09/2026 (mesmo dia, ronda seguinte): "Propriedades e Unidades"
-# passou a "Gestão de Propriedades" e "Planta de Lugares" saiu da
-# lista — deixou de ser um ecrã à parte, só se chega lá pelo botão
-# "Abrir" de uma unidade mensal dentro do popup de unidades de
-# ListaPropriedades (ver ponto 10 do docstring de gui_propriedades.
-# py). PlantaLugares deixou de ser importada aqui — quem chama
-# `mostrar_frame(PlantaLugares, ...)` agora é o próprio
-# gui_propriedades.py, que já a importa para isso.
+# 07/09/2026: "Planta de Lugares" saiu da barra lateral — só se
+# chega lá pelo botão "Abrir Mapa" de uma unidade mensal, dentro do
+# popup de unidades da Gestão de Propriedades.
+#
+# 08/09/2026: "Stock" e não "Requisições" — o hub que ele abre já
+# tem um cartão "Requisições" lá dentro.
 ITENS_MENU = [
+    # ---- PAINEL -----------------------------------------------------
+    {"tipo": "secao", "texto": "Painel"},
+    {"tipo": "item", "texto": "Dashboard", "ecra": Dashboard},
+    # ---- GESTÃO -----------------------------------------------------
+    {"tipo": "secao", "texto": "Gestão"},
     {
         "tipo": "item",
         "texto": "Gestão de Propriedades",
@@ -45,7 +85,7 @@ ITENS_MENU = [
     {"tipo": "item", "texto": "Clientes", "ecra": ListaClientes},
     {
         "tipo": "item",
-        "texto": "Contrato Mensal",
+        "texto": "Contratos Mensais",
         "ecra": ListaContratosMensais,
     },
     {
@@ -53,35 +93,20 @@ ITENS_MENU = [
         "texto": "Reservas Airbnb",
         "ecra": ListaReservasAirbnb,
     },
-    # 08/09/2026: "Calendário" entra como 5.º item, ainda sem
-    # secções (a lista simples continua a ser a decisão em vigor).
-    # O ecrã em si só mostra os dois cartões de regime — a grelha
-    # da semana abre em popup a partir daí, para não ficar presa à
-    # largura da área de conteúdo (ver gui_calendario.py).
+    # ---- OPERAÇÃO ---------------------------------------------------
+    {"tipo": "secao", "texto": "Operação"},
     {"tipo": "item", "texto": "Calendário", "ecra": Calendario},
-    # 08/09/2026: o item chama-se "Stock", e não "Requisições",
-    # porque o hub que ele abre já tem lá dentro um cartão
-    # "Requisições" — o mesmo nome nos dois sítios repetia o
-    # problema corrigido em 07/09 entre "Contrato Mensal" e
-    # "Novo Contrato Mensal". As outras quatro áreas do módulo
-    # (Aprovação, Devoluções, Produtos, Movimentos) estão
-    # desenhadas no hub mas ainda por implementar.
     {"tipo": "item", "texto": "Stock", "ecra": EcraStock},
-    # 09/09/2026: Gestão de Responsáveis. É também o único
-    # sítio da aplicação que chama sessao.definir_responsavel_
-    # ativo — até aqui o cabeçalho de todos os ecrãs dizia "sem
-    # responsável" e o "Confirmar receção" das requisições nunca
-    # podia aparecer.
-    {
-        "tipo": "item",
-        "texto": "Responsáveis",
-        "ecra": ListaResponsaveis,
-    },
+    {"tipo": "item", "texto": "Responsáveis", "ecra": ListaResponsaveis},
+    # ---- SISTEMA ----------------------------------------------------
+    {"tipo": "secao", "texto": "Sistema"},
+    {"tipo": "item", "texto": "Relatórios", "ecra": Relatorios},
+    {"tipo": "item", "texto": "Configurações", "ecra": Configuracoes},
 ]
 
 
 class SelecionarUtilizadorModal(ctk.CTkToplevel):
-    """"Quem está a usar a aplicação?" — obrigatório ao arrancar.
+    """ "Quem está a usar a aplicação?" — obrigatório ao arrancar.
 
     Substituto provisório de um ecrã de login a sério, enquanto não
     existir um módulo `utilizadores.py` com conta e palavra-passe
@@ -150,7 +175,7 @@ class SelecionarUtilizadorModal(ctk.CTkToplevel):
             self,
             text=(
                 "Ainda não há nenhum responsável criado. Continue e "
-                "crie um em \"Responsáveis\" — da próxima vez que "
+                'crie um em "Responsáveis" — da próxima vez que '
                 "abrir a aplicação já pode escolher aqui."
             ),
             text_color=tema.COR_TEXTO_SECUNDARIO,
@@ -223,6 +248,24 @@ class Aplicacao(ctk.CTk):
         super().__init__()
 
         self.title("Hostel Clean — Gestão de Alojamento")
+
+        # Ícone da janela (barra de título + barra de tarefas do
+        # sistema). Tem de ser aplicado ANTES da janela ficar
+        # visível — depois disso, alguns gestores de janelas
+        # ignoram a chamada.
+        #
+        # `iconbitmap` espera um `.ico` no Windows e um `.png` no
+        # Linux/Mac; para funcionar em ambos, o caminho é passado
+        # como string e o `iconphoto(True, ...)` (usado abaixo)
+        # cobre o caso do PNG. O `try/except` evita rebentar o
+        # arranque se o ficheiro não existir (por exemplo, num
+        # ambiente onde o `img/` não foi copiado) — a janela abre
+        # sem ícone, mas abre.
+        try:
+            self.iconbitmap(str(_ICONE_JANELA))
+        except Exception:
+            pass
+
         # Janela redimensionável, com maximizar/minimizar (07/09/2026
         # — pedido do aluno: o tamanho fixo, sem margem nenhuma, era
         # parte do aperto que as tabelas sentiam para caber tudo).
@@ -244,10 +287,17 @@ class Aplicacao(ctk.CTk):
         # extra aqui só criava uma faixa vazia acima do menu e do
         # ecrã, sem função nenhuma (visível pela primeira vez agora
         # que a barra lateral é real). Decisão do aluno, 07/09/2026.
+        #
+        # Largura de 160px (era 150px até 13/09/2026): o logo da
+        # sidebar (`ico_hostel_transparente.png`) é renderizado com
+        # 110px de largura, mais 12px de padding lateral de cada
+        # lado — precisa de pelo menos 134px. Os 160 dão folga para
+        # o "Gestão de Propriedades" (o item mais comprido) caber
+        # sem truncar.
         self.barra_lateral = componentes.BarraLateral(
             self, controlador=self, itens=ITENS_MENU
         )
-        self.barra_lateral.configure(width=150)
+        self.barra_lateral.configure(width=160)
         self.barra_lateral.grid(row=0, column=0, sticky="ns")
         self.barra_lateral.grid_propagate(False)
 
@@ -268,10 +318,14 @@ class Aplicacao(ctk.CTk):
         popup_utilizador = SelecionarUtilizadorModal(self)
         self.wait_window(popup_utilizador)
 
-        # Ecrã inicial ao arrancar a aplicação (decisão do aluno,
-        # 07/09/2026): Gestão de Propriedades — é o ponto de partida
-        # lógico do fluxo, enquanto não existir Dashboard.
-        self.mostrar_frame(ListaPropriedades)
+        # Ecrã inicial ao arrancar a aplicação — Dashboard desde
+        # 13/09/2026 (antes era Gestão de Propriedades, decisão de
+        # 07/09/2026 que ficou documentada como provisória "enquanto
+        # não existir Dashboard"). O Dashboard mostra os números do
+        # dia e os alertas por resolver, que é o que interessa ao
+        # abrir a aplicação — as listas de Propriedades/Clientes
+        # continuam a um clique na barra lateral.
+        self.mostrar_frame(Dashboard)
 
     def mostrar_frame(self, classe_frame, **kwargs):
         """Troca o ecrã atual pelo indicado em classe_frame.
@@ -283,6 +337,15 @@ class Aplicacao(ctk.CTk):
         acede a coisas partilhadas (ex. sessao). kwargs são
         argumentos extra específicos do ecrã (ex.: o id de uma
         unidade a abrir).
+
+        Depois de trocar o ecrã, avisa a barra lateral para marcar
+        o botão correspondente como ativo (azul). O `classe_frame`
+        é usado como chave — o mesmo objeto que a barra lateral
+        guardou em `_botoes_por_ecra` quando criou o botão. Se a
+        classe não estiver na barra (ex.: `NovoContratoMensal`, que
+        só se abre por um caminho específico), o `marcar_ativo`
+        simplesmente limpa todos os botões — comportamento
+        aceitável, ver o docstring de `BarraLateral.marcar_ativo`.
         """
         if self.frame_atual is not None:
             self.frame_atual.destroy()
@@ -291,6 +354,8 @@ class Aplicacao(ctk.CTk):
             self.area_conteudo, controlador=self, **kwargs
         )
         self.frame_atual.pack(fill="both", expand=True)
+
+        self.barra_lateral.marcar_ativo(classe_frame)
 
     def trocar_utilizador(self):
         """Reabre o "Quem está a usar a aplicação?" a qualquer altura

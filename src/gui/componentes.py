@@ -1,13 +1,38 @@
 import collections
 import datetime
 import tkinter.font as tkfont
+from pathlib import Path
 from tkinter import messagebox
 
 import customtkinter as ctk
+from PIL import Image
 
 import config
 from . import tema
 from . import sessao
+
+# =====================================================================
+# Caminhos das imagens
+#
+# O `img/` está na raiz do projeto, e este ficheiro está em
+# `src/gui/`. O caminho é `../../img/`, mas não é escrito à mão —
+# calcula-se a partir de `__file__`, que é o caminho DESTE ficheiro
+# (independente de onde o `python` foi corrido).
+#
+# Porquê: se um dia corres a aplicação da raiz, de `src/` ou de
+# `src/gui/`, o `__file__` é sempre o mesmo. Um caminho relativo
+# simples (`"../../img/x.png"`) funcionava só de um sítio — o resto
+# dava `FileNotFoundError` ou, pior, ficava silenciosamente com um
+# retângulo vazio.
+#
+# `.resolve()` normaliza o caminho antes de o usar: resolve `..`,
+# symlinks e caminhos relativos, para o `Image.open(...)` receber
+# sempre um caminho absoluto.
+# =====================================================================
+
+_PASTA_IMG = Path(__file__).resolve().parent.parent.parent / "img"
+
+_LOGO_SIDEBAR = _PASTA_IMG / "ico_hostel_transparente.png"
 
 
 def mostrar_erro(mensagem, titulo="Erro"):
@@ -60,10 +85,21 @@ class BarraLateral(ctk.CTkFrame):
     com ecrãs falsos sem Unidades/Clientes/etc. já existirem. Mostra
     sempre a versão do sistema (config.VERSAO) no rodapé (decisão 21).
 
-    Cabeçalho de marca "HOSTEL CLEAN" no topo (07/09/2026, aprovado
-    por mockup antes de codar, junto com os itens 2/3/5 do checklist
-    de wireframes) — só decorativo, sem lógica nenhuma, por isso fica
-    fixo aqui em vez de vir na lista `itens`.
+    LOGO no topo (13/09/2026): em vez do antigo cabeçalho "●
+    HOSTEL CLEAN" em texto, o topo passa a mostrar
+    `ico_hostel_transparente.png` dentro de uma caixa quase-branca.
+    A caixa resolve o problema de contraste — o logo tem o texto em
+    navy escuro (#0C2F48), exatamente a mesma cor do fundo da
+    barra; sem a caixa, o texto desaparecia. Validado por mockup
+    antes de codar.
+
+    ESTADO ATIVO (13/09/2026): cada botão de item fica gravado em
+    `self._botoes_por_ecra`, com a classe do ecrã como chave. O
+    método `marcar_ativo(classe_ecra)` — chamado por
+    `Aplicacao.mostrar_frame` a cada troca de ecrã — pinta o botão
+    do ecrã atual de azul (AZUL_PRINCIPAL) e os outros de
+    transparente. Sem isto, o utilizador perdia-se sobre onde
+    estava: nenhum botão marcava o ecrã aberto.
 
     Botão "Trocar utilizador" no rodapé, acima da versão (09/09/2026
     — pedido explícito do aluno, "botão cinza"). Mesma ideia de
@@ -77,50 +113,108 @@ class BarraLateral(ctk.CTkFrame):
     def __init__(self, master, controlador, itens):
         super().__init__(master, corner_radius=0, fg_color=tema.NAVY_ESCURO)
 
-        marca = ctk.CTkFrame(self, fg_color="transparent")
-        marca.pack(fill="x", padx=16, pady=(20, 14))
-        ctk.CTkLabel(
-            marca,
-            text="●",
-            text_color=tema.AZUL_CLARO,
-            font=ctk.CTkFont(size=14),
-        ).pack(side="left", padx=(0, 8))
-        ctk.CTkLabel(
-            marca,
-            text="HOSTEL CLEAN",
-            text_color=tema.COR_TEXTO_SIDEBAR,
-            font=ctk.CTkFont(size=13, weight="bold"),
-        ).pack(side="left")
+        # Guarda o controlador e o dicionário de botões por classe
+        # de ecrã — usado pelo `marcar_ativo` para saber que botão
+        # pintar de azul quando um ecrã é aberto.
+        self.controlador = controlador
+        self._botoes_por_ecra = {}
 
-        ctk.CTkFrame(
+        # =============================================================
+        # LOGO no topo, dentro de uma caixa quase-branca
+        #
+        # O logo (`ico_hostel_transparente.png`) tem o texto em navy
+        # escuro (#0C2F48). Sobre a sidebar navy (a mesma cor), o
+        # texto desaparecia. Uma caixa quase-branca atrás resolve o
+        # contraste — validado por mockup antes de codar.
+        #
+        # A caixa tem cantos redondos alinhados com os itens da
+        # navegação (RAIO_BOTAO = 10), para o conjunto ler como um
+        # todo, não como um retângulo colado lá em cima.
+        #
+        # O `Image.open(...)` é chamado uma única vez, no `__init__`
+        # da barra — não a cada `mostrar_frame`. Se a imagem não
+        # existir (mudou de sítio, foi apagada), o erro é imediato e
+        # claro, em vez de mostrar um retângulo vazio que ninguém
+        # percebe de onde vem.
+        # =============================================================
+        imagem_pil = Image.open(_LOGO_SIDEBAR)
+        proporcao = imagem_pil.height / imagem_pil.width
+        largura_logo = 110
+        altura_logo = int(largura_logo * proporcao)
+
+        # A referência tem de ficar guardada em `self`, senão o
+        # garbage collector do Python recolhe-a e a imagem
+        # desaparece da sidebar (bug conhecido do Tkinter: o
+        # PhotoImage tem de ter uma referência viva).
+        self._imagem_logo = ctk.CTkImage(
+            light_image=imagem_pil,
+            dark_image=imagem_pil,
+            size=(largura_logo, altura_logo),
+        )
+
+        caixa_logo = ctk.CTkFrame(
             self,
-            height=1,
-            fg_color=tema.COR_TEXTO_SIDEBAR_SECAO,
-        ).pack(fill="x", padx=16, pady=(0, 10))
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="#F5F7F9",
+        )
+        caixa_logo.pack(fill="x", padx=12, pady=(10, 4))
 
+        ctk.CTkLabel(
+            caixa_logo,
+            text="",
+            image=self._imagem_logo,
+        ).pack(padx=6, pady=6)
+
+        # =============================================================
+        # ITENS da navegação
+        #
+        # Cada botão de item é guardado em `self._botoes_por_ecra`
+        # com a classe do ecrã como chave — é assim que o
+        # `marcar_ativo` consegue encontrar e pintar o botão certo
+        # quando `Aplicacao.mostrar_frame` lhe diz "estou neste
+        # ecrã".
+        # =============================================================
         for item in itens:
             if item["tipo"] == "secao":
+                # O `.upper()` existe para não obrigar quem escreve
+                # o `ITENS_MENU` (em app.py) a lembrar-se de escrever
+                # as secções em maiúsculas. Mesma convenção dos
+                # títulos das tabelas ("ID", "NOME", "AÇÕES").
+                #
+                # O `padx=14` alinha o texto da secção com o texto
+                # dos itens da navegação (que têm `padx=6` no `pack`
+                # do botão + 12 interno do CTkButton, somando 18
+                # visíveis — os 14 aqui ficam ligeiramente à
+                # esquerda, o que lê melhor do que alinhado ao
+                # pixel).
                 ctk.CTkLabel(
                     self,
-                    text=item["texto"],
+                    text=item["texto"].upper(),
                     text_color=tema.COR_TEXTO_SIDEBAR_SECAO,
                     font=ctk.CTkFont(size=10, weight="bold"),
                     anchor="w",
-                ).pack(fill="x", padx=16, pady=(16, 4))
+                ).pack(fill="x", padx=14, pady=(12, 4))
             else:
-                ctk.CTkButton(
+                botao = ctk.CTkButton(
                     self,
                     text=item["texto"],
                     fg_color="transparent",
                     text_color=tema.COR_TEXTO_SIDEBAR,
                     hover_color=tema.AZUL_PRINCIPAL,
                     corner_radius=tema.RAIO_BOTAO,
+                    font=ctk.CTkFont(size=12),
                     anchor="w",
                     command=lambda ecra=item["ecra"]: (
                         controlador.mostrar_frame(ecra)
                     ),
-                ).pack(fill="x", padx=8, pady=2)
+                )
+                botao.pack(fill="x", padx=6, pady=1)
 
+                self._botoes_por_ecra[item["ecra"]] = botao
+
+        # =============================================================
+        # RODAPÉ: versão + botão de trocar utilizador
+        # =============================================================
         ctk.CTkLabel(
             self,
             text=f"v{config.VERSAO}",
@@ -142,7 +236,39 @@ class BarraLateral(ctk.CTkFrame):
             corner_radius=tema.RAIO_BOTAO,
             height=30,
             command=controlador.trocar_utilizador,
-        ).pack(side="bottom", fill="x", padx=12, pady=(4, 0))
+        ).pack(side="bottom", fill="x", padx=10, pady=(4, 0))
+
+    def marcar_ativo(self, classe_ecra):
+        """Pinta de azul o botão do ecrã indicado, e limpa os
+        outros.
+
+        Chamado por `Aplicacao.mostrar_frame` sempre que o ecrã
+        muda — sem isto, nenhum botão fica marcado como "estou
+        aqui", e o utilizador perde-se sobre onde está.
+
+        'classe_ecra' é a classe (não o nome) do ecrã — é a mesma
+        que está gravada em `_botoes_por_ecra` como chave, e a
+        mesma que é passada a `mostrar_frame`.
+
+        O "azul ativo" é o mesmo AZUL_PRINCIPAL usado no `hover`
+        dos botões. Isto é intencional: o item ativo e o item
+        sob o rato usam o mesmo azul, porque ambos significam
+        "este é o item em foco agora". A diferença é que o ativo
+        fica assim até se mudar de ecrã, o hover só enquanto o
+        rato está lá.
+
+        Ecrãs que não estão na barra lateral (ex.: um popup, ou
+        um ecrã que só se abre por um caminho específico — o
+        `NovoContratoMensal` a partir do `PlantaLugaresModal`)
+        não têm botão associado. Nesse caso, todos os botões ficam
+        transparentes, o que é aceitável: o utilizador está
+        dentro de um formulário, não num ecrã de navegação.
+        """
+        for ecra, botao in self._botoes_por_ecra.items():
+            if ecra is classe_ecra:
+                botao.configure(fg_color=tema.AZUL_PRINCIPAL)
+            else:
+                botao.configure(fg_color="transparent")
 
 
 class Cabecalho(ctk.CTkFrame):

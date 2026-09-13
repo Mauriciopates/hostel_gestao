@@ -15,6 +15,14 @@ módulo recebe `dados` — `desativar`, `estado`, `_estado_mensal`,
 `dados["ocupacoes"]` diretamente: leem `repositorio.listar_ocupacoes`
 (mesmo módulo que `contratos.py` usa), o que continua a evitar o
 import circular (`contratos.py` já importa `unidades.py`).
+
+ACRESCENTADO 13/09/2026 — `taxa_ocupacao(data, tipo=None)`, para o
+Dashboard. Agrega a ocupação de todas as unidades ativas num dia,
+medindo cada regime na sua unidade natural: Airbnb em unidades
+ocupadas/total, mensal em lugares ocupados/total. Não substitui
+`estado`/`estado_detalhe` (que classificam UMA unidade); responde
+a uma pergunta diferente — "de tudo o que está em oferta, quanto
+é que está ocupado".
 """
 
 from decimal import Decimal
@@ -797,6 +805,63 @@ def estado_detalhe(unidade_id, data):
         "capacidade": capacidade,
     }
 
+
+def taxa_ocupacao(data, tipo=None):
+    """Taxa de ocupação agregada de todas as unidades ativas, numa
+    data — devolve o par (ocupados, total).
+
+    Cada regime mede-se na sua unidade natural (decisão tomada com
+    o aluno, 13/09/2026, ao planear o dashboard):
+
+    - tipo="airbnb" → (unidades ocupadas, unidades ativas). Uma
+      unidade Airbnb é indivisível (decisão 5), por isso a unidade
+      natural de medida é a própria unidade: ou está ocupada, ou
+      não está.
+    - tipo="mensal" → (lugares ocupados, lugares totais). Uma
+      unidade mensal tem vários lugares (decisão 17), e a pergunta
+      "quanto está ocupado" só faz sentido ao nível do lugar.
+    - tipo=None → soma os dois regimes (unidades Airbnb ocupadas +
+      lugares mensais ocupados, unidades Airbnb + lugares mensais).
+      Só serve para um número de topo; qualquer leitura em detalhe
+      deve passar um tipo concreto.
+
+    Unidades inativas e unidades em manutenção ficam de fora da
+    contagem nos dois lados (numerador e denominador): uma unidade
+    desativada não faz parte da oferta, e uma em manutenção também
+    não (decisão 3 — manutenção sobrepõe-se ao cálculo). Isto é o
+    que distingue esta função de `estado_detalhe`, que classifica
+    uma unidade isolada; aqui a pergunta é "de tudo o que está em
+    oferta, quanto é que está ocupado".
+
+    Uma unidade mensal ainda sem quartos ou sem lugares ativos
+    contribui com 0 lugares para o total — está por preencher, não
+    está ocupada. `estado_detalhe` trata este caso como "livre"
+    (via capacidade==0), e é coerente com o que aqui se faz.
+    """
+    if tipo is not None and tipo not in ("mensal", "airbnb"):
+        raise ValueError(f"Tipo de unidade desconhecido: {tipo}")
+
+    ocupados = 0
+    total = 0
+
+    for unidade in listar(tipo=tipo):
+        if unidade["em_manutencao"]:
+            continue
+
+        if unidade["tipo"] == "airbnb":
+            total += 1
+
+            if _estado_airbnb(unidade["id"], data) == "Ocupado":
+                ocupados += 1
+
+        else:  # mensal
+            ocupados_unidade, capacidade = _contagem_mensal(
+                unidade["id"], data
+            )
+            ocupados += ocupados_unidade
+            total += capacidade
+
+    return ocupados, total
 
 
 def proxima_disponibilidade(unidade_id, data):
