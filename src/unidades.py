@@ -798,6 +798,72 @@ def estado_detalhe(unidade_id, data):
     }
 
 
+
+def proxima_disponibilidade(unidade_id, data):
+    """Devolve (data_inicio, data_fim) da próxima janela livre da
+    unidade a partir de 'data', ou None se não houver nenhuma
+    ocupação futura registada.
+
+    Só faz sentido para unidades Airbnb — uma unidade mensal tem
+    ocupações sem termo previsto, e "próxima janela livre" não é
+    uma pergunta que se responda com o modelo atual. Levanta
+    ValueError se a unidade for mensal.
+
+    A janela começa no dia seguinte à última ocupação ativa que
+    ainda vai começar (ou que já começou mas ainda não terminou —
+    a partir de hoje, é a mesma coisa). Termina na data de início
+    da ocupação seguinte, ou fica em aberto (None) se não houver
+    nenhuma.
+
+    Devolve None quando não há nenhuma ocupação futura — a unidade
+    está livre a partir de 'data' e não há nada a anunciar a seguir.
+
+    Não é uma função de apresentação: devolve dates, quem chama
+    formata. Vive aqui e não em contratos.py porque é uma pergunta
+    sobre o estado físico da unidade, e é este módulo que trata de
+    unidades (mesma lógica que levou `quarto_privativo_ocupado`
+    para aqui, em vez de para contratos.py).
+    """
+    unidade = procurar(unidade_id)
+
+    if unidade is None:
+        raise ValueError(f"A unidade {unidade_id} não existe.")
+
+    if unidade["tipo"] != "airbnb":
+        raise ValueError(
+            "A próxima disponibilidade só se calcula para unidades "
+            "Airbnb."
+        )
+
+    # Ocupações ativas cujo data_fim ainda não passou — as que
+    # interessam para "quando é que isto volta a estar livre".
+    ocupacoes = [
+        o
+        for o in repositorio.listar_ocupacoes(
+            unidade_id=unidade_id, tipo="airbnb"
+        )
+        if o["data_fim"] is not None and o["data_fim"] > data
+    ]
+
+    if not ocupacoes:
+        return None
+
+    ocupacoes.sort(key=lambda o: o["data_fim"])
+
+    inicio = ocupacoes[-1]["data_fim"]
+
+    # Fim: a próxima ocupação cujo início já seja depois da janela
+    # que estamos a anunciar. Se não houver, a janela fica aberta
+    # (None), e quem chama mostra "sem fim previsto".
+    seguintes = [
+        o["data_inicio"] for o in ocupacoes if o["data_inicio"] > inicio
+    ]
+
+    if not seguintes:
+        return (inicio, None)
+
+    return (inicio, min(seguintes))
+
 # --- atribuição de responsáveis a unidades ---------------------------
 #
 # Liga um responsável à gestão de uma ou mais unidades — quem faz a

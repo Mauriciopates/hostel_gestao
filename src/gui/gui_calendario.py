@@ -38,11 +38,41 @@ Camadas: este módulo não calcula ocupação nenhuma. Toda a leitura
 de estado vem de `unidades.estado_detalhe(unidade_id, data)`, que
 devolve o estado já classificado e os números já contados — a GUI
 só escolhe a cor e escreve o texto.
+
+ALTERAÇÕES 13/09/2026 — "Detalhe do dia" passou de popup nativo
+para modal próprio:
+
+- `_abrir_detalhe_dia` deixa de chamar `componentes.mostrar_sucesso`
+  (que abria um `messagebox` do sistema, igual em qualquer estado,
+  sem aproveitar nada do que a célula já sabia: ID da ocupação,
+  hóspede, valores, próximas datas livres).
+- `DetalheDiaModal` substitui-o — um `CTkToplevel` com a mesma
+  linguagem visual das outras tabelas da aplicação, adaptado ao
+  regime e ao estado da célula clicada. Cinco ramos: livre,
+  parcial, ocupado, reservado, manutenção.
+- Airbnb mostra a reserva ativa (ID, hóspede, estadia, check-in,
+  total) e, quando aplicável, uma faixa amarela com a próxima
+  disponibilidade (`unidades.proxima_disponibilidade`).
+- Mensal não tem hóspede principal (cada lugar tem o seu contrato)
+  — o cartão mostra só a ficha da unidade e a contagem de lugares.
+- Manutenção mostra a ficha e um aviso de "fora da oferta", sem
+  ação principal.
+- Botões do rodapé navegam para o ecrã correspondente
+  (`ListaReservasAirbnb` ou `ListaPropriedades`) e fecham os dois
+  popups empilhados (detalhe + calendário), pela mesma razão que
+  levou o `PlantaLugaresModal` a fechar-se antes de navegar.
+
+Imports acrescentados nesta ronda: `clientes` e `contratos` (usados
+pelo `DetalheDiaModal` para ler o hóspede da reserva e o detalhe
+Airbnb). `responsaveis` NÃO é preciso — o nome do hóspede vem do
+`clientes.procurar`, não do responsável.
 """
 import datetime
 
 import customtkinter as ctk
 
+import clientes
+import contratos
 import propriedades
 import unidades
 from . import componentes
@@ -56,6 +86,26 @@ _DIAS_SEMANA = ("SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM")
 _MESES = (
     "jan", "fev", "mar", "abr", "mai", "jun",
     "jul", "ago", "set", "out", "nov", "dez",
+)
+
+# Nomes por extenso, usados só no cabeçalho do DetalheDiaModal. Ficam
+# aqui e não se calculam com `strftime('%A')` porque `strftime` sem
+# locale configurado devolve o nome em inglês ("Saturday"), e mudar
+# o locale global do Python só por causa disto trazia mais problemas
+# do que resolvia.
+_DIAS_SEMANA_EXTENSO = (
+    "segunda-feira",
+    "terça-feira",
+    "quarta-feira",
+    "quinta-feira",
+    "sexta-feira",
+    "sábado",
+    "domingo",
+)
+
+_MESES_EXTENSO = (
+    "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
 )
 
 # Larguras fixas, como nas tabelas de Gestão de Propriedades: com
@@ -309,6 +359,13 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
         self.tela = tela
         self.tipo = tipo
         self.inicio_semana = _segunda_feira(datetime.date.today())
+
+        # O controlador da aplicação é o que estava por trás do
+        # ecrã `Calendario` (que é `tela` aqui) — guardado no
+        # `__init__` porque o `DetalheDiaModal` precisa dele para
+        # navegar ao fechar ("Abrir reserva" / "Abrir unidade").
+        # Sem isto, o modal não teria como chamar `mostrar_frame`.
+        self.controlador = tela.controlador
 
         titulo = "Mensal" if tipo == "mensal" else "Airbnb"
         self.title(f"Calendário — {titulo}")
@@ -637,24 +694,675 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
         )
 
     def _abrir_detalhe_dia(self, uni, dia, detalhe):
-        """Abre o detalhe de uma noite.
+        """Abre o modal de detalhe de uma noite.
 
-        Espaço reservado: o ecrã de detalhe do dia (ecrã 7 dos
-        wireframes) ainda não existe. Por agora mostra o que já se
-        sabe da célula, para o clique dar sinal de vida e o percurso
-        ficar testável.
+        Substitui o popup nativo que aqui estava (09/2026) — abria
+        sempre com o mesmo formato de sistema operativo, sem
+        aproveitar nada da informação que a célula já tinha: ID da
+        ocupação, hóspede, valores, próximas datas livres. O
+        `DetalheDiaModal` mostra isso tudo, com a mesma linguagem
+        visual das outras tabelas da aplicação.
+
+        Recebe tudo o que precisa do lado de fora (`uni`, `dia`,
+        `detalhe`) para não ter de recalcular nada: a célula já
+        sabe isto tudo, e recalculá-lo aqui era abrir uma janela
+        para o estado divergir do que a célula mostra.
         """
-        linhas = [
-            f"Unidade: {uni['nome']} ({uni['id']})",
-            f"Noite: {dia.strftime('%d/%m/%Y')}",
-            f"Estado: {detalhe['estado']}",
-        ]
+        DetalheDiaModal(self, uni, dia, detalhe)
 
-        if detalhe["capacidade"] is not None:
-            linhas.append(
-                f"Lugares: {detalhe['ocupados']}/{detalhe['capacidade']}"
+
+# =====================================================================
+# Detalhe do dia
+# =====================================================================
+
+
+class DetalheDiaModal(ctk.CTkToplevel):
+    """Popup com o detalhe de uma noite do calendário.
+
+    Substitui o antigo `componentes.mostrar_sucesso` que respondia
+    ao clique numa célula — o mesmo formato de sistema operativo
+    para os cinco estados possíveis, sem IDs, sem valores, sem
+    contexto. Este modal adapta-se ao regime da unidade:
+
+    - Mensal: cartão com a unidade, contagem de lugares, preço
+      base. Sem ocupação concreta — a entidade OcupacaoMensal não
+      tem "hóspede principal", é uma unidade partilhada com N
+      lugares (cada um com o seu contrato).
+    - Airbnb: cartão com a reserva ativa (ID, hóspede, estadia,
+      valores) e faixa amarela com a próxima disponibilidade, quando
+      houver.
+    - Manutenção (qualquer regime): cartão simples com o estado e
+      um aviso de que a unidade está fora da oferta, sem ações.
+
+    Recebe tudo do lado de fora (a `uni`, a `dia`, o `detalhe` da
+    célula) — não vai buscar nada ao repositório por si própria,
+    exceto o que for específico deste modal (reserva ativa no
+    Airbnb, próxima disponibilidade) e que a célula não tem em
+    mãos.
+    """
+
+    # Largura fixa. A altura varia consoante o ramo: o cartão da
+    # reserva Airbnb é mais alto do que o da unidade mensal, e o do
+    # manutenção mais baixo do que os dois.
+    _LARGURA = 460
+
+    # Altura por ramo. Cada valor foi escolhido a contar as linhas
+    # de cada ramo + cabeçalho + rodapé + margens, não a olho: um
+    # valor curto demais cortava o rodapé (bug apanhado no
+    # `_ResumoDevolucaoModal`, ver gui_est_devolucoes.py), um longo
+    # demais deixava uma faixa vazia feia.
+    _ALTURAS = {
+        "manutencao": 360,
+        "livre": 400,
+        "parcial": 420,
+        "cheia": 440,
+        "ocupado": 500,
+        "reservado": 500,
+    }
+
+    def __init__(self, tela_semana, uni, dia, detalhe):
+        super().__init__(tela_semana)
+        self.tela_semana = tela_semana
+        self.uni = uni
+        self.dia = dia
+        self.detalhe = detalhe
+        self.estado = detalhe["estado"]
+
+        self._construir_geometria()
+        self._construir_cabecalho()
+        self._construir_corpo()
+        self._construir_rodape()
+
+        self.transient(tela_semana)
+        _colocar_no_topo(self)
+
+    # -- geometria ----------------------------------------------------
+
+    def _construir_geometria(self):
+        """A janela não é redimensionável, por isso a altura tem de
+        ser escolhida à cabeça. O título da janela é a data — dá
+        contexto sem precisar de uma linha própria no corpo (que
+        ficaria redundante com o cabeçalho).
+        """
+        self.title(f"Detalhe do dia — {self.dia.strftime('%d/%m/%Y')}")
+
+        altura = self._ALTURAS.get(self.estado, 460)
+        self.geometry(f"{self._LARGURA}x{altura}")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+
+    # -- cabeçalho ----------------------------------------------------
+
+    def _construir_cabecalho(self):
+        """Dia da semana por extenso, data grande, chip de estado."""
+        cabecalho = ctk.CTkFrame(self, fg_color="transparent")
+        cabecalho.pack(fill="x", padx=22, pady=(18, 6))
+
+        ctk.CTkLabel(
+            cabecalho,
+            text=_DIAS_SEMANA_EXTENSO[self.dia.weekday()],
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+            anchor="w",
+        ).pack(fill="x")
+
+        ctk.CTkLabel(
+            cabecalho,
+            text=(
+                f"{self.dia.day} de "
+                f"{_MESES_EXTENSO[self.dia.month - 1]} de "
+                f"{self.dia.year}"
+            ),
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=20, weight="bold"),
+            anchor="w",
+        ).pack(fill="x", pady=(2, 10))
+
+        # Chip de estado. O texto mostrado depende do estado — no
+        # parcial leva a contagem ("parcial · 2/4"), nos outros é só
+        # a palavra. O par (fundo, texto) vem do mesmo sítio que o
+        # `_desenhar_celula` usa, para os dois nunca poderem
+        # discordar.
+        fundo, cor_texto = _CORES_ESTADO[self.estado]
+        texto_chip = _texto_chip_estado(self.estado, self.detalhe)
+
+        ctk.CTkLabel(
+            cabecalho,
+            text=texto_chip,
+            text_color=cor_texto,
+            fg_color=fundo,
+            corner_radius=tema.RAIO_CAMPO,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            padx=12,
+            pady=4,
+            anchor="w",
+        ).pack(anchor="w")
+
+    # -- corpo --------------------------------------------------------
+
+    def _construir_corpo(self):
+        """Cartão principal + (só quando aplicável) faixa amarela da
+        próxima disponibilidade.
+
+        Ramifica por estado. Cada ramo é um método próprio, para
+        este aqui não virar um `if/elif` de cinquenta linhas.
+        """
+        corpo = ctk.CTkFrame(self, fg_color="transparent")
+        corpo.pack(fill="both", expand=True, padx=22, pady=(10, 6))
+
+        if self.estado == "manutencao":
+            self._corpo_manutencao(corpo)
+        elif self.uni["tipo"] == "mensal":
+            self._corpo_mensal(corpo)
+        else:
+            self._corpo_airbnb(corpo)
+
+    def _corpo_manutencao(self, master):
+        """Unidade em manutenção — nem ocupação nem próxima
+        disponibilidade. Só a ficha da unidade e o aviso de que está
+        fora da oferta.
+        """
+        corpo_cartao = _criar_cartao(master)
+        _linha_cartao(
+            corpo_cartao,
+            "Unidade",
+            f"{self.uni['nome']} ({self.uni['id']})",
+        )
+        _linha_cartao(corpo_cartao, "Estado", "Em manutenção")
+        _linha_cartao(corpo_cartao, "Regime", self.uni["tipo"])
+
+        ctk.CTkLabel(
+            master,
+            text=(
+                "Sem ações disponíveis enquanto a unidade estiver "
+                "em manutenção."
+            ),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+            wraplength=self._LARGURA - 60,
+            justify="center",
+        ).pack(fill="x", pady=(16, 0))
+
+    def _corpo_mensal(self, master):
+        """Unidade mensal — a entidade OcupacaoMensal não guarda o
+        hóspede principal, cada lugar tem o seu contrato. Por isso
+        não há cartão de reserva para mostrar; só a ficha da
+        unidade e a contagem de lugares.
+        """
+        corpo_cartao = _criar_cartao(master)
+        _linha_cartao(
+            corpo_cartao,
+            "Unidade",
+            f"{self.uni['nome']} ({self.uni['id']})",
+        )
+        _linha_cartao(corpo_cartao, "Regime", "mensal")
+
+        if self.detalhe["capacidade"] is not None:
+            _linha_cartao(
+                corpo_cartao,
+                "Ocupação",
+                f"{self.detalhe['ocupados']} de "
+                f"{self.detalhe['capacidade']} lugares",
+                forte=True,
+            )
+            _linha_cartao(
+                corpo_cartao,
+                "Preço base",
+                _formatar_valor(self.uni["preco_base"]),
             )
 
-        componentes.mostrar_sucesso(
-            "\n".join(linhas), titulo="Detalhe do dia"
+    def _corpo_airbnb(self, master):
+        """Unidade Airbnb — cartão da reserva ativa e (se houver)
+        faixa amarela com a próxima disponibilidade.
+
+        Procura a ocupação cujo intervalo cobre 'dia': o mesmo
+        critério de sobreposição da secção 4, aplicado aqui para
+        identificar QUAL reserva é a que a célula está a mostrar.
+        """
+        ocupacao = _ocupacao_ativa_no_dia(self.uni["id"], self.dia)
+
+        corpo_cartao = _criar_cartao(master)
+
+        if ocupacao is None:
+            # Estado "livre" ou "reservado" numa unidade Airbnb: não
+            # há reserva a decorrer neste dia. No "reservado" há uma
+            # reserva futura, mas não é a que interessa mostrar aqui
+            # (é a que ainda não começou); o detalhe fica só pela
+            # ficha da unidade e pelo estado.
+            _linha_cartao(
+                corpo_cartao,
+                "Unidade",
+                f"{self.uni['nome']} ({self.uni['id']})",
+            )
+            _linha_cartao(corpo_cartao, "Regime", "Airbnb")
+            _linha_cartao(
+                corpo_cartao,
+                "Estado",
+                "Reservado" if self.estado == "reservado" else "Livre",
+            )
+        else:
+            _linha_cartao(
+                corpo_cartao,
+                "Reserva",
+                f"{ocupacao['id']} · reserva Airbnb",
+                com_chip_id=True,
+            )
+
+            cliente = clientes.procurar(ocupacao["cliente_id"])
+            nome_cliente = (
+                f"{cliente['nome']} ({cliente['id']})"
+                if cliente
+                else ocupacao["cliente_id"]
+            )
+            _linha_cartao(corpo_cartao, "Hóspede", nome_cliente)
+
+            noites = (ocupacao["data_fim"] - ocupacao["data_inicio"]).days
+            _linha_cartao(
+                corpo_cartao,
+                "Estadia",
+                f"{ocupacao['data_inicio'].strftime('%d/%m')} a "
+                f"{ocupacao['data_fim'].strftime('%d/%m')} · "
+                f"{noites} noites",
+            )
+
+            airbnb = contratos.detalhes_airbnb(ocupacao["id"])
+
+            if airbnb is not None:
+                if airbnb["check_in_tardio"]:
+                    _linha_cartao(
+                        corpo_cartao,
+                        "Check-in",
+                        f"Tardio · {airbnb['hora_chegada']}",
+                    )
+                else:
+                    _linha_cartao(
+                        corpo_cartao, "Check-in", "Automatizado"
+                    )
+
+                _linha_cartao(
+                    corpo_cartao,
+                    "Total",
+                    _formatar_valor(airbnb["preco_praticado"]),
+                    total=True,
+                )
+
+        # Faixa amarela com a próxima disponibilidade — só quando
+        # faz sentido: unidade Airbnb, ocupada agora ou reservada,
+        # e existir mesmo uma janela futura. Sem isto, a faixa
+        # aparecia vazia (ou pior: com um intervalo inventado).
+        if self.estado in ("ocupado", "reservado"):
+            janela = _proxima_disponibilidade_segura(
+                self.uni["id"], self.dia
+            )
+
+            if janela is not None:
+                inicio, fim = janela
+                noites = (fim - inicio).days if fim is not None else None
+
+                faixa = ctk.CTkFrame(
+                    master,
+                    fg_color=tema.AMARELO_AVISO,
+                    corner_radius=tema.RAIO_CAMPO,
+                )
+                faixa.pack(fill="x", pady=(12, 0))
+
+                ctk.CTkLabel(
+                    faixa,
+                    text="PRÓXIMA DISPONIBILIDADE",
+                    text_color=tema.TEXTO_AVISO,
+                    font=ctk.CTkFont(size=10, weight="bold"),
+                    anchor="w",
+                ).pack(fill="x", padx=14, pady=(10, 2))
+
+                if fim is None:
+                    texto_periodo = (
+                        f"a partir de {inicio.strftime('%d/%m')}"
+                    )
+                    texto_sub = "sem fim previsto"
+                else:
+                    texto_periodo = (
+                        f"{inicio.strftime('%d/%m')} a "
+                        f"{fim.strftime('%d/%m')}"
+                    )
+                    texto_sub = f"{noites} noites livres"
+
+                ctk.CTkLabel(
+                    faixa,
+                    text=texto_periodo,
+                    text_color=tema.TEXTO_AVISO,
+                    font=ctk.CTkFont(size=14, weight="bold"),
+                    anchor="w",
+                ).pack(fill="x", padx=14)
+
+                ctk.CTkLabel(
+                    faixa,
+                    text=texto_sub,
+                    text_color=tema.TEXTO_AVISO,
+                    font=ctk.CTkFont(size=11),
+                    anchor="w",
+                ).pack(fill="x", padx=14, pady=(0, 10))
+
+    # -- rodapé -------------------------------------------------------
+
+    def _construir_rodape(self):
+        """Dois botões de largura igual: "Fechar" à esquerda, ação
+        principal à direita. Qual é a ação principal depende do
+        estado e do regime — ver `_rotulo_acao_principal` e
+        `_executar_acao_principal`.
+        """
+        rodape = ctk.CTkFrame(self, fg_color="transparent")
+        rodape.pack(fill="x", padx=22, pady=(4, 20), side="bottom")
+
+        ctk.CTkButton(
+            rodape,
+            text="Fechar",
+            height=38,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="left", fill="x", expand=True, padx=(0, 5))
+
+        ctk.CTkButton(
+            rodape,
+            text=self._rotulo_acao_principal(),
+            height=38,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.AZUL_PRINCIPAL,
+            hover_color=tema.AZUL_CLARO,
+            command=self._executar_acao_principal,
+        ).pack(side="right", fill="x", expand=True, padx=(5, 0))
+
+    def _rotulo_acao_principal(self):
+        """Texto do botão principal, consoante o estado e o regime.
+
+        - Manutenção → "Abrir unidade" (não há mais nada a fazer).
+        - Mensal (qualquer estado) → "Abrir unidade".
+        - Airbnb ocupado/reservado → "Abrir reserva".
+        - Airbnb livre → "Abrir unidade".
+        """
+        if self.estado == "manutencao":
+            return "Abrir unidade"
+
+        if self.uni["tipo"] == "mensal":
+            return "Abrir unidade"
+
+        if self.estado in ("ocupado", "reservado"):
+            return "Abrir reserva"
+
+        return "Abrir unidade"
+
+
+    def _executar_acao_principal(self):
+        """Navega para o destino correspondente e fecha os dois
+        popups empilhados.
+
+        Três destinos possíveis, decididos por regime e estado:
+
+        - Airbnb ocupado/reservado → `ListaReservasAirbnb` (a tabela
+          de reservas, onde a reserva em causa vive).
+        - Mensal (qualquer estado) ou Airbnb livre → abre o
+          `UnidadesDaPropriedadeModal` da propriedade a que a
+          unidade pertence, para se ver a unidade em concreto.
+          Não `ListaPropriedades`, que é a lista de propriedades —
+          ir para lá não mostrava a unidade nenhuma (bug apanhado
+          pelo aluno, 13/09/2026: "ao clicar está indo à
+          propriedade e não à unidade").
+
+        O `UnidadesDaPropriedadeModal` é aberto como popup próprio,
+        não navegando o ecrã principal — é o mesmo que o clique no
+        ID da propriedade faz em `ListaPropriedades`. Assim o
+        utilizador vê logo as unidades da propriedade certa, sem
+        ter de passar pela lista de propriedades toda.
+
+        A ordem importa: fecha o modal de detalhe e o calendário
+        ANTES de abrir o popup das unidades. Deixar a pilha de
+        popups aberta punha o novo popup por baixo dos antigos.
+        """
+        from gui.gui_contratos import ListaReservasAirbnb
+        from gui.gui_propriedades import (
+            ListaPropriedades,
+            UnidadesDaPropriedadeModal,
         )
+
+        tela_semana = self.tela_semana
+        controlador = tela_semana.controlador
+
+        # Airbnb ocupado ou reservado → vai para a tabela de
+        # reservas. É o único caso em que "Abrir reserva" faz
+        # sentido: a reserva em causa está nessa lista.
+        if self.uni["tipo"] == "airbnb" and self.estado in (
+            "ocupado",
+            "reservado",
+        ):
+            self.destroy()
+            tela_semana.destroy()
+            controlador.mostrar_frame(ListaReservasAirbnb)
+            return
+
+        # Todos os outros casos → unidades da propriedade a que a
+        # unidade pertence. Precisamos do registo da propriedade
+        # (não só do id) porque `UnidadesDaPropriedadeModal` espera
+        # o dicionário completo — usa `prop["nome"]` e `prop["id"]`
+        # no cabeçalho.
+        propriedade = propriedades.procurar(self.uni["propriedade_id"])
+
+        if propriedade is None:
+            # A unidade existe mas a propriedade já não — só
+            # acontece se algo foi apagado noutra janela. Cai para
+            # a lista de propriedades, que é o ecrã mais próximo
+            # de "algo a ver".
+            self.destroy()
+            tela_semana.destroy()
+            controlador.mostrar_frame(ListaPropriedades)
+            return
+
+        # Fecha os dois popups antes de abrir o novo. A ordem
+        # importa: `UnidadesDaPropriedadeModal` é `transient` da
+        # `tela_lista` que recebe, e essa `tela_lista` tem de estar
+        # visível quando o popup abre — se fosse `ListaPropriedades`
+        # por trás dos popups antigos, o novo popup abria por cima
+        # de uma janela escondida.
+        #
+        # Para o `UnidadesDaPropriedadeModal` funcionar, precisa de
+        # uma `tela_lista` — um objeto com `.controlador` e
+        # `._recarregar()`. O ecrã principal (`ListaPropriedades`)
+        # é exatamente isso, e é o sítio onde este popup vive
+        # normalmente. Por isso: navega primeiro para
+        # `ListaPropriedades`, e só depois abre o popup das
+        # unidades por cima.
+        self.destroy()
+        tela_semana.destroy()
+
+        controlador.mostrar_frame(ListaPropriedades)
+
+        # `controlador.frame_atual` é o `ListaPropriedades` que
+        # acabámos de criar em `mostrar_frame`. Passá-lo como
+        # `tela_lista` ao popup é o que faz o botão "Voltar" e o
+        # `_recarregar` funcionarem como se o popup tivesse sido
+        # aberto a partir do clique no ID da propriedade.
+        UnidadesDaPropriedadeModal(
+            controlador.frame_atual, propriedade
+        )
+
+ 
+# =====================================================================
+# Helpers do DetalheDiaModal
+#
+# Vivem fora da classe para o corpo dos métodos ficar mais curto:
+# são construções repetidas (cartão, linha rótulo/valor) e pequenas
+# consultas de leitura que não mudam de comportamento com o estado.
+# =====================================================================
+
+
+def _texto_chip_estado(estado, detalhe):
+    """Devolve o texto a mostrar dentro do chip de estado no
+    cabeçalho. O parcial leva a contagem; os outros ficam-se pela
+    palavra.
+    """
+    if estado == "parcial":
+        return f"parcial · {detalhe['ocupados']}/{detalhe['capacidade']}"
+
+    return estado
+
+
+def _criar_cartao(master):
+    """Cartão interior do modal — borda fina, raio 14, mesmo padrão
+    dos cartões dos formulários da aplicação.
+
+    Devolve o corpo do cartão (o frame interior), não o cartão em
+    si: quem chama usa sempre o corpo, nunca o cartão, e devolver o
+    corpo poupa uma linha em cada sítio.
+    """
+    cartao = ctk.CTkFrame(
+        master,
+        fg_color=tema.COR_FUNDO,
+        border_width=1,
+        border_color=tema.COR_BORDA,
+        corner_radius=tema.RAIO_CARTAO,
+    )
+    cartao.pack(fill="x")
+
+    corpo = ctk.CTkFrame(cartao, fg_color="transparent")
+    corpo.pack(fill="x", padx=14, pady=12)
+
+    return corpo
+
+
+def _linha_cartao(
+    corpo, rotulo, valor, forte=False, total=False, com_chip_id=False
+):
+    """Uma linha rótulo → valor dentro de um cartão.
+
+    O rótulo fica à esquerda, largura fixa (130px), em cor
+    secundária — mesma convenção de todos os formulários. O valor
+    fica à direita, alinhado à esquerda da sua coluna.
+
+    'forte' e 'total' são dois graus de destaque: 'total' é mais
+    forte do que 'forte' (é o valor que interessa). Isto porque o
+    valor da ocupação merece destaque, mas o total da reserva
+    merece outro.
+
+    'com_chip_id' separa o valor em duas partes (ID + descrição) e
+    põe o ID num chip colorido — usado só na linha "Reserva", onde
+    o ID é o que se procura ao abrir isto.
+    """
+    linha = ctk.CTkFrame(corpo, fg_color="transparent")
+    linha.pack(fill="x", pady=3)
+
+    ctk.CTkLabel(
+        linha,
+        text=rotulo,
+        text_color=tema.COR_TEXTO_SECUNDARIO,
+        font=ctk.CTkFont(size=12),
+        width=130,
+        anchor="w",
+    ).pack(side="left")
+
+    if com_chip_id and " · " in valor:
+        id_parte, tipo_parte = valor.split(" · ", 1)
+
+        bloco = ctk.CTkFrame(linha, fg_color="transparent")
+        bloco.pack(side="left", fill="x", expand=True)
+
+        ctk.CTkLabel(
+            bloco,
+            text=id_parte,
+            text_color=tema.AZUL_PRINCIPAL,
+            fg_color=tema.ID_CHIP_FUNDO,
+            corner_radius=6,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            padx=8,
+            pady=2,
+        ).pack(side="left")
+
+        ctk.CTkLabel(
+            bloco,
+            text=tipo_parte,
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=12),
+        ).pack(side="left", padx=(8, 0))
+
+        return
+
+    if total:
+        cor = tema.AZUL_PRINCIPAL
+        fonte = ctk.CTkFont(size=13, weight="bold")
+    elif forte:
+        cor = tema.COR_TEXTO
+        fonte = ctk.CTkFont(size=12, weight="bold")
+    else:
+        cor = tema.COR_TEXTO
+        fonte = ctk.CTkFont(size=12)
+
+    ctk.CTkLabel(
+        linha,
+        text=valor,
+        text_color=cor,
+        font=fonte,
+        anchor="w",
+    ).pack(side="left", fill="x", expand=True)
+
+
+def _formatar_valor(valor):
+    """Formata um Decimal em PT-PT, com vírgula decimal e "€".
+
+    Mesma convenção do `cli.formatar_valor` e do `_formatar_valor`
+    de gui_contratos.py — não se importa de lá porque cada módulo
+    da GUI já tem a sua cópia local, e o `gui_calendario.py` não
+    deve depender do `cli.py` (que é a camada de linha de comandos).
+    """
+    if valor is None:
+        return "—"
+
+    texto = f"{valor:,.2f}"
+    texto = texto.replace(",", "X").replace(".", ",").replace("X", ".")
+
+    return f"{texto} €"
+
+
+def _ocupacao_ativa_no_dia(unidade_id, dia):
+    """Devolve a ocupação Airbnb ativa da unidade que cobre 'dia',
+    ou None se a unidade estiver livre.
+
+    Sobreposição no mesmo critério da secção 4: inicio < fim_janela
+    E dia < fim, com fim_janela = dia + 1 dia. Não é uma pergunta
+    que a célula já responda — a célula só sabe o estado ("ocupado"),
+    não qual das reservas é a ativa. Como a unidade Airbnb é
+    indivisível, só pode haver uma ao mesmo tempo, mas o critério
+    continua a ser o de sobreposição (não uma igualdade de datas),
+    para nunca apanhar uma reserva adjacente por engano.
+    """
+    fim_janela = dia + datetime.timedelta(days=1)
+
+    for ocupacao in contratos.listar(
+        unidade_id=unidade_id, tipo="airbnb"
+    ):
+        if (
+            ocupacao["data_inicio"] < fim_janela
+            and dia < ocupacao["data_fim"]
+        ):
+            return ocupacao
+
+    return None
+
+
+def _proxima_disponibilidade_segura(unidade_id, dia):
+    """Chama `unidades.proxima_disponibilidade` a partir do
+    calendário, apanhando o ValueError se a unidade não for Airbnb
+    ou já não existir.
+
+    O calendário já sabe que a unidade é Airbnb (está no ramo certo
+    do `_corpo_airbnb`), mas `proxima_disponibilidade` continua a
+    validar — e uma corrida entre abrir o modal e a unidade ser
+    apagada noutra janela é teoricamente possível. Não vale a pena
+    rebentar o modal por causa disso: o ramo certo simplesmente não
+    mostra a faixa.
+    """
+    try:
+        return unidades.proxima_disponibilidade(unidade_id, dia)
+    except ValueError:
+        return None
