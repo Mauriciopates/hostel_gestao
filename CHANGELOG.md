@@ -3,6 +3,271 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [1.3.0] - 2026-09-13
+
+Fase 2 — interface gráfica funcional e fecho do fluxo de stock. Com esta
+versão, o sistema deixa de ser só CLI: entra a GUI completa (CustomTkinter),
+com Dashboard, Calendário, Gestão de Propriedades, Clientes, Contratos e
+Reservas, Responsáveis e Stock. O fluxo de stock revisto (Aprovação de
+Requisições, cancelamento pelo autor, observação de receção, Rol de
+Lavanderia) fica fechado. Acrescentado o IBAN da propriedade, que destranca
+a impressão do contrato mensal em PDF — minuta completa com senhorio,
+inquilino, renda e IBAN.
+
+## Adicionado
+
+- gui/ — pacote novo da interface gráfica (CustomTkinter), com o tema
+em tema.py (paleta extraída do logo, preparada para modo claro e
+escuro) e app.py/main_gui.py como ponto de entrada. A decisão 7
+mantém-se: só a camada de apresentação fala com quem usa o sistema;
+os módulos de negócio continuam sem saber que existe ecrã.
+
+- componentes.py — tabela genérica (Tabela/Coluna) com cabeçalho e
+corpo na mesma grelha (evita o desalinhamento que se arrastou por
+várias tentativas em 08/09/2026, quando cabeçalho e linhas viviam em
+grelhas separadas), barra lateral com secções, cabeçalho comum,
+popups nativos (mostrar_erro/mostrar_sucesso/confirmar) e
+helpers visuais partilhados (colocar_no_topo, centrar_sobre,
+tornar_cliclavel, truncar_texto, formatar_valor).
+
+- componentes_graficos.py — gráficos com matplotlib embutidos em
+CustomTkinter. Base Grafico (Figure + canvas + tema aplicado num
+sítio só) e duas subclasses: GraficoOcupacao (linhas, ocupação dos
+últimos 7 dias) e GraficoRequisicoes (barras horizontais por
+estado). Ficheiro próprio por causa do custo de importar o matplotlib
+— quem só precisa de tabelas não o paga.
+
+- gui_dashboard.py — ecrã de arranque. KPIs do dia, gráficos de
+ocupação e requisições, alertas clicáveis (navegam para o ecrã certo)
+e três ações rápidas (nova reserva, novo contrato, novo cliente).
+Substitui a Gestão de Propriedades como ecrã inicial.
+
+- gui_calendario.py — calendário em dois passos: cartões clicáveis
+(Mensal/Airbnb) e popup da semana. Cada regime mede-se na sua
+unidade natural (mensal em "ocupados/capacidade", Airbnb em
+livre/reservado/ocupado) — uma grelha só, com as duas leituras
+misturadas, obrigava a legenda a mentir num dos casos.
+
+- gui_propriedades.py, gui_clientes.py, gui_contratos.py,
+gui_unidades.py, gui_responsaveis.py, gui_est_*.py — os ecrãs
+de cada módulo de negócio, todos com o mesmo padrão de lista
+(tabela + botão "Gerir" por linha + popup de ações).
+
+- gui_est_hub.py, gui_est_produtos.py, gui_est_movimentos.py,
+gui_est_requisicoes.py, gui_est_devolucoes.py,
+gui_est_aprovacao.py, gui_est_comum.py — o antigo gui_estoque.py
+(1200 linhas, 7 classes, no limite do que dá para navegar) partido
+em sete ficheiros focados. gui_est_comum.py guarda constantes e
+helpers partilhados, para evitar imports cruzados entre irmãos.
+
+- gui_relatorios.py e gui_configuracoes.py — placeholders. Existem
+na barra lateral (secção "Sistema") para a estrutura do menu estar
+completa desde já; o que vão fazer está no docstring de cada um.
+
+- impressao.py — módulo puro de formatação, gera o PDF do contrato
+mensal a partir de dicionários já lidos pelos módulos de negócio.
+Não fala com a base de dados, não importa nenhum módulo de negócio —
+fica testável com dicionários falsos. A pasta contratos_gerados/
+fica na raiz, fora do controlo de versões (mesma convenção de
+dados/ e backups/, decisão 13).
+
+- sessao.py — sessão em memória: mantém o responsável ativo durante
+a execução da GUI, sem login nem palavra-passe (decisão 10).
+Substitui o que era pedido ecrã a ecrã no cli.py.
+
+estoque.cancelar_requisicao(requisicao_id, responsavel_id) e o
+estado novo cancelada — o autor desiste de uma requisição pendente
+antes de o admin a ver, sem gerar movimento de stock (nada saiu do
+armazém ainda). Só o autor, só pendentes.
+
+estoque.confirmar_rececao_requisicao(..., observacao_rececao="") —
+texto livre que o responsável escreve ao confirmar, para informar
+faltas. Não mexe no stock: o admin lê depois e decide se corrige com
+um movimento de ajuste.
+
+estoque.criar_requisicao(..., origem="pedido") — distingue as
+requisições normais ('pedido') das criadas pelo Rol de Lavanderia
+('rol'). As duas vivem no mesmo fluxo a partir do momento em que são
+enviadas; a origem só serve para o responsável perceber, na lista
+dele, porque apareceu ali uma requisição que ele não pediu.
+
+estoque.listar_movimentos(produto_id=None, tipo=None) — o ecrã de
+Movimentos da GUI precisava de listar por produto e por tipo, e não
+havia função pública para isso.
+
+estoque.contar_dependencias_produto(produto_id) — a GUI precisa de
+saber se o produto tem dependências antes de decidir se pede forçar,
+sem falar com repositorio diretamente (decisão 7).
+
+estoque.desativar_produto(..., forcar=False, responsavel_id=None) —
+mesma proteção de propriedades.desativar e unidades.desativar,
+agora aplicada aos produtos. Forçar com dependências exige
+responsável validado, gravado em desativado_por_id/
+data_desativacao.
+
+contratos.avisos_encerramento(ocupacao, data_fim) — os dois sinais
+de encerramento (duração abaixo do mínimo, aviso prévio
+insuficiente) ficam acessíveis à interface ANTES de encerrar, sem
+duplicar a regra fora do módulo de negócio.
+
+contratos.calcular_preco_airbnb(unidade, data_inicio, data_fim) —
+versão pública do cálculo, para a GUI mostrar "Preço calculado: ..."
+antes de pedir o praticado e decidir se há desconto a confirmar.
+
+contratos.detalhes_mensal/detalhes_airbnb (públicas) — antes
+viviam como auxiliares privadas (_dados_mensais/_dados_airbnb) e
+o cli.py mantinha réplicas funcionais suas; agora é a forma
+correta de a GUI ler os dados específicos de um contrato/reserva.
+
+unidades.taxa_ocupacao(data, tipo=None) — ocupação agregada de
+todas as unidades ativas num dia, medida na unidade natural de cada
+regime (Airbnb em unidades, mensal em lugares). Alimenta os KPIs do
+Dashboard.
+
+unidades.proxima_disponibilidade(unidade_id, data) — próxima
+janela livre de uma unidade Airbnb, ou None se não houver ocupações
+futuras. Alimenta a faixa amarela do "Detalhe do dia" no calendário.
+
+unidades.atribuir_responsavel, unidades.remover_atribuicao e
+unidades.unidades_geridas_por (tabela responsavel_unidade) — a
+ligação responsável ↔ unidade não existia no modelo até esta versão;
+antes, responsavel_id só aparecia em requisições, devoluções e
+movimentos. Um balão sobre o crachá do ID, na Gestão de
+Responsáveis, mostra as unidades geridas.
+
+propriedades.criar(nome, morada="", iban="") e
+propriedades.atualizar(..., iban=None) — o IBAN do senhorio, para
+a Cláusula 3ª do contrato mensal. Opcional, guardado cru sem espaços
+(formato canónico), a formatação com espaços de 4 em 4 fica na
+apresentação.
+
+validacoes.validar_iban(iban) — algoritmo do módulo 97 (ISO 13616),
+o mecanismo oficial de controlo do IBAN. Confirma que o número não
+tem erros de digitação; não confirma que a conta existe (mesmo tipo
+de validação do nif_valido).
+
+## Alterado
+
+config.VERSAO: 1.2.0 → 1.3.0.
+
+- cli.py, main.py: já não têm consumidor do dados único (a
+migração MySQL ficou completa na v1.1.0, mas a estrutura em memória
+ainda era usada como referência em comentários). Removido o
+cli.mostrar_erro_arranque (só servia para o erro de versão que o
+carregar() levantava) e, em repositorio.py,
+carregar()/gravar()/_estrutura_vazia()/_migrar() e os
+auxiliares de serialização (_reconstituir_tipos, _serializar,
+_desserializar) — sem consumidores (grep confirmado em todo o
+projeto antes da remoção).
+
+_FormularioCliente (gui_clientes.py) — o botão "+ Novo cliente"
+existe em três sítios (ListaClientes e cartões "Cliente" de
+Novo Contrato Mensal e Nova Reserva Airbnb). O modal chamava sempre
+self.tela_lista._recarregar() no fim; quando a tela_lista era o
+contrato ou a reserva, esse método não existia e rebentava. Agora
+tolera os dois casos com _recarregar_tela_lista.
+
+NovaReservaAirbnb (gui_contratos.py) — formulário reformulado:
+cartões "Unidade e cliente", "Estadia", "Check-in tardio" e resumo
+final, todos dentro da área de scroll. Antes o resumo e o rodapé
+ficavam presos ao fundo da janela e saíam da vista quando o
+conteúdo era maior do que o espaço disponível.
+
+_AlterarValorCalculadoModal (gui_contratos.py) — sub-confirmação
+nova, aparece só quando o preço praticado fica abaixo do calculado.
+Distinta do "Editar reserva" (que corrige uma reserva já criada) —
+esta vive dentro do fluxo de criação.
+
+_AcoesRequisicaoModal (gui_est_requisicoes.py) — substituído por
+três modais específicos, cada um com a sua única ação:
+_AcoesRequisicaoPendenteModal (só cancelar),
+_ConfirmarRececaoModal (ficha do que foi enviado + observação) e
+_AcoesRequisicaoFechadaModal (só reportar sobra). As ações do admin
+(aprovar, rejeitar) saíram daqui e passaram para o ecrã de Aprovação.
+
+ListaRequisicoes (gui_est_requisicoes.py) — a coluna
+"Responsável e produtos" foi desdobrada em "Responsável" e
+"Observações"; a lista de produtos resumida era ruído — quem quer
+ver produtos abre o Gerir. Duas marcas visuais novas na coluna de
+estado: chip "rol lavanderia" (quando origem == "rol") e chip
+"obs. receção" (quando fechada e há observação de receção).
+
+produtos — o desativar_produto passa a registar quem autorizou
+a desativação forçada (desativado_por_id/data_desativacao), e o
+reativar_produto limpa esses dois campos ao reativar.
+
+propriedades.desativar e unidades.desativar — já existiam com
+forcar/responsavel_id; sem alterações de assinatura nesta versão.
+
+_dados_mensais/_dados_airbnb (contratos.py) — renomeadas para
+detalhes_mensal/detalhes_airbnb, agora públicas.
+
+Corrigido
+clientes.anonimizar(): as colunas data_nascimento/
+validade_documento continuam NOT NULL no esquema físico — o
+aviso sobre o ALTER TABLE fica registado, sem correção do esquema
+nesta versão (ver Notas).
+
+impressao.py: as fontes core do fpdf2 (Times, Helvetica,
+Courier) usam Latin-1 e não incluem travessão longo (—), aspas
+curvas, nem reticências (…) — todos os travessões do documento
+foram substituídos por hífen simples (ASCII puro), resolvendo o
+ValueError: Character ... is outside the range of characters supported by the font used. Preferida esta correção mínima a
+carregar um .ttf Unicode.
+
+componentes_graficos._cor_para_matplotlib: o CORES_ESTADO
+mistura pares do tema com cores de marca simples; tirar o elemento
+claro com um [0] cru dava "#" para as strings, e o matplotlib
+rebentava com "not a valid value for color". A função normaliza os
+dois casos.
+
+Margens e nomes cortados nos gráficos do Dashboard:
+set_layout_engine("tight") do matplotlib entrava em conflito com
+o tight_layout(pad=1.5) explícito — os rótulos do eixo X
+("seg 7") e os nomes dos estados ("rejeitada") apareciam cortados.
+Removido o set_layout_engine; o tight_layout explícito, com
+pad subido de 1.2 para 1.5, é agora o único sítio a mexer nas
+margens.
+
+ListaRequisicoes._desenhar_linha (gui_est_requisicoes.py): o
+bloco_estado (chip + marcas) tinha pack_propagate(False) sem
+height explícita — um CTkFrame sem altura assume 200px por
+omissão, e o pack_propagate(False) impede-o de encolher até ao
+tamanho dos chips lá dentro. A linha inteira esticava até aos 200px,
+com espaçamento vertical enorme entre requisições. Corrigido com
+height=26.
+
+ListaRequisicoes._e_o_autor e _pode_reportar_devolucao
+(gui_est_requisicoes.py): os dois métodos eram chamados pelos modais
+desde o primeiro dia, mas nunca tinham sido escritos. Abrir o Gerir
+de uma pendente ou de uma fechada rebentava com AttributeError.
+
+gui_est_requisicoes.py: linha 90 tinha
+_tornar_clicavel = componentes.tornar_cliclavel (com um "l" a
+menos). Rebentava com AttributeError no import, e isso quebrava
+toda a cadeia de imports da GUI.
+
+gui_est_aprovacao._COLUNAS_APROVACAO: a coluna ESTADO tinha
+alinhamento="center" (em inglês); o _ALINHAMENTOS do
+componentes.py só conhece "centro" (em português). O
+componentes.Tabela rebentava com KeyError: 'center'.
+
+Gestão de Propriedades: espaçador transparente entre a última
+coluna de texto e os botões, com fill="x", expand=True e
+height=1. A primeira versão, sem height, esticou cada linha
+para ~200px (mesma família do bug do pack_propagate acima, mas
+ao contrário: não era faltar propagate(False), era faltar
+height).
+
+"← Voltar" → "< Voltar" (gui_propriedades.py) e "Ver planta →"
+→ "Abrir Mapa": o glifo Unicode da seta aparecia como um quadrado
+(tofu) no Windows. < e > são ASCII puro, sem depender da fonte
+ter o glifo.
+
+gui_relatorios.py/gui_configuracoes.py na barra lateral: existe
+um cartão por implementar em cada ecrã, para o utilizador perceber
+que a página está vazia por decisão e não por engano.
+
 ## [1.2.0] - 2026-09-05
 
 Fase 2 — MySQL estabilizado. Fecha os passos de estabilização definidos
