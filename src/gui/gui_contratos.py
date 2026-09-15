@@ -335,9 +335,16 @@ class NovoContratoMensal(ctk.CTkFrame):
     # -- carregamento de dados -------------------------------------
 
     def _recarregar_unidades(self, unidade_id_inicial=None):
-        self.unidades_mensais = unidades.listar(tipo="mensal")
+        # `listar_com_propriedade` em vez de `listar` (Fase 2,
+        # v1.4.0): o rótulo passa a incluir o nome da propriedade,
+        # para não confundir unidades com o mesmo nome em prédios
+        # diferentes — mesmo problema já resolvido na Planta de
+        # Lugares, aqui na mesma convenção "ID · texto" já usada
+        # neste ficheiro para cliente/responsável.
+        self.unidades_mensais = unidades.listar_com_propriedade(tipo="mensal")
         nomes = [
-            f"{u['id']} · {u['nome']}" for u in self.unidades_mensais
+            f"{u['id']} · {u['propriedade_nome']} - {u['nome']}"
+            for u in self.unidades_mensais
         ] or ["— Sem unidades mensais —"]
         self.combo_unidade.configure(values=nomes)
 
@@ -945,10 +952,13 @@ class NovaReservaAirbnb(ctk.CTkFrame):
     # -- carregamento de dados -------------------------------------
 
     def _recarregar_unidades(self, unidade_id_inicial=None):
-        self.unidades_airbnb = unidades.listar(tipo="airbnb")
-        nomes = [f"{u['id']} · {u['nome']}" for u in self.unidades_airbnb] or [
-            "— Sem unidades Airbnb —"
-        ]
+        # Mesma mudança da versão mensal (ver comentário lá): rótulo
+        # passa a incluir a propriedade, via `listar_com_propriedade`.
+        self.unidades_airbnb = unidades.listar_com_propriedade(tipo="airbnb")
+        nomes = [
+            f"{u['id']} · {u['propriedade_nome']} - {u['nome']}"
+            for u in self.unidades_airbnb
+        ] or ["— Sem unidades Airbnb —"]
         self.combo_unidade.configure(values=nomes)
 
         alvo = None

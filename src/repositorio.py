@@ -440,8 +440,12 @@ def inserir_unidade(unidade):
 
     Espera um dicionário com id, propriedade_id, nome, tipo, preco_base,
     preco_epoca_alta, multa_check_in_tardio, epoca_alta_ativa,
-    em_manutencao, ativo — o mesmo formato que `unidades.criar` já
-    construía para a estrutura em memória.
+    em_manutencao, ativo, permite_cama_extra, qtd_cama_extra,
+    tipo_cama_extra — o mesmo formato que `unidades.criar` já
+    construía para a estrutura em memória. Os três últimos campos
+    foram acrescentados na Fase 2, v1.4.0 (item (d) — cama extra do
+    Airbnb; a coluna já existia desde um ALTER TABLE anterior, só
+    faltava ser escrita).
     """
     conexao = obter_conexao()
     try:
@@ -449,8 +453,10 @@ def inserir_unidade(unidade):
         cursor.execute(
             "INSERT INTO unidades (id, propriedade_id, nome, tipo, "
             "preco_base, preco_epoca_alta, multa_check_in_tardio, "
-            "epoca_alta_ativa, em_manutencao, ativo) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            "epoca_alta_ativa, em_manutencao, ativo, "
+            "permite_cama_extra, qtd_cama_extra, tipo_cama_extra) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
+            "%s, %s)",
             (
                 unidade["id"],
                 unidade["propriedade_id"],
@@ -462,6 +468,9 @@ def inserir_unidade(unidade):
                 unidade["epoca_alta_ativa"],
                 unidade["em_manutencao"],
                 unidade["ativo"],
+                unidade["permite_cama_extra"],
+                unidade["qtd_cama_extra"],
+                unidade["tipo_cama_extra"],
             ),
         )
         conexao.commit()
@@ -472,10 +481,22 @@ def inserir_unidade(unidade):
 def _normalizar_unidade(linha):
     """Converte os campos BOOLEAN (0/1 no MySQL) de uma linha de
     `unidades` para bool — os DECIMAL já chegam como Decimal.
+
+    `permite_cama_extra` segue a mesma conversão (Fase 2, v1.4.0).
+    `tipo_cama_extra` segue a convenção de string vazia do resto do
+    sistema quando vem NULL (unidade sem cama extra, ou não-Airbnb);
+    `qtd_cama_extra` fica None nesse caso — não faz sentido um "0"
+    ou uma string vazia para um número que, quando existe, é sempre
+    positivo (ver `unidades._validar_cama_extra`).
     """
     linha["epoca_alta_ativa"] = bool(linha["epoca_alta_ativa"])
     linha["em_manutencao"] = bool(linha["em_manutencao"])
     linha["ativo"] = bool(linha["ativo"])
+    linha["permite_cama_extra"] = bool(linha["permite_cama_extra"])
+
+    if linha["tipo_cama_extra"] is None:
+        linha["tipo_cama_extra"] = ""
+
     return linha
 
 
@@ -517,6 +538,54 @@ def listar_unidades(incluir_inativas=False, propriedade_id=None, tipo=None):
     sql = "SELECT * FROM unidades"
     if condicoes:
         sql += " WHERE " + " AND ".join(condicoes)
+
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor(dictionary=True)
+        cursor.execute(sql, valores)
+        linhas = cast(list, cursor.fetchall())
+    finally:
+        conexao.close()
+
+    return [_normalizar_unidade(linha) for linha in linhas]
+
+
+def listar_unidades_com_propriedade(incluir_inativas=False, tipo=None):
+    """Devolve as unidades já ligadas ao nome da respetiva
+    propriedade (INNER JOIN unidades x propriedades), para
+    ComboBoxes que têm de desambiguar unidades com o mesmo nome em
+    propriedades diferentes (Fase 2, v1.4.0, ação 4 do plano de
+    correções). Cada linha tem os mesmos campos de `listar_unidades`
+    (via `u.*`), mais `propriedade_nome`.
+
+    `incluir_inativas` refere-se só às unidades — o JOIN não filtra
+    por `propriedades.ativo` (uma unidade ativa de uma propriedade
+    desativada não devia existir na prática, já que
+    `propriedades.desativar` exige forçar quando há unidades
+    ativas, mas o filtro fica de fora por segurança, não por
+    garantia).
+
+    Ordenado por nome da propriedade e depois da unidade, para o
+    ComboBox já sair agrupado por propriedade em vez de disperso.
+    """
+    condicoes = []
+    valores = []
+
+    if not incluir_inativas:
+        condicoes.append("u.ativo = 1")
+
+    if tipo is not None:
+        condicoes.append("u.tipo = %s")
+        valores.append(tipo)
+
+    sql = (
+        "SELECT u.*, p.nome AS propriedade_nome "
+        "FROM unidades u "
+        "INNER JOIN propriedades p ON p.id = u.propriedade_id"
+    )
+    if condicoes:
+        sql += " WHERE " + " AND ".join(condicoes)
+    sql += " ORDER BY p.nome, u.nome"
 
     conexao = obter_conexao()
     try:
@@ -656,15 +725,19 @@ def inserir_lugar(lugar):
     """Insere um lugar novo na base de dados.
 
     Espera um dicionário com id, quarto_id, nome, tipo_cama,
-    capacidade, ativo.
+    capacidade, ativo, e opcionalmente posicao_beliche e
+    beliche_grupo_id (Fase 2, v1.4.0 — beliches; `.get()` porque só
+    faz sentido em lugares com tipo_cama='beliche', ficam None nos
+    restantes).
     """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor()
         cursor.execute(
             "INSERT INTO lugares "
-            "(id, quarto_id, nome, tipo_cama, capacidade, ativo) "
-            "VALUES (%s, %s, %s, %s, %s, %s)",
+            "(id, quarto_id, nome, tipo_cama, capacidade, ativo, "
+            "posicao_beliche, beliche_grupo_id) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 lugar["id"],
                 lugar["quarto_id"],
@@ -672,6 +745,8 @@ def inserir_lugar(lugar):
                 lugar["tipo_cama"],
                 lugar["capacidade"],
                 lugar["ativo"],
+                lugar.get("posicao_beliche"),
+                lugar.get("beliche_grupo_id"),
             ),
         )
         conexao.commit()
@@ -681,6 +756,17 @@ def inserir_lugar(lugar):
 
 def _normalizar_lugar(linha):
     linha["ativo"] = bool(linha["ativo"])
+
+    # Fase 2, v1.4.0 — mesma convenção de string vazia usada em todo
+    # o sistema para colunas de texto opcionais (ver _normalizar_
+    # propriedade/_normalizar_requisicao): NULL vira "", nunca None,
+    # para quem consome o dicionário não ter de tratar os dois casos.
+    if linha["posicao_beliche"] is None:
+        linha["posicao_beliche"] = ""
+
+    if linha["beliche_grupo_id"] is None:
+        linha["beliche_grupo_id"] = ""
+
     return linha
 
 
@@ -755,21 +841,25 @@ def atualizar_lugar(lugar_id, campos):
 def inserir_responsavel(responsavel):
     """Insere um responsável novo na base de dados.
 
-    Espera um dicionário com id, nome, contacto, ativo — o mesmo
-    formato que `responsaveis.criar` já construía para a estrutura
-    em memória.
+    Espera um dicionário com id, nome, contacto, ativo,
+    tipo_utilizador — o mesmo formato que `responsaveis.criar` já
+    construía para a estrutura em memória. `tipo_utilizador` foi
+    acrescentado na Fase 2, v1.4.0 (coluna ENUM já existente na
+    tabela via ALTER TABLE, agora finalmente escrita no INSERT).
     """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor()
         cursor.execute(
-            "INSERT INTO responsaveis (id, nome, contacto, ativo) "
-            "VALUES (%s, %s, %s, %s)",
+            "INSERT INTO responsaveis "
+            "(id, nome, contacto, ativo, tipo_utilizador) "
+            "VALUES (%s, %s, %s, %s, %s)",
             (
                 responsavel["id"],
                 responsavel["nome"],
                 responsavel["contacto"],
                 responsavel["ativo"],
+                responsavel["tipo_utilizador"],
             ),
         )
         conexao.commit()

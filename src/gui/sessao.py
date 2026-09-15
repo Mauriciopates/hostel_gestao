@@ -29,6 +29,23 @@ def obter_responsavel_ativo():
     """
     return _responsavel_ativo
 
+def tipo_utilizador_ativo():
+    """Devolve o tipo_utilizador (Master/Admin/Staff) do responsável
+    ativo desta sessão, ou None se ainda não houver nenhum.
+
+    Atalho para `obter_responsavel_ativo()["tipo_utilizador"]` sem
+    repetir em cada sítio que precisa do perfil a verificação de
+    sessão vazia — existe porque a lógica de permissões por perfil
+    (próximo passo do plano, Fase 2, v1.4.0) vai consultar isto a
+    cada ecrã e ação, não só uma vez. Não valida nada por si: quem
+    decide o que cada tipo pode fazer é essa lógica, não esta
+    função.
+    """
+    if _responsavel_ativo is None:
+        return None
+
+    return _responsavel_ativo["tipo_utilizador"]
+
 def limpar_responsavel_ativo():
     """Repõe a sessão para nenhum responsável ativo — por exemplo,
     para trocar de utilizador sem fechar a aplicação, sem precisar

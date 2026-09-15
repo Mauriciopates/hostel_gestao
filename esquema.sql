@@ -162,10 +162,13 @@ CREATE TABLE `lugares` (
   `quarto_id` varchar(10) NOT NULL,
   `nome` varchar(100) NOT NULL,
   `tipo_cama` enum('solteiro','casal','beliche') NOT NULL DEFAULT 'solteiro',
+  `posicao_beliche` enum('superior','inferior') DEFAULT NULL,
+  `beliche_grupo_id` varchar(10) DEFAULT NULL,
   `capacidade` int NOT NULL,
   `ativo` tinyint(1) NOT NULL DEFAULT '1',
   PRIMARY KEY (`id`),
   KEY `quarto_id` (`quarto_id`),
+  KEY `idx_lugares_beliche_grupo` (`beliche_grupo_id`),
   CONSTRAINT `lugares_ibfk_1` FOREIGN KEY (`quarto_id`) REFERENCES `quartos` (`id`),
   CONSTRAINT `lugares_chk_1` CHECK ((`capacidade` >= 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -382,6 +385,7 @@ CREATE TABLE `responsaveis` (
   `id` varchar(10) NOT NULL,
   `nome` varchar(150) NOT NULL,
   `contacto` varchar(100) DEFAULT NULL,
+  `tipo_utilizador` enum('Master','Admin','Staff') NOT NULL DEFAULT 'Staff',
   `ativo` tinyint(1) NOT NULL DEFAULT '1',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -424,6 +428,9 @@ CREATE TABLE `unidades` (
   `multa_check_in_tardio` decimal(10,2) NOT NULL,
   `epoca_alta_ativa` tinyint(1) NOT NULL DEFAULT '0',
   `em_manutencao` tinyint(1) NOT NULL DEFAULT '0',
+  `permite_cama_extra` tinyint(1) NOT NULL DEFAULT '0',
+  `qtd_cama_extra` int NOT NULL DEFAULT '0',
+  `tipo_cama_extra` varchar(50) DEFAULT NULL,
   `ativo` tinyint(1) NOT NULL DEFAULT '1',
   `desativado_por_id` varchar(10) DEFAULT NULL,
   `data_desativacao` date DEFAULT NULL,
@@ -431,7 +438,8 @@ CREATE TABLE `unidades` (
   KEY `propriedade_id` (`propriedade_id`),
   KEY `fk_unidades_desativado_por` (`desativado_por_id`),
   CONSTRAINT `fk_unidades_desativado_por` FOREIGN KEY (`desativado_por_id`) REFERENCES `responsaveis` (`id`),
-  CONSTRAINT `unidades_ibfk_1` FOREIGN KEY (`propriedade_id`) REFERENCES `propriedades` (`id`)
+  CONSTRAINT `unidades_ibfk_1` FOREIGN KEY (`propriedade_id`) REFERENCES `propriedades` (`id`),
+  CONSTRAINT `unidades_chk_cama_extra` CHECK ((`qtd_cama_extra` >= 0))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -444,4 +452,4 @@ CREATE TABLE `unidades` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-09-15 14:41:07
+-- Dump completed on 2026-09-15 15:03:26

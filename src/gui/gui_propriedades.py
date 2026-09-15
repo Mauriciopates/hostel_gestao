@@ -401,6 +401,7 @@ diretamente.
 """
 
 import datetime
+import tkinter
 import tkinter.font as tkfont
 from decimal import Decimal, InvalidOperation
 
@@ -421,6 +422,45 @@ from .gui_unidades import PlantaLugares
 # usada no gui_est_requisicoes.py para os helpers do gui_est_comum.
 _truncar_texto = componentes.truncar_texto
 _colocar_no_topo = componentes.colocar_no_topo
+
+
+def _ajustar_tamanho(janela, largura=None):
+    """Redimensiona `janela` ao tamanho que o seu próprio conteúdo
+    já pede (`winfo_reqheight`), em vez de um "WxH" fixo escolhido
+    à mão.
+
+    Existe porque o modal de Unidade (e depois o pop-up de cama
+    extra) passou por três rondas de "está a cortar/sobrepor
+    conteúdo" com valores fixos (560→680→820, depois 290) — a fonte
+    "Segoe UI" e a escala de ecrã do aluno rendem mais alto do que
+    o que qualquer conta em pixels à mão previa, e adivinhar de novo
+    só adiava o mesmo bug para o próximo campo (15/09/2026). Chamar
+    sempre por último, já com todos os widgets fixos "packed" — e
+    de novo sempre que um bloco de conteúdo variável (como o resumo
+    da cama extra) aparece ou desaparece, porque `resizable(False,
+    False)` só impede o REDIMENSIONAMENTO PELO RATO, nunca uma
+    chamada a `.geometry()` feita pelo código.
+
+    `largura` fica fixa (não pedida ao conteúdo) porque os campos
+    desta aplicação usam sempre `fill="x"` — a largura não é o que
+    quebra, é sempre a altura.
+
+    Usa `tkinter.Toplevel.geometry` (a versão de base), não
+    `janela.geometry`: o `CTkToplevel.geometry()` do customtkinter
+    volta a multiplicar o valor recebido pela escala da janela (o
+    "widget scaling"), pensado para quem escreve um tamanho à mão
+    em pixels lógicos — mas `winfo_reqwidth`/`winfo_reqheight` já
+    devolvem pixels reais, depois dessa escala. Passar um valor já
+    escalado pela versão do customtkinter escalava-o outra vez,
+    fazendo o modal crescer com espaço vazio a cada chamada em vez
+    de encolher (bug visto pelo aluno em 15/09/2026, ao marcar
+    "Permite cama extra" uma 2ª vez com o resumo já visível).
+    """
+    janela.update_idletasks()
+    if largura is None:
+        largura = janela.winfo_reqwidth()
+    altura = janela.winfo_reqheight()
+    tkinter.Toplevel.geometry(janela, f"{largura}x{altura}")
 
 
 def _categoria_estado(texto_estado):
@@ -575,6 +615,21 @@ def _ler_decimal(texto, nome_campo):
         return Decimal(texto.strip().replace(",", "."))
     except InvalidOperation:
         raise ValueError(f"{nome_campo} tem um valor inválido.")
+
+
+def _ler_inteiro_cama_extra(texto):
+    """Converte o texto do campo "Quantidade de camas extra" em int.
+    Levanta ValueError com mensagem pronta para popup — a regra de
+    "maior que zero" fica por conta de
+    `unidades._validar_cama_extra`, aqui só se garante que é um
+    número inteiro (Fase 2, v1.4.0, item (d)).
+    """
+    try:
+        return int(texto.strip())
+    except ValueError:
+        raise ValueError(
+            "A quantidade de cama extra tem de ser um número inteiro."
+        )
 
 
 def _formatar_iban(iban):
@@ -1942,6 +1997,135 @@ class EditarPropriedadeModal(ctk.CTkToplevel):
         self.tela_lista._recarregar()
 
 
+class _PopupCamaExtra(ctk.CTkToplevel):
+    """Pop-up para "Quantidade de camas extra" e "Tipo de cama
+    extra", aberto ao marcar "Permite cama extra" em
+    NovaUnidadeModal/EditarUnidadeModal (Fase 2, v1.4.0, item (d),
+    2ª ronda — mockup validado pelo aluno em 15/09/2026: a 1ª
+    versão mostrava estes dois campos dentro do próprio modal da
+    unidade, mas o corpo ficou demasiado alto e o rodapé chegou a
+    sobrepor-se à secção; separar num pop-up devolveu o modal
+    principal ao tamanho de antes).
+
+    "Voltar" e "Confirmar" fazem os dois a mesma ação de fecho —
+    guardam o texto escrito e fecham o pop-up, mantendo "Permite
+    cama extra" marcada — só muda QUANDO validam: "Confirmar" exige
+    já aqui quantidade (inteiro > 0) e tipo preenchidos, recusando
+    fechar enquanto faltar algo; "Voltar" aceita o texto tal como
+    está, válido ou não, e deixa a validação para o "Criar"/
+    "Guardar" do modal principal, tal como qualquer outro campo do
+    formulário.
+    """
+
+    def __init__(self, pai, nome_unidade, qtd_inicial, tipo_inicial,
+                 ao_fechar):
+        super().__init__(pai)
+        self.ao_fechar = ao_fechar
+
+        self.title("Cama extra")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(pai)
+        _colocar_no_topo(self)
+        self.grab_set()
+
+        ctk.CTkLabel(
+            self,
+            text="CAMA EXTRA",
+            text_color=tema.AZUL_PRINCIPAL,
+            fg_color=tema.ID_CHIP_FUNDO,
+            corner_radius=5,
+            font=ctk.CTkFont(size=9, weight="bold"),
+        ).pack(anchor="w", padx=20, pady=(16, 8))
+
+        ctk.CTkLabel(
+            self,
+            text="Cama extra",
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=14, weight="bold"),
+        ).pack(anchor="w", padx=20)
+        ctk.CTkLabel(
+            self,
+            text=nome_unidade,
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=20, pady=(0, 14))
+
+        ctk.CTkLabel(
+            self,
+            text="Quantidade de camas extra",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=20)
+        self.campo_qtd = ctk.CTkEntry(self, corner_radius=tema.RAIO_CAMPO)
+        self.campo_qtd.insert(0, qtd_inicial)
+        self.campo_qtd.pack(fill="x", padx=20, pady=(2, 10))
+
+        ctk.CTkLabel(
+            self,
+            text="Tipo de cama extra",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=20)
+        self.campo_tipo = ctk.CTkEntry(
+            self,
+            corner_radius=tema.RAIO_CAMPO,
+            placeholder_text="ex.: colchão insuflável, sofá-cama",
+        )
+        self.campo_tipo.insert(0, tipo_inicial)
+        self.campo_tipo.pack(fill="x", padx=20, pady=(2, 6))
+
+        rodape = ctk.CTkFrame(self, fg_color="transparent")
+        rodape.pack(fill="x", padx=20, pady=20, side="bottom")
+        ctk.CTkButton(
+            rodape,
+            text="Voltar",
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self._voltar,
+        ).pack(side="left")
+        ctk.CTkButton(
+            rodape,
+            text="Confirmar",
+            fg_color=tema.VERDE,
+            hover_color=tema.AZUL_CLARO,
+            command=self._confirmar,
+        ).pack(side="right")
+
+        # Por último, e não no início: só depois de todos os
+        # widgets (incluindo o rodapé) estarem "packed" é que
+        # `winfo_reqheight` sabe a altura real que isto precisa.
+        _ajustar_tamanho(self, largura=300)
+
+        self.campo_qtd.focus_set()
+
+    def _voltar(self):
+        self.ao_fechar(self.campo_qtd.get(), self.campo_tipo.get())
+        self.destroy()
+
+    def _confirmar(self):
+        texto_qtd = self.campo_qtd.get().strip()
+        texto_tipo = self.campo_tipo.get().strip()
+
+        try:
+            _ler_inteiro_cama_extra(texto_qtd)
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        if not texto_tipo:
+            componentes.mostrar_erro(
+                "O tipo de cama extra é obrigatório."
+            )
+            return
+
+        self.ao_fechar(texto_qtd, texto_tipo)
+        self.destroy()
+
+
 class NovaUnidadeModal(ctk.CTkToplevel):
     """Modal de criação de uma unidade dentro de uma propriedade já
     escolhida (o cartão onde "+ Unidade" foi premido) — a
@@ -1957,15 +2141,28 @@ class NovaUnidadeModal(ctk.CTkToplevel):
     desmarca-se sozinha — decisão do aluno, 06/09/2026: validado só
     aqui na GUI, por agora (unidades.criar/atualizar continuam a
     aceitar qualquer combinação, para o cli.py não mudar).
+
+    Cama extra do Airbnb (Fase 2, v1.4.0, item (d), 2ª ronda,
+    mockup validado pelo aluno em 15/09/2026): só faz sentido na
+    Airbnb, "Permite cama extra" desmarca-se sozinha com aviso ao
+    trocar para Mensal (`_ao_mudar_tipo`) ou ao tentar marcá-la já
+    em Mensal (`_ao_marcar_cama_extra`). Marcá-la abre
+    `_PopupCamaExtra` por cima deste modal — "Quantidade" e "Tipo
+    de cama extra" não vivem aqui dentro (a 1ª versão tentou isso e
+    o modal ficou demasiado alto, com o rodapé a sobrepor-se à
+    secção); o que fica aqui é só um resumo de uma linha
+    (`self.frame_resumo_cama_extra`) com um link "editar" que
+    reabre o pop-up.
     """
 
     def __init__(self, tela_lista, prop):
         super().__init__(tela_lista)
         self.tela_lista = tela_lista
         self.prop = prop
+        self._cama_extra_qtd_texto = ""
+        self._cama_extra_tipo_texto = ""
 
         self.title(f"Nova Unidade — {prop['nome']}")
-        self.geometry("380x560")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
         self.transient(tela_lista)
@@ -2009,6 +2206,38 @@ class NovaUnidadeModal(ctk.CTkToplevel):
             command=self._ao_marcar_epoca_alta,
         ).pack(anchor="w", padx=20, pady=(14, 0))
 
+        self.permite_cama_extra = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            self,
+            text="Permite cama extra",
+            variable=self.permite_cama_extra,
+            command=self._ao_marcar_cama_extra,
+        ).pack(anchor="w", padx=20, pady=(10, 0))
+
+        self.frame_resumo_cama_extra = ctk.CTkFrame(
+            self,
+            fg_color=tema.ID_CHIP_FUNDO,
+            corner_radius=tema.RAIO_CAMPO,
+        )
+        self.rotulo_resumo_cama_extra = ctk.CTkLabel(
+            self.frame_resumo_cama_extra,
+            text="",
+            text_color=tema.NAVY_ESCURO,
+            font=ctk.CTkFont(size=11),
+        )
+        self.rotulo_resumo_cama_extra.pack(side="left", padx=10, pady=6)
+        ctk.CTkButton(
+            self.frame_resumo_cama_extra,
+            text="editar",
+            fg_color="transparent",
+            hover=False,
+            text_color=tema.AZUL_PRINCIPAL,
+            font=ctk.CTkFont(size=11, underline=True),
+            command=self._abrir_popup_cama_extra,
+        ).pack(side="right", padx=10, pady=6)
+        # Começa escondido (self.permite_cama_extra nasce False) —
+        # só `_atualizar_resumo_cama_extra` decide quando aparece.
+
         rodape = ctk.CTkFrame(self, fg_color="transparent")
         rodape.pack(fill="x", padx=20, pady=20, side="bottom")
         ctk.CTkButton(
@@ -2029,6 +2258,8 @@ class NovaUnidadeModal(ctk.CTkToplevel):
             command=self._criar,
         ).pack(side="right")
 
+        _ajustar_tamanho(self, largura=380)
+
     def _campo(self, rotulo):
         ctk.CTkLabel(
             self,
@@ -2044,11 +2275,12 @@ class NovaUnidadeModal(ctk.CTkToplevel):
         return "mensal" if self.combo_tipo.get() == "Mensal" else "airbnb"
 
     def _ao_mudar_tipo(self, _valor_escolhido):
-        """Ao trocar para "Mensal" com "Época alta ativa" já
-        marcada, desmarca e avisa — mesma regra de
-        `_ao_marcar_epoca_alta`, só que disparada pelo lado do
-        tipo em vez do lado da caixa (cobre trocar o tipo DEPOIS de
-        já ter marcado a caixa, não só o caminho inverso).
+        """Ao trocar para "Mensal" com "Época alta ativa" e/ou
+        "Permite cama extra" já marcadas, desmarca e avisa — mesma
+        regra de `_ao_marcar_epoca_alta`/`_ao_marcar_cama_extra`, só
+        que disparada pelo lado do tipo em vez do lado da caixa
+        (cobre trocar o tipo DEPOIS de já ter marcado a caixa, não
+        só o caminho inverso).
         """
         tipo_mensal = self._tipo_selecionado() == "mensal"
         if tipo_mensal and self.epoca_alta_ativa.get():
@@ -2056,6 +2288,8 @@ class NovaUnidadeModal(ctk.CTkToplevel):
             componentes.mostrar_erro(
                 "Unidade do tipo mensal não existe época alta."
             )
+        if tipo_mensal and self.permite_cama_extra.get():
+            self._desmarcar_cama_extra_com_aviso()
 
     def _ao_marcar_epoca_alta(self):
         tipo_mensal = self._tipo_selecionado() == "mensal"
@@ -2064,6 +2298,60 @@ class NovaUnidadeModal(ctk.CTkToplevel):
             componentes.mostrar_erro(
                 "Unidade do tipo mensal não existe época alta."
             )
+
+    def _ao_marcar_cama_extra(self):
+        if not self.permite_cama_extra.get():
+            self._cama_extra_qtd_texto = ""
+            self._cama_extra_tipo_texto = ""
+            self._atualizar_resumo_cama_extra()
+            return
+
+        if self._tipo_selecionado() == "mensal":
+            self._desmarcar_cama_extra_com_aviso()
+            return
+
+        self._abrir_popup_cama_extra()
+
+    def _desmarcar_cama_extra_com_aviso(self):
+        self.permite_cama_extra.set(False)
+        self._cama_extra_qtd_texto = ""
+        self._cama_extra_tipo_texto = ""
+        self._atualizar_resumo_cama_extra()
+        componentes.mostrar_erro(
+            "Cama extra só se aplica a unidades do tipo Airbnb."
+        )
+
+    def _abrir_popup_cama_extra(self):
+        _PopupCamaExtra(
+            self,
+            self.campo_nome.get().strip() or "Nova unidade",
+            self._cama_extra_qtd_texto,
+            self._cama_extra_tipo_texto,
+            self._ao_fechar_popup_cama_extra,
+        )
+
+    def _ao_fechar_popup_cama_extra(self, qtd_texto, tipo_texto):
+        self._cama_extra_qtd_texto = qtd_texto.strip()
+        self._cama_extra_tipo_texto = tipo_texto.strip()
+        self._atualizar_resumo_cama_extra()
+
+    def _atualizar_resumo_cama_extra(self):
+        if not self.permite_cama_extra.get():
+            self.frame_resumo_cama_extra.pack_forget()
+            _ajustar_tamanho(self, largura=380)
+            return
+
+        if self._cama_extra_qtd_texto and self._cama_extra_tipo_texto:
+            texto = (
+                f"{self._cama_extra_qtd_texto} × "
+                f"{self._cama_extra_tipo_texto}"
+            )
+        else:
+            texto = "Por preencher"
+
+        self.rotulo_resumo_cama_extra.configure(text=texto)
+        self.frame_resumo_cama_extra.pack(fill="x", padx=20, pady=(6, 0))
+        _ajustar_tamanho(self, largura=380)
 
     def _criar(self):
         try:
@@ -2076,6 +2364,11 @@ class NovaUnidadeModal(ctk.CTkToplevel):
             multa = _ler_decimal(
                 self.campo_multa.get(), "Multa de check-in tardio"
             )
+            qtd_cama_extra = None
+            if self.permite_cama_extra.get():
+                qtd_cama_extra = _ler_inteiro_cama_extra(
+                    self._cama_extra_qtd_texto
+                )
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
             return
@@ -2089,6 +2382,9 @@ class NovaUnidadeModal(ctk.CTkToplevel):
                 preco_epoca_alta,
                 multa,
                 epoca_alta_ativa=self.epoca_alta_ativa.get(),
+                permite_cama_extra=self.permite_cama_extra.get(),
+                qtd_cama_extra=qtd_cama_extra,
+                tipo_cama_extra=self._cama_extra_tipo_texto,
             )
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
@@ -2117,15 +2413,32 @@ class EditarUnidadeModal(ctk.CTkToplevel):
     "Colocar", sem confirmação para "Retirar" — mesma convenção de
     `_reativar_unidade`) e fechando o modal a seguir, sem misturar
     com o "Guardar" dos preços.
+
+    Cama extra do Airbnb (Fase 2, v1.4.0, item (d), 2ª ronda,
+    mockup validado pelo aluno em 15/09/2026): como o tipo não muda
+    ao editar, aqui não há a lógica de "desmarcar sozinho ao trocar
+    de tipo" de `NovaUnidadeModal` — "Época alta ativa" e "Permite
+    cama extra" ficam as duas permanentemente desativadas
+    (`state="disabled"`) quando `uni["tipo"] == "mensal"`, com uma
+    nota a explicar porquê. Em Airbnb, se a unidade já tiver cama
+    extra gravada, aparece logo o resumo de uma linha (sem abrir o
+    pop-up sozinho) com um link "editar" — `_PopupCamaExtra` só
+    abre se o aluno clicar em "editar" ou desmarcar e voltar a
+    marcar a caixa.
     """
 
     def __init__(self, tela_lista, uni, prop):
         super().__init__(tela_lista)
         self.tela_lista = tela_lista
         self.uni = uni
+        self._cama_extra_qtd_texto = (
+            str(uni["qtd_cama_extra"])
+            if uni["qtd_cama_extra"] is not None
+            else ""
+        )
+        self._cama_extra_tipo_texto = uni["tipo_cama_extra"]
 
         self.title(f"Editar Unidade — {uni['nome']}")
-        self.geometry("380x580")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
         self.transient(tela_lista)
@@ -2156,13 +2469,64 @@ class EditarUnidadeModal(ctk.CTkToplevel):
             _formatar_valor(uni["multa_check_in_tardio"]),
         )
 
+        airbnb = uni["tipo"] == "airbnb"
+
         self.epoca_alta_ativa = ctk.BooleanVar(value=uni["epoca_alta_ativa"])
         ctk.CTkCheckBox(
             self,
             text="Época alta ativa",
             variable=self.epoca_alta_ativa,
             command=self._ao_marcar_epoca_alta,
+            state="normal" if airbnb else "disabled",
         ).pack(anchor="w", padx=20, pady=(14, 0))
+
+        self.permite_cama_extra = ctk.BooleanVar(
+            value=uni["permite_cama_extra"]
+        )
+        ctk.CTkCheckBox(
+            self,
+            text="Permite cama extra",
+            variable=self.permite_cama_extra,
+            command=self._ao_marcar_cama_extra,
+            state="normal" if airbnb else "disabled",
+        ).pack(anchor="w", padx=20, pady=(10, 0))
+
+        self.frame_resumo_cama_extra = ctk.CTkFrame(
+            self,
+            fg_color=tema.ID_CHIP_FUNDO,
+            corner_radius=tema.RAIO_CAMPO,
+        )
+        self.rotulo_resumo_cama_extra = ctk.CTkLabel(
+            self.frame_resumo_cama_extra,
+            text="",
+            text_color=tema.NAVY_ESCURO,
+            font=ctk.CTkFont(size=11),
+        )
+        self.rotulo_resumo_cama_extra.pack(side="left", padx=10, pady=6)
+        ctk.CTkButton(
+            self.frame_resumo_cama_extra,
+            text="editar",
+            fg_color="transparent",
+            hover=False,
+            text_color=tema.AZUL_PRINCIPAL,
+            font=ctk.CTkFont(size=11, underline=True),
+            command=self._abrir_popup_cama_extra,
+        ).pack(side="right", padx=10, pady=6)
+
+        if airbnb:
+            self._atualizar_resumo_cama_extra()
+        else:
+            ctk.CTkLabel(
+                self,
+                text=(
+                    "Época alta e cama extra só se aplicam a "
+                    "unidades do tipo Airbnb."
+                ),
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=10),
+                wraplength=320,
+                justify="left",
+            ).pack(anchor="w", padx=20, pady=(8, 0))
 
         ctk.CTkFrame(self, height=1, fg_color=tema.COR_BORDA).pack(
             fill="x", padx=20, pady=(16, 12)
@@ -2209,6 +2573,8 @@ class EditarUnidadeModal(ctk.CTkToplevel):
             hover_color=tema.AZUL_CLARO,
             command=self._guardar,
         ).pack(side="right")
+
+        _ajustar_tamanho(self, largura=380)
 
     def _alternar_manutencao(self):
         if self.uni["em_manutencao"]:
@@ -2265,6 +2631,49 @@ class EditarUnidadeModal(ctk.CTkToplevel):
                 "Unidade do tipo mensal não existe época alta."
             )
 
+    def _ao_marcar_cama_extra(self):
+        # Tipo é fixo aqui e a caixa já nasce desativada quando
+        # mensal — este ramo só é alcançável em Airbnb.
+        if not self.permite_cama_extra.get():
+            self._cama_extra_qtd_texto = ""
+            self._cama_extra_tipo_texto = ""
+            self._atualizar_resumo_cama_extra()
+            return
+
+        self._abrir_popup_cama_extra()
+
+    def _abrir_popup_cama_extra(self):
+        _PopupCamaExtra(
+            self,
+            self.uni["nome"],
+            self._cama_extra_qtd_texto,
+            self._cama_extra_tipo_texto,
+            self._ao_fechar_popup_cama_extra,
+        )
+
+    def _ao_fechar_popup_cama_extra(self, qtd_texto, tipo_texto):
+        self._cama_extra_qtd_texto = qtd_texto.strip()
+        self._cama_extra_tipo_texto = tipo_texto.strip()
+        self._atualizar_resumo_cama_extra()
+
+    def _atualizar_resumo_cama_extra(self):
+        if not self.permite_cama_extra.get():
+            self.frame_resumo_cama_extra.pack_forget()
+            _ajustar_tamanho(self, largura=380)
+            return
+
+        if self._cama_extra_qtd_texto and self._cama_extra_tipo_texto:
+            texto = (
+                f"{self._cama_extra_qtd_texto} × "
+                f"{self._cama_extra_tipo_texto}"
+            )
+        else:
+            texto = "Por preencher"
+
+        self.rotulo_resumo_cama_extra.configure(text=texto)
+        self.frame_resumo_cama_extra.pack(fill="x", padx=20, pady=(6, 0))
+        _ajustar_tamanho(self, largura=380)
+
     def _guardar(self):
         try:
             preco_base = _ler_decimal(
@@ -2276,6 +2685,11 @@ class EditarUnidadeModal(ctk.CTkToplevel):
             multa = _ler_decimal(
                 self.campo_multa.get(), "Multa de check-in tardio"
             )
+            qtd_cama_extra = None
+            if self.permite_cama_extra.get():
+                qtd_cama_extra = _ler_inteiro_cama_extra(
+                    self._cama_extra_qtd_texto
+                )
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
             return
@@ -2288,6 +2702,9 @@ class EditarUnidadeModal(ctk.CTkToplevel):
                 preco_epoca_alta=preco_epoca_alta,
                 multa_check_in_tardio=multa,
                 epoca_alta_ativa=self.epoca_alta_ativa.get(),
+                permite_cama_extra=self.permite_cama_extra.get(),
+                qtd_cama_extra=qtd_cama_extra,
+                tipo_cama_extra=self._cama_extra_tipo_texto,
             )
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))

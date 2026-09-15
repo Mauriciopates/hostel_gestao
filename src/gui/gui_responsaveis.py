@@ -384,15 +384,27 @@ class ListaResponsaveis(ctk.CTkFrame):
         self._baloes.append(_BalaoUnidades(cracha, registo["id"]))
 
         # Ativo/desativado passou para a coluna ESTADO, com crachá,
-        # igual à tabela de unidades. Por baixo do nome fica só o
-        # marcador da sessão — e diz "(em sessão)", não
-        # "(responsável ativo)": com o crachá a dizer "ativo" ao
-        # lado, a mesma palavra estaria a significar duas coisas
-        # diferentes na mesma linha (09/09/2026).
+        # igual à tabela de unidades. Por baixo do nome fica um
+        # subtítulo — e diz "(em sessão)", não "(responsável
+        # ativo)": com o crachá a dizer "ativo" ao lado, a mesma
+        # palavra estaria a significar duas coisas diferentes na
+        # mesma linha (09/09/2026).
+        #
+        # Subtítulo passou a incluir também o tipo_utilizador
+        # (Fase 2, v1.4.0, pedido do aluno ao ver a tabela real:
+        # "em frente ou como subtitulo do nome o tipo do usuario").
+        # Mesmo padrão já usado aqui para "(em sessão)" — uma
+        # segunda linha no mesmo CTkLabel, sem criar um widget novo
+        # por célula — e resolve, de caminho, o que no ecrã real já
+        # aparecia como um "- ADM" escrito à mão dentro do próprio
+        # nome, por não haver ainda este campo.
         texto_nome = registo["nome"]
+        subtitulo = registo["tipo_utilizador"]
 
         if ativo_na_sessao:
-            texto_nome += "\n(em sessão)"
+            subtitulo += " · em sessão"
+
+        texto_nome += f"\n{subtitulo}"
 
         self.tabela.colocar(
             linha,
@@ -888,19 +900,33 @@ class UnidadesDoResponsavelModal(ctk.CTkToplevel):
 class _FormularioResponsavel(ctk.CTkToplevel):
     """Base dos formulários de criar e editar.
 
-    Os dois têm exatamente os mesmos dois campos e a mesma
+    Os dois têm exatamente os mesmos três campos e a mesma
     disposição; só muda o título, o texto do botão e o que acontece
     ao gravar. Duplicar o formulário era duplicar também cada
     correção futura de layout.
+
+    Campo "Tipo de utilizador" acrescentado na Fase 2, v1.4.0
+    (mockup validado pelo aluno em 15/09/2026): fica logo a seguir
+    ao Nome, antes do Contacto — é um atributo de identidade do
+    responsável, não um dado de contacto.
+
+    LÓGICA DE PERMISSÕES (item (c) da Fase 2, 15/09/2026): só quem
+    está definido como responsável ativo da sessão E é "Master"
+    pode escolher ou mudar o tipo de utilizador — combinado com o
+    aluno quando o campo foi criado, implementado agora que chegou
+    a vez de tratar as permissões por perfil. Sem Master ativo (ou
+    sem ninguém ativo), o combo fica desativado e todo o resto do
+    formulário continua a funcionar normalmente — só este campo
+    fica bloqueado.
     """
 
     def __init__(self, tela_lista, titulo, texto_botao, nome="",
-                 contacto=""):
+                 contacto="", tipo_utilizador="Staff"):
         super().__init__(tela_lista)
         self.tela_lista = tela_lista
 
         self.title(titulo)
-        self.geometry("440x310")
+        self.geometry("440x390")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
         self.transient(tela_lista)
@@ -925,6 +951,38 @@ class _FormularioResponsavel(ctk.CTkToplevel):
         )
         self.campo_nome.pack(fill="x", padx=20, pady=(2, 12))
         self.campo_nome.insert(0, nome)
+
+        ctk.CTkLabel(
+            self,
+            text="Tipo de utilizador",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=20)
+
+        pode_mudar_tipo = sessao.tipo_utilizador_ativo() == "Master"
+
+        self.campo_tipo_utilizador = ctk.CTkOptionMenu(
+            self,
+            values=list(responsaveis.TIPOS_UTILIZADOR),
+            corner_radius=tema.RAIO_CAMPO,
+            state="normal" if pode_mudar_tipo else "disabled",
+        )
+        self.campo_tipo_utilizador.pack(
+            fill="x", padx=20, pady=(2, 6)
+        )
+        self.campo_tipo_utilizador.set(tipo_utilizador)
+
+        ctk.CTkLabel(
+            self,
+            text=(
+                "Define o perfil de acesso do responsável."
+                if pode_mudar_tipo
+                else "Só um Master pode definir ou alterar o tipo "
+                "de utilizador."
+            ),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+        ).pack(anchor="w", padx=20, pady=(0, 12))
 
         ctk.CTkLabel(
             self,
@@ -978,6 +1036,7 @@ class _FormularioResponsavel(ctk.CTkToplevel):
         return (
             self.campo_nome.get().strip(),
             self.campo_contacto.get().strip(),
+            self.campo_tipo_utilizador.get(),
         )
 
     def _gravar(self):
@@ -995,10 +1054,12 @@ class NovoResponsavelModal(_FormularioResponsavel):
         )
 
     def _gravar(self):
-        nome, contacto = self._valores()
+        nome, contacto, tipo_utilizador = self._valores()
 
         try:
-            registo = responsaveis.criar(nome, contacto)
+            registo = responsaveis.criar(
+                nome, contacto, tipo_utilizador
+            )
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
             return
@@ -1021,10 +1082,11 @@ class EditarResponsavelModal(_FormularioResponsavel):
             texto_botao="Guardar",
             nome=registo["nome"],
             contacto=registo["contacto"],
+            tipo_utilizador=registo["tipo_utilizador"],
         )
 
     def _gravar(self):
-        nome, contacto = self._valores()
+        nome, contacto, tipo_utilizador = self._valores()
 
         try:
             responsaveis.atualizar(
@@ -1033,6 +1095,21 @@ class EditarResponsavelModal(_FormularioResponsavel):
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
             return
+
+        # Só chama alterar_tipo_utilizador quando o valor mudou: a
+        # própria função recusa reatribuir o mesmo tipo (haveria
+        # erro a cada "Guardar" em que ninguém tivesse mexido no
+        # combo).
+        if tipo_utilizador != self.registo["tipo_utilizador"]:
+            try:
+                responsaveis.alterar_tipo_utilizador(
+                    self.registo["id"],
+                    tipo_utilizador,
+                    sessao.tipo_utilizador_ativo(),
+                )
+            except ValueError as erro:
+                componentes.mostrar_erro(str(erro))
+                return
 
         componentes.mostrar_sucesso("Responsável atualizado.")
         self.destroy()

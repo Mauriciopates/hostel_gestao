@@ -38,6 +38,50 @@ PREFIXO_QUARTO = "QRT"
 PREFIXO_LUGAR = "LUG"
 PREFIXO_ATRIBUICAO = "ATR"
 
+# Fase 2, v1.4.0 — beliches. Não é um prefixo novo: um beliche é só
+# duas linhas de `lugares` (tipo_cama='beliche') ligadas por
+# beliche_grupo_id, que reaproveita o próprio LUG-XXX de uma delas
+# (ver criar_beliche, mais abaixo) — sem contador próprio.
+POSICOES_BELICHE = ("superior", "inferior")
+
+
+def _validar_cama_extra(tipo, permite_cama_extra, qtd_cama_extra,
+                         tipo_cama_extra):
+    """Valida os três campos de cama extra do Airbnb em conjunto
+    (Fase 2, v1.4.0, item (d) do plano de correções).
+
+    Decisão do aluno (15/09/2026): só fazem sentido em unidades
+    tipo='airbnb' — uma unidade mensal nem chega a mostrar isto na
+    GUI, e aqui a mesma regra é aplicada como segunda barreira, não
+    só confiança na interface. Quando `permite_cama_extra` é True,
+    `qtd_cama_extra` (inteiro > 0) e `tipo_cama_extra` (não vazio)
+    passam a obrigatórios — mesma relação que o CHECK já aplicado
+    à tabela `unidades` via ALTER TABLE numa entrega anterior; esta
+    validação replica-a do lado da aplicação, não a substitui.
+    Quando `permite_cama_extra` é False, os outros dois nem chegam
+    a ser olhados aqui — quem chama é que já os reduz a None nesse
+    caso (ver `criar`/`atualizar`).
+    """
+    if not permite_cama_extra:
+        return
+
+    if tipo != "airbnb":
+        raise ValueError(
+            "Cama extra só se aplica a unidades do tipo 'airbnb'."
+        )
+
+    if not isinstance(qtd_cama_extra, int) or qtd_cama_extra <= 0:
+        raise ValueError(
+            "A quantidade de cama extra tem de ser um número "
+            "inteiro maior que zero."
+        )
+
+    if not tipo_cama_extra or not tipo_cama_extra.strip():
+        raise ValueError(
+            "O tipo de cama extra é obrigatório quando a unidade "
+            "permite cama extra."
+        )
+
 
 def criar(
     propriedade_id,
@@ -47,6 +91,9 @@ def criar(
     preco_epoca_alta,
     multa_check_in_tardio,
     epoca_alta_ativa=False,
+    permite_cama_extra=False,
+    qtd_cama_extra=None,
+    tipo_cama_extra=None,
 ):
     """Criação das unidades, faz a validações de existencia
     antes de criar a unidade"""
@@ -83,6 +130,10 @@ def criar(
         if valor < 0:
             raise ValueError(f"{nome_preco} não pode ser negativo: {valor}.")
 
+    _validar_cama_extra(
+        tipo, permite_cama_extra, qtd_cama_extra, tipo_cama_extra
+    )
+
     unidade = {
         "id": repositorio.proximo_id(PREFIXO),
         "propriedade_id": propriedade_id,
@@ -94,6 +145,13 @@ def criar(
         "epoca_alta_ativa": epoca_alta_ativa,
         "em_manutencao": False,
         "ativo": True,
+        "permite_cama_extra": permite_cama_extra,
+        "qtd_cama_extra": qtd_cama_extra if permite_cama_extra else None,
+        "tipo_cama_extra": (
+            tipo_cama_extra.strip()
+            if permite_cama_extra and tipo_cama_extra
+            else None
+        ),
     }
 
     repositorio.inserir_unidade(unidade)
@@ -122,6 +180,34 @@ def listar(incluir_inativas=False, propriedade_id=None, tipo=None):
     )
 
 
+def listar_com_propriedade(incluir_inativas=False, tipo=None):
+    """Devolve as unidades com o nome da propriedade a que
+    pertencem (campo `propriedade_nome`), para popular ComboBoxes
+    que têm de distinguir unidades com o mesmo nome em propriedades
+    diferentes (Fase 2, v1.4.0). Ver `rotulo_com_propriedade` para
+    formatar cada linha como texto de ComboBox.
+
+    Sem filtro por propriedade_id — não faria sentido aqui: se já
+    se sabe a propriedade, `listar()` chega e é mais direto.
+    """
+    return repositorio.listar_unidades_com_propriedade(
+        incluir_inativas=incluir_inativas, tipo=tipo,
+    )
+
+
+def rotulo_com_propriedade(unidade):
+    """Formata o rótulo "[PROPRIEDADE] - [UNIDADE] (ID)" usado nos
+    ComboBoxes de unidade, a partir de uma linha devolvida por
+    `listar_com_propriedade` (tem de incluir `propriedade_nome`) —
+    mesma convenção de ID entre parênteses já usada nos outros
+    seletores do sistema.
+    """
+    return (
+        f"{unidade['propriedade_nome']} - {unidade['nome']} "
+        f"({unidade['id']})"
+    )
+
+
 def atualizar(
     unidade_id,
     nome=None,
@@ -129,9 +215,12 @@ def atualizar(
     preco_epoca_alta=None,
     multa_check_in_tardio=None,
     epoca_alta_ativa=None,
+    permite_cama_extra=None,
+    qtd_cama_extra=None,
+    tipo_cama_extra=None,
 ):
-    """Altera o nome, os preços e o indicador de época alta de uma
-    unidade.
+    """Altera o nome, os preços, o indicador de época alta e a cama
+    extra do Airbnb de uma unidade.
 
     Um parâmetro a None significa não alterar (mesma convenção de
     `propriedades.atualizar`). O nome não pode ficar vazio, mesma regra
@@ -143,6 +232,18 @@ def atualizar(
     rígida sobre as ocupações e mudar de propriedade não corresponde
     a nenhuma operação real do negócio. O estado de manutenção tem
     funções próprias.
+
+    Cama extra (Fase 2, v1.4.0, item (d)): os três campos
+    (`permite_cama_extra`, `qtd_cama_extra`, `tipo_cama_extra`) são
+    tratados em conjunto, não um a um — mudar só a quantidade sem
+    tocar em `permite_cama_extra` tem de continuar válido contra o
+    valor JÁ gravado, não contra None. Por isso, sempre que UM dos
+    três vier diferente de None, os outros dois completam-se com o
+    valor atual da unidade antes de validar com
+    `_validar_cama_extra`. Desligar `permite_cama_extra` limpa
+    sempre `qtd_cama_extra`/`tipo_cama_extra` para None, mesmo que
+    tenham sido passados — a flag é que manda, nunca fica um par
+    quantidade/tipo "orfão" de uma cama extra desligada.
     """
 
     unidade = procurar(unidade_id)
@@ -187,6 +288,38 @@ def atualizar(
 
     if epoca_alta_ativa is not None:
         campos["epoca_alta_ativa"] = epoca_alta_ativa
+
+    algum_cama_extra_mudou = (
+        permite_cama_extra is not None
+        or qtd_cama_extra is not None
+        or tipo_cama_extra is not None
+    )
+
+    if algum_cama_extra_mudou:
+        novo_permite = (
+            permite_cama_extra
+            if permite_cama_extra is not None
+            else unidade["permite_cama_extra"]
+        )
+        novo_qtd = (
+            qtd_cama_extra
+            if qtd_cama_extra is not None
+            else unidade["qtd_cama_extra"]
+        )
+        novo_tipo = (
+            tipo_cama_extra
+            if tipo_cama_extra is not None
+            else unidade["tipo_cama_extra"]
+        )
+
+        _validar_cama_extra(unidade["tipo"], novo_permite, novo_qtd,
+                             novo_tipo)
+
+        campos["permite_cama_extra"] = novo_permite
+        campos["qtd_cama_extra"] = novo_qtd if novo_permite else None
+        campos["tipo_cama_extra"] = (
+            novo_tipo.strip() if novo_permite and novo_tipo else None
+        )
 
     if campos:
         repositorio.atualizar_unidade(unidade_id, campos)
@@ -453,14 +586,29 @@ def reativar_quarto(quarto_id):
     return quarto
 
 
-def criar_lugar(quarto_id, nome, tipo_cama, capacidade=1):
-    """Cria um lugar dentro de um quarto existente.
+def _criar_lugar(
+    quarto_id,
+    nome,
+    tipo_cama,
+    capacidade,
+    posicao_beliche=None,
+    beliche_grupo_id=None,
+    id_lugar=None,
+):
+    """Validações e persistência comuns a `criar_lugar` e a
+    `criar_beliche` (Fase 2, v1.4.0).
 
-    'tipo_cama' é obrigatório e só decide a aparência do lugar na
-    planta de lugares (GUI) — não deriva nem substitui a
-    capacidade, que continua um campo à parte (decisão 17).
+    'posicao_beliche'/'beliche_grupo_id' só se aplicam a
+    tipo_cama='beliche' — nos restantes têm de vir None, e num
+    beliche são obrigatórios (raise ValueError se não bater certo).
 
-    Devolve o registo criado.
+    'id_lugar' existe só para `criar_beliche`: a cama "inferior" do
+    par usa o seu próprio id como beliche_grupo_id (decisão de
+    15/09/2026, para não criar um prefixo novo — ver
+    POSICOES_BELICHE, acima), e para isso o id tem de ser conhecido
+    ANTES de gravar a linha, em vez de vir de
+    `repositorio.proximo_id` só depois. Quando não indicado (uso
+    normal, via `criar_lugar`), gera-se um novo, como sempre.
     """
     quarto = procurar_quarto(quarto_id)
 
@@ -475,17 +623,177 @@ def criar_lugar(quarto_id, nome, tipo_cama, capacidade=1):
     validacoes.validar_tipo_cama(tipo_cama)
     validacoes.validar_capacidade_lugar(capacidade)
 
+    if tipo_cama == "beliche":
+        if posicao_beliche not in POSICOES_BELICHE:
+            raise ValueError(
+                "Uma cama de beliche exige posicao_beliche "
+                f"{POSICOES_BELICHE[0]!r} ou {POSICOES_BELICHE[1]!r}."
+            )
+
+        if not beliche_grupo_id:
+            raise ValueError(
+                "Uma cama de beliche exige beliche_grupo_id."
+            )
+    elif posicao_beliche is not None or beliche_grupo_id is not None:
+        raise ValueError(
+            "posicao_beliche/beliche_grupo_id só se aplicam a "
+            "tipo_cama='beliche'."
+        )
+
     lugar = {
-        "id": repositorio.proximo_id(PREFIXO_LUGAR),
+        "id": id_lugar or repositorio.proximo_id(PREFIXO_LUGAR),
         "quarto_id": quarto_id,
         "nome": nome,
         "tipo_cama": tipo_cama,
         "capacidade": capacidade,
         "ativo": True,
+        "posicao_beliche": posicao_beliche,
+        "beliche_grupo_id": beliche_grupo_id,
     }
 
     repositorio.inserir_lugar(lugar)
     return lugar
+
+
+def criar_lugar(quarto_id, nome, tipo_cama, capacidade=1):
+    """Cria um lugar dentro de um quarto existente.
+
+    'tipo_cama' é obrigatório e só decide a aparência do lugar na
+    planta de lugares (GUI) — não deriva nem substitui a
+    capacidade, que continua um campo à parte (decisão 17).
+
+    Para camas de beliche (agrupadas duas a duas), usar
+    `criar_beliche` — esta função cria sempre um lugar avulso, sem
+    posicao_beliche/beliche_grupo_id.
+
+    Devolve o registo criado.
+    """
+    return _criar_lugar(quarto_id, nome, tipo_cama, capacidade)
+
+
+# Fase 2, v1.4.0 — decisão do aluno (15/09/2026): não existe beliche
+# com um lugar só. Cada nível aloja sempre 1 pessoa; o par soma 2 ao
+# todo do quarto/unidade (`_contagem_mensal` soma a capacidade de
+# cada lugar). Não é um valor à escolha de quem cria — é uma
+# propriedade física do móvel, por isso `criar_beliche` nem recebe
+# capacidade como parâmetro.
+CAPACIDADE_CAMA_BELICHE = 1
+
+
+def criar_beliche(quarto_id, nome_superior, nome_inferior):
+    """Cria um par de beliche — duas camas ligadas — num quarto
+    existente (Fase 2, v1.4.0).
+
+    Não introduz nenhum prefixo/contador novo (decisão de
+    15/09/2026): 'beliche' é só `tipo_cama='beliche'` em duas linhas
+    de `lugares`, e o agrupamento faz-se reaproveitando o próprio
+    LUG-XXX da cama "inferior" como beliche_grupo_id das duas —
+    por isso a cama inferior é sempre criada primeiro.
+
+    Sem parâmetro de capacidade (ver CAPACIDADE_CAMA_BELICHE, acima)
+    — cada cama do par fica sempre com capacidade 1, o par soma
+    sempre 2 ao total do quarto.
+
+    Levanta ValueError nos mesmos casos de `criar_lugar` (quarto
+    inexistente, nome vazio), mais se os dois nomes vierem iguais
+    depois de retirados os espaços.
+
+    Devolve o par de lugares criados, (inferior, superior).
+    """
+    nome_superior_normalizado = nome_superior.strip()
+    nome_inferior_normalizado = nome_inferior.strip()
+
+    if (
+        nome_superior_normalizado
+        and nome_inferior_normalizado
+        and nome_superior_normalizado == nome_inferior_normalizado
+    ):
+        raise ValueError(
+            "As duas camas do beliche não podem ter o mesmo nome."
+        )
+
+    inferior = _criar_lugar(
+        quarto_id,
+        nome_inferior,
+        "beliche",
+        CAPACIDADE_CAMA_BELICHE,
+        posicao_beliche="inferior",
+        beliche_grupo_id=repositorio.proximo_id(PREFIXO_LUGAR),
+    )
+
+    superior = _criar_lugar(
+        quarto_id,
+        nome_superior,
+        "beliche",
+        CAPACIDADE_CAMA_BELICHE,
+        posicao_beliche="superior",
+        beliche_grupo_id=inferior["beliche_grupo_id"],
+    )
+
+    return inferior, superior
+
+
+def agrupar_beliches(lugares):
+    """Agrupa os lugares de UM quarto em pares de beliche mais
+    avulsos, para a Planta de Beliches (Fase 2/3, v1.4.0).
+
+    Recebe a lista tal como `listar_lugares(quarto_id=...)` a
+    devolve. Função pura — não acede à base de dados, fácil de
+    testar sem MySQL.
+
+    Devolve uma lista de itens:
+    - {"tipo": "beliche", "grupo_id": ..., "superior": lugar,
+      "inferior": lugar} — par completo, decidido sempre por
+      'posicao_beliche', nunca pela ordem de chegada da lista (MySQL
+      não promete ordem sem ORDER BY).
+    - {"tipo": "beliche_incompleto", "grupo_id": ..., "lugares":
+      [...]} — só uma das duas camas do grupo veio na lista (ex.: a
+      outra está inativa e a chamada não incluiu inativas). Não
+      esconde o problema, devolve o que há para a GUI decidir o que
+      mostrar.
+    - {"tipo": "avulso", "lugar": lugar} — sem beliche_grupo_id
+      (solteiro, casal, ou beliche sem par ainda).
+    """
+    grupos = {}
+    avulsos = []
+
+    for lugar in lugares:
+        grupo_id = lugar.get("beliche_grupo_id")
+
+        if grupo_id:
+            grupos.setdefault(grupo_id, []).append(lugar)
+        else:
+            avulsos.append(lugar)
+
+    resultado = []
+
+    for grupo_id, membros in grupos.items():
+        por_posicao = {m.get("posicao_beliche"): m for m in membros}
+        superior = por_posicao.get("superior")
+        inferior = por_posicao.get("inferior")
+
+        if superior is not None and inferior is not None:
+            resultado.append(
+                {
+                    "tipo": "beliche",
+                    "grupo_id": grupo_id,
+                    "superior": superior,
+                    "inferior": inferior,
+                }
+            )
+        else:
+            resultado.append(
+                {
+                    "tipo": "beliche_incompleto",
+                    "grupo_id": grupo_id,
+                    "lugares": membros,
+                }
+            )
+
+    for lugar in avulsos:
+        resultado.append({"tipo": "avulso", "lugar": lugar})
+
+    return resultado
 
 
 def atualizar_lugar(lugar_id, nome=None, tipo_cama=None, capacidade=None):

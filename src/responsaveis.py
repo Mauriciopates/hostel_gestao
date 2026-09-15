@@ -21,8 +21,18 @@ import repositorio
 
 PREFIXO = "RES"
 
+# Perfis de acesso (Fase 2, v1.4.0). A coluna `tipo_utilizador` já
+# existia na tabela (ALTER TABLE de uma entrega anterior); esta é a
+# primeira vez que o próprio módulo passa a conhecer e a validar os
+# valores permitidos, em vez de deixar o ENUM da base ser a única
+# barreira. A ordem aqui não implica hierarquia de código nenhuma —
+# é só a ordem "do mais para o menos amplo" para leitura humana; a
+# lógica de permissões por perfil (próximo passo do plano) é que vai
+# dar significado real a cada um.
+TIPOS_UTILIZADOR = ("Master", "Admin", "Staff")
 
-def criar(nome, contacto=""):
+
+def criar(nome, contacto="", tipo_utilizador="Staff"):
     """Cria um responsável e grava-o imediatamente na base de dados.
 
     O nome é obrigatório: sem ele, a autoria que este módulo
@@ -30,6 +40,14 @@ def criar(nome, contacto=""):
     opcional e não tem validação de formato — pode ser telefone,
     email ou extensão interna, e a decisão 11 já dispensa a
     validação de formato de telefone.
+
+    `tipo_utilizador` por omissão é "Staff", o mesmo valor por
+    omissão da coluna na base — criar um responsável sem indicar o
+    perfil continua a dar o resultado mais restrito, não o mais
+    permissivo. Tem de ser um de TIPOS_UTILIZADOR; qualquer outro
+    valor é erro. Não há bootstrap automático do primeiro "Master"
+    aqui — combinado que o primeiro Master de cada instalação é
+    promovido com um UPDATE manual na base, feito uma única vez.
 
     Não marca o registo como incompleto: `Responsavel` não tem
     esse campo (ver modelos.py). A listagem de incompletos da
@@ -45,11 +63,18 @@ def criar(nome, contacto=""):
     if not nome:
         raise ValueError("O nome do responsável é obrigatório.")
 
+    if tipo_utilizador not in TIPOS_UTILIZADOR:
+        raise ValueError(
+            "Tipo de utilizador inválido. Tem de ser um de: "
+            + ", ".join(TIPOS_UTILIZADOR)
+        )
+
     responsavel = {
         "id": repositorio.proximo_id(PREFIXO),
         "nome": nome,
         "contacto": contacto.strip(),
         "ativo": True,
+        "tipo_utilizador": tipo_utilizador,
     }
 
     repositorio.inserir_responsavel(responsavel)
@@ -187,6 +212,63 @@ def reativar(responsavel_id):
 
     repositorio.atualizar_responsavel(responsavel_id, {"ativo": True})
     responsavel["ativo"] = True
+    return responsavel
+
+
+def alterar_tipo_utilizador(responsavel_id, tipo_utilizador,
+                             tipo_utilizador_autor):
+    """Muda o perfil de acesso de um responsável existente.
+
+    Função própria, à parte de `atualizar`, pela mesma razão que
+    `desativar`/`reativar` têm as suas: mudar o perfil de acesso não
+    é como corrigir um nome ou um contacto, tem a sua própria
+    verificação (o valor tem de ser um de TIPOS_UTILIZADOR) e um
+    segundo caminho sem ela seria uma porta lateral.
+
+    `tipo_utilizador_autor` é o tipo_utilizador de quem está a pedir
+    esta alteração — normalmente `sessao.tipo_utilizador_ativo()`,
+    lido por quem chama. Este módulo não importa `sessao` (seria
+    import circular: `sessao.py` já importa `responsaveis`), por
+    isso a verificação de "quem" fica aqui, mas o valor tem de vir
+    de fora (item (c) da Fase 2, 15/09/2026, corrigido no mesmo
+    dia depois de um teste do aluno mostrar que só desativar o
+    combo na GUI não chegava — um responsável sem ser Master
+    conseguiu gravar a alteração à mesma). Só um "Master" pode
+    mudar o tipo de outro responsável; qualquer outro valor
+    (incluindo None, sem sessão ativa) é recusado.
+
+    Devolve o registo atualizado, já com o novo tipo aplicado
+    localmente — mesma convenção de `atualizar`, `desativar` e
+    `reativar`.
+    """
+
+    if tipo_utilizador_autor != "Master":
+        raise ValueError(
+            "Só um responsável do tipo 'Master' pode alterar o tipo "
+            "de utilizador de outro responsável."
+        )
+
+    if tipo_utilizador not in TIPOS_UTILIZADOR:
+        raise ValueError(
+            "Tipo de utilizador inválido. Tem de ser um de: "
+            + ", ".join(TIPOS_UTILIZADOR)
+        )
+
+    responsavel = procurar(responsavel_id)
+
+    if responsavel is None:
+        raise ValueError(f"O responsável {responsavel_id} não existe.")
+
+    if responsavel["tipo_utilizador"] == tipo_utilizador:
+        raise ValueError(
+            f"O responsável {responsavel_id} já tem o tipo "
+            f"'{tipo_utilizador}'."
+        )
+
+    repositorio.atualizar_responsavel(
+        responsavel_id, {"tipo_utilizador": tipo_utilizador}
+    )
+    responsavel["tipo_utilizador"] = tipo_utilizador
     return responsavel
 
 

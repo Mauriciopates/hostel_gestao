@@ -410,11 +410,20 @@ class PlantaLugares(ctk.CTkFrame):
     # -- carregamento da lista de unidades --------------------------
 
     def _recarregar_unidades(self):
-        """Lê as unidades mensais ativas e povoa o seletor."""
-        unidades_mensais = unidades.listar(tipo="mensal")
+        """Lê as unidades mensais ativas e povoa o seletor.
+
+        Usa `listar_com_propriedade` (Fase 2, v1.4.0) em vez de
+        `listar`: o rótulo passa a incluir o nome da propriedade
+        (`unidades.rotulo_com_propriedade`), já ordenado por
+        propriedade — antes só tinha o nome da unidade, o que
+        confundia unidades com o mesmo nome em propriedades
+        diferentes.
+        """
+        unidades_mensais = unidades.listar_com_propriedade(tipo="mensal")
 
         self._opcoes_unidade = {
-            f"{u['nome']} ({u['id']})": u["id"] for u in unidades_mensais
+            unidades.rotulo_com_propriedade(u): u["id"]
+            for u in unidades_mensais
         }
 
         if not self._opcoes_unidade:
@@ -1001,7 +1010,25 @@ class _NovoQuartoModal(ctk.CTkToplevel):
 
 
 class _NovoLugarModal(ctk.CTkToplevel):
-    """Modal de criação de um lugar — nome, tipo de cama, capacidade.
+    """Modal de criação de um lugar — ou de um par de beliche.
+
+    "Tipo de cama" é o primeiro campo, porque é ele que decide os
+    campos seguintes (padrão de formulário dinâmico adotado no
+    projeto): "solteiro"/"casal" mostram "Nome do lugar" e uma
+    capacidade editável; "beliche" mostra "Cama superior"/"Cama
+    inferior" e a capacidade fixa em 2 — cada cama aloja 1 pessoa
+    (`unidades.CAPACIDADE_CAMA_BELICHE`), nunca há beliche com um
+    lugar só (decisão 17). O corpo é reconstruído por
+    `_montar_corpo` sempre que "Tipo de cama" muda.
+
+    Aprovado por mockup HTML em 15/09/2026
+    (`mockup_novo_lugar_beliche.html`), incluindo o texto da dica e
+    da nota de capacidade fixa, mantidos aqui ao pé da letra.
+
+    Com "beliche" escolhido, o botão passa a "Criar beliche" e
+    chama `unidades.criar_beliche(quarto_id, nome_superior,
+    nome_inferior)` em vez de `unidades.criar_lugar(...)` — sem
+    seletor de posição, porque cada campo já diz qual é qual.
 
     Botões do rodapé com a mesma receita do `_EditarQuartoModal`.
     """
@@ -1011,8 +1038,13 @@ class _NovoLugarModal(ctk.CTkToplevel):
         self.tela_planta = tela_planta
         self.quarto = quarto
 
+        self.campo_nome = None
+        self.campo_nome_superior = None
+        self.campo_nome_inferior = None
+        self.campo_capacidade = None
+
         self.title("Novo Lugar")
-        self.geometry("440x360")
+        self.geometry("440x480")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
         self.transient(tela_planta)
@@ -1034,20 +1066,6 @@ class _NovoLugarModal(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             self,
-            text="Nome do lugar *",
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=11),
-        ).pack(anchor="w", padx=24)
-
-        self.campo_nome = ctk.CTkEntry(
-            self,
-            corner_radius=tema.RAIO_CAMPO,
-            placeholder_text="ex.: Cama 3 — janela",
-        )
-        self.campo_nome.pack(fill="x", padx=24, pady=(2, 12))
-
-        ctk.CTkLabel(
-            self,
             text="Tipo de cama *",
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=11),
@@ -1057,24 +1075,15 @@ class _NovoLugarModal(ctk.CTkToplevel):
             self,
             values=["solteiro", "casal", "beliche"],
             corner_radius=tema.RAIO_CAMPO,
+            command=self._montar_corpo,
         )
         self.combo_tipo_cama.set("solteiro")
         self.combo_tipo_cama.pack(fill="x", padx=24, pady=(2, 12))
 
-        ctk.CTkLabel(
-            self,
-            text="Capacidade",
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=11),
-        ).pack(anchor="w", padx=24)
-
-        self.campo_capacidade = ctk.CTkEntry(
-            self,
-            corner_radius=tema.RAIO_CAMPO,
-            placeholder_text="Enter para 1",
-        )
-        self.campo_capacidade.pack(fill="x", padx=24, pady=(2, 12))
-        self.campo_capacidade.insert(0, "1")
+        # Corpo dinâmico — nome(s) e capacidade, reconstruído a cada
+        # troca de "Tipo de cama" por `_montar_corpo`.
+        self.corpo = ctk.CTkFrame(self, fg_color="transparent")
+        self.corpo.pack(fill="x")
 
         rodape = ctk.CTkFrame(self, fg_color="transparent")
         rodape.pack(fill="x", padx=24, pady=(10, 20), side="bottom")
@@ -1093,7 +1102,7 @@ class _NovoLugarModal(ctk.CTkToplevel):
             command=self.destroy,
         ).pack(side="left")
 
-        ctk.CTkButton(
+        self.botao_criar = ctk.CTkButton(
             rodape,
             text="Criar lugar",
             width=_LARGURA_BOTAO_MODAL,
@@ -1102,11 +1111,168 @@ class _NovoLugarModal(ctk.CTkToplevel):
             fg_color=tema.VERDE,
             hover_color=tema.VERDE,
             command=self._criar,
-        ).pack(side="right")
+        )
+        self.botao_criar.pack(side="right")
+
+        self._montar_corpo("solteiro")
+
+    # -- corpo dinâmico, conforme o "Tipo de cama" -------------------
+
+    def _montar_corpo(self, tipo_cama):
+        """Reconstrói os campos abaixo de "Tipo de cama" — nome(s) e
+        capacidade — conforme o tipo escolhido.
+        """
+        for widget in self.corpo.winfo_children():
+            widget.destroy()
+
+        self.campo_nome = None
+        self.campo_nome_superior = None
+        self.campo_nome_inferior = None
+        self.campo_capacidade = None
+
+        if tipo_cama == "beliche":
+            self._montar_corpo_beliche()
+            self.botao_criar.configure(text="Criar beliche")
+        else:
+            self._montar_corpo_normal()
+            self.botao_criar.configure(text="Criar lugar")
+
+    def _montar_corpo_normal(self):
+        ctk.CTkLabel(
+            self.corpo,
+            text="Nome do lugar *",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        self.campo_nome = ctk.CTkEntry(
+            self.corpo,
+            corner_radius=tema.RAIO_CAMPO,
+            placeholder_text="ex.: Cama 3 — janela",
+        )
+        self.campo_nome.pack(fill="x", padx=24, pady=(2, 12))
+
+        ctk.CTkLabel(
+            self.corpo,
+            text="Capacidade",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        self.campo_capacidade = ctk.CTkEntry(
+            self.corpo,
+            corner_radius=tema.RAIO_CAMPO,
+            placeholder_text="Enter para 1",
+        )
+        self.campo_capacidade.pack(fill="x", padx=24, pady=(2, 12))
+        self.campo_capacidade.insert(0, "1")
 
         self.campo_nome.focus_set()
 
+    def _montar_corpo_beliche(self):
+        ctk.CTkLabel(
+            self.corpo,
+            text=(
+                'Vai criar duas camas ligadas — "superior" fica '
+                'sempre em cima na Planta de Beliches, "inferior" '
+                "sempre em baixo."
+            ),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+            wraplength=380,
+            justify="left",
+            anchor="w",
+        ).pack(anchor="w", padx=24, pady=(0, 12))
+
+        par = ctk.CTkFrame(self.corpo, fg_color="transparent")
+        par.pack(fill="x", padx=24, pady=(0, 12))
+        par.grid_columnconfigure(0, weight=1)
+        par.grid_columnconfigure(1, weight=1)
+
+        coluna_superior = ctk.CTkFrame(par, fg_color="transparent")
+        coluna_superior.grid(row=0, column=0, sticky="ew", padx=(0, 5))
+
+        ctk.CTkLabel(
+            coluna_superior,
+            text="Cama superior *",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w")
+
+        self.campo_nome_superior = ctk.CTkEntry(
+            coluna_superior,
+            corner_radius=tema.RAIO_CAMPO,
+            placeholder_text="ex.: Cama 2A",
+        )
+        self.campo_nome_superior.pack(fill="x", pady=(2, 0))
+
+        coluna_inferior = ctk.CTkFrame(par, fg_color="transparent")
+        coluna_inferior.grid(row=0, column=1, sticky="ew", padx=(5, 0))
+
+        ctk.CTkLabel(
+            coluna_inferior,
+            text="Cama inferior *",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w")
+
+        self.campo_nome_inferior = ctk.CTkEntry(
+            coluna_inferior,
+            corner_radius=tema.RAIO_CAMPO,
+            placeholder_text="ex.: Cama 2B",
+        )
+        self.campo_nome_inferior.pack(fill="x", pady=(2, 0))
+
+        ctk.CTkLabel(
+            self.corpo,
+            text="Capacidade",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        # Fixa em 2 (uma cama = 1 lugar cada) — sem parâmetro de
+        # capacidade em `unidades.criar_beliche`, por isso este
+        # campo é só informativo, desabilitado, nunca lido em
+        # `_criar_beliche`.
+        self.campo_capacidade = ctk.CTkEntry(
+            self.corpo, corner_radius=tema.RAIO_CAMPO
+        )
+        self.campo_capacidade.pack(fill="x", padx=24, pady=(2, 2))
+        self.campo_capacidade.insert(0, "2")
+        self.campo_capacidade.configure(state="disabled")
+
+        ctk.CTkLabel(
+            self.corpo,
+            text=(
+                "Fixa — cada cama aloja 1 pessoa, o par soma sempre "
+                "2. Não há beliche com um lugar só."
+            ),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+            wraplength=380,
+            justify="left",
+            anchor="w",
+        ).pack(anchor="w", padx=24, pady=(2, 12))
+
+        self.campo_nome_superior.focus_set()
+
+    # -- criação ------------------------------------------------------
+
     def _criar(self):
+        if self.combo_tipo_cama.get() == "beliche":
+            self._criar_beliche()
+        else:
+            self._criar_normal()
+
+    def _criar_normal(self):
+        # Os dois campos já existem sempre que _criar_normal pode ser
+        # chamado (só depois de _montar_corpo_normal os criar) — esta
+        # guarda nunca dispara na prática, é só para o verificador de
+        # tipos (mesmo padrão já usado em gui_est_devolucoes.py para
+        # self.frame_alerta/self.entry_motivo).
+        if self.campo_nome is None or self.campo_capacidade is None:
+            return
+
         texto_capacidade = self.campo_capacidade.get().strip()
 
         if not texto_capacidade:
@@ -1130,11 +1296,38 @@ class _NovoLugarModal(ctk.CTkToplevel):
             componentes.mostrar_erro(str(erro))
             return
 
+        self._apos_criar(lugar["id"], lugar["nome"])
+
+    def _criar_beliche(self):
+        # Mesma guarda de _criar_normal, mesmo motivo — só para o
+        # verificador de tipos, nunca dispara na prática.
+        if (
+            self.campo_nome_superior is None
+            or self.campo_nome_inferior is None
+        ):
+            return
+
+        try:
+            inferior, superior = unidades.criar_beliche(
+                self.quarto["id"],
+                self.campo_nome_superior.get(),
+                self.campo_nome_inferior.get(),
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        self._apos_criar(
+            f"{superior['id']}/{inferior['id']}",
+            f"{superior['nome']} / {inferior['nome']}",
+        )
+
+    def _apos_criar(self, id_criado, nome_criado):
         self.destroy()
         self.tela_planta._desenhar_planta()
 
         if componentes.confirmar(
-            f"Lugar criado: {lugar['id']} — {lugar['nome']}.\n\n"
+            f"Lugar criado: {id_criado} — {nome_criado}.\n\n"
             f"Sobrou mais algum lugar para criar neste quarto?",
             titulo="Criar lugar",
         ):
