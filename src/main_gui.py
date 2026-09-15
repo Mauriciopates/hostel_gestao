@@ -16,7 +16,6 @@ criada em `config.garantir_diretorios()` — Fase 1, v1.4.0.
 import config
 from gui.app import Aplicacao
 
-
 if __name__ == "__main__":
     config.garantir_diretorios()
     app = Aplicacao()
