@@ -60,6 +60,7 @@ docs/ análise, desenho, testes e manual
 dados/ ficheiros de dados — fora do controlo de versões
 backups/ cópias de segurança — fora do controlo de versões
 logs/ registos — fora do controlo de versões
+img/ imagem do logo de sistema 
 
 ---
 

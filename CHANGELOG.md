@@ -3,6 +3,69 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [Não lançado] - rumo a 1.4.0
+
+Fase 2 — estabilização da interface, bloco 1 (infraestrutura de pastas).
+As pastas de trabalho do sistema saem de dentro do repositório e passam a
+viver num sítio fixo fora da pasta de instalação, criado automaticamente
+no arranque. É o que permite correr o sistema como executável
+(PyInstaller) sem erros de permissão de escrita — um executável pode ficar
+instalado numa pasta onde o utilizador não pode escrever, e até aqui o
+código assumia sempre que a raiz do projeto era escrevível.
+
+## Adicionado
+
+- config.DIR_BASE, config.DIR_DADOS, config.DIR_BACKUPS,
+config.DIR_CONTRATOS e config.DIR_LOGS — os cinco caminhos que o sistema
+usa em disco, todos derivados de um só sítio. Em Windows tenta
+C:\Hostel_gestao; se não houver permissão de escrita, cai para
+Path.home()/"Hostel_gestao". Deixa de haver caminhos calculados a partir
+da raiz do repositório espalhados por vários módulos.
+
+- config.garantir_diretorios() — cria a árvore de pastas se não existir,
+idempotente. Chamada só nos pontos de entrada (main.py e main_gui.py),
+nunca à importação do módulo: se corresse à importação, correr os testes
+criava pastas reais no disco da máquina de quem os corre.
+
+- repositorio._ficheiro_contadores() — substitui a constante de módulo
+FICHEIRO_CONTADORES. O caminho passa a ser calculado a cada chamada, a
+partir de config.DIR_DADOS. Uma constante calculada uma vez à importação
+ficava presa ao caminho inicial e não acompanhava o fallback do
+garantir_diretorios(), se este fosse acionado. Mesmo cuidado vale para
+qualquer código futuro que precise destas pastas: ler sempre o atributo,
+nunca fixar o valor num nome de módulo.
+
+## Alterado
+
+- main.py e main_gui.py: garantir_diretorios() passa a ser a primeira
+instrução dos dois pontos de entrada, antes de qualquer leitura ou
+escrita. Na prática é o único sítio do sistema que decide que as pastas
+têm de existir.
+
+- repositorio.py: criar_backup(), limpar_backups_antigos(),
+_carregar_contadores() e _gravar_contadores() passam a usar
+config.DIR_BACKUPS e config.DIR_DADOS. RAIZ_PROJETO, PASTA_DADOS e
+PASTA_BACKUPS removidos. _garantir_pastas() deixa de criar pastas e
+delega em config.garantir_diretorios() — uma só função a decidir onde
+estas pastas vivem.
+
+- impressao.py: _caminho_do_ficheiro() grava o PDF do contrato em
+config.DIR_CONTRATOS em vez de RAIZ_PROJETO/PASTA_CONTRATOS (removida).
+
+- As pastas backups/, contratos_gerados/, dados/ e logs/ na raiz do
+repositório ficam obsoletas para o sistema em execução. Continuam fora do
+controlo de versões (decisão 13), mas nada volta a escrever nelas; os
+dados reais foram copiados para a localização nova antes desta alteração
+entrar.
+
+## Notas
+
+- Registo de ocorrências (logging): deliberadamente fora do âmbito deste
+bloco. Nada no sistema gera logs neste momento, e a intenção é que o
+registo nasça integrado na regra de negócio e pensado para a migração da
+Fase 3, não como captura técnica de exceções na fronteira. A pasta
+config.DIR_LOGS já existe e fica reservada até essa decisão ser retomada.
+
 ## [1.3.0] - 2026-09-13
 
 Fase 2 — interface gráfica funcional e fecho do fluxo de stock. Com esta
