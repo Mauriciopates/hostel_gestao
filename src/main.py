@@ -5,19 +5,22 @@ próprio).
 """
 
 import cli
+import config
 import repositorio
 
 
 def main():
-    """Arranca o sistema: cópia de segurança, limpeza de cópias
-    antigas e entrega ao menu principal.
+    """Arranca o sistema: pastas persistentes, cópia de segurança,
+    limpeza de cópias antigas e entrega ao menu principal.
 
-    A ordem importa: a cópia de hoje faz-se ANTES da limpeza, para
-    que um erro na limpeza nunca deixe passar um arranque sem
-    cópia do dia. `criar_backup` e `limpar_backups_antigos` não
-    recebem argumentos: o primeiro decide sozinho se a cópia de
-    hoje já existe, o segundo usa `config.DIAS_BACKUP` por
-    omissão.
+    A ordem importa: `config.garantir_diretorios()` corre primeiro
+    de tudo (Fase 1, v1.4.0) — sem isto, `criar_backup()` podia
+    falhar por a pasta de destino ainda não existir. A cópia de hoje
+    faz-se ANTES da limpeza, para que um erro na limpeza nunca deixe
+    passar um arranque sem cópia do dia. `criar_backup` e
+    `limpar_backups_antigos` não recebem argumentos: o primeiro
+    decide sozinho se a cópia de hoje já existe, o segundo usa
+    `config.DIAS_BACKUP` por omissão.
 
     Não há mais nenhuma estrutura de dados a carregar aqui: desde a
     migração completa da Fase 2 para MySQL (v1.1.0), cada módulo de
@@ -29,6 +32,8 @@ def main():
     o erro de versão que `carregar()` levantava) foram removidos por
     já não terem nenhum consumidor.
     """
+    config.garantir_diretorios()
+
     repositorio.criar_backup()
     repositorio.limpar_backups_antigos()
 

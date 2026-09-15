@@ -9,6 +9,8 @@ Montantes em Decimal (decisão 4). Datas de época alta guardadas como
 """
 
 import os
+import sys
+from pathlib import Path
 
 from dotenv import load_dotenv
 from decimal import Decimal
@@ -42,26 +44,70 @@ MULTIPLICADOR_MAXIMO_CAUCAO = Decimal("2")  # teto aceite; regra da casa
 MULTA_CHECK_IN_TARDIO = Decimal("20.00")  # sobreponível por unidade
 JUROS_ATRASO = Decimal("0.10")
 
-# --- Regime mensal --------------------------------------------------------
+# --- Regime mensal ----------------------------------------------------------
 DIA_VENCIMENTO = 5
 AVISO_PREVIO_DIAS = 15
 DURACAO_MINIMA_MESES = 3
 
-# --- Regime Airbnb --------------------------------------------------------
+# --- Regime Airbnb ----------------------------------------------------------
 ESTADIA_MINIMA_NOITES = 1
 ESTADIA_MAXIMA_NOITES = 28
 
-# --- Horários -------------------------------------------------------------
+# --- Horários ---------------------------------------------------------------
 HORA_CHECK_IN = "15:00"
 HORA_CHECK_OUT = "11:00"
 HORA_LIMITE_CHECK_IN_TARDIO = "17:00"
 
-# --- Cópias de segurança --------------------------------------------------
+# --- Cópias de segurança -----------------------------------------------------
 DIAS_BACKUP = 30
 
-# --- Conservação de dados (RGPD) ------------------------------------------
+# --- Conservação de dados (RGPD) --------------------------------------------
 PRAZO_CONSERVACAO_HOSPEDES_DIAS = 365  # boletins SIBA/AIMA
 PRAZO_CONSERVACAO_FISCAL_DIAS = 3650  # art.º 40.º Código Comercial
 PRAZO_CONSERVACAO_LOGS_DIAS = 180  # minimização
 
 VERSAO = "1.3.0"  # mostrada na interface (decisão 21); atualizar a cada fecho de versão
+
+
+# --- Diretoria base de dados persistentes (Fase 1, v1.4.0) ------------------
+# Fica FORA da pasta de instalação/repositório: evita erros de permissão
+# de escrita quando o sistema corre como executável PyInstaller (nunca se
+# escreve em sys._MEIPASS — a pasta temporária onde o PyInstaller
+# descompacta o executável, apagada ao fechar o programa).
+if sys.platform == "win32":
+    DIR_BASE = Path("C:\\Hostel_gestao")
+else:
+    DIR_BASE = Path.home() / "Hostel_gestao"
+
+DIR_DADOS = DIR_BASE / "dados"
+DIR_BACKUPS = DIR_BASE / "backups"
+DIR_CONTRATOS = DIR_BASE / "contratos"
+DIR_LOGS = DIR_BASE / "logs"
+
+
+def garantir_diretorios():
+    """Cria a árvore de diretorias persistentes, se ainda não existir.
+
+    Chamada uma vez, explicitamente, em cada ponto de entrada
+    (`main.py` e `main_gui.py`) — nunca ao importar este módulo, para
+    não criar pastas em disco só por correr os testes automáticos.
+    Idempotente (`exist_ok=True`): seguro chamar sempre que o sistema
+    arranca.
+
+    Se `DIR_BASE` não puder ser criada (ex. sem permissão de escrita
+    na raiz do disco, no Windows), cai para `Path.home() /
+    "Hostel_gestao"` e todas as subpastas passam a viver aí.
+    """
+    global DIR_BASE, DIR_DADOS, DIR_BACKUPS, DIR_CONTRATOS, DIR_LOGS
+    try:
+        DIR_BASE.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        DIR_BASE = Path.home() / "Hostel_gestao"
+        DIR_DADOS = DIR_BASE / "dados"
+        DIR_BACKUPS = DIR_BASE / "backups"
+        DIR_CONTRATOS = DIR_BASE / "contratos"
+        DIR_LOGS = DIR_BASE / "logs"
+        DIR_BASE.mkdir(parents=True, exist_ok=True)
+
+    for diretoria in (DIR_DADOS, DIR_BACKUPS, DIR_CONTRATOS, DIR_LOGS):
+        diretoria.mkdir(parents=True, exist_ok=True)

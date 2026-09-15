@@ -28,6 +28,22 @@ da base MySQL via `mysqldump` (antes copiavam `dados.json`, que já
 não existe) — ver docstring de `criar_backup()` para o porquê da
 escolha e os requisitos (binário `mysqldump` no PATH).
 
+ALTERAÇÕES 15/09/2026 (Fase 1, v1.4.0 — pastas persistentes):
+
+- `dados/` e `backups/` deixam de viver dentro do repositório
+  (`RAIZ_PROJETO / "dados"` / `"backups"`, decisão 13 antiga).
+  Passam a viver em `config.DIR_DADOS` / `config.DIR_BACKUPS` —
+  fora da pasta de instalação, para não dar erro de permissão de
+  escrita quando o sistema corre como executável PyInstaller (ver
+  `config.garantir_diretorios()`).
+- `_garantir_pastas()` passa a delegar em
+  `config.garantir_diretorios()`, em vez de criar as pastas aqui —
+  uma só função decide onde estas pastas vivem no disco.
+- `FICHEIRO_CONTADORES` deixa de ser uma constante de módulo:
+  calcula-se a cada chamada a partir de `config.DIR_DADOS`, para
+  acompanhar corretamente o caminho de recurso (fallback) de
+  `config.garantir_diretorios()`, se algum dia for acionado.
+
 ALTERAÇÕES 10/09/2026 (ecrãs Produtos e Movimentos da GUI):
 
 - `inserir_produto`/`_normalizar_produto`/`atualizar_produto`
@@ -74,7 +90,6 @@ import json
 import os
 import subprocess
 from datetime import date, timedelta
-from pathlib import Path
 from typing import cast
 
 import mysql.connector
@@ -83,31 +98,30 @@ import config
 
 ## Funções de leitura e escrita de ficheiros
 
-# raiz do projeto = pasta que contém "src" e "testes" como irmãs;
-# ancora-se na localização deste ficheiro, não na pasta corrente,
-# para funcionar sempre da mesma forma seja qual for o sítio de
-# onde o programa é arrancado (terminal na raiz, IDE com cwd em
-# src/, etc.) — foi isto que causou a pasta "dados" duplicada
-# dentro de src/.
-RAIZ_PROJETO = Path(__file__).resolve().parent.parent
-
-PASTA_DADOS = RAIZ_PROJETO / "dados"
-
-# o path possibilita a leitura e escrita de ficheiros
-# mesmo em sistemas operativos diferentes
-
-PASTA_BACKUPS = RAIZ_PROJETO / "backups"
-FICHEIRO_CONTADORES = PASTA_DADOS / "contadores.json"
-
 
 def _garantir_pastas():
-    """Cria as pastas de dados e de cópias de segurança se não existirem.
+    """Garante que as pastas de dados e de cópias de segurança
+    existem.
 
-    Estas pastas estão fora do controlo de versões (decisão 13), pelo que
-    não vêm com o repositório: têm de ser criadas na primeira execução.
+    Delega em `config.garantir_diretorios()` (Fase 1, v1.4.0): essa
+    função é agora a única a decidir onde `dados/` e `backups/`
+    vivem no disco (fora do repositório, para funcionar também como
+    executável PyInstaller) e a criá-las. Chamada idempotente,
+    seguro repetir sempre que se vai tocar em disco.
     """
-    PASTA_DADOS.mkdir(exist_ok=True)
-    PASTA_BACKUPS.mkdir(exist_ok=True)
+    config.garantir_diretorios()
+
+
+def _ficheiro_contadores():
+    """Caminho do ficheiro de contadores, calculado a cada chamada.
+
+    Não é uma constante de módulo de propósito: se
+    `config.garantir_diretorios()` cair no caminho de recurso (ex.
+    sem permissão de escrita em C:\\), `config.DIR_DADOS` muda de
+    valor — uma constante calculada uma vez à importação deste
+    módulo ficaria presa ao caminho antigo.
+    """
+    return config.DIR_DADOS / "contadores.json"
 
 
 def criar_backup():
@@ -129,7 +143,7 @@ def criar_backup():
     """
     _garantir_pastas()
 
-    destino = PASTA_BACKUPS / f"dump_{date.today().isoformat()}.sql"
+    destino = config.DIR_BACKUPS / f"dump_{date.today().isoformat()}.sql"
     # Formato de data ISO 8601, que é o formato de data mais
     # utilizado e recomendado para intercâmbio de dados entre sistemas.
 
@@ -182,7 +196,7 @@ def limpar_backups_antigos(dias=None):
     limite = date.today() - timedelta(days=dias)
     eliminadas = 0
 
-    for ficheiro in PASTA_BACKUPS.glob("dump_*.sql"):
+    for ficheiro in config.DIR_BACKUPS.glob("dump_*.sql"):
         texto = ficheiro.stem.replace("dump_", "")
         try:
             data_copia = date.fromisoformat(texto)
@@ -206,11 +220,12 @@ def _carregar_contadores():
     ficheiro não existir, devolve um dicionário vazio.
     """
     _garantir_pastas()
+    ficheiro = _ficheiro_contadores()
 
-    if not FICHEIRO_CONTADORES.exists():
+    if not ficheiro.exists():
         return {}
 
-    with open(FICHEIRO_CONTADORES, encoding="utf-8") as f:
+    with open(ficheiro, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -232,12 +247,13 @@ def _gravar_contadores(contadores):
 
     """
     _garantir_pastas()
-    temporario = FICHEIRO_CONTADORES.with_suffix(".tmp")
+    ficheiro = _ficheiro_contadores()
+    temporario = ficheiro.with_suffix(".tmp")
 
     with open(temporario, "w", encoding="utf-8") as f:
         json.dump(contadores, f, ensure_ascii=False, indent=2)
 
-    temporario.replace(FICHEIRO_CONTADORES)
+    temporario.replace(ficheiro)
 
 
 def proximo_id(prefixo):

@@ -40,11 +40,8 @@ fiel à minuta original. Nomes de pessoas e unidades sempre só com
 o nome — nunca com o ID à frente (só o ID do contrato aparece, e é
 "CNT-XXX").
 
-A pasta `contratos_gerados/` fica na raiz do projeto (ao lado de
-`dados/` e `backups/`), fora do controlo de versões — mesma
-convenção da decisão 13. O nome do ficheiro leva a hora, para nunca
-sobrescrever um contrato já gerado no mesmo dia (decisão do aluno,
-13/09/2026).
+O nome do ficheiro leva a hora, para nunca sobrescrever um contrato
+já gerado no mesmo dia (decisão do aluno, 13/09/2026).
 
 ALTERAÇÕES 13/09/2026 (mesmo dia, ao testar no PC do aluno):
 
@@ -75,6 +72,18 @@ ALTERAÇÕES 13/09/2026 (mesmo dia, ao testar no PC do aluno):
   Quando aparecer um caso que precise de símbolos a sério
   (gráficos, ícones, moeda), aí passa-se para o Unicode.
 
+ALTERAÇÕES 15/09/2026 (Fase 1, v1.4.0 — pasta persistente):
+
+- `contratos_gerados/` deixa de viver dentro do repositório
+  (`RAIZ_PROJETO / "contratos_gerados"`, decisão 13 antiga) e passa
+  a viver em `config.DIR_CONTRATOS` — fora da pasta de
+  instalação/repositório, para funcionar também como executável
+  PyInstaller (ver `config.garantir_diretorios()`).
+- `_garantir_pasta()` passa a delegar em
+  `config.garantir_diretorios()`, tal como `repositorio.py` já
+  fazia para `dados/`/`backups/` — uma só função decide onde estas
+  pastas vivem no disco.
+
 Nota para quem mexer neste ficheiro no futuro: o texto que vai
 para o PDF (dentro de `pdf.cell` e `pdf.multi_cell`) NUNCA pode
 ter símbolos fora de Latin-1. Se alguém escrever travessões ou
@@ -84,16 +93,10 @@ contratos), aí sim, considerar a alternativa de carregar um TTF.
 """
 
 from datetime import date
-from decimal import Decimal
-from pathlib import Path
 
 from fpdf import FPDF
 
-# Raiz do projeto = pasta que contém `src/` e `dados/` como irmãs;
-# ancora-se na localização deste ficheiro, não na pasta corrente —
-# mesma convenção do `repositorio.py`.
-RAIZ_PROJETO = Path(__file__).resolve().parent.parent
-PASTA_CONTRATOS = RAIZ_PROJETO / "contratos_gerados"
+import config
 
 
 def _formatar_valor_para_pdf(valor):
@@ -142,21 +145,23 @@ def _formatar_iban(iban):
 
 
 def _garantir_pasta():
-    """Cria a pasta `contratos_gerados/` se não existir.
+    """Garante que a pasta de contratos gerados existe.
 
-    Está fora do controlo de versões (mesma decisão dos backups),
-    por isso tem de ser criada na primeira geração.
+    Delega em `config.garantir_diretorios()` (Fase 1, v1.4.0) — a
+    mesma função que cria `config.DIR_DADOS`/`DIR_BACKUPS`/`DIR_LOGS`
+    trata também de `config.DIR_CONTRATOS`.
     """
-    PASTA_CONTRATOS.mkdir(exist_ok=True)
+    config.garantir_diretorios()
 
 
 def _caminho_do_ficheiro(ocupacao_id):
     """Constrói o nome e o caminho do PDF para este contrato.
 
-    Formato: `contratos_gerados/CNT-003_2026-09-13_15h42.pdf` — o ID
-    do contrato, a data e a hora a que foi gerado. A hora resolve o
-    problema de gerar o mesmo contrato duas vezes no mesmo dia, sem
-    sobrescrever o primeiro (decisão do aluno, 13/09/2026).
+    Formato: `CNT-003_2026-09-13_15h42.pdf`, dentro de
+    `config.DIR_CONTRATOS` — o ID do contrato, a data e a hora a
+    que foi gerado. A hora resolve o problema de gerar o mesmo
+    contrato duas vezes no mesmo dia, sem sobrescrever o primeiro
+    (decisão do aluno, 13/09/2026).
     """
     from datetime import datetime
 
@@ -167,7 +172,7 @@ def _caminho_do_ficheiro(ocupacao_id):
 
     nome = f"{ocupacao_id}_{agora.isoformat()}_{hora_minuto}.pdf"
 
-    return PASTA_CONTRATOS / nome
+    return config.DIR_CONTRATOS / nome
 
 
 def gerar_contrato_pdf(
