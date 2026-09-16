@@ -107,7 +107,6 @@ from . import gui_est_comum
 from . import sessao
 from . import tema
 
-
 # Aliases dos helpers partilhados — os nomes antigos locais eram
 # usados no corpo das classes extraídas do gui_estoque.py; estes
 # aliases evitam ter de reescrever todas as chamadas no corpo.
@@ -184,9 +183,7 @@ class ListaRequisicoes(ctk.CTkFrame):
             text_color=tema.AZUL_PRINCIPAL,
             hover_color=tema.COR_BORDA,
             command=lambda: controlador.mostrar_frame(
-                __import__(
-                    "gui.gui_est_hub", fromlist=["EcraStock"]
-                ).EcraStock
+                __import__("gui.gui_est_hub", fromlist=["EcraStock"]).EcraStock
             ),
         ).pack(side="left")
 
@@ -288,12 +285,23 @@ class ListaRequisicoes(ctk.CTkFrame):
         return bool(_itens_disponiveis_devolucao(requisicao["id"]))
 
     def _recarregar(self):
-        """Limpa e volta a desenhar a tabela de requisições."""
+        """Limpa e volta a desenhar a tabela de requisições.
+
+        FASE 4 — visibilidade por perfil. Staff vê só as requisições
+        dele (mas de todos os estados — vê tudo o que fez); Admin/
+        Master vê tudo. A regra vive em estoque.listar_requisicoes;
+        aqui só se passa quem está a pedir.
+        """
         self.tabela.limpar()
+
+        ativo = sessao.obter_responsavel_ativo()
+        tipo_utilizador = sessao.tipo_utilizador_ativo()
 
         requisicoes = estoque.listar_requisicoes(
             estado=self._estado_filtro(),
             responsavel_id=self._responsavel_filtro(),
+            tipo_utilizador_autor=tipo_utilizador,
+            autor_id=ativo["id"] if ativo else None,
         )
         # Mais recentes primeiro. 'data_pedido' pode ser None num
         # registo antigo, e comparar None com date rebenta — daí o
@@ -373,7 +381,10 @@ class ListaRequisicoes(ctk.CTkFrame):
         # Numa rejeitada, a coluna "Observações" passa a mostrar o
         # motivo da rejeição — é o que interessa nesse estado, e os
         # produtos/observações já não vão a lado nenhum.
-        if requisicao["estado"] == "rejeitada" and requisicao["motivo_rejeicao"]:
+        if (
+            requisicao["estado"] == "rejeitada"
+            and requisicao["motivo_rejeicao"]
+        ):
             texto_obs = f"motivo: {requisicao['motivo_rejeicao']}"
 
         self.tabela.colocar(
@@ -397,14 +408,10 @@ class ListaRequisicoes(ctk.CTkFrame):
         # entre as requisições (bug apanhado pelo aluno, 13/09/2026).
         # 26 é a altura de um chip de estado (`height=22` no
         # `gui_est_comum.etiqueta_estado`) mais uma folga pequena.
-        bloco_estado = ctk.CTkFrame(
-            linha, fg_color="transparent", height=26
-        )
+        bloco_estado = ctk.CTkFrame(linha, fg_color="transparent", height=26)
         bloco_estado.pack_propagate(False)
 
-        _etiqueta_estado(bloco_estado, requisicao["estado"]).pack(
-            side="left"
-        )
+        _etiqueta_estado(bloco_estado, requisicao["estado"]).pack(side="left")
 
         if requisicao["origem"] == "rol":
             ctk.CTkLabel(
@@ -516,11 +523,13 @@ class _AcoesRequisicaoPendenteModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(pady=(0, 14))
 
-        # Só o autor pode cancelar. Se não for ele, esconde a ação
-        # e diz porquê — sem isto, o botão aparecia sempre e o
-        # `cancelar_requisicao` recusava a seguir, com um erro que
-        # o utilizador não conseguia ligar a nada.
-        if tela_lista._e_o_autor(requisicao):
+        # FASE 4 — autor OU Admin/Master podem cancelar. A regra
+        # vive em estoque.cancelar_requisicao; aqui só se decide se
+        # o botão aparece.
+        tipo_utilizador = sessao.tipo_utilizador_ativo()
+        e_administrativo = tipo_utilizador in ("Admin", "Master")
+
+        if tela_lista._e_o_autor(requisicao) or e_administrativo:
             self._botao(
                 "Cancelar requisição",
                 text_color=tema.TEXTO_ERRO,
@@ -531,8 +540,8 @@ class _AcoesRequisicaoPendenteModal(ctk.CTkToplevel):
             ctk.CTkLabel(
                 self,
                 text=(
-                    "Só o responsável que pediu pode cancelar esta "
-                    "requisição."
+                    "Só o responsável que pediu, ou um Admin/Master, "
+                    "pode cancelar esta requisição."
                 ),
                 text_color=tema.COR_TEXTO_SECUNDARIO,
                 font=ctk.CTkFont(size=12),
@@ -588,16 +597,13 @@ class _AcoesRequisicaoPendenteModal(ctk.CTkToplevel):
 
         try:
             estoque.cancelar_requisicao(
-                self.requisicao["id"], ativo["id"]
+                self.requisicao["id"],
+                ativo["id"],
+                tipo_utilizador_autor=sessao.tipo_utilizador_ativo(),
             )
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
             return
-
-        componentes.mostrar_sucesso(
-            f"Requisição {self.requisicao['id']} cancelada."
-        )
-        self.tela_lista._recarregar()
 
 
 class _AcoesRequisicaoRejeitadaModal(ctk.CTkToplevel):
@@ -635,9 +641,7 @@ class _AcoesRequisicaoRejeitadaModal(ctk.CTkToplevel):
         ).pack(pady=(0, 14))
 
         if requisicao["estado"] == "rejeitada":
-            texto = (
-                f"Rejeitada: {requisicao['motivo_rejeicao'] or '—'}"
-            )
+            texto = f"Rejeitada: {requisicao['motivo_rejeicao'] or '—'}"
         else:
             texto = "Cancelada pelo autor — sem ações disponíveis."
 
@@ -695,11 +699,20 @@ class _AcoesRequisicaoFechadaModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(pady=(0, 14))
 
-        # Só o autor pode reportar sobra; se já não houver itens
-        # disponíveis, também não mostra o botão. Mesma lógica de
-        # hoje (`_pode_reportar_devolucao`), mas agora dentro do
-        # modal certo.
-        if tela_lista._pode_reportar_devolucao(requisicao):
+        # FASE 4 — autor OU Admin/Master podem reportar sobra. Além
+        # disso, é preciso haver itens por devolver (a regra vive em
+        # `_pode_reportar_devolucao`, que já tem a verificação do
+        # autor — por isso passamos a decidir aqui, e não lá dentro).
+        tipo_utilizador = sessao.tipo_utilizador_ativo()
+        e_administrativo = tipo_utilizador in ("Admin", "Master")
+        e_o_autor = tela_lista._e_o_autor(requisicao)
+
+        tem_itens_disponiveis = bool(
+            _itens_disponiveis_devolucao(requisicao["id"])
+        )
+
+        if (e_o_autor or e_administrativo) and tem_itens_disponiveis:
+
             def executar():
                 self.destroy()
                 ReportarDevolucaoModal(tela_lista, requisicao)
@@ -721,7 +734,8 @@ class _AcoesRequisicaoFechadaModal(ctk.CTkToplevel):
                 self,
                 text=(
                     "Sem sobra por reportar — ou já foi reportada "
-                    "toda, ou a requisição não é tua."
+                    "toda, ou a requisição não é tua nem estás em "
+                    "Admin/Master."
                 ),
                 text_color=tema.COR_TEXTO_SECUNDARIO,
                 font=ctk.CTkFont(size=12),
@@ -767,8 +781,7 @@ class _ConfirmarRececaoModal(ctk.CTkToplevel):
             requisicao_id=requisicao["id"]
         )
         self.produtos_por_id = {
-            p["id"]: p
-            for p in estoque.listar_produtos(incluir_inativos=True)
+            p["id"]: p for p in estoque.listar_produtos(incluir_inativos=True)
         }
 
         largura, altura = 560, 560
@@ -791,9 +804,7 @@ class _ConfirmarRececaoModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=15, weight="bold"),
         ).pack(side="left")
 
-        _etiqueta_estado(topo, requisicao["estado"]).pack(
-            side="right"
-        )
+        _etiqueta_estado(topo, requisicao["estado"]).pack(side="right")
 
         # ---- Ficha ----
         ficha = ctk.CTkFrame(
@@ -997,16 +1008,11 @@ class _ConfirmarRececaoModal(ctk.CTkToplevel):
                 ativo["id"],
                 datetime.date.today(),
                 observacao_rececao=observacao,
+                tipo_utilizador_autor=sessao.tipo_utilizador_ativo(),
             )
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
             return
-
-        componentes.mostrar_sucesso(
-            f"Requisição {self.requisicao['id']} fechada."
-        )
-        self.destroy()
-        self.tela_lista._recarregar()
 
 
 class _RejeitarRequisicaoModal(ctk.CTkToplevel):
@@ -1139,15 +1145,11 @@ class ReportarDevolucaoModal(ctk.CTkToplevel):
         self.requisicao = requisicao
         self.campos_por_produto = {}
 
-        self.itens_disponiveis = _itens_disponiveis_devolucao(
-            requisicao["id"]
-        )
+        self.itens_disponiveis = _itens_disponiveis_devolucao(requisicao["id"])
         produtos = {p["id"]: p for p in estoque.listar_produtos(True)}
 
         largura = 620
-        altura = 220 + _ALTURA_LINHA_ITEM * max(
-            len(self.itens_disponiveis), 1
-        )
+        altura = 220 + _ALTURA_LINHA_ITEM * max(len(self.itens_disponiveis), 1)
         self.title(f"Reportar sobra — {requisicao['id']}")
         self.geometry(f"{largura}x{altura}")
         self.resizable(False, False)
@@ -1359,18 +1361,11 @@ class ReportarDevolucaoModal(ctk.CTkToplevel):
                 responsavel_id=ativo["id"],
                 itens=itens,
                 data_reportada=datetime.date.today(),
+                tipo_utilizador_autor=sessao.tipo_utilizador_ativo(),
             )
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
             return
-
-        componentes.mostrar_sucesso(
-            f"Devolução reportada: {devolucao['id']} — fica "
-            f"pendente até o armazém aceitar, em \"Aceitar Sobra "
-            f"(Devolução)\"."
-        )
-        self.destroy()
-        self.tela_lista._recarregar()
 
 
 # =====================================================================
@@ -1413,11 +1408,27 @@ class _EscolherTipoRequisicaoModal(ctk.CTkToplevel):
             "Pedido normal: fica pendente até ser aprovado.",
             self._abrir_staff,
         )
-        self._cartao(
-            "Rol de Lavanderia",
-            "Envio direto a um responsável, sem passar por aprovação.",
-            self._abrir_lavanderia,
-        )
+
+        # FASE 4 — o cartão "Rol de Lavanderia" fica cinzento com
+        # nota para Staff. Barreira real vive no RolLavanderiaModal
+        # (que recusa se não for Admin/Master); esta é só conforto
+        # visual, para o Staff não abrir um formulário que ia
+        # recusar no fim.
+        tipo_utilizador = sessao.tipo_utilizador_ativo()
+        e_administrativo = tipo_utilizador in ("Admin", "Master")
+
+        if e_administrativo:
+            self._cartao(
+                "Rol de Lavanderia",
+                "Envio direto a um responsável, sem passar por " "aprovação.",
+                self._abrir_lavanderia,
+            )
+        else:
+            self._cartao_desativado(
+                "Rol de Lavanderia",
+                "Envio direto a um responsável, sem passar por " "aprovação.",
+                "Só Admin/Master podem enviar rol de lavanderia.",
+            )
 
         ctk.CTkButton(
             self,
@@ -1459,6 +1470,47 @@ class _EscolherTipoRequisicaoModal(ctk.CTkToplevel):
         ).pack(fill="x", padx=14, pady=(0, 12))
 
         _tornar_clicavel(cartao, ao_clicar)
+
+    def _cartao_desativado(self, titulo, descricao, nota):
+        """Cartão cinzento, não clicável, com nota a explicar
+        porquê — usado para o "Rol de Lavanderia" quando o
+        utilizador não é Admin/Master (Fase 4)."""
+        cartao = ctk.CTkFrame(
+            self,
+            corner_radius=tema.RAIO_CARTAO,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            fg_color=tema.COR_FUNDO,
+        )
+        cartao.pack(fill="x", padx=20, pady=6)
+
+        ctk.CTkLabel(
+            cartao,
+            text=titulo,
+            text_color=tema.TEXTO_INDISPONIVEL,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            anchor="w",
+        ).pack(fill="x", padx=14, pady=(12, 2))
+
+        ctk.CTkLabel(
+            cartao,
+            text=descricao,
+            text_color=tema.TEXTO_INDISPONIVEL,
+            font=ctk.CTkFont(size=11),
+            anchor="w",
+            justify="left",
+            wraplength=300,
+        ).pack(fill="x", padx=14, pady=(0, 6))
+
+        ctk.CTkLabel(
+            cartao,
+            text=nota,
+            text_color=tema.TEXTO_INDISPONIVEL,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            anchor="w",
+            justify="left",
+            wraplength=300,
+        ).pack(fill="x", padx=14, pady=(0, 12))
 
     def _abrir_staff(self):
         self.destroy()
@@ -1878,9 +1930,7 @@ class NovaRequisicaoModal(ctk.CTkToplevel):
         )
 
         if responsavel_id is None:
-            componentes.mostrar_erro(
-                "Escolha o responsável pela requisição."
-            )
+            componentes.mostrar_erro("Escolha o responsável pela requisição.")
             return
 
         itens = self._itens()
@@ -1936,7 +1986,22 @@ class RolLavanderiaModal(ctk.CTkToplevel):
         self.tela_lista = tela_lista
         self.linhas = []
 
+        # FASE 4 — barreira real. O cartão do
+        # `_EscolherTipoRequisicaoModal` já fica cinzento para
+        # Staff, mas se por algum motivo este modal for aberto
+        # diretamente (código futuro, atalho, teste), recusa aqui
+        # antes de construir o formulário.
+        tipo_utilizador = sessao.tipo_utilizador_ativo()
+
+        if tipo_utilizador not in ("Admin", "Master"):
+            self.destroy()
+            componentes.mostrar_erro(
+                "Só Admin/Master podem enviar rol de lavanderia."
+            )
+            return
+
         largura, altura = 760, 680
+        
         self.title("Rol de Lavanderia")
         self.geometry(f"{largura}x{altura}")
         self.resizable(False, False)
@@ -2045,9 +2110,7 @@ class RolLavanderiaModal(ctk.CTkToplevel):
         if rotulos:
             self.combo_recebe.set(rotulos[0])
 
-        coluna_envia = ctk.CTkFrame(
-            linha_responsaveis, fg_color="transparent"
-        )
+        coluna_envia = ctk.CTkFrame(linha_responsaveis, fg_color="transparent")
         coluna_envia.pack(side="left", fill="x", expand=True, padx=(8, 0))
         ctk.CTkLabel(
             coluna_envia,
@@ -2220,8 +2283,7 @@ class RolLavanderiaModal(ctk.CTkToplevel):
         avisos = [
             aviso.replace(
                 "O administrador terá de repor.",
-                "Reduza a quantidade ou reponha stock antes de "
-                "enviar.",
+                "Reduza a quantidade ou reponha stock antes de " "enviar.",
             )
             for aviso in avisos
         ]
@@ -2250,9 +2312,7 @@ class RolLavanderiaModal(ctk.CTkToplevel):
     # -- submissão ---------------------------------------------------
 
     def _enviar(self):
-        recebe_id = self.id_por_rotulo_responsavel.get(
-            self.combo_recebe.get()
-        )
+        recebe_id = self.id_por_rotulo_responsavel.get(self.combo_recebe.get())
         envia_id = self.id_por_rotulo_responsavel.get(self.combo_envia.get())
 
         if recebe_id is None or envia_id is None:

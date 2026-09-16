@@ -24,7 +24,6 @@ from . import gui_est_comum
 from . import sessao
 from . import tema
 
-
 # Aliases dos helpers partilhados — ver o mesmo bloco em
 # gui_est_requisicoes.py para o porquê.
 _CORES_ESTADO = gui_est_comum.CORES_ESTADO
@@ -61,7 +60,7 @@ _COLUNAS_DEVOLUCAO = (
 
 
 class ListaDevolucoes(ctk.CTkFrame):
-    """"Aceitar Sobra (Devolução)": mesma tabela e mesmo padrão de
+    """ "Aceitar Sobra (Devolução)": mesma tabela e mesmo padrão de
     Gerir de ListaRequisicoes, agora para o material devolvido por
     sobra (`estoque.reportar_devolucao` / `fechar_devolucao`).
 
@@ -90,9 +89,7 @@ class ListaDevolucoes(ctk.CTkFrame):
             text_color=tema.AZUL_PRINCIPAL,
             hover_color=tema.COR_BORDA,
             command=lambda: controlador.mostrar_frame(
-                __import__(
-                    "gui.gui_est_hub", fromlist=["EcraStock"]
-                ).EcraStock
+                __import__("gui.gui_est_hub", fromlist=["EcraStock"]).EcraStock
             ),
         ).pack(side="left")
 
@@ -134,10 +131,21 @@ class ListaDevolucoes(ctk.CTkFrame):
     def _recarregar(self):
         self.tabela.limpar()
 
+        # FASE 4 — visibilidade por perfil. Staff vê só as devoluções
+        # dele e só as pendentes; Admin/Master vê tudo. A regra vive
+        # em estoque.listar_devolucoes — aqui só se passa quem está
+        # a pedir.
+        ativo = sessao.obter_responsavel_ativo()
+        tipo_utilizador = sessao.tipo_utilizador_ativo()
+
         produtos = {
             p["id"]: p for p in estoque.listar_produtos(incluir_inativos=True)
         }
-        devolucoes = estoque.listar_devolucoes(estado=self._estado_filtro())
+        devolucoes = estoque.listar_devolucoes(
+            estado=self._estado_filtro(),
+            tipo_utilizador_autor=tipo_utilizador,
+            autor_id=ativo["id"] if ativo else None,
+        )
         devolucoes.sort(
             key=lambda d: (
                 d["data_reportada"] is not None,
@@ -173,9 +181,7 @@ class ListaDevolucoes(ctk.CTkFrame):
         ).pack(fill="x")
         _tornar_cliclavel(
             coluna_id,
-            lambda: _ResumoRequisicaoModal(
-                self, devolucao["requisicao_id"]
-            ),
+            lambda: _ResumoRequisicaoModal(self, devolucao["requisicao_id"]),
         )
         self.tabela.colocar(linha, 0, coluna_id)
 
@@ -294,24 +300,54 @@ class _AcoesDevolucaoModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(pady=(0, 14))
 
+        # FASE 4 — "Aceitar devolução" só a Admin/Master. Para Staff,
+        # o botão fica desativado (cinzento) com uma nota a explicar
+        # — a barreira real vive em estoque.fechar_devolucao; esta é
+        # só conforto visual.
+        tipo_utilizador = sessao.tipo_utilizador_ativo()
+        e_administrativo = tipo_utilizador in ("Admin", "Master")
+
         if devolucao["estado"] == "pendente":
+            if e_administrativo:
 
-            def executar():
-                self.destroy()
-                _ResumoDevolucaoModal(tela_lista, devolucao)
+                def executar():
+                    self.destroy()
+                    _ResumoDevolucaoModal(tela_lista, devolucao)
 
-            ctk.CTkButton(
-                self,
-                text="Aceitar devolução",
-                height=34,
-                corner_radius=tema.RAIO_BOTAO,
-                fg_color="transparent",
-                hover_color=tema.ID_CHIP_FUNDO,
-                text_color=tema.AZUL_PRINCIPAL,
-                border_width=1,
-                border_color=tema.COR_BORDA,
-                command=executar,
-            ).pack(fill="x", padx=20, pady=3)
+                ctk.CTkButton(
+                    self,
+                    text="Aceitar devolução",
+                    height=34,
+                    corner_radius=tema.RAIO_BOTAO,
+                    fg_color="transparent",
+                    hover_color=tema.ID_CHIP_FUNDO,
+                    text_color=tema.AZUL_PRINCIPAL,
+                    border_width=1,
+                    border_color=tema.COR_BORDA,
+                    command=executar,
+                ).pack(fill="x", padx=20, pady=3)
+            else:
+                ctk.CTkButton(
+                    self,
+                    text="Aceitar devolução",
+                    height=34,
+                    corner_radius=tema.RAIO_BOTAO,
+                    fg_color="transparent",
+                    hover_color=tema.COR_BORDA,
+                    text_color=tema.TEXTO_INDISPONIVEL,
+                    border_width=1,
+                    border_color=tema.COR_BORDA,
+                    state="disabled",
+                ).pack(fill="x", padx=20, pady=3)
+
+                ctk.CTkLabel(
+                    self,
+                    text="Só Admin/Master podem aceitar devoluções.",
+                    text_color=tema.TEXTO_INDISPONIVEL,
+                    font=ctk.CTkFont(size=10),
+                    wraplength=260,
+                    justify="center",
+                ).pack(padx=20, pady=(0, 4))
         else:
             ctk.CTkLabel(
                 self,
@@ -369,12 +405,8 @@ class _ResumoDevolucaoModal(ctk.CTkToplevel):
         self.frame_alerta = None
         self.entry_motivo = None
 
-        itens = estoque.listar_itens_devolucao(
-            devolucao_id=devolucao["id"]
-        )
-        produtos = {
-            p["id"]: p for p in estoque.listar_produtos(True)
-        }
+        itens = estoque.listar_itens_devolucao(devolucao_id=devolucao["id"])
+        produtos = {p["id"]: p for p in estoque.listar_produtos(True)}
         nome = tela_lista.nomes_por_id.get(
             devolucao["responsavel_id"], devolucao["responsavel_id"]
         )
@@ -386,9 +418,7 @@ class _ResumoDevolucaoModal(ctk.CTkToplevel):
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
         self.transient(tela_lista)
-        _centrar_sobre(
-            self, tela_lista, self.largura_janela, self.altura_base
-        )
+        _centrar_sobre(self, tela_lista, self.largura_janela, self.altura_base)
         _colocar_no_topo(self)
 
         ctk.CTkLabel(
@@ -400,8 +430,7 @@ class _ResumoDevolucaoModal(ctk.CTkToplevel):
         ctk.CTkLabel(
             self,
             text=(
-                f"de {devolucao['requisicao_id']} · devolvido por "
-                f"{nome}"
+                f"de {devolucao['requisicao_id']} · devolvido por " f"{nome}"
             ),
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=11),
@@ -412,7 +441,7 @@ class _ResumoDevolucaoModal(ctk.CTkToplevel):
         self.rotulo_explicacao = ctk.CTkLabel(
             self,
             text=(
-                "\"A repor\" vem preenchido com o que foi reportado, "
+                '"A repor" vem preenchido com o que foi reportado, '
                 "mas pode ser corrigido para mais ou para menos — "
                 "reduzido até 0, se parte voltou danificada, ou "
                 "aumentado, se voltou mais do que ficou reportado. "
@@ -517,9 +546,9 @@ class _ResumoDevolucaoModal(ctk.CTkToplevel):
                 width=_LARGURA_ARMAZEM + 30,
                 anchor="w",
             ).pack(side="left", padx=(10, 0))
-            self.rotulos_apos_por_produto[produto_id] = (
-                linha.winfo_children()[-1]
-            )
+            self.rotulos_apos_por_produto[produto_id] = linha.winfo_children()[
+                -1
+            ]
             self._atualizar_linha(produto_id)
 
     def _quantidade_aceite(self, produto_id):
@@ -590,13 +619,9 @@ class _ResumoDevolucaoModal(ctk.CTkToplevel):
             justify="left",
             anchor="w",
         )
-        self.rotulo_alerta.pack(
-            anchor="w", fill="x", padx=14, pady=(12, 6)
-        )
+        self.rotulo_alerta.pack(anchor="w", fill="x", padx=14, pady=(12, 6))
 
-        linha_motivo = ctk.CTkFrame(
-            self.frame_alerta, fg_color="transparent"
-        )
+        linha_motivo = ctk.CTkFrame(self.frame_alerta, fg_color="transparent")
         linha_motivo.pack(fill="x", padx=14, pady=(0, 12))
 
         ctk.CTkLabel(
@@ -632,8 +657,7 @@ class _ResumoDevolucaoModal(ctk.CTkToplevel):
             return
 
         linhas = "; ".join(
-            f"{self.nomes_produto_por_id[produto_id]}: {diferenca:+d} "
-            "unid"
+            f"{self.nomes_produto_por_id[produto_id]}: {diferenca:+d} " "unid"
             for produto_id, diferenca in diferencas.items()
         )
         self.rotulo_alerta.configure(
@@ -677,14 +701,30 @@ class _ResumoDevolucaoModal(ctk.CTkToplevel):
             command=self.destroy,
         ).pack(side="left")
 
-        ctk.CTkButton(
+        # FASE 4 — segunda barreira. O botão do `_AcoesDevolucaoModal`
+        # já impede o Staff de chegar aqui, mas se por algum caminho
+        # (código futuro, teste, alteração) isto for aberto por um
+        # Staff, o botão continua desativado.
+        tipo_utilizador = sessao.tipo_utilizador_ativo()
+        e_administrativo = tipo_utilizador in ("Admin", "Master")
+
+        botao_aceitar = ctk.CTkButton(
             rodape,
             text="Aceitar devolução",
             corner_radius=tema.RAIO_BOTAO,
             fg_color=tema.AZUL_PRINCIPAL,
             hover_color=tema.AZUL_CLARO,
             command=self._aceitar,
-        ).pack(side="right")
+        )
+
+        if not e_administrativo:
+            botao_aceitar.configure(
+                state="disabled",
+                fg_color=tema.CINZA_INDISPONIVEL,
+                text_color=tema.TEXTO_INDISPONIVEL,
+            )
+
+        botao_aceitar.pack(side="right")
 
     def _aceitar(self):
         diferencas = self._diferencas_por_produto()
@@ -731,12 +771,8 @@ class _ResumoRequisicaoModal(ctk.CTkToplevel):
         self.master_janela = master
 
         requisicao = estoque.procurar_requisicao(requisicao_id)
-        itens = estoque.listar_itens_requisicao(
-            requisicao_id=requisicao_id
-        )
-        produtos = {
-            p["id"]: p for p in estoque.listar_produtos(True)
-        }
+        itens = estoque.listar_itens_requisicao(requisicao_id=requisicao_id)
+        produtos = {p["id"]: p for p in estoque.listar_produtos(True)}
         nomes_por_id = getattr(master, "nomes_por_id", None) or {
             r["id"]: r["nome"]
             for r in responsaveis.listar(incluir_inativos=True)

@@ -46,13 +46,13 @@ import customtkinter as ctk
 
 import estoque
 from . import componentes
+from . import sessao
 from . import tema
 from .gui_est_aprovacao import ListaAprovacao
 from .gui_est_devolucoes import ListaDevolucoes
 from .gui_est_movimentos import ListaMovimentos
 from .gui_est_produtos import ListaProdutos
 from .gui_est_requisicoes import ListaRequisicoes
-
 
 # Áreas do hub. 'ecra' a None significa "ainda por implementar": o
 # cartão continua clicável, mas avisa em vez de navegar — assim o
@@ -66,26 +66,31 @@ _AREAS = (
         "titulo": "Requisições",
         "descricao": "Pedir material e acompanhar os pedidos",
         "ecra": "requisicoes",
+        "so_admin": False,
     },
     {
-        "titulo": "Aprovação de Requisições",
-        "descricao": "Aprovar ou rejeitar pedidos pendentes",
+        "titulo": "Rota de Envio",
+        "descricao": "Acompanhar e gerir todas as requisições",
         "ecra": "aprovacao",
+        "so_admin": True,
     },
     {
         "titulo": "Devoluções",
         "descricao": "Aceitar sobras de material (administrativo)",
         "ecra": "devolucoes",
+        "so_admin": False,
     },
     {
         "titulo": "Produtos",
         "descricao": "Catálogo, unidade de medida e stock mínimo",
         "ecra": "produtos",
+        "so_admin": True,
     },
     {
         "titulo": "Movimentos",
         "descricao": "Entradas de compra e ajustes de inventário",
         "ecra": "movimentos",
+        "so_admin": True,
     },
 )
 
@@ -118,8 +123,23 @@ class EcraStock(ctk.CTkFrame):
         grelha.grid_columnconfigure(0, weight=1, uniform="areas")
         grelha.grid_columnconfigure(1, weight=1, uniform="areas")
 
-        for indice, item in enumerate(_AREAS):
+        # FASE 4 — visibilidade por perfil. Staff só vê os cartões
+        # marcados com so_admin=False (Requisições, Devoluções);
+        # Admin/Master vê todos. O índice da grelha é contado
+        # separadamente do índice de _AREAS: se filtrarmos um
+        # item, o próximo tem de ocupar a posição seguinte na
+        # grelha, não a posição "original" dele.
+        tipo = sessao.tipo_utilizador_ativo()
+        e_administrativo = tipo in ("Admin", "Master")
+
+        indice = 0
+
+        for item in _AREAS:
+            if item.get("so_admin") and not e_administrativo:
+                continue
+
             self._desenhar_cartao(grelha, item, indice)
+            indice += 1
 
     def _desenhar_alertas(self):
         """Faixa amarela com os produtos abaixo do stock mínimo.
@@ -222,6 +242,21 @@ class EcraStock(ctk.CTkFrame):
         componentes.tornar_cliclavel(cartao, lambda: self._abrir_area(area))
 
     def _abrir_area(self, area):
+        # FASE 4 — dupla barreira: o cartão já não aparece ao Staff
+        # (o `_AREAS` tem `so_admin`), mas se por algum motivo este
+        # método for chamado com uma área administrativa num perfil
+        # Staff, recusa antes de navegar. É a mesma disciplina do
+        # resto do sistema: a barreira de negócio não pode depender
+        # da GUI ter escondido o botão.
+        if area.get("so_admin"):
+            tipo = sessao.tipo_utilizador_ativo()
+
+            if tipo not in ("Admin", "Master"):
+                componentes.mostrar_erro(
+                    "Só Admin/Master podem aceder a esta área."
+                )
+                return
+
         if area["ecra"] == "requisicoes":
             self.controlador.mostrar_frame(ListaRequisicoes)
             return

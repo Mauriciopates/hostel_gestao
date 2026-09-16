@@ -67,27 +67,38 @@ import responsaveis
 from . import componentes
 from . import tema
 
-
 # =====================================================================
 # Lista de unidades de medida comuns — dropdown do formulário
 # =====================================================================
 
 UNIDADES_MEDIDA = (
-    "un",       # unidade
-    "cx",       # caixa
-    "par",      # par
-    "kg",       # quilograma
-    "g",        # grama
-    "L",        # litro
-    "ml",       # mililitro
-    "m",        # metro
-    "rolo",     # rolo
-    "frasco",   # frasco
-    "pacote",   # pacote
+    "un",  # unidade
+    "cx",  # caixa
+    "par",  # par
+    "kg",  # quilograma
+    "g",  # grama
+    "L",  # litro
+    "ml",  # mililitro
+    "m",  # metro
+    "rolo",  # rolo
+    "frasco",  # frasco
+    "pacote",  # pacote
 )
 
 UNIDADE_PLACEHOLDER = "— Escolher —"
 OUTRA_UNIDADE = "Outro (escrever ao lado)"
+
+# Tipos de produto (Fase 4, v1.4.0). Os mesmos quatro valores do
+# ENUM na base de dados — a lista fica aqui, do lado da GUI, para
+# o dropdown poder ser construído sem ir buscar nada ao MySQL. O
+# valor gravado é sempre minúsculo, como no ENUM.
+
+TIPOS_PRODUTO_GUI = (
+    "consumivel",
+    "roupa_cama",
+    "roupa_banho",
+    "outro",
+)
 
 
 # =====================================================================
@@ -122,9 +133,7 @@ _COLUNAS_PRODUTO = (
         minimo=_LARGURA_SALDO,
         alinhamento="centro",
     ),
-    componentes.Coluna(
-        "AÇÕES", minimo=_LARGURA_ACOES, alinhamento="centro"
-    ),
+    componentes.Coluna("AÇÕES", minimo=_LARGURA_ACOES, alinhamento="centro"),
 )
 
 
@@ -135,9 +144,7 @@ class ListaProdutos(ctk.CTkFrame):
         super().__init__(master, fg_color=tema.COR_FUNDO)
         self.controlador = controlador
 
-        componentes.Cabecalho(self, titulo="Stock · Produtos").pack(
-            fill="x"
-        )
+        componentes.Cabecalho(self, titulo="Stock · Produtos").pack(fill="x")
 
         # Botão de criação numa barra própria, logo abaixo do
         # cabeçalho e a verde — mesma convenção dos outros ecrãs.
@@ -164,9 +171,7 @@ class ListaProdutos(ctk.CTkFrame):
         self.campo_busca.pack(side="left")
         # Só filtra ao premir Enter (mesmo padrão dos outros ecrãs):
         # filtrar a cada tecla redesenhava a lista inteira a cada letra.
-        self.campo_busca.bind(
-            "<Return>", lambda evento: self._recarregar()
-        )
+        self.campo_busca.bind("<Return>", lambda evento: self._recarregar())
 
         self.mostrar_inativos = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
@@ -221,16 +226,13 @@ class ListaProdutos(ctk.CTkFrame):
         incluir_inativos = self.mostrar_inativos.get()
         texto_busca = self.campo_busca.get().strip().lower()
 
-        lista = estoque.listar_produtos(
-            incluir_inativos=incluir_inativos
-        )
+        lista = estoque.listar_produtos(incluir_inativos=incluir_inativos)
 
         if texto_busca:
             lista = [
                 produto
                 for produto in lista
-                if texto_busca
-                in f"{produto['nome']} {produto['id']}".lower()
+                if texto_busca in f"{produto['nome']} {produto['id']}".lower()
             ]
 
         self._atualizar_faixa_alerta()
@@ -272,9 +274,7 @@ class ListaProdutos(ctk.CTkFrame):
             nomes += ", …"
 
         self.rotulo_alerta.configure(
-            text=(
-                f"{len(alertas)} produtos abaixo do mínimo: {nomes}."
-            )
+            text=(f"{len(alertas)} produtos abaixo do mínimo: {nomes}.")
         )
         self.faixa_alerta.pack(
             fill="x", padx=20, pady=(4, 8), before=self.tabela
@@ -310,9 +310,7 @@ class ListaProdutos(ctk.CTkFrame):
                 linha,
                 text=produto["id"],
                 text_color=(
-                    tema.TEXTO_INDISPONIVEL
-                    if inativo
-                    else tema.AZUL_PRINCIPAL
+                    tema.TEXTO_INDISPONIVEL if inativo else tema.AZUL_PRINCIPAL
                 ),
                 fg_color=tema.ID_CHIP_FUNDO,
                 corner_radius=6,
@@ -349,9 +347,7 @@ class ListaProdutos(ctk.CTkFrame):
         self.tabela.colocar(
             linha,
             3,
-            self._celula_quantidade(
-                saldo, unidade, inativo, destacar=abaixo
-            ),
+            self._celula_quantidade(saldo, unidade, inativo, destacar=abaixo),
         )
 
         acoes = self.tabela.celula_acoes(linha, 4)
@@ -381,17 +377,13 @@ class ListaProdutos(ctk.CTkFrame):
         'destacar' pinta o número a vermelho (usado na coluna SALDO
         quando está abaixo do mínimo).
         """
-        bloco = ctk.CTkFrame(
-            self.tabela.grelha, fg_color="transparent"
-        )
+        bloco = ctk.CTkFrame(self.tabela.grelha, fg_color="transparent")
 
         numero = ctk.CTkLabel(
             bloco,
             text=str(quantidade),
             text_color=self._cor_quantidade(inativo, destacar),
-            font=ctk.CTkFont(
-                size=12, weight="bold" if destacar else "normal"
-            ),
+            font=ctk.CTkFont(size=12, weight="bold" if destacar else "normal"),
         )
         numero.pack(side="left")
 
@@ -422,9 +414,7 @@ class ListaProdutos(ctk.CTkFrame):
         abre o popup de forçar com pedido de responsável. Se não
         houver, confirmação simples.
         """
-        total_dependencias = estoque.contar_dependencias_produto(
-            produto["id"]
-        )
+        total_dependencias = estoque.contar_dependencias_produto(produto["id"])
 
         if total_dependencias:
             mensagem = (
@@ -454,9 +444,7 @@ class ListaProdutos(ctk.CTkFrame):
             componentes.mostrar_erro(str(erro))
             return
 
-        componentes.mostrar_sucesso(
-            f"Produto {produto['nome']} desativado."
-        )
+        componentes.mostrar_sucesso(f"Produto {produto['nome']} desativado.")
         self._recarregar()
 
     def _forcar_desativar(self, produto, responsavel_id):
@@ -472,9 +460,7 @@ class ListaProdutos(ctk.CTkFrame):
             componentes.mostrar_erro(str(erro))
             return
 
-        componentes.mostrar_sucesso(
-            f"Produto {produto['nome']} desativado."
-        )
+        componentes.mostrar_sucesso(f"Produto {produto['nome']} desativado.")
         self._recarregar()
 
     def _reativar(self, produto):
@@ -485,9 +471,7 @@ class ListaProdutos(ctk.CTkFrame):
             componentes.mostrar_erro(str(erro))
             return
 
-        componentes.mostrar_sucesso(
-            f"Produto {produto['nome']} reativado."
-        )
+        componentes.mostrar_sucesso(f"Produto {produto['nome']} reativado.")
         self._recarregar()
 
 
@@ -571,8 +555,7 @@ class _ConfirmarForcarProdutoModal(ctk.CTkToplevel):
 
         if not responsavel_id:
             componentes.mostrar_erro(
-                "Escolhe o responsável que autoriza a desativação "
-                "forçada."
+                "Escolhe o responsável que autoriza a desativação " "forçada."
             )
             return
 
@@ -705,11 +688,12 @@ class _FormularioProduto(ctk.CTkToplevel):
         nome="",
         unidade_medida="",
         stock_minimo="",
+        tipo_produto="consumivel",
     ):
         super().__init__(tela_lista)
         self.tela_lista = tela_lista
 
-        largura, altura = 480, 480
+        largura, altura = 480, 620
 
         self.title(titulo)
         self.geometry(f"{largura}x{altura}")
@@ -734,9 +718,7 @@ class _FormularioProduto(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=24)
 
-        self.campo_nome = ctk.CTkEntry(
-            self, corner_radius=tema.RAIO_CAMPO
-        )
+        self.campo_nome = ctk.CTkEntry(self, corner_radius=tema.RAIO_CAMPO)
         self.campo_nome.pack(fill="x", padx=24, pady=(2, 12))
         self.campo_nome.insert(0, nome)
 
@@ -786,6 +768,35 @@ class _FormularioProduto(ctk.CTkToplevel):
             ),
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=10),
+        ).pack(anchor="w", padx=24)
+
+        # ---- Tipo de produto (Fase 4, v1.4.0) ----
+
+        ctk.CTkLabel(
+            self,
+            text="Tipo de produto *",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24, pady=(10, 0))
+
+        self.combo_tipo_produto = ctk.CTkOptionMenu(
+            self,
+            values=list(TIPOS_PRODUTO_GUI),
+            corner_radius=tema.RAIO_CAMPO,
+        )
+        self.combo_tipo_produto.pack(fill="x", padx=24, pady=(2, 2))
+        self.combo_tipo_produto.set(tipo_produto)
+
+        ctk.CTkLabel(
+            self,
+            text=(
+                "Só os produtos de roupa de cama / roupa de banho "
+                "entram no Rol de Lavanderia automático."
+            ),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+            wraplength=430,
+            justify="left",
         ).pack(anchor="w", padx=24)
 
         # ---- Rodapé ----
@@ -851,9 +862,7 @@ class _FormularioProduto(ctk.CTkToplevel):
         self.combo_unidade = ctk.CTkOptionMenu(
             bloco,
             values=(
-                [UNIDADE_PLACEHOLDER]
-                + list(UNIDADES_MEDIDA)
-                + [OUTRA_UNIDADE]
+                [UNIDADE_PLACEHOLDER] + list(UNIDADES_MEDIDA) + [OUTRA_UNIDADE]
             ),
             command=self._ao_escolher_unidade,
         )
@@ -899,8 +908,8 @@ class _FormularioProduto(ctk.CTkToplevel):
     # -- leitura dos valores -----------------------------------------
 
     def _valores(self):
-        """Devolve (nome, unidade_medida, stock_minimo) já
-        normalizados.
+        """Devolve (nome, unidade_medida, stock_minimo, tipo_produto)
+        já normalizados.
 
         A unidade de medida vem da CAIXA (o seletor é só atalho);
         pode vir preenchida pela lista ou escrita à mão no caso
@@ -910,6 +919,11 @@ class _FormularioProduto(ctk.CTkToplevel):
 
         O stock mínimo é convertido para int — se o campo vier
         vazio, assume 0 (mesmo comportamento do CLI).
+
+        O tipo de produto (Fase 4, v1.4.0) vem sempre do dropdown,
+        que só aceita os quatro valores do ENUM — não há validação
+        extra aqui. A validação final (raise ValueError se inválido)
+        vive em `estoque.criar_produto`/`atualizar_produto`.
         """
         nome = self.campo_nome.get().strip()
         unidade_medida = self.campo_unidade.get().strip()
@@ -928,7 +942,9 @@ class _FormularioProduto(ctk.CTkToplevel):
                 "O stock mínimo tem de ser um número inteiro."
             )
 
-        return nome, unidade_medida, stock_minimo
+        tipo_produto = self.combo_tipo_produto.get()
+
+        return nome, unidade_medida, stock_minimo, tipo_produto
 
     def _gravar(self):
         raise NotImplementedError
@@ -943,17 +959,25 @@ class NovoProdutoModal(_FormularioProduto):
             titulo="Novo Produto",
             texto_botao="Criar",
         )
-
+        
     def _gravar(self):
         try:
-            nome, unidade_medida, stock_minimo = self._valores()
+            (
+                nome,
+                unidade_medida,
+                stock_minimo,
+                tipo_produto,
+            ) = self._valores()
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
             return
 
         try:
             produto = estoque.criar_produto(
-                nome, unidade_medida, stock_minimo=stock_minimo
+                nome,
+                unidade_medida,
+                stock_minimo=stock_minimo,
+                tipo_produto=tipo_produto,
             )
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
@@ -978,11 +1002,17 @@ class EditarProdutoModal(_FormularioProduto):
             nome=produto["nome"],
             unidade_medida=produto["unidade_medida"],
             stock_minimo=produto["stock_minimo"],
+            tipo_produto=produto["tipo_produto"],
         )
 
     def _gravar(self):
         try:
-            nome, unidade_medida, stock_minimo = self._valores()
+            (
+                nome,
+                unidade_medida,
+                stock_minimo,
+                tipo_produto,
+            ) = self._valores()
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
             return
@@ -993,6 +1023,7 @@ class EditarProdutoModal(_FormularioProduto):
                 nome=nome,
                 unidade_medida=unidade_medida,
                 stock_minimo=stock_minimo,
+                tipo_produto=tipo_produto,
             )
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
