@@ -66,6 +66,32 @@ ALTERAÇÕES 13/09/2026 (Aprovação de Requisições + cancelamento):
   ('rol'). O Rol cria e envia numa só operação (não passa por
   Aprovação), mas a marca deixa o responsável perceber, na lista
   dele, porque apareceu ali uma requisição que ele não pediu.
+
+ALTERAÇÕES 16/09/2026 (Fase 4 — permissões e visibilidade por perfil):
+
+- `cancelar_requisicao`, `confirmar_rececao_requisicao` e
+  `reportar_devolucao` ganham o parâmetro `tipo_utilizador_autor`
+  (Admin/Master). A regra passa a ser "autor OU Admin/Master" em
+  vez de "só autor". O parâmetro vem de fora (sessao) — o módulo
+  não importa sessao, para evitar import circular; mesma convenção
+  já usada em `responsaveis.alterar_tipo_utilizador`.
+
+- `listar_requisicoes` e `listar_devolucoes` ganham o parâmetro
+  `tipo_utilizador_autor` + `autor_id` para filtrar a visibilidade:
+  Staff vê só as dele; Admin/Master vê tudo.
+
+  * Staff em Requisições: só as dele, SEM filtro de estado — vê
+    os cinco estados (pendente, enviada, fechada, rejeitada,
+    cancelada), mas só as que ele próprio criou. Decisão do
+    aluno, 16/09/2026: "ele vê tudo o que fez, só não pode ver
+    as das outras pessoas".
+
+  * Staff em Devoluções: só as dele E só as pendentes. A regra
+    força `estado="pendente"` internamente, ignorando qualquer
+    estado passado de fora — barreira de negócio, não de
+    validação.
+
+  * Admin/Master: sem filtro adicional, vê tudo.
 """
 
 from datetime import date
@@ -97,6 +123,10 @@ _ESTADOS_REQUISICAO = (
 # (admin cria e envia, sem aprovação — não há nada a aprovar porque
 # o admin é quem decide).
 _ORIGENS_REQUISICAO = ("pedido", "rol")
+
+# Perfis que contam como "administrativo" para a Fase 4. Admin e
+# Master têm o mesmo peso nesta fase — decisão do aluno, 16/09/2026.
+_TIPOS_ADMINISTRATIVOS = ("Admin", "Master")
 
 
 def criar_produto(nome, unidade_medida, stock_minimo=0):
@@ -922,7 +952,10 @@ def rejeitar_requisicao(requisicao_id, responsavel_id, motivo):
     return requisicao
 
 
-def cancelar_requisicao(requisicao_id, responsavel_id):
+# ALTERADO FASE 4 — autor OU Admin/Master
+def cancelar_requisicao(
+    requisicao_id, responsavel_id, tipo_utilizador_autor=None
+):
     """Cancela uma requisição pendente — pendente → cancelada.
 
     Saída alternativa a partir de "pendente", distinta de
@@ -937,11 +970,15 @@ def cancelar_requisicao(requisicao_id, responsavel_id):
     não cancelar. Fechadas, rejeitadas e canceladas também não se
     recancelam.
 
-    Só o autor pode cancelar: `responsavel_id` tem de corresponder
-    ao `responsavel_id` gravado em `criar_requisicao`, não a
-    qualquer responsável ativo. Mesma verificação que
-    `confirmar_rececao_requisicao` faz, pela mesma razão de
-    autoria.
+    FASE 4 (16/09/2026): a autorização passa a ser "autor OU
+    Admin/Master". O autor é sempre autorizado; um Admin ou um
+    Master podem cancelar em nome do autor. O parâmetro
+    `tipo_utilizador_autor` é o tipo_utilizador de quem está a
+    pedir a operação — vem de fora (sessao.tipo_utilizador_ativo(),
+    lido por quem chama), porque este módulo não importa sessao
+    (seria import circular). Quando é None, o comportamento mantém-
+    se o antigo ("só autor") — é o que permite ao cli.py continuar
+    a funcionar sem ser tocado.
 
     Não gera nenhum movimento de stock — nada saiu do armazém
     ainda. É só mudança de estado.
@@ -963,11 +1000,14 @@ def cancelar_requisicao(requisicao_id, responsavel_id):
 
     responsavel = responsaveis.validar_autoria(responsavel_id)
 
-    if responsavel["id"] != requisicao["responsavel_id"]:
+    e_o_autor = responsavel["id"] == requisicao["responsavel_id"]
+    e_administrativo = tipo_utilizador_autor in _TIPOS_ADMINISTRATIVOS
+
+    if not (e_o_autor or e_administrativo):
         raise ValueError(
             f"Só o responsável que pediu "
-            f"({requisicao['responsavel_id']}) pode cancelar esta "
-            f"requisição."
+            f"({requisicao['responsavel_id']}) ou um Admin/Master "
+            f"pode cancelar esta requisição."
         )
 
     campos = {"estado": "cancelada"}
@@ -977,21 +1017,30 @@ def cancelar_requisicao(requisicao_id, responsavel_id):
     return requisicao
 
 
+# ALTERADO FASE 4 — autor OU Admin/Master
 def confirmar_rececao_requisicao(
     requisicao_id,
     responsavel_id,
     data_fecho,
     observacao_rececao="",
+    tipo_utilizador_autor=None,
 ):
     """Confirma a receção de uma requisição — enviada → fechada.
 
     Só o responsável que pediu confirma a receção (decisão 9,
     reforçada no docstring de `Requisicao` em modelos.py): "esta
     confirmação é dele, não do admin — quem pede é quem sabe se
-    recebeu". Por isso 'responsavel_id' tem de corresponder ao
-    'responsavel_id' gravado em `criar_requisicao`, não a qualquer
-    responsável ativo — ao contrário de `enviar_requisicao`, em que
-    'enviado_por_id' podia ser qualquer um.
+    recebeu".
+
+    FASE 4 (16/09/2026): a autorização passa a ser "autor OU
+    Admin/Master". O autor é sempre autorizado; um Admin ou um
+    Master podem confirmar em nome do autor (útil quando o autor
+    já não está na operação, ou está de férias). O parâmetro
+    `tipo_utilizador_autor` é o tipo_utilizador de quem está a
+    pedir a operação — vem de fora (sessao.tipo_utilizador_ativo(),
+    lido por quem chama), porque este módulo não importa sessao
+    (seria import circular). Quando é None, o comportamento mantém-
+    se o antigo ("só autor").
 
     'observacao_rececao' é texto livre, opcional — o responsável
     escreve aí o que faltou, se faltou (13/09/2026). Fica gravado
@@ -1025,11 +1074,14 @@ def confirmar_rececao_requisicao(
 
     responsavel = responsaveis.validar_autoria(responsavel_id)
 
-    if responsavel["id"] != requisicao["responsavel_id"]:
+    e_o_autor = responsavel["id"] == requisicao["responsavel_id"]
+    e_administrativo = tipo_utilizador_autor in _TIPOS_ADMINISTRATIVOS
+
+    if not (e_o_autor or e_administrativo):
         raise ValueError(
             f"Só o responsável que pediu "
-            f"({requisicao['responsavel_id']}) pode confirmar a "
-            f"receção desta requisição."
+            f"({requisicao['responsavel_id']}) ou um Admin/Master "
+            f"pode confirmar a receção desta requisição."
         )
 
     if data_fecho is None:
@@ -1046,11 +1098,13 @@ def confirmar_rececao_requisicao(
     return requisicao
 
 
+# ALTERADO FASE 4 — autor OU Admin/Master
 def reportar_devolucao(
     requisicao_id,
     responsavel_id,
     itens,
     data_reportada,
+    tipo_utilizador_autor=None,
 ):
     """Reporta sobra de material de uma requisição já fechada.
 
@@ -1068,9 +1122,14 @@ def reportar_devolucao(
     que aceitar zero, antes da decisão 19, obrigava a fingir que
     era).
 
-    Mesma regra de identidade da versão anterior: só o responsável
-    que pediu (e recebeu) pode reportar a sobra — é ele quem sabe o
-    que sobrou.
+    FASE 4 (16/09/2026): a autorização passa a ser "autor OU
+    Admin/Master". O autor é sempre autorizado; um Admin ou um
+    Master podem reportar sobra em nome do autor. O parâmetro
+    `tipo_utilizador_autor` é o tipo_utilizador de quem está a
+    pedir a operação — vem de fora (sessao.tipo_utilizador_ativo(),
+    lido por quem chama), porque este módulo não importa sessao
+    (seria import circular). Quando é None, o comportamento mantém-
+    se o antigo ("só autor").
 
     Cada produto devolvido tem de fazer parte da requisição
     original, e a sua quantidade não pode exceder o que ainda falta
@@ -1100,11 +1159,14 @@ def reportar_devolucao(
 
     responsavel = responsaveis.validar_autoria(responsavel_id)
 
-    if responsavel["id"] != requisicao["responsavel_id"]:
+    e_o_autor = responsavel["id"] == requisicao["responsavel_id"]
+    e_administrativo = tipo_utilizador_autor in _TIPOS_ADMINISTRATIVOS
+
+    if not (e_o_autor or e_administrativo):
         raise ValueError(
             f"Só o responsável que pediu "
-            f"({requisicao['responsavel_id']}) pode reportar "
-            f"sobra desta requisição."
+            f"({requisicao['responsavel_id']}) ou um Admin/Master "
+            f"pode reportar sobra desta requisição."
         )
 
     if not itens:
@@ -1229,7 +1291,14 @@ def procurar_devolucao(devolucao_id):
     return repositorio.procurar_devolucao(devolucao_id)
 
 
-def listar_devolucoes(estado=None, requisicao_id=None, responsavel_id=None):
+# ALTERADO FASE 4 — visibilidade por perfil
+def listar_devolucoes(
+    estado=None,
+    requisicao_id=None,
+    responsavel_id=None,
+    tipo_utilizador_autor=None,
+    autor_id=None,
+):
     """Devolve as devoluções, filtráveis por estado, requisição e
     responsável.
 
@@ -1238,10 +1307,35 @@ def listar_devolucoes(estado=None, requisicao_id=None, responsavel_id=None):
     filtros aplicam-se na própria consulta SQL, em
     `repositorio.listar_devolucoes`.
 
+    FASE 4 (16/09/2026): ganhou visibilidade por perfil.
+
+    - `tipo_utilizador_autor="Staff"` → força `responsavel_id =
+      autor_id` (só as dele) E `estado="pendente"` (só as
+      pendentes). A regra é de negócio — o Staff nunca vê as
+      fechadas, mesmo que peça. `autor_id` é obrigatório neste
+      caso; sem ele, levanta ValueError (erro de programação não
+      deve passar silenciosamente).
+
+    - `tipo_utilizador_autor="Admin"` ou `"Master"` → sem filtro
+      adicional; vê tudo.
+
+    - `tipo_utilizador_autor=None` → sem filtro de visibilidade
+      (comportamento antigo, para o cli.py continuar a funcionar
+      sem ser tocado).
+
     Devolve lista nova, para que alterá-la depois não afete a
     estrutura de dados (mesma convenção dos `listar` dos outros
     módulos).
     """
+    if tipo_utilizador_autor == "Staff":
+        if not autor_id:
+            raise ValueError(
+                "autor_id é obrigatório quando tipo_utilizador_autor "
+                "é 'Staff'."
+            )
+        responsavel_id = autor_id
+        estado = "pendente"
+
     return repositorio.listar_devolucoes(
         estado=estado,
         requisicao_id=requisicao_id,
@@ -1384,7 +1478,14 @@ def fechar_devolucao(
     return devolucao
 
 
-def listar_requisicoes(estado=None, responsavel_id=None, produto_id=None):
+# ALTERADO FASE 4 — visibilidade por perfil
+def listar_requisicoes(
+    estado=None,
+    responsavel_id=None,
+    produto_id=None,
+    tipo_utilizador_autor=None,
+    autor_id=None,
+):
     """Devolve as requisições, filtráveis por estado, responsável e
     produto.
 
@@ -1405,10 +1506,35 @@ def listar_requisicoes(estado=None, responsavel_id=None, produto_id=None):
     que cruza com `clientes` em vez de virar SQL na camada de
     persistência).
 
+    FASE 4 (16/09/2026): ganhou visibilidade por perfil.
+
+    - `tipo_utilizador_autor="Staff"` → força `responsavel_id =
+      autor_id` (só as dele), mas SEM filtro de estado — vê os
+      cinco estados (pendente, enviada, fechada, rejeitada,
+      cancelada). Decisão do aluno: "ele vê tudo o que fez, só não
+      pode ver as das outras pessoas". `autor_id` é obrigatório
+      neste caso; sem ele, levanta ValueError (erro de programação
+      não deve passar silenciosamente).
+
+    - `tipo_utilizador_autor="Admin"` ou `"Master"` → sem filtro
+      adicional; vê tudo.
+
+    - `tipo_utilizador_autor=None` → sem filtro de visibilidade
+      (comportamento antigo, para o cli.py continuar a funcionar
+      sem ser tocado).
+
     Devolve lista nova, para que alterá-la depois não afete a
     estrutura de dados (mesma convenção de listar_produtos e dos
     `listar` dos outros módulos).
     """
+    if tipo_utilizador_autor == "Staff":
+        if not autor_id:
+            raise ValueError(
+                "autor_id é obrigatório quando tipo_utilizador_autor "
+                "é 'Staff'."
+            )
+        responsavel_id = autor_id
+
     requisicoes_com_produto = None
 
     if produto_id is not None:
@@ -1427,3 +1553,292 @@ def listar_requisicoes(estado=None, responsavel_id=None, produto_id=None):
         ]
 
     return resultado
+
+
+# =====================================================================
+# ROL DE LAVANDERIA — Fase 4, v1.4.0
+# =====================================================================
+#
+# Duas funções que implementam a geração automática do Rol de
+# Lavanderia ao criar uma reserva Airbnb:
+#
+# - `calcular_rol_lavanderia(unidade_id)` — só leitura. Devolve os
+#   produtos + quantidades a enviar, calculados a partir dos lugares
+#   ativos da unidade + a tabela `rol_lavanderia_regras`.
+#
+# - `gerar_rol_lavanderia_automatico(ocupacao, responsavel_id)` —
+#   cria a requisição de stock com origem="rol", decide enviada vs
+#   pendente conforme o stock, e devolve-a.
+#
+# A regra vive na tabela nova `rol_lavanderia_regras` (criada e
+# populada na migração SQL da Fase 4), não no código: um produto
+# novo numa categoria nova é uma linha nova na tabela, não uma
+# alteração aqui. O que fica aqui é só o cruzamento entre os
+# lugares físicos da unidade e as regras da tabela.
+
+
+def _lugares_ativos_por_tipo(unidade_id):
+    """Percorre os quartos e lugares ativos de uma unidade e devolve
+    um dicionário {tipo_cama: contagem}.
+
+    Os tipos possíveis são os de `lugares.tipo_cama` — 'solteiro',
+    'casal', 'beliche'. Os beliches são contados como PARES (dois
+    lugares = um par), porque a regra do beliche em
+    `rol_lavanderia_regras` é por par, não por cama individual.
+
+    Um número ímpar de beliches (caso raro, mas possível se o par
+    estiver a meio de ser criado) é arredondado para baixo — não
+    vale a pena rebentar por causa disso; se a unidade tiver 3
+    camas de beliche, contam-se 1 par e sobra 1 cama que fica
+    ignorada.
+    """
+    import unidades as _unidades
+
+    contagem = {"solteiro": 0, "casal": 0, "beliche": 0}
+
+    for quarto in _unidades.listar_quartos(unidade_id=unidade_id):
+        for lugar in _unidades.listar_lugares(quarto_id=quarto["id"]):
+            tipo = lugar["tipo_cama"]
+
+            if tipo in contagem:
+                contagem[tipo] += 1
+
+    # Beliches contam como pares — divisão inteira, arredonda para
+    # baixo (ver docstring).
+    contagem["beliche"] = contagem["beliche"] // 2
+
+    return contagem
+
+
+def _ler_regras_rol(tipo_cama):
+    """Lê as regras de `rol_lavanderia_regras` para um tipo de cama.
+
+    Devolve uma lista de dicionários {"produto_id": ..., "quantidade": ...}.
+    """
+    return repositorio.listar_regras_rol_lavanderia(tipo_cama=tipo_cama)
+
+
+def calcular_rol_lavanderia(unidade_id):
+    """Calcula o Rol de Lavanderia de uma unidade — só leitura.
+
+    Devolve um par `(produtos_a_enviar, produtos_desativados)`:
+
+    - `produtos_a_enviar`: lista de dicts
+      `{"produto_id": ..., "nome": ..., "quantidade": ...}`,
+      ordenada por nome do produto. Só produtos ativos.
+    - `produtos_desativados`: lista de dicts
+      `{"produto_id": ..., "nome": ...}` com os produtos que
+      aparecem nas regras mas estão desativados. O chamador decide
+      o que fazer — o `_ConfirmacaoAirbnb` mostra-os como aviso, o
+      `gerar_rol_lavanderia_automatico` ignora-os.
+
+    O cálculo cruza três fontes:
+
+    1. Os lugares ativos da unidade (`unidades.listar_quartos` +
+       `unidades.listar_lugares`), agrupados por tipo de cama.
+       Beliches contam como pares.
+    2. A cama extra da unidade (`permite_cama_extra` +
+       `categoria_cama_extra` + `qtd_cama_extra`), se aplicável.
+    3. As regras em `rol_lavanderia_regras`, uma linha por
+       (tipo_cama, produto) com a quantidade.
+
+    A quantidade final de cada produto é a soma, para cada tipo de
+    cama presente na unidade, de (contagem × quantidade da regra).
+    Produtos repetidos entre tipos diferentes (ex.: Fronha usada em
+    casal E em solteiro) são somados numa só linha.
+
+    Levanta `ValueError` se a unidade não existir ou não estiver
+    ativa.
+    """
+    import unidades as _unidades
+
+    unidade = _unidades.procurar(unidade_id)
+
+    if unidade is None:
+        raise ValueError(f"A unidade {unidade_id} não existe.")
+
+    if not unidade["ativo"]:
+        raise ValueError(f"A unidade {unidade_id} não está ativa.")
+
+    contagem_por_tipo = _contagem_com_extra(unidade)
+
+    # Soma as regras de todos os tipos presentes, num só dict por
+    # produto. Chave: produto_id; valor: quantidade acumulada.
+    acumulado: dict = {}
+
+    for tipo_cama, contagem in contagem_por_tipo.items():
+        if contagem <= 0:
+            continue
+
+        for regra in _ler_regras_rol(tipo_cama):
+            produto_id = regra["produto_id"]
+            quantidade = regra["quantidade"] * contagem
+
+            acumulado[produto_id] = (
+                acumulado.get(produto_id, 0) + quantidade
+            )
+
+    # Separa em ativos e desativados, e resolve o nome de cada um.
+    produtos_a_enviar = []
+    produtos_desativados = []
+
+    for produto_id, quantidade in acumulado.items():
+        produto = procurar_produto(produto_id)
+
+        if produto is None:
+            # O produto referenciado na regra não existe (a FK na
+            # tabela não devia permitir, mas protege-se).
+            raise ValueError(
+                f"O produto {produto_id} (referenciado nas regras do "
+                f"Rol) não existe."
+            )
+
+        if not produto["ativo"]:
+            produtos_desativados.append(
+                {"produto_id": produto_id, "nome": produto["nome"]}
+            )
+            continue
+
+        produtos_a_enviar.append(
+            {
+                "produto_id": produto_id,
+                "nome": produto["nome"],
+                "quantidade": quantidade,
+            }
+        )
+
+    produtos_a_enviar.sort(key=lambda p: p["nome"])
+    produtos_desativados.sort(key=lambda p: p["nome"])
+
+    return produtos_a_enviar, produtos_desativados
+
+
+def gerar_rol_lavanderia_automatico(ocupacao, responsavel_id):
+    """Gera o Rol de Lavanderia automático de uma reserva Airbnb.
+
+    Recebe o registo da reserva já criada (`ocupacao`, com `id` e
+    `unidade_id`) e o `responsavel_id` de quem está a registar a
+    reserva (vem de `sessao.obter_responsavel_ativo()`, lido por
+    quem chama).
+
+    Fluxo:
+
+    1. Chama `calcular_rol_lavanderia` para obter os produtos a
+       enviar. Produtos desativados são ignorados (não vão para a
+       requisição).
+    2. Se `produtos_a_enviar` vier vazio → devolve `None`. Não cria
+       requisição nenhuma (uma requisição sem itens não faz
+       sentido, e `criar_requisicao` já a recusa).
+    3. Cria a requisição com `origem="rol"`, no estado `pendente`.
+    4. Verifica o stock de cada produto. Se houver stock suficiente
+       para todos → chama `enviar_requisicao` e a requisição fica
+       `enviada`. Se faltar stock em algum → a requisição fica
+       `pendente`, com nota automática nas observações.
+    5. Devolve a requisição criada (no estado final).
+
+    Observações automáticas — duas partes, quando ambas se aplicam:
+
+    - Se stock insuficiente:
+      "Rol gerado automaticamente com stock insuficiente — aguarda
+       reposição."
+    - Se produtos desativados ignorados:
+      "Produtos das regras ignorados (desativados): X, Y."
+
+    A decisão de criar a requisição como `enviada` ou `pendente`
+    conforme o stock foi do aluno (Fase 4, 16/09/2026): a reserva
+    grava sempre, independentemente do stock do Rol; se faltar
+    stock, o Rol fica pendente e o Admin trata dele na Rota de
+    Envio como qualquer outra requisição.
+
+    Não levanta erro se a unidade não tiver lugares ativos ou se
+    todos os produtos das regras estiverem desativados — devolve
+    `None` em qualquer dos casos, e quem chama decide o que
+    mostrar ao utilizador.
+    """
+    unidade_id = ocupacao["unidade_id"]
+
+    produtos_a_enviar, produtos_desativados = calcular_rol_lavanderia(
+        unidade_id
+    )
+
+    if not produtos_a_enviar:
+        return None
+
+    itens = [
+        {"produto_id": p["produto_id"], "quantidade_pedida": p["quantidade"]}
+        for p in produtos_a_enviar
+    ]
+
+    # Verifica o stock ANTES de criar a requisição — a decisão de a
+    # criar como enviada ou pendente depende disso, e é mais limpo
+    # decidir antes do INSERT do que corrigir o estado depois.
+    stock_suficiente = True
+    em_falta = []
+
+    for p in produtos_a_enviar:
+        saldo = saldo_produto(p["produto_id"])
+
+        if saldo < p["quantidade"]:
+            stock_suficiente = False
+            em_falta.append(f"{p['nome']} (faltam {p['quantidade'] - saldo})")
+
+    # Constrói as observações automáticas — duas partes, quando ambas
+    # se aplicam (decisão do aluno, 16/09/2026).
+    partes_observacoes = []
+
+    if not stock_suficiente:
+        partes_observacoes.append(
+            "Rol gerado automaticamente com stock insuficiente — "
+            "aguarda reposição."
+        )
+
+    if produtos_desativados:
+        nomes = ", ".join(p["nome"] for p in produtos_desativados)
+        partes_observacoes.append(
+            f"Produtos das regras ignorados (desativados): {nomes}."
+        )
+
+    observacoes = " ".join(partes_observacoes)
+
+    requisicao = criar_requisicao(
+        responsavel_id=responsavel_id,
+        itens=itens,
+        data_pedido=date.today(),
+        observacoes=observacoes,
+        origem="rol",
+    )
+
+    if stock_suficiente:
+        requisicao = enviar_requisicao(
+            requisicao["id"],
+            responsavel_id,
+            date.today(),
+        )
+
+    return requisicao
+
+def _contagem_com_extra(unidade):
+    """Junta a contagem dos lugares (por tipo de cama) com a cama
+    extra da unidade, se aplicável.
+
+    Devolve um dicionário {chave_de_regra: contagem}, onde a chave
+    de regra é o valor a casar com `rol_lavanderia_regras.tipo_cama`:
+    'casal', 'solteiro', 'beliche', 'extra_casal' ou 'extra_solteiro'.
+
+    A cama extra só entra se a unidade tiver `permite_cama_extra=True`
+    E `categoria_cama_extra` preenchido (decisão do aluno, 16/09/2026:
+    categoria NULL → ignora o extra). A quantidade vem de
+    `qtd_cama_extra` — se for 2, conta como 2 conjuntos de extra.
+    """
+    contagem = _lugares_ativos_por_tipo(unidade["id"])
+
+    if unidade["permite_cama_extra"] and unidade["categoria_cama_extra"]:
+        categoria = unidade["categoria_cama_extra"]
+        qtd = unidade["qtd_cama_extra"] or 0
+
+        chave = f"extra_{categoria}"
+
+        if qtd > 0:
+            contagem[chave] = qtd
+
+    return contagem

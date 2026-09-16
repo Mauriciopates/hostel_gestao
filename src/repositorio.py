@@ -2273,3 +2273,39 @@ def listar_itens_devolucao(devolucao_id=None, produto_id=None):
         conexao.close()
 
     return linhas
+
+    # --- rol_lavanderia_regras -------------------------------------------
+
+def listar_regras_rol_lavanderia(tipo_cama=None):
+    """Devolve as regras do Rol de Lavanderia, filtráveis por
+    tipo_cama.
+
+    Fase 4, v1.4.0. A tabela `rol_lavanderia_regras` liga cada tipo
+    de cama ('casal', 'solteiro', 'beliche', 'extra_casal',
+    'extra_solteiro') a um produto e uma quantidade. Usada por
+    `estoque.calcular_rol_lavanderia` para o cálculo automático do
+    Rol.
+
+    Devolve lista de dicionários, uma linha por (tipo_cama,
+    produto_id).
+    """
+    condicoes = []
+    valores = []
+
+    if tipo_cama is not None:
+        condicoes.append("tipo_cama = %s")
+        valores.append(tipo_cama)
+
+    sql = "SELECT * FROM rol_lavanderia_regras"
+    if condicoes:
+        sql += " WHERE " + " AND ".join(condicoes)
+
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor(dictionary=True)
+        cursor.execute(sql, valores)
+        linhas = cast(list, cursor.fetchall())
+    finally:
+        conexao.close()
+
+    return linhas

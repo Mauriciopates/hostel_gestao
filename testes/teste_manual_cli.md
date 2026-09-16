@@ -598,7 +598,9 @@ FIM PASSO
 
 PASSO 5 — segundo_contrato_lugar_diferente_recusado
     Caminho: Criar contrato mensal → mesma unidade, cliente CLI-0zz
-    outra vez (tanto faz), data de início = HOJE, lugar = LUG-0ww
+    outra cliente com NIF diferente bate em outra regra 
+    (Erro: O NIF 283858338 já tem um contrato mensal ativo.)
+    data de início = HOJE, lugar = LUG-0ww
     (Cama B — lugar DIFERENTE do passo 4, mas no MESMO quarto
     privativo)
     Entrada: na confirmação, responder "n"
