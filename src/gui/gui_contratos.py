@@ -110,23 +110,42 @@ def _rotulo_lugar(lugar, ocupantes, capacidade):
 # =====================================================================
 
 
-def _abrir_novo_cliente(formulario):
-    """Abre o `NovoClienteModal` de `gui_clientes.py` a partir de um
-    formulário (reserva Airbnb ou contrato mensal). O import é
-    local, dentro da função, para evitar import circular entre
-    `gui_contratos` e `gui_clientes`.
+def _abrir_novo_cliente(formulario, regime):
+    """Abre o modal de novo cliente certo de `gui_clientes.py` a
+    partir de um formulário (reserva Airbnb ou contrato mensal). O
+    import é local, dentro da função, para evitar import circular
+    entre `gui_contratos` e `gui_clientes`.
 
-    Ao fechar o modal, recarrega a lista de clientes do formulário
-    e pré-seleciona o cliente novo — se ele foi mesmo criado. O
-    `NovoClienteModal` não devolve o cliente criado (chama
-    `tela_lista._recarregar()` e fecha-se); para o pré-selecionar
+    ATUALIZADO 16/09/2026: `gui_clientes.NovoClienteModal` (um único
+    formulário com seletor de Regime) foi substituído por dois
+    modais dedicados — `NovoClienteMensalModal`/
+    `NovoClienteAirbnbModal` — escolhidos normalmente por um popup
+    prévio (`_SeletorRegimeClienteModal`). Aqui o regime já é
+    conhecido pelo próprio formulário que chama (`NovoContratoMensal`
+    passa "mensal", `NovaReservaAirbnb` passa "airbnb"), por isso
+    abre-se logo o modal certo, sem passar pelo popup de escolha.
+
+    Ao fechar o modal, recarrega a lista de clientes do formulário e
+    pré-seleciona o cliente novo — se ele foi mesmo criado. O modal
+    não devolve o cliente criado (chama `tela_lista._recarregar()`
+    ou `_recarregar_clientes()` e fecha-se, ver
+    `gui_clientes._recarregar_tela_lista`); para o pré-selecionar
     aqui, comparamos a lista antes e depois.
     """
-    from gui.gui_clientes import NovoClienteModal
+    from gui.gui_clientes import (
+        NovoClienteAirbnbModal,
+        NovoClienteMensalModal,
+    )
+
+    classe_modal = (
+        NovoClienteMensalModal
+        if regime == "mensal"
+        else NovoClienteAirbnbModal
+    )
 
     ids_antes = {c["id"] for c in formulario.clientes_disponiveis}
 
-    modal = NovoClienteModal(formulario)
+    modal = classe_modal(formulario)
     formulario.wait_window(modal)
 
     formulario._recarregar_clientes()
@@ -159,7 +178,7 @@ class NovoContratoMensal(ctk.CTkFrame):
         componentes.Cabecalho(self, "Novo Contrato Mensal").pack(fill="x")
 
         self.area = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self.area.pack(fill="both", expand=True, padx=24, pady=16)
+        self.area.pack(fill="both", expand=True, padx=20, pady=16)
 
         self._montar_cartao_unidade()
         self._montar_cartao_cliente()
@@ -169,6 +188,7 @@ class NovoContratoMensal(ctk.CTkFrame):
         self._recarregar_unidades(unidade_id)
         self._recarregar_clientes()
         self._recarregar_responsaveis()
+        self.after(50, self.area.update_idletasks)
 
     # -- montagem dos widgets ------------------------------------------
 
@@ -228,7 +248,7 @@ class NovoContratoMensal(ctk.CTkFrame):
         bloco.grid(row=0, column=1, sticky="ew", pady=6)
         bloco.grid_columnconfigure(0, weight=1)
 
-        self.combo_cliente = ctk.CTkOptionMenu(bloco, values=["—"])
+        self.combo_cliente = ctk.CTkOptionMenu(bloco, values=["—"], width=1)
         self.combo_cliente.grid(row=0, column=0, sticky="ew")
 
         ctk.CTkButton(
@@ -242,7 +262,7 @@ class NovoContratoMensal(ctk.CTkFrame):
             border_color=tema.COR_BORDA,
             text_color=tema.COR_TEXTO,
             hover_color=tema.COR_BORDA,
-            command=lambda: _abrir_novo_cliente(self),
+            command=lambda: _abrir_novo_cliente(self, "mensal"),
         ).grid(row=0, column=1, sticky="e", padx=(8, 0))
 
     def _montar_cartao_contrato(self):
@@ -658,7 +678,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         # área visível. Dentro do scroll, tudo rola junto e nunca
         # desaparece (bug apanhado pelo aluno, 13/09/2026).
         self.area = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self.area.pack(fill="both", expand=True, padx=24, pady=16)
+        self.area.pack(fill="both", expand=True, padx=20, pady=16)
 
         self._montar_cartao_unidade_cliente()
         self._montar_cartao_estadia()
@@ -669,6 +689,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         self._recarregar_unidades(unidade_id)
         self._recarregar_clientes()
         self._recarregar_responsaveis()
+        self.after(50, self.area.update_idletasks)
 
     # -- montagem dos widgets ------------------------------------------
 
@@ -720,7 +741,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         bloco.grid(row=1, column=1, sticky="ew", pady=6)
         bloco.grid_columnconfigure(0, weight=1)
 
-        self.combo_cliente = ctk.CTkOptionMenu(bloco, values=["—"])
+        self.combo_cliente = ctk.CTkOptionMenu(bloco, values=["—"], width=1)
         self.combo_cliente.grid(row=0, column=0, sticky="ew")
 
         ctk.CTkButton(
@@ -734,7 +755,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
             border_color=tema.COR_BORDA,
             text_color=tema.COR_TEXTO,
             hover_color=tema.COR_BORDA,
-            command=lambda: _abrir_novo_cliente(self),
+            command=lambda: _abrir_novo_cliente(self, "airbnb"),
         ).grid(row=0, column=1, sticky="e", padx=(8, 0))
 
     def _montar_cartao_estadia(self):
