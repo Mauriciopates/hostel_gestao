@@ -1540,8 +1540,10 @@ class _AcoesUnidadeModal(ctk.CTkToplevel):
 
     As ações disponíveis dependem do estado da unidade, tal como
     antes: uma unidade inativa só oferece "Reativar", e "Abrir Mapa"
-    só aparece no regime mensal, porque a Airbnb não usa
-    quarto/lugar (decisão 5) e não tem planta nenhuma para mostrar.
+    aparece nos dois regimes — desde a Fase 4 (16/09/2026), a Airbnb
+    também tem quartos e lugares, que representam as camas físicas
+    da unidade; é essa estrutura que o Rol de Lavanderia usa para
+    contar a roupa."
     """
 
     def __init__(self, tela_unidades, uni):
@@ -1579,13 +1581,18 @@ class _AcoesUnidadeModal(ctk.CTkToplevel):
                 acao=lambda: self.tela_unidades._reativar_unidade(uni),
             )
         else:
-            if uni["tipo"] == "mensal":
-                self._botao(
-                    "Abrir Mapa",
-                    text_color=tema.AZUL_PRINCIPAL,
-                    hover_color=tema.ID_CHIP_FUNDO,
-                    acao=lambda: self.tela_unidades._abrir_planta(uni["id"]),
-                )
+            # FASE 4 (16/09/2026) — "Abrir Mapa" passa a aparecer nos
+            # dois tipos. Antes só aparecia em unidades mensais
+            # (as Airbnb não tinham lugares). Agora as Airbnb também
+            # têm quartos e lugares (que representam as camas
+            # físicas), porque o Rol de Lavanderia precisa dessa
+            # estrutura para contar a roupa.
+            self._botao(
+                "Abrir Mapa",
+                text_color=tema.AZUL_PRINCIPAL,
+                hover_color=tema.ID_CHIP_FUNDO,
+                acao=lambda: self.tela_unidades._abrir_planta(uni["id"]),
+            )
 
             self._botao(
                 "Editar",
@@ -2017,8 +2024,9 @@ class _PopupCamaExtra(ctk.CTkToplevel):
     formulário.
     """
 
-    def __init__(self, pai, nome_unidade, qtd_inicial, tipo_inicial,
-                 ao_fechar):
+    def __init__(
+        self, pai, nome_unidade, qtd_inicial, tipo_inicial, ao_fechar
+    ):
         super().__init__(pai)
         self.ao_fechar = ao_fechar
 
@@ -2117,9 +2125,7 @@ class _PopupCamaExtra(ctk.CTkToplevel):
             return
 
         if not texto_tipo:
-            componentes.mostrar_erro(
-                "O tipo de cama extra é obrigatório."
-            )
+            componentes.mostrar_erro("O tipo de cama extra é obrigatório.")
             return
 
         self.ao_fechar(texto_qtd, texto_tipo)

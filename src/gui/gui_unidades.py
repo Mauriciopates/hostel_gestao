@@ -23,9 +23,17 @@ Um lugar sem ocupante atual mas já com um contrato futuro registado
 indisponibilidade, distinta tanto do aviso/parcial (amarelo) como
 do erro/ocupado (vermelho) — em vez de "Livre".
 
-Só se aplica a unidades do regime mensal — uma reserva Airbnb ocupa
-a unidade inteira, sem 'lugar_id' (decisão 5), por isso não há
-estado de ocupação por lugar para mostrar numa unidade Airbnb.
+Aplica-se aos dois regimes. Até à Fase 4 (16/09/2026) só as unidades
+mensais tinham planta — as Airbnb ocupavam a unidade inteira,
+sem 'lugar_id' (decisão 5). A partir da Fase 4, uma unidade
+Airbnb também tem quartos e lugares, que representam as camas
+físicas da unidade; é essa estrutura que o Rol de Lavanderia
+usa para contar a roupa. O estado dos lugares
+(livre / reservado / ocupado) só faz sentido completo nas mensais,
+porque é aí que há contratos associados a lugares;
+nas Airbnb o estado aparece 'Livre' por omissão — não é um erro
+é a realidade (a Airbnb não reserva lugar a lugar,
+reserva a unidade inteira)."
 
 Clique — cada ação tem o seu sítio próprio, sem se cruzarem:
 
@@ -379,7 +387,7 @@ class PlantaLugares(ctk.CTkFrame):
 
         self.seletor_unidade = ctk.CTkOptionMenu(
             barra,
-            values=["Sem unidades mensais"],
+            values=["Sem unidades disponíveis"],
             command=self._ao_escolher_unidade,
             corner_radius=tema.RAIO_CAMPO,
             fg_color=tema.AZUL_PRINCIPAL,
@@ -410,7 +418,8 @@ class PlantaLugares(ctk.CTkFrame):
     # -- carregamento da lista de unidades --------------------------
 
     def _recarregar_unidades(self):
-        """Lê as unidades mensais ativas e povoa o seletor.
+        """Lê as unidades ativas (mensais E Airbnb) e povoa o
+        seletor.
 
         Usa `listar_com_propriedade` (Fase 2, v1.4.0) em vez de
         `listar`: o rótulo passa a incluir o nome da propriedade
@@ -418,19 +427,27 @@ class PlantaLugares(ctk.CTkFrame):
         propriedade — antes só tinha o nome da unidade, o que
         confundia unidades com o mesmo nome em propriedades
         diferentes.
+
+        FASE 4 (16/09/2026) — deixou de filtrar por `tipo="mensal"`.
+        A Planta de Lugares passou a aplicar-se aos dois regimes,
+        porque as unidades Airbnb também precisam de quartos e
+        lugares para o Rol de Lavanderia contar a roupa. O rótulo
+        já diz "· Airbnb" ou nada (mensal) via
+        `rotulo_com_propriedade` — o seletor mostra os dois, o
+        utilizador escolhe.
         """
-        unidades_mensais = unidades.listar_com_propriedade(tipo="mensal")
+        unidades_disponiveis = unidades.listar_com_propriedade()
 
         self._opcoes_unidade = {
             unidades.rotulo_com_propriedade(u): u["id"]
-            for u in unidades_mensais
+            for u in unidades_disponiveis
         }
 
         if not self._opcoes_unidade:
             self.seletor_unidade.configure(
-                values=["Sem unidades mensais"], state="disabled"
+                values=["Sem unidades disponíveis"], state="disabled"
             )
-            self.seletor_unidade.set("Sem unidades mensais")
+            self.seletor_unidade.set("Sem unidades disponíveis")
             self.unidade_id = None
             self._desenhar_planta()
             return
@@ -500,7 +517,7 @@ class PlantaLugares(ctk.CTkFrame):
 
         if self.unidade_id is None:
             self._mostrar_mensagem(
-                "Ainda não existem unidades mensais ativas."
+                "Ainda não existem unidades ativas."
             )
             return
 
@@ -512,12 +529,13 @@ class PlantaLugares(ctk.CTkFrame):
             )
             return
 
-        if unidade["tipo"] != "mensal":
-            self._mostrar_mensagem(
-                "A planta de lugares aplica-se apenas a unidades do "
-                "regime mensal."
-            )
-            return
+        # FASE 4 (16/09/2026) — a Planta de Lugares passou a aplicar-se
+        # também às unidades Airbnb. Antes recusava com uma mensagem
+        # ("aplica-se apenas a unidades do regime mensal"); agora os
+        # dois tipos podem ter quartos e lugares, porque o Rol de
+        # Lavanderia precisa dessa estrutura para contar a roupa.
+        # Não há alteração nenhuma no desenho — as caixas, o estado
+        # e os cliques funcionam igual nos dois tipos.
 
         quartos = unidades.listar_quartos(unidade_id=self.unidade_id)
 
