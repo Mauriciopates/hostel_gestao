@@ -124,12 +124,19 @@ _ESTADOS_REQUISICAO = (
 # o admin é quem decide).
 _ORIGENS_REQUISICAO = ("pedido", "rol")
 
+# Tipos de produto (Fase 4, v1.4.0). A coluna `tipo_produto` na
+# tabela `produtos` é um ENUM com estes quatro valores — a mesma
+# lista, do lado do código, para a validação ser feita aqui (camada
+# de negócio), não só pela base de dados.
+TIPOS_PRODUTO = ("consumivel", "roupa_cama", "roupa_banho", "outro")
+
 # Perfis que contam como "administrativo" para a Fase 4. Admin e
 # Master têm o mesmo peso nesta fase — decisão do aluno, 16/09/2026.
 _TIPOS_ADMINISTRATIVOS = ("Admin", "Master")
 
 
-def criar_produto(nome, unidade_medida, stock_minimo=0):
+def criar_produto(nome, unidade_medida, stock_minimo=0,
+                   tipo_produto="consumivel"):
     """Cria um produto no catálogo e grava-o imediatamente na base de
     dados.
 
@@ -139,6 +146,13 @@ def criar_produto(nome, unidade_medida, stock_minimo=0):
     sempre a soma dos seus movimentos, nunca um valor guardado
     (decisão 9) — é a mesma razão pela qual `Movimento` não vai ter
     `atualizar` nem `desativar` neste módulo.
+
+    'tipo_produto' (Fase 4, v1.4.0) distingue os produtos do
+    catálogo por natureza: 'consumivel' (lixívia, detergente — o
+    default), 'roupa_cama', 'roupa_banho' ou 'outro'. É este campo
+    que o cálculo do Rol de Lavanderia usa para saber que produtos
+    entram automaticamente — só os de 'roupa_cama' e 'roupa_banho'.
+    Tem de ser um de TIPOS_PRODUTO; qualquer outro valor é erro.
 
     Devolve o registo criado. Grava de imediato via repositório —
     mesma convenção de propriedades.criar, unidades.criar,
@@ -164,11 +178,18 @@ def criar_produto(nome, unidade_medida, stock_minimo=0):
             f"O stock mínimo não pode ser negativo: {stock_minimo}."
         )
 
+    if tipo_produto not in TIPOS_PRODUTO:
+        raise ValueError(
+            "Tipo de produto inválido. Tem de ser um de: "
+            + ", ".join(TIPOS_PRODUTO)
+        )
+
     produto = {
         "id": repositorio.proximo_id(PREFIXO),
         "nome": nome,
         "unidade_medida": unidade_medida,
         "stock_minimo": stock_minimo,
+        "tipo_produto": tipo_produto,
         "ativo": True,
     }
 
@@ -202,14 +223,18 @@ def atualizar_produto(
     nome=None,
     unidade_medida=None,
     stock_minimo=None,
+    tipo_produto=None,
 ):
-    """Altera o nome, a unidade de medida ou o stock mínimo de um
-    produto existente.
+    """Altera o nome, a unidade de medida, o stock mínimo ou o tipo
+    de um produto existente.
 
     Um parâmetro a None significa não alterar (mesma convenção de
     propriedades.atualizar, unidades.atualizar e
     clientes.atualizar). 'nome' e 'unidade_medida' não podem ficar
     vazios — são obrigatórios, tal como em criar_produto().
+
+    'tipo_produto' (Fase 4, v1.4.0) segue a mesma convenção de None
+    = não alterar. Quando indicado, tem de ser um de TIPOS_PRODUTO.
     """
     produto = procurar_produto(produto_id)
 
@@ -247,6 +272,15 @@ def atualizar_produto(
             )
 
         campos["stock_minimo"] = stock_minimo
+
+    if tipo_produto is not None:
+        if tipo_produto not in TIPOS_PRODUTO:
+            raise ValueError(
+                "Tipo de produto inválido. Tem de ser um de: "
+                + ", ".join(TIPOS_PRODUTO)
+            )
+
+        campos["tipo_produto"] = tipo_produto
 
     if campos:
         repositorio.atualizar_produto(produto_id, campos)
@@ -1674,9 +1708,7 @@ def calcular_rol_lavanderia(unidade_id):
             produto_id = regra["produto_id"]
             quantidade = regra["quantidade"] * contagem
 
-            acumulado[produto_id] = (
-                acumulado.get(produto_id, 0) + quantidade
-            )
+            acumulado[produto_id] = acumulado.get(produto_id, 0) + quantidade
 
     # Separa em ativos e desativados, e resolve o nome de cada um.
     produtos_a_enviar = []
@@ -1816,6 +1848,7 @@ def gerar_rol_lavanderia_automatico(ocupacao, responsavel_id):
         )
 
     return requisicao
+
 
 def _contagem_com_extra(unidade):
     """Junta a contagem dos lugares (por tipo de cama) com a cama

@@ -1605,19 +1605,27 @@ def inserir_produto(produto):
     (a NULL na criação — só fazem sentido quando um produto é
     desativado com dependências ativas). Ver
     `estoque.desativar_produto`.
+
+    Passou a gravar também `tipo_produto` (Fase 4, v1.4.0) — um
+    ENUM com os valores 'consumivel', 'roupa_cama', 'roupa_banho'
+    ou 'outro'. Vem sempre preenchido do `estoque.criar_produto`
+    (default 'consumivel'). A coluna tem esse DEFAULT na base
+    também, por isso valores antigos nunca ficam NULL.
     """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor()
         cursor.execute(
             "INSERT INTO produtos (id, nome, unidade_medida, "
-            "stock_minimo, ativo, desativado_por_id, data_desativacao) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            "stock_minimo, tipo_produto, ativo, desativado_por_id, "
+            "data_desativacao) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 produto["id"],
                 produto["nome"],
                 produto["unidade_medida"],
                 produto["stock_minimo"],
+                produto.get("tipo_produto") or "consumivel",
                 produto["ativo"],
                 produto.get("desativado_por_id") or None,
                 produto.get("data_desativacao"),
@@ -1633,11 +1641,19 @@ def _normalizar_produto(linha):
     `desativado_por_id` quando vier NULL — mesma convenção de string
     vazia usada em todo o sistema para "sem valor" (aplicada às
     tabelas de ocupações e clientes desde a v1.1.0).
+
+    Repõe o default 'consumivel' em `tipo_produto` quando vier NULL
+    (Fase 4, v1.4.0). Não devia acontecer — a coluna tem NOT NULL
+    DEFAULT 'consumivel' na base — mas protege-se para o caso de
+    alguma linha ser mexida à mão sem esse campo.
     """
     linha["ativo"] = bool(linha["ativo"])
 
     if linha.get("desativado_por_id") is None:
         linha["desativado_por_id"] = ""
+
+    if linha.get("tipo_produto") is None:
+        linha["tipo_produto"] = "consumivel"
 
     return linha
 
@@ -1694,9 +1710,7 @@ def atualizar_produto(produto_id, campos):
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor()
-        cursor.execute(
-            f"UPDATE produtos SET {colunas} WHERE id = %s", valores
-        )
+        cursor.execute(f"UPDATE produtos SET {colunas} WHERE id = %s", valores)
         conexao.commit()
     finally:
         conexao.close()
@@ -2275,6 +2289,7 @@ def listar_itens_devolucao(devolucao_id=None, produto_id=None):
     return linhas
 
     # --- rol_lavanderia_regras -------------------------------------------
+
 
 def listar_regras_rol_lavanderia(tipo_cama=None):
     """Devolve as regras do Rol de Lavanderia, filtráveis por
