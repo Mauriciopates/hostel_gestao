@@ -32,6 +32,8 @@ CREATE TABLE `clientes` (
   `telefone` varchar(30) DEFAULT NULL,
   `morada` varchar(255) DEFAULT NULL,
   `nacionalidade` varchar(100) DEFAULT NULL,
+  `pais_emissor_documento` varchar(100) NOT NULL DEFAULT '',
+  `pais_residencia` varchar(100) NOT NULL DEFAULT '',
   `estado_civil` varchar(30) DEFAULT NULL,
   `data_nascimento` date DEFAULT NULL,
   `validade_documento` date DEFAULT NULL,
@@ -452,4 +454,4 @@ CREATE TABLE `unidades` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-09-15 15:03:26
+-- Dump completed on 2026-09-16  7:35:34

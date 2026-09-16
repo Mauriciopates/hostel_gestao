@@ -54,18 +54,28 @@ def criar(
     data_nascimento=None,
     validade_documento=None,
     contacto_emergencia="",
+    pais_emissor_documento="",
+    pais_residencia="",
 ):
     """Cria um cliente e grava-o imediatamente na base de dados.
 
     'regime' ("mensal" ou "airbnb") não fica guardado no registo:
     serve só para validacoes.validar_cliente() saber quais campos
-    são obrigatórios nesse regime (decisão 11, revista na decisão
-    de 26/08 — cada regime passou a ter o seu próprio conjunto de
-    obrigatórios, ver validar_cliente). O regime pertence ao
-    contrato, não ao cliente.
+    são obrigatórios nesse regime. O regime pertence ao formulário
+    que chamou (Novo Cliente Mensal / Novo Cliente Airbnb, ver
+    gui_clientes.py), não ao cliente.
 
-    Devolve o registo criado, com 'incompleto' a True se algum
-    campo não essencial (por regime) ficou por preencher.
+    'pais_emissor_documento' e 'pais_residencia' são novos
+    (16/09/2026) — só o regime Airbnb os exige (boletim de
+    alojamento); no regime mensal ficam sempre "".
+
+    REESTRUTURAÇÃO 16/09/2026: cada regime passou a ter o seu
+    próprio modal na GUI, cada um só com os campos que aquele
+    regime pede — por isso deixou de haver "campo em falta que não
+    bloqueia": ou o cliente tem tudo o que o regime exige, ou
+    `validacoes.validar_cliente` recusa. 'incompleto' fica sempre
+    False num cliente novo (só a anonimização volta a usá-lo, para
+    sinalizar que os dados pessoais foram apagados).
 
     Grava de imediato via repositório — mesma convenção de
     propriedades.criar, unidades.criar e responsaveis.criar, agora
@@ -83,9 +93,11 @@ def criar(
         "estado_civil": estado_civil.strip(),
         "data_nascimento": data_nascimento,
         "validade_documento": validade_documento,
+        "pais_emissor_documento": pais_emissor_documento.strip(),
+        "pais_residencia": pais_residencia.strip(),
     }
 
-    em_falta = validacoes.validar_cliente(candidato, regime)
+    validacoes.validar_cliente(candidato, regime)
 
     if _nif_pertence_a_outro_cliente(candidato["nif"]):
         raise ValueError(
@@ -106,7 +118,9 @@ def criar(
         "data_nascimento": data_nascimento,
         "validade_documento": validade_documento,
         "contacto_emergencia": contacto_emergencia.strip(),
-        "incompleto": bool(em_falta),
+        "pais_emissor_documento": candidato["pais_emissor_documento"],
+        "pais_residencia": candidato["pais_residencia"],
+        "incompleto": False,
         "anonimizado": False,
         "data_anonimizado": None,
         "responsavel_anonimizado_id": "",
@@ -158,6 +172,8 @@ def atualizar(
     data_nascimento=None,
     validade_documento=None,
     contacto_emergencia=None,
+    pais_emissor_documento=None,
+    pais_residencia=None,
 ):
     """Altera os dados de um cliente existente.
 
@@ -189,6 +205,16 @@ def atualizar(
     os dois passaram a obrigatórios (decisão de 26/08), um cliente
     antigo que ainda não os tenha preenchido só volta a poder ser
     atualizado depois de os fornecer nesta mesma chamada.
+
+    'pais_emissor_documento' e 'pais_residencia' (16/09/2026) seguem
+    a mesma convenção de None = não alterar. ATENÇÃO: um cliente
+    Airbnb criado antes desta data não tem estes dois campos
+    preenchidos — como `EditarClienteModal` ainda não tem estes
+    campos no formulário (só `NovoClienteAirbnbModal` tem), editar
+    um desses clientes antigos com regime="airbnb" continua a
+    exigi-los (herdados do registo, continuam vazios) e a chamada
+    falha. Fica registado como pendência — não bloqueia clientes
+    Mensais nem clientes Airbnb criados já com os campos novos.
 
     Devolve o registo atualizado, já com os campos novos aplicados
     localmente (evita um SELECT extra a seguir ao UPDATE).
@@ -244,10 +270,20 @@ def atualizar(
             if validade_documento is not None
             else cliente["validade_documento"]
         ),
+        "pais_emissor_documento": (
+            pais_emissor_documento.strip()
+            if pais_emissor_documento is not None
+            else cliente["pais_emissor_documento"]
+        ),
+        "pais_residencia": (
+            pais_residencia.strip()
+            if pais_residencia is not None
+            else cliente["pais_residencia"]
+        ),
     }
 
     regime_para_validar = regime if regime is not None else "airbnb"
-    em_falta = validacoes.validar_cliente(candidato, regime_para_validar)
+    validacoes.validar_cliente(candidato, regime_para_validar)
 
     if (
         regime_para_validar != "mensal"
@@ -271,7 +307,9 @@ def atualizar(
         "morada": candidato["morada"],
         "nacionalidade": candidato["nacionalidade"],
         "estado_civil": candidato["estado_civil"],
-        "incompleto": bool(em_falta),
+        "pais_emissor_documento": candidato["pais_emissor_documento"],
+        "pais_residencia": candidato["pais_residencia"],
+        "incompleto": False,
     }
 
     if data_nascimento is not None:

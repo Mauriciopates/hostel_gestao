@@ -74,24 +74,27 @@ ou 0 se o resto for 0 ou 1).
 def validar_cliente(dados, regime):
     """Valida os dados de um cliente para o regime indicado.
 
-    Aplica a decisão 11 (o essencial bloqueia, o resto avisa), mas
-    desde a decisão de 26/08 (ponto 2) o que conta como essencial
-    passa a depender do regime:
+    REESTRUTURAÇÃO 16/09/2026 (dois modais dedicados na GUI, um por
+    regime — "Novo Cliente Mensal" / "Novo Cliente Airbnb", escolhidos
+    num seletor antes do formulário): cada regime passou a pedir só
+    os campos que realmente precisa, por isso deixou de fazer sentido
+    o conceito antigo de "campo em falta que não bloqueia" (decisão
+    11) — o que é obrigatório bloqueia com ValueError, o resto nem
+    chega a existir no formulário daquele regime. Já não há aqui
+    noção de registo "incompleto".
 
-    - Airbnb: nome, tipo de documento, número de documento,
-      validade do documento, data de nascimento e nacionalidade são
-      obrigatórios. NIF, email, telefone, morada e contacto de
-      emergência ficam opcionais (nunca marcam incompleto, exceto
-      email/telefone/morada).
-    - Mensal: nome, tipo de documento, número de documento,
-      validade do documento, data de nascimento, NIF, morada e
-      estado civil são obrigatórios. Email, telefone e
-      nacionalidade ficam opcionais.
+    - Mensal: tudo obrigatório, exceto email e contacto de
+      emergência — nome, tipo de documento, número de documento,
+      NIF, morada, estado civil, nacionalidade, telefone, data de
+      nascimento e validade do documento.
+    - Airbnb: nome, nacionalidade, data de nascimento, tipo de
+      documento, número de documento, país emissor do documento e
+      país de residência — só o que o boletim de alojamento exige.
+      NIF, morada, estado civil, validade do documento e telefone
+      não fazem parte deste regime.
 
-    Devolve a lista de campos em falta que não impedem a gravação —
-    se não estiver vazia, o registo é marcado como incompleto.
-
-    Lança ValueError no primeiro campo obrigatório em falta.
+    Lança ValueError no primeiro campo obrigatório em falta ou
+    inválido. Não devolve nada.
     """
     if regime not in TIPOS_UNIDADE:
         raise ValueError(f"Regime desconhecido: {regime}")
@@ -110,13 +113,16 @@ def validar_cliente(dados, regime):
     if not dados.get("numero_documento", "").strip():
         raise ValueError("O número do documento é obrigatório.")
 
-    if dados.get("validade_documento") is None:
-        raise ValueError("A validade do documento é obrigatória.")
+    if not dados.get("nacionalidade", "").strip():
+        raise ValueError("A nacionalidade é obrigatória.")
 
     if dados.get("data_nascimento") is None:
         raise ValueError("A data de nascimento é obrigatória.")
 
     if regime == "mensal":
+        if dados.get("validade_documento") is None:
+            raise ValueError("A validade do documento é obrigatória.")
+
         nif = dados.get("nif", "").strip()
         if not nif:
             raise ValueError("O NIF é obrigatório no regime mensal.")
@@ -139,22 +145,20 @@ def validar_cliente(dados, regime):
         if estado_civil not in TIPOS_ESTADO_CIVIL:
             raise ValueError(f"Estado civil inválido: {estado_civil}")
 
-        em_falta = []
-        for campo in ("email", "telefone", "nacionalidade"):
-            if not dados.get(campo, "").strip():
-                em_falta.append(campo)
+        if not dados.get("telefone", "").strip():
+            raise ValueError("O telefone é obrigatório no regime mensal.")
     else:
-        if not dados.get("nacionalidade", "").strip():
+        if not dados.get("pais_emissor_documento", "").strip():
             raise ValueError(
-                "A nacionalidade é obrigatória no regime Airbnb."
+                "O país emissor do documento é obrigatório no "
+                "regime Airbnb."
             )
 
-        em_falta = []
-        for campo in ("email", "telefone", "morada"):
-            if not dados.get(campo, "").strip():
-                em_falta.append(campo)
-
-    return em_falta
+        if not dados.get("pais_residencia", "").strip():
+            raise ValueError(
+                "O país de residência é obrigatório no regime "
+                "Airbnb."
+            )
 
 def documento_expira_durante_estadia(validade, data_inicio, data_fim):
     """Verifica se o documento caduca durante a permanência.

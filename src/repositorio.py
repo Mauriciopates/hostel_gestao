@@ -1060,8 +1060,13 @@ def inserir_cliente(cliente):
     construía para a estrutura em memória (id, nome, tipo_documento,
     numero_documento, nif, email, telefone, morada, nacionalidade,
     estado_civil, data_nascimento, validade_documento,
-    contacto_emergencia, incompleto, anonimizado, data_anonimizado,
+    contacto_emergencia, pais_emissor_documento, pais_residencia,
+    incompleto, anonimizado, data_anonimizado,
     responsavel_anonimizado_id, ativo).
+
+    'pais_emissor_documento' e 'pais_residencia' são novas
+    (16/09/2026, exigidas só no regime Airbnb) — exige o
+    ALTER TABLE clientes correspondente (ver aviso separado).
     """
     conexao = obter_conexao()
     try:
@@ -1071,10 +1076,11 @@ def inserir_cliente(cliente):
             "id, nome, tipo_documento, numero_documento, nif, email, "
             "telefone, morada, nacionalidade, estado_civil, "
             "data_nascimento, validade_documento, contacto_emergencia, "
+            "pais_emissor_documento, pais_residencia, "
             "incompleto, anonimizado, data_anonimizado, "
             "responsavel_anonimizado_id, ativo) "
             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
-            "%s, %s, %s, %s, %s, %s)",
+            "%s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 cliente["id"],
                 cliente["nome"],
@@ -1089,6 +1095,8 @@ def inserir_cliente(cliente):
                 cliente["data_nascimento"],
                 cliente["validade_documento"],
                 cliente["contacto_emergencia"],
+                cliente["pais_emissor_documento"],
+                cliente["pais_residencia"],
                 cliente["incompleto"],
                 cliente["anonimizado"],
                 cliente["data_anonimizado"],

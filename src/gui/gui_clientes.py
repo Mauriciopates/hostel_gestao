@@ -1,7 +1,7 @@
 """Ecrã "Clientes": lista os clientes (mensais e Airbnb) em tabela
 padrão — a mesma estrutura da Gestão de Propriedades — com o estado
-de cada um (ativo/inativo, incompleto, anonimizado) e um botão
-"Gerir" por linha que abre o popup com as ações.
+de cada um (ativo/inativo/anonimizado) e um botão "Gerir" por linha
+que abre o popup com as ações.
 
 REESTRUTURAÇÃO 13/09/2026 — decisão do aluno, mockup HTML aprovado
 antes de codar. A lista deixou de desenhar cartões empilhados e
@@ -40,37 +40,38 @@ aplicadas ao popup novo:
    para dar uma pausa antes do último botão.
 
 Decisões anteriores que continuam em vigor (do ecrã antigo,
-07/09/2026):
+07/09/2026, ATUALIZADAS pela reestruturação de 16/09/2026 — ver
+secção própria mais abaixo):
 
 1. 'regime' NÃO é campo do cliente (clientes.criar/atualizar já não
    o guardam) — serve só para saber, no momento da chamada, que
-   conjunto de campos é obrigatório (decisão de 26/08: mensal exige
-   NIF/morada/estado civil, Airbnb exige nacionalidade; nome, tipo e
-   número de documento, data de nascimento e validade do documento
-   são sempre obrigatórios, nos dois regimes). Por isso o formulário
-   tem sempre um seletor "Regime" (Mensal/Airbnb) — mesma posição do
-   CLI, logo a seguir ao número de documento — mesmo ao editar, onde
-   o cliente já existe sem regime gravado: o seletor arranca em
-   "Mensal" se o cliente já tiver NIF preenchido (sinal de que foi
-   criado nesse regime), senão "Airbnb" — só um valor por omissão,
-   sempre alterável antes de guardar.
+   conjunto de campos é obrigatório. Desde 16/09/2026 a escolha do
+   regime já não é um seletor dentro de um formulário único — é um
+   popup prévio (`_SeletorRegimeClienteModal`) que abre já o modal
+   certo (`NovoClienteMensalModal`/`NovoClienteAirbnbModal`). O
+   `EditarClienteModal` é a EXCEÇÃO: continua com o formulário único
+   de sempre e o seletor "Regime" lá dentro (mesma posição do CLI,
+   logo a seguir ao número de documento), porque a edição não foi
+   repartida por regime nesta entrega — arranca em "Mensal" se o
+   cliente já tiver NIF preenchido, senão "Airbnb", só um valor por
+   omissão, sempre alterável antes de guardar.
 
 2. Todos os campos sempre visíveis, obrigatoriedade só validada ao
    submeter — mesma convenção fixada em Novo Contrato Mensal (parte
    3), reforçada em Propriedades e Unidades (parte 4).
 
-3. Formulário com muitos campos (13, mais o seletor de Regime) — em
-   vez do padrão "rótulo em cima, campo em baixo" dos modais mais
-   simples de Propriedades e Unidades, uso o mesmo padrão do cartão
-   de Novo Contrato Mensal (grelha rótulo-à-esquerda/campo-à-
-   direita, dentro de um CTkScrollableFrame, rodapé de botões fixo
-   por fora) — cabe melhor num modal desta dimensão.
+3. Cada modal usa o mesmo padrão visual (grelha rótulo-à-esquerda/
+   campo-à-direita, dentro de um CTkScrollableFrame, rodapé de
+   botões fixo por fora — o mesmo do cartão de Novo Contrato Mensal),
+   mas desde 16/09/2026 cada um só tem os campos do seu regime: o
+   `_FormularioCliente` deixou de construir uma lista fixa de 13
+   campos + seletor — é só a moldura (título, geometria, cartão,
+   rodapé) e os helpers de campo; cada subclasse decide os seus.
 
 4. Erro e sucesso sempre por popup nativo (componentes.mostrar_erro/
-   mostrar_sucesso), convenção já fixada nas partes 3 e 4. Sucesso
-   ao criar inclui o aviso de incompleto, quando aplicável (mesmo
-   texto que o CLI imprime): "Cliente criado com sucesso: CLI-XXX
-   (incompleto — verifica os campos em falta)".
+   mostrar_sucesso), convenção já fixada nas partes 3 e 4. Desde
+   16/09/2026 já não existe o aviso de "incompleto" na mensagem de
+   sucesso — ver a secção "incompleto" mais abaixo.
 
 5. Anonimização — operação irreversível (decisão 8, RGPD secção 6):
    modal próprio (_AnonimizarModal), mesmo padrão do
@@ -84,10 +85,9 @@ Decisões anteriores que continuam em vigor (do ecrã antigo,
    (clientes.atualizar/reativar recusam) — por isso o popup de um
    cliente anonimizado não mostra nenhum botão de ação, só o aviso.
 
-7. Filtro de completude (Todos/Incompletos/Completos), ao lado de
-   "Mostrar inativos" — mesmas duas opções de filtro que
-   `_listar_clientes` já tem no CLI (decisão 11: tem de existir
-   listagem de incompletos, senão o aviso não produz efeito).
+7. (Removida em 16/09/2026 — ver secção "incompleto" mais abaixo. O
+   filtro de completude ao lado de "Mostrar inativos" deixou de
+   existir.)
 
 8. Email em formato simples validado (tem de ter um nome, um "@" e
    um domínio com pelo menos um ponto), só no ecrã Clientes — a
@@ -125,6 +125,52 @@ quando abertos de dentro de um formulário de contrato/reserva:
   `_recarregar` se existir, senão `_recarregar_clientes`. O
   `EditarClienteModal` ganhou a mesma defesa por consistência,
   mesmo não sendo aberto a partir dos contratos hoje.
+
+REESTRUTURAÇÃO 16/09/2026 — decisão do aluno, mockup HTML aprovado
+("perfeito no modal novo cliente também coloque como nome completo
+ok validado achei perfeito"). Fase 3, checklist "Alternância de
+campos no formulário de Cliente (Airbnb vs Mensal)":
+
+1. "+ Novo Cliente" deixou de abrir um formulário único com um
+   seletor "Regime" lá dentro. Abre agora `_SeletorRegimeClienteModal`
+   — dois cartões clicáveis (mesmo padrão do "O que pretende criar?"
+   do módulo de Stock, `componentes.tornar_cliclavel`) — que já abre
+   o modal certo: `NovoClienteMensalModal` (620x680, 12 campos, todos
+   obrigatórios exceto Email e Contacto de emergência — Nacionalidade
+   e Telefone passaram a obrigatórios, deixaram de ser opcionais) ou
+   `NovoClienteAirbnbModal` (580x460, só 7 campos, todos
+   obrigatórios: nome, nacionalidade, data de nascimento, tipo/
+   número de documento, país emissor do documento, país de
+   residência).
+
+2. Campos novos (só Airbnb): 'pais_emissor_documento' e
+   'pais_residencia' — texto livre, sem lista de países pré-definida
+   (a Nacionalidade continua com o seletor de sempre). Exigem
+   ALTER TABLE clientes (ver aviso em separado) — colunas novas em
+   `repositorio.inserir_cliente`, parâmetros novos em
+   `clientes.criar`/`atualizar`.
+
+3. O conceito de "incompleto" (campos em falta que não bloqueavam a
+   gravação, decisão 11 antiga) foi DESCARTADO nesta reestruturação
+   — decisão do aluno: como cada modal já só pede o que o regime
+   exige, um cliente novo nunca fica "a meio". `validacoes.
+   validar_cliente` deixou de devolver uma lista de em_falta — só
+   bloqueia (ValueError). `clientes.criar`/`atualizar` gravam sempre
+   `incompleto=False` num cliente novo/atualizado (a coluna
+   'incompleto' continua a existir na BD e `clientes.anonimizar`
+   continua a marcá-la True — esse uso é outro, sinaliza dados
+   apagados por RGPD, não foi tocado). O filtro "Todos/Incompletos/
+   Completos" e o chip "incompleto" na tabela foram removidos do
+   ecrã — deixaram de ter efeito.
+
+4. `EditarClienteModal` NÃO foi repartido por regime nesta entrega
+   (decisão do aluno: "fico só com Novo Cliente nesta entrega") —
+   continua com o formulário único de sempre, sem os dois campos de
+   país. PENDÊNCIA conhecida: um cliente Airbnb criado antes desta
+   data (sem país emissor/residência preenchidos) só volta a poder
+   ser editado depois de esses dois campos serem preenchidos nalgum
+   sítio — hoje não há onde os preencher no Editar. Não bloqueia
+   clientes Mensais nem Airbnb já criados com os campos novos.
 """
 
 import datetime
@@ -250,8 +296,8 @@ def _email_valido(email):
 def _recarregar_tela_lista(tela_lista):
     """Recarrega a lista por trás de um modal de cliente.
 
-    O `NovoClienteModal` e o `EditarClienteModal` são abertos em
-    dois contextos diferentes:
+    `NovoClienteMensalModal`, `NovoClienteAirbnbModal` e
+    `EditarClienteModal` são abertos em dois contextos diferentes:
 
     - A partir da `ListaClientes` (o ecrã "Clientes", botão
       "+ Novo Cliente" e "Gerir → Editar") — a `tela_lista` é uma
@@ -297,7 +343,7 @@ class ListaClientes(ctk.CTkFrame):
             corner_radius=tema.RAIO_BOTAO,
             fg_color=tema.VERDE,
             hover_color=tema.VERDE,
-            command=lambda: NovoClienteModal(self),
+            command=lambda: _SeletorRegimeClienteModal(self),
         ).pack(side="left")
 
         barra = ctk.CTkFrame(self, fg_color=tema.COR_FUNDO)
@@ -313,15 +359,6 @@ class ListaClientes(ctk.CTkFrame):
             font=ctk.CTkFont(size=11),
         ).pack(side="right", padx=(12, 0))
 
-        self.combo_completude = ctk.CTkOptionMenu(
-            barra,
-            values=["Todos", "Incompletos", "Completos"],
-            command=lambda _valor: self._recarregar(),
-            width=130,
-        )
-        self.combo_completude.set("Todos")
-        self.combo_completude.pack(side="right")
-
         self.tabela = componentes.Tabela(
             self,
             colunas=_COLUNAS_CLIENTE,
@@ -335,23 +372,18 @@ class ListaClientes(ctk.CTkFrame):
 
     # -- carregamento / atualização ------------------------------------
 
-    def _incompleto_selecionado(self):
-        return {"Todos": None, "Incompletos": True, "Completos": False}[
-            self.combo_completude.get()
-        ]
-
     def _recarregar(self):
         """Limpa e volta a desenhar a tabela — chamada na abertura do
         ecrã, ao mexer nos filtros, e depois de qualquer criação/
         edição/desativação/reativação/anonimização (mesmo princípio
         de ListaPropriedades._recarregar).
+
+        REESTRUTURAÇÃO 16/09/2026: já não filtra por "incompleto" —
+        ver docstring do módulo e de `validacoes.validar_cliente`.
         """
         self.tabela.limpar()
 
-        lista = clientes.listar(
-            incluir_inativos=self.mostrar_inativos.get(),
-            incompleto=self._incompleto_selecionado(),
-        )
+        lista = clientes.listar(incluir_inativos=self.mostrar_inativos.get())
 
         if not lista:
             self.tabela.mostrar_vazio()
@@ -441,12 +473,6 @@ class ListaClientes(ctk.CTkFrame):
                 "inativo",
                 tema.CINZA_INDISPONIVEL,
                 tema.TEXTO_INDISPONIVEL,
-            )
-        elif cliente["incompleto"]:
-            chip_texto, chip_fundo, chip_cor = (
-                "incompleto",
-                tema.AMARELO_AVISO,
-                tema.TEXTO_AVISO,
             )
         else:
             chip_texto, chip_fundo, chip_cor = (
@@ -708,23 +734,122 @@ class _AcoesClienteModal(ctk.CTkToplevel):
         ).pack(fill="x", padx=20, pady=3)
 
 
-class _FormularioCliente(ctk.CTkToplevel):
-    """Base comum a NovoClienteModal e EditarClienteModal — monta os
-    13 campos + o seletor de Regime, sempre na mesma ordem do CLI
-    (_criar_cliente/_atualizar_cliente). As duas subclasses só
-    diferem no título, na pré-preenchida dos campos e no que
-    acontece ao guardar.
-
-    Inalterada desde 06/09/2026, quando foi validada por mockup e
-    por um teste de submissão real.
+class _SeletorRegimeClienteModal(ctk.CTkToplevel):
+    """Popup de escolha, aberto pelo "+ Novo Cliente" — dois cartões
+    clicáveis (Cliente Mensal / Cliente Airbnb), mesmo padrão do
+    seletor "O que pretende criar?" do módulo de Stock
+    (NovaRequisicaoModal). Substitui o antigo seletor "Regime" de
+    dentro do formulário único (decisão do aluno, mockup HTML
+    aprovado, 16/09/2026): cada regime passou a ter o seu próprio
+    modal, com só os campos que exige — ver `NovoClienteMensalModal`
+    e `NovoClienteAirbnbModal`.
     """
 
-    def __init__(self, tela_lista, titulo):
+    def __init__(self, tela_lista):
+        super().__init__(tela_lista)
+        self.tela_lista = tela_lista
+
+        largura, altura = 380, 260
+        self.title("Novo Cliente")
+        self.geometry(f"{largura}x{altura}")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_lista)
+        _colocar_no_topo(self)
+
+        ctk.CTkLabel(
+            self,
+            text="Que tipo de cliente?",
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=15, weight="bold"),
+        ).pack(anchor="w", padx=20, pady=(20, 14))
+
+        self._cartao(
+            "Cliente Mensal",
+            "Contrato de arrendamento — formulário completo (NIF, "
+            "morada, estado civil, etc.).",
+            self._abrir_mensal,
+        )
+        self._cartao(
+            "Cliente Airbnb",
+            "Reserva de curta duração — só os dados exigidos para o "
+            "boletim de alojamento.",
+            self._abrir_airbnb,
+        )
+
+        ctk.CTkButton(
+            self,
+            text="Cancelar",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(fill="x", padx=20, pady=(6, 20))
+
+    def _cartao(self, titulo, descricao, ao_clicar):
+        cartao = ctk.CTkFrame(
+            self,
+            corner_radius=tema.RAIO_CARTAO,
+            border_width=1,
+            border_color=tema.AZUL_PRINCIPAL,
+            fg_color=tema.COR_FUNDO,
+        )
+        cartao.pack(fill="x", padx=20, pady=6)
+
+        ctk.CTkLabel(
+            cartao,
+            text=titulo,
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            anchor="w",
+        ).pack(fill="x", padx=14, pady=(12, 2))
+        ctk.CTkLabel(
+            cartao,
+            text=descricao,
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+            anchor="w",
+            justify="left",
+            wraplength=300,
+        ).pack(fill="x", padx=14, pady=(0, 12))
+
+        componentes.tornar_cliclavel(cartao, ao_clicar)
+
+    def _abrir_mensal(self):
+        self.destroy()
+        NovoClienteMensalModal(self.tela_lista)
+
+    def _abrir_airbnb(self):
+        self.destroy()
+        NovoClienteAirbnbModal(self.tela_lista)
+
+
+class _FormularioCliente(ctk.CTkToplevel):
+    """Base comum aos modais de cliente — monta a moldura (título,
+    geometria, cartão com CTkScrollableFrame, rodapé Cancelar/
+    Guardar) e os helpers de campo (`_campo_texto`, `_campo_dropdown`,
+    `_campo_nacionalidade`). Cada subclasse constrói os SEUS campos
+    depois de `super().__init__(...)`, na ordem que quiser.
+
+    REESTRUTURAÇÃO 16/09/2026 (decisão do aluno, mockup HTML
+    aprovado): antes desenhava sempre os mesmos 13 campos + seletor
+    de Regime. Passou a existir um seletor prévio (Mensal/Airbnb, ver
+    `_SeletorRegimeClienteModal`) que já abre o modal certo —
+    `NovoClienteMensalModal` e `NovoClienteAirbnbModal` têm cada um o
+    seu conjunto de campos, por isso esta base deixou de impor uma
+    lista fixa. `EditarClienteModal` continua com o conjunto completo
+    de sempre (ver a própria docstring dessa classe).
+    """
+
+    def __init__(self, tela_lista, titulo, largura=620, altura=700):
         super().__init__(tela_lista)
         self.tela_lista = tela_lista
 
         self.title(titulo)
-        self.geometry("620x700")
+        self.geometry(f"{largura}x{altura}")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
         self.transient(tela_lista)
@@ -754,37 +879,6 @@ class _FormularioCliente(ctk.CTkToplevel):
         self.corpo.grid_columnconfigure(0, weight=0)
         self.corpo.grid_columnconfigure(1, weight=1)
         self._linha_atual = 0
-
-        self.campo_nome = self._campo_texto("Nome *")
-        self.combo_tipo_documento = self._campo_dropdown(
-            "Tipo de documento *", validacoes.TIPOS_DOCUMENTO
-        )
-        self.campo_numero_documento = self._campo_texto(
-            "Número de documento *"
-        )
-        self.combo_regime = self._campo_dropdown(
-            "Regime (define a obrigatoriedade abaixo) *",
-            ["Mensal", "Airbnb"],
-        )
-        self.campo_nif = self._campo_texto("NIF")
-        self.campo_email = self._campo_texto("Email")
-        self.campo_telefone = self._campo_texto("Telefone")
-        self.campo_morada = self._campo_texto("Morada")
-        self.campo_nacionalidade, self.combo_nacionalidade = (
-            self._campo_nacionalidade()
-        )
-        self.combo_estado_civil = self._campo_dropdown(
-            "Estado civil", validacoes.TIPOS_ESTADO_CIVIL
-        )
-        self.campo_data_nascimento = self._campo_texto(
-            "Data de nascimento *", placeholder="dd/mm/aaaa"
-        )
-        self.campo_validade_documento = self._campo_texto(
-            "Validade do documento *", placeholder="dd/mm/aaaa"
-        )
-        self.campo_contacto_emergencia = self._campo_texto(
-            "Contacto de emergência"
-        )
 
         rodape = ctk.CTkFrame(self, fg_color="transparent")
         rodape.pack(fill="x", padx=20, pady=16, side="bottom")
@@ -891,16 +985,273 @@ class _FormularioCliente(ctk.CTkToplevel):
             campo_entrada.insert(0, valor)
             campo_entrada.grid_remove()
 
-    # -- leitura ----------------------------------------------------------
+    # -- submissão ----------------------------------------------------
+
+    def _guardar(self):
+        raise NotImplementedError
+
+
+class NovoClienteMensalModal(_FormularioCliente):
+    """Modal de criação de um cliente Mensal.
+
+    REGRA 16/09/2026 (aluno): tudo obrigatório, exceto Email e
+    Contacto de emergência — inclui Nacionalidade e Telefone, que
+    antes (decisão de 26/08) eram opcionais no regime mensal e
+    passaram a obrigatórios. Ver `validacoes.validar_cliente`.
+    """
+
+    def __init__(self, tela_lista):
+        super().__init__(
+            tela_lista, "Novo Cliente Mensal", largura=620, altura=680
+        )
+
+        self.campo_nome = self._campo_texto("Nome completo *")
+        self.combo_tipo_documento = self._campo_dropdown(
+            "Tipo de documento *", validacoes.TIPOS_DOCUMENTO
+        )
+        self.campo_numero_documento = self._campo_texto(
+            "Número de documento *"
+        )
+        self.campo_nif = self._campo_texto("NIF *")
+        self.campo_morada = self._campo_texto("Morada *")
+        self.combo_estado_civil = self._campo_dropdown(
+            "Estado civil *", validacoes.TIPOS_ESTADO_CIVIL
+        )
+        self.campo_nacionalidade, self.combo_nacionalidade = (
+            self._campo_nacionalidade()
+        )
+        self.campo_telefone = self._campo_texto("Telefone *")
+        self.campo_data_nascimento = self._campo_texto(
+            "Data de nascimento *", placeholder="dd/mm/aaaa"
+        )
+        self.campo_validade_documento = self._campo_texto(
+            "Validade do documento *", placeholder="dd/mm/aaaa"
+        )
+        self.campo_email = self._campo_texto("Email")
+        self.campo_contacto_emergencia = self._campo_texto(
+            "Contacto de emergência"
+        )
+
+    def _guardar(self):
+        try:
+            data_nascimento = _ler_data(
+                self.campo_data_nascimento.get(), "Data de nascimento"
+            )
+            validade_documento = _ler_data(
+                self.campo_validade_documento.get(),
+                "Validade do documento",
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        email = self.campo_email.get().strip()
+        if email and not _email_valido(email):
+            componentes.mostrar_erro(
+                "Email em formato inválido (esperado algo como "
+                "nome@dominio.com)."
+            )
+            return
+
+        try:
+            cliente = clientes.criar(
+                self.campo_nome.get(),
+                self.combo_tipo_documento.get(),
+                self.campo_numero_documento.get(),
+                "mensal",
+                nif=self.campo_nif.get(),
+                email=email,
+                telefone=self.campo_telefone.get(),
+                morada=self.campo_morada.get(),
+                nacionalidade=self.campo_nacionalidade.get(),
+                estado_civil=self.combo_estado_civil.get(),
+                data_nascimento=data_nascimento,
+                validade_documento=validade_documento,
+                contacto_emergencia=self.campo_contacto_emergencia.get(),
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        componentes.mostrar_sucesso(
+            f"Cliente criado com sucesso: {cliente['id']}"
+        )
+        self.destroy()
+        _recarregar_tela_lista(self.tela_lista)
+
+
+class NovoClienteAirbnbModal(_FormularioCliente):
+    """Modal de criação de um cliente Airbnb.
+
+    REGRA 16/09/2026 (aluno): só os 7 campos que o boletim de
+    alojamento exige — nome, nacionalidade, data de nascimento, tipo/
+    número de documento, país emissor do documento e país de
+    residência, todos obrigatórios. NIF, morada, estado civil,
+    validade do documento, telefone, email e contacto de emergência
+    não fazem parte deste regime — ficam de fora do modal.
+
+    'País emissor do documento' e 'País de residência' são texto
+    livre (sem lista de países pré-definida, ao contrário da
+    Nacionalidade) — simplificação deliberada para não duplicar uma
+    segunda lista de países só para estes dois campos.
+    """
+
+    def __init__(self, tela_lista):
+        super().__init__(
+            tela_lista, "Novo Cliente Airbnb", largura=580, altura=460
+        )
+
+        self.campo_nome = self._campo_texto("Nome completo *")
+        self.campo_nacionalidade, self.combo_nacionalidade = (
+            self._campo_nacionalidade()
+        )
+        self.campo_data_nascimento = self._campo_texto(
+            "Data de nascimento *", placeholder="dd/mm/aaaa"
+        )
+        self.combo_tipo_documento = self._campo_dropdown(
+            "Tipo de documento *", validacoes.TIPOS_DOCUMENTO
+        )
+        self.campo_numero_documento = self._campo_texto(
+            "Número de documento *"
+        )
+        self.campo_pais_emissor = self._campo_texto(
+            "País emissor do documento *", placeholder="ex.: Portugal"
+        )
+        self.campo_pais_residencia = self._campo_texto(
+            "País de residência *", placeholder="ex.: Portugal"
+        )
+
+    def _guardar(self):
+        try:
+            data_nascimento = _ler_data(
+                self.campo_data_nascimento.get(), "Data de nascimento"
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        try:
+            cliente = clientes.criar(
+                self.campo_nome.get(),
+                self.combo_tipo_documento.get(),
+                self.campo_numero_documento.get(),
+                "airbnb",
+                nacionalidade=self.campo_nacionalidade.get(),
+                data_nascimento=data_nascimento,
+                pais_emissor_documento=self.campo_pais_emissor.get(),
+                pais_residencia=self.campo_pais_residencia.get(),
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        componentes.mostrar_sucesso(
+            f"Cliente criado com sucesso: {cliente['id']}"
+        )
+        self.destroy()
+        _recarregar_tela_lista(self.tela_lista)
+
+
+class EditarClienteModal(_FormularioCliente):
+    """Modal de edição de um cliente existente — os mesmos 13 campos
+    + seletor de Regime de sempre (formulário único, inalterado
+    desde 06/09/2026), pré-preenchidos.
+
+    ÂMBITO 16/09/2026: a divisão em dois modais dedicados
+    (`NovoClienteMensalModal`/`NovoClienteAirbnbModal`) ficou só na
+    criação — a edição continua com o formulário único, por decisão
+    do aluno ("fico só com Novo Cliente nesta entrega"). Por isso
+    NÃO tem campos de País emissor do documento / País de
+    residência: ficam inalterados ao editar (ver
+    `clientes.atualizar`). Um cliente Airbnb criado só depois desta
+    data já os tem gravados; um cliente Airbnb anterior a esta data
+    continua sem eles preenchidos, e `validacoes.validar_cliente` vai
+    recusar a edição desse cliente específico enquanto os dois
+    campos não tiverem conteúdo — pendência registada, não bloqueia
+    clientes Mensais nem Airbnb já criados com os campos novos.
+
+    'Regime' não vem gravado no cliente (ver docstring de
+    `clientes.criar`) — arranca em "Mensal" se o cliente já tiver
+    NIF preenchido (sinal de que foi criado nesse regime), senão
+    "Airbnb". É só um valor por omissão: o utilizador pode trocá-lo
+    antes de guardar, se o regime real for outro.
+    """
+
+    def __init__(self, tela_lista, cliente):
+        super().__init__(
+            tela_lista,
+            f"Editar Cliente — {cliente['nome']}",
+            largura=620,
+            altura=700,
+        )
+        self.cliente = cliente
+
+        self.campo_nome = self._campo_texto("Nome completo *")
+        self.combo_tipo_documento = self._campo_dropdown(
+            "Tipo de documento *", validacoes.TIPOS_DOCUMENTO
+        )
+        self.campo_numero_documento = self._campo_texto(
+            "Número de documento *"
+        )
+        self.combo_regime = self._campo_dropdown(
+            "Regime (define a obrigatoriedade abaixo) *",
+            ["Mensal", "Airbnb"],
+        )
+        self.campo_nif = self._campo_texto("NIF")
+        self.campo_email = self._campo_texto("Email")
+        self.campo_telefone = self._campo_texto("Telefone")
+        self.campo_morada = self._campo_texto("Morada")
+        self.campo_nacionalidade, self.combo_nacionalidade = (
+            self._campo_nacionalidade()
+        )
+        self.combo_estado_civil = self._campo_dropdown(
+            "Estado civil", validacoes.TIPOS_ESTADO_CIVIL
+        )
+        self.campo_data_nascimento = self._campo_texto(
+            "Data de nascimento *", placeholder="dd/mm/aaaa"
+        )
+        self.campo_validade_documento = self._campo_texto(
+            "Validade do documento *", placeholder="dd/mm/aaaa"
+        )
+        self.campo_contacto_emergencia = self._campo_texto(
+            "Contacto de emergência"
+        )
+
+        self.campo_nome.insert(0, cliente["nome"])
+        self.combo_tipo_documento.set(cliente["tipo_documento"])
+        self.campo_numero_documento.insert(0, cliente["numero_documento"])
+        self.combo_regime.set("Mensal" if cliente["nif"] else "Airbnb")
+        self.campo_nif.insert(0, cliente["nif"])
+        self.campo_email.insert(0, cliente["email"])
+        self.campo_telefone.insert(0, cliente["telefone"])
+        self.campo_morada.insert(0, cliente["morada"])
+        self.campo_nacionalidade.insert(0, cliente["nacionalidade"])
+        if cliente["nacionalidade"] in NACIONALIDADES:
+            self.combo_nacionalidade.set(cliente["nacionalidade"])
+            self.campo_nacionalidade.grid_remove()
+        elif cliente["nacionalidade"]:
+            self.combo_nacionalidade.set(OUTRA_NACIONALIDADE)
+            self.campo_nacionalidade.grid()
+        if cliente["estado_civil"]:
+            self.combo_estado_civil.set(cliente["estado_civil"])
+        self.campo_data_nascimento.insert(
+            0, _formatar_data(cliente["data_nascimento"])
+        )
+        self.campo_validade_documento.insert(
+            0, _formatar_data(cliente["validade_documento"])
+        )
+        self.campo_contacto_emergencia.insert(
+            0, cliente["contacto_emergencia"]
+        )
 
     def _regime_selecionado(self):
         return "mensal" if self.combo_regime.get() == "Mensal" else "airbnb"
 
     def _ler_campos_comuns(self):
-        """Lê e valida (formato, não regra de negócio) os campos
-        comuns a criar e atualizar. As datas são as únicas que podem
-        levantar ValueError aqui — o resto só é validado pela
-        camada de negócio, ao submeter.
+        """Lê e valida (formato, não regra de negócio) os campos do
+        formulário. As datas são as únicas que podem levantar
+        ValueError aqui — o resto só é validado pela camada de
+        negócio, ao submeter.
         """
         data_nascimento = _ler_data(
             self.campo_data_nascimento.get(), "Data de nascimento"
@@ -931,99 +1282,6 @@ class _FormularioCliente(ctk.CTkToplevel):
             "validade_documento": validade_documento,
             "contacto_emergencia": self.campo_contacto_emergencia.get(),
         }
-
-    def _guardar(self):
-        raise NotImplementedError
-
-
-class NovoClienteModal(_FormularioCliente):
-    """Modal de criação de um cliente novo."""
-
-    def __init__(self, tela_lista):
-        super().__init__(tela_lista, "Novo Cliente")
-
-    def _guardar(self):
-        try:
-            valores = self._ler_campos_comuns()
-        except ValueError as erro:
-            componentes.mostrar_erro(str(erro))
-            return
-
-        try:
-            cliente = clientes.criar(
-                valores["nome"],
-                valores["tipo_documento"],
-                valores["numero_documento"],
-                valores["regime"],
-                nif=valores["nif"],
-                email=valores["email"],
-                telefone=valores["telefone"],
-                morada=valores["morada"],
-                nacionalidade=valores["nacionalidade"],
-                estado_civil=valores["estado_civil"],
-                data_nascimento=valores["data_nascimento"],
-                validade_documento=valores["validade_documento"],
-                contacto_emergencia=valores["contacto_emergencia"],
-            )
-        except ValueError as erro:
-            componentes.mostrar_erro(str(erro))
-            return
-
-        mensagem = f"Cliente criado com sucesso: {cliente['id']}"
-        if cliente["incompleto"]:
-            mensagem += "\n(incompleto — verifica os campos em falta)"
-
-        componentes.mostrar_sucesso(mensagem)
-        self.destroy()
-        # A `tela_lista` tanto pode ser a `ListaClientes` (que tem
-        # `_recarregar`) como o `NovoContratoMensal` / o
-        # `NovaReservaAirbnb` (que têm `_recarregar_clientes`) — o
-        # botão "+ Novo cliente" existe nos três sítios. Ver
-        # `_recarregar_tela_lista`, no topo do módulo.
-        _recarregar_tela_lista(self.tela_lista)
-
-
-class EditarClienteModal(_FormularioCliente):
-    """Modal de edição de um cliente existente — mesmos campos de
-    NovoClienteModal, pré-preenchidos.
-
-    'Regime' não vem gravado no cliente (ver docstring do módulo,
-    ponto 1) — arranca em "Mensal" se o cliente já tiver NIF
-    preenchido (sinal de que foi criado nesse regime), senão
-    "Airbnb". É só um valor por omissão: o utilizador pode trocá-lo
-    antes de guardar, se o regime real for outro.
-    """
-
-    def __init__(self, tela_lista, cliente):
-        super().__init__(tela_lista, f"Editar Cliente — {cliente['nome']}")
-        self.cliente = cliente
-
-        self.campo_nome.insert(0, cliente["nome"])
-        self.combo_tipo_documento.set(cliente["tipo_documento"])
-        self.campo_numero_documento.insert(0, cliente["numero_documento"])
-        self.combo_regime.set("Mensal" if cliente["nif"] else "Airbnb")
-        self.campo_nif.insert(0, cliente["nif"])
-        self.campo_email.insert(0, cliente["email"])
-        self.campo_telefone.insert(0, cliente["telefone"])
-        self.campo_morada.insert(0, cliente["morada"])
-        self.campo_nacionalidade.insert(0, cliente["nacionalidade"])
-        if cliente["nacionalidade"] in NACIONALIDADES:
-            self.combo_nacionalidade.set(cliente["nacionalidade"])
-            self.campo_nacionalidade.grid_remove()
-        elif cliente["nacionalidade"]:
-            self.combo_nacionalidade.set(OUTRA_NACIONALIDADE)
-            self.campo_nacionalidade.grid()
-        if cliente["estado_civil"]:
-            self.combo_estado_civil.set(cliente["estado_civil"])
-        self.campo_data_nascimento.insert(
-            0, _formatar_data(cliente["data_nascimento"])
-        )
-        self.campo_validade_documento.insert(
-            0, _formatar_data(cliente["validade_documento"])
-        )
-        self.campo_contacto_emergencia.insert(
-            0, cliente["contacto_emergencia"]
-        )
 
     def _guardar(self):
         try:
@@ -1057,7 +1315,7 @@ class EditarClienteModal(_FormularioCliente):
             f"Cliente {self.cliente['id']} atualizado."
         )
         self.destroy()
-        # Mesma defesa do `NovoClienteModal._guardar` — ver
+        # Mesma defesa do `NovoClienteMensalModal._guardar` — ver
         # `_recarregar_tela_lista`, no topo do módulo. Hoje o
         # "Editar" só é aberto a partir da `ListaClientes`, mas a
         # defesa fica para o caso de o botão se estender aos
