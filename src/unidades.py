@@ -964,23 +964,16 @@ def estado(unidade_id, data):
     return _estado_airbnb(unidade_id, data)
 
 
-def _contagem_mensal(unidade_id, data):
-    """Devolve o par (ocupados, capacidade) de uma unidade mensal
-    numa data (decisão 17: capacidade é a soma dos lugares dos
-    quartos ativos; um contrato sem lugar_id conta na mesma, ver
-    secção 4).
+def _capacidade_mensal(unidade_id):
+    """Soma a capacidade dos lugares ativos de uma unidade mensal.
 
-    Conta as ocupações mensais ativas cuja vigência cobre 'data':
-    data_inicio <= data e (data_fim nulo ou data_fim > data).
+    Extraída de `_contagem_mensal` na Fase 5 (v1.4.0), ao separar a
+    LEITURA da CLASSIFICAÇÃO: a capacidade de uma unidade não depende
+    da data, por isso numa semana de calendário basta lê-la uma vez
+    em vez de sete (ver `estados_da_semana`, mais abaixo).
 
-    Extraída de `_estado_mensal` em 08/09/2026, ao chegar o ecrã
-    de Calendário: `estado()` devolve a proporção como texto
-    ("6/8"), e o calendário precisa dos dois números separados
-    para escolher a cor da célula. Partir a string na interface
-    seria pôr regra de negócio na camada errada, por isso a
-    contagem passou a viver aqui, num sítio só, e as duas funções
-    públicas (`estado` e `estado_detalhe`) formatam-na cada uma à
-    sua maneira.
+    Custa 1 + N queries — uma para os quartos, mais uma por cada
+    quarto para os seus lugares. É a leitura mais cara deste módulo.
     """
     capacidade = 0
 
@@ -988,11 +981,26 @@ def _contagem_mensal(unidade_id, data):
         for lugar in listar_lugares(quarto_id=quarto["id"]):
             capacidade += lugar["capacidade"]
 
+    return capacidade
+
+
+def _classificar_mensal(ocupacoes, data):
+    """Conta as ocupações mensais que cobrem 'data'.
+
+    Função pura — recebe as ocupações já lidas e não toca na base de
+    dados, como `agrupar_beliches`. Vigência: data_inicio <= data e
+    (data_fim nulo ou data_fim > data). É a mesma regra que vivia
+    dentro de `_contagem_mensal` antes da Fase 5 — mudou de sítio,
+    não de conteúdo.
+
+    Separada da leitura para o calendário poder classificar os sete
+    dias de uma semana a partir de UMA leitura (ver
+    `estados_da_semana`), e para a regra de vigência poder ser
+    testada em `unittest` sem MySQL.
+    """
     ocupados = 0
 
-    for ocupacao in repositorio.listar_ocupacoes(
-        unidade_id=unidade_id, tipo="mensal"
-    ):
+    for ocupacao in ocupacoes:
         if ocupacao["data_inicio"] > data:
             continue
 
@@ -1000,6 +1008,55 @@ def _contagem_mensal(unidade_id, data):
             continue
 
         ocupados += 1
+
+    return ocupados
+
+
+def _classificar_proporcao(ocupados, capacidade):
+    """Classifica uma unidade mensal em "livre", "parcial" ou
+    "cheia" a partir da contagem. Função pura.
+
+    Capacidade zero é uma unidade mensal ainda sem quartos ou sem
+    lugares ativos: não está cheia, está por preencher. Sem este
+    caso, `ocupados >= capacidade` daria "cheia" para 0/0.
+
+    Vive numa função própria (Fase 5, v1.4.0) porque passou a ter
+    dois chamadores — `estado_detalhe` e `estados_da_semana`. Com a
+    regra escrita duas vezes, bastava corrigir uma delas um dia para
+    o calendário e a Gestão de Propriedades passarem a discordar
+    sobre a mesma unidade.
+    """
+    if capacidade == 0 or ocupados == 0:
+        return "livre"
+
+    if ocupados >= capacidade:
+        return "cheia"
+
+    return "parcial"
+
+
+def _contagem_mensal(unidade_id, data):
+    """Devolve o par (ocupados, capacidade) de uma unidade mensal
+    numa data (decisão 17: capacidade é a soma dos lugares dos
+    quartos ativos; um contrato sem lugar_id conta na mesma, ver
+    secção 4).
+
+    Extraída de `_estado_mensal` em 08/09/2026, ao chegar o ecrã de
+    Calendário: `estado()` devolve a proporção como texto ("6/8"), e
+    o calendário precisa dos dois números separados para escolher a
+    cor da célula. Partir a string na interface seria pôr regra de
+    negócio na camada errada.
+
+    Fase 5 (v1.4.0): passou a casca fina sobre `_capacidade_mensal`
+    (leitura) e `_classificar_mensal` (regra). Por fora não mudou
+    nada — `_estado_mensal`, `estado_detalhe` e `taxa_ocupacao`
+    continuam a chamá-la exatamente como antes.
+    """
+    capacidade = _capacidade_mensal(unidade_id)
+    ocupados = _classificar_mensal(
+        repositorio.listar_ocupacoes(unidade_id=unidade_id, tipo="mensal"),
+        data,
+    )
 
     return ocupados, capacidade
 
@@ -1014,20 +1071,23 @@ def _estado_mensal(unidade_id, data):
     return f"{ocupados}/{capacidade}"
 
 
-def _estado_airbnb(unidade_id, data):
-    """Livre, Ocupado ou Reservado de uma unidade Airbnb numa data.
+def _classificar_airbnb(ocupacoes, data):
+    """Livre, Ocupado ou Reservado a partir das ocupações já lidas.
 
-    Fórmula de sobreposição da secção 4 — inicio_A < fim_B E
-    inicio_B < fim_A — tratando 'data' como a noite [data, data + 1
-    dia). Reservado é uma ocupação futura ainda não iniciada
-    (início > data), quando a noite pedida está livre.
+    Função pura — não toca na base de dados. Fórmula de sobreposição
+    da secção 4 — inicio_A < fim_B E inicio_B < fim_A — tratando
+    'data' como a noite [data, data + 1 dia). Reservado é uma
+    ocupação futura ainda não iniciada (início > data), quando a
+    noite pedida está livre.
+
+    Separada de `_estado_airbnb` na Fase 5 (v1.4.0) pela mesma razão
+    de `_classificar_mensal`: o calendário lê uma vez e classifica
+    sete dias.
     """
     fim_janela = data + timedelta(days=1)
     tem_futura = False
 
-    for ocupacao in repositorio.listar_ocupacoes(
-        unidade_id=unidade_id, tipo="airbnb"
-    ):
+    for ocupacao in ocupacoes:
         if (
             ocupacao["data_inicio"] < fim_janela
             and data < ocupacao["data_fim"]
@@ -1038,6 +1098,19 @@ def _estado_airbnb(unidade_id, data):
             tem_futura = True
 
     return "Reservado" if tem_futura else "Livre"
+
+
+def _estado_airbnb(unidade_id, data):
+    """Livre, Ocupado ou Reservado de uma unidade Airbnb numa data.
+
+    Casca fina sobre `_classificar_airbnb` desde a Fase 5 (v1.4.0) —
+    faz a leitura e delega a regra. Por fora não mudou nada:
+    `estado()` e `taxa_ocupacao` continuam a chamá-la como antes.
+    """
+    return _classificar_airbnb(
+        repositorio.listar_ocupacoes(unidade_id=unidade_id, tipo="airbnb"),
+        data,
+    )
 
 
 # Tradução dos estados textuais de `_estado_airbnb` para as chaves
@@ -1066,15 +1139,18 @@ def estado_detalhe(unidade_id, data):
       nenhuma a mostrar (decisão 5), e None diz isso melhor do que
       um zero que se confundiria com "vazia".
 
-    Acrescentada em 08/09/2026 para o ecrã de Calendário, que precisa
-    de escolher a cor de cada célula a partir do estado e de escrever
-    "6/8" a partir dos números. `estado()` continua a existir sem
-    alterações, para o CLI e a Gestão de Propriedades — as duas leem
-    a mesma contagem, em `_contagem_mensal`.
+    Acrescentada em 08/09/2026 para o ecrã de Calendário. `estado()`
+    continua a existir sem alterações, para o CLI e a Gestão de
+    Propriedades — as duas leem a mesma contagem, em
+    `_contagem_mensal`.
 
     Em manutenção sobrepõe-se ao cálculo, tal como em `estado()`
     (decisão 3): uma unidade em manutenção nunca está livre,
     independentemente das ocupações.
+
+    Para SETE dias seguidos da mesma unidade, usar
+    `estados_da_semana` — chamar esta função sete vezes relê as
+    mesmas linhas sete vezes (ver o porquê nessa docstring).
     """
     unidade = procurar(unidade_id)
 
@@ -1097,21 +1173,95 @@ def estado_detalhe(unidade_id, data):
 
     ocupados, capacidade = _contagem_mensal(unidade_id, data)
 
-    # Capacidade zero é uma unidade mensal ainda sem quartos ou sem
-    # lugares ativos: não está cheia, está por preencher. Sem este
-    # caso, `ocupados >= capacidade` daria "cheia" para 0/0.
-    if capacidade == 0 or ocupados == 0:
-        classificacao = "livre"
-    elif ocupados >= capacidade:
-        classificacao = "cheia"
-    else:
-        classificacao = "parcial"
-
     return {
-        "estado": classificacao,
+        "estado": _classificar_proporcao(ocupados, capacidade),
         "ocupados": ocupados,
         "capacidade": capacidade,
     }
+
+
+def estados_da_semana(unidade_id, inicio):
+    """Os sete estados de uma unidade, a começar no dia 'inicio' — o
+    mesmo que sete chamadas a `estado_detalhe`, mas lendo a base de
+    dados uma vez só.
+
+    Devolve uma lista de sete dicionários com as MESMAS chaves de
+    `estado_detalhe` ('estado', 'ocupados', 'capacidade'), por ordem
+    de dia: o índice 0 é 'inicio', o índice 6 é 'inicio' + 6 dias.
+    Levanta ValueError se a unidade não existir, com a mesma
+    mensagem de `estado_detalhe` — quem chama continua a poder
+    apanhá-la e saltar a linha.
+
+    Não exige que 'inicio' seja segunda-feira: devolve sete dias a
+    contar de onde lhe disserem. Quem decide que a semana vai de
+    segunda a domingo é o calendário, não este módulo.
+
+    PORQUÊ (Fase 5, v1.4.0): nenhuma das leituras de que o estado
+    depende recebe a data — `listar_ocupacoes` devolve todas as
+    ocupações da unidade, `listar_quartos`/`listar_lugares` devolvem
+    a estrutura física inteira, e o filtro por data acontece todo em
+    Python, depois. Sete chamadas a `estado_detalhe` para a mesma
+    unidade traziam por isso exatamente as mesmas linhas sete vezes.
+    Medido no calendário a 16/09/2026: 183 ligações ao MySQL por
+    mudança de semana, a ~9ms cada (o `repositorio` abre uma ligação
+    nova por operação, por decisão documentada). Com esta função
+    passam a 27.
+
+    Custo por unidade: 1 query em manutenção, 2 no Airbnb, 3 + N
+    quartos no mensal — em vez de 7, 14 e 7 x (3 + N).
+    """
+    unidade = procurar(unidade_id)
+
+    if unidade is None:
+        raise ValueError(f"A unidade {unidade_id} não existe.")
+
+    dias = [inicio + timedelta(days=indice) for indice in range(7)]
+
+    if unidade["em_manutencao"]:
+        return [
+            {
+                "estado": "manutencao",
+                "ocupados": None,
+                "capacidade": None,
+            }
+            for _dia in dias
+        ]
+
+    if unidade["tipo"] != "mensal":
+        ocupacoes = repositorio.listar_ocupacoes(
+            unidade_id=unidade_id, tipo="airbnb"
+        )
+        estados = []
+
+        for dia in dias:
+            texto = _classificar_airbnb(ocupacoes, dia)
+            estados.append(
+                {
+                    "estado": _ESTADOS_AIRBNB[texto],
+                    "ocupados": None,
+                    "capacidade": None,
+                }
+            )
+
+        return estados
+
+    capacidade = _capacidade_mensal(unidade_id)
+    ocupacoes = repositorio.listar_ocupacoes(
+        unidade_id=unidade_id, tipo="mensal"
+    )
+    estados = []
+
+    for dia in dias:
+        ocupados = _classificar_mensal(ocupacoes, dia)
+        estados.append(
+            {
+                "estado": _classificar_proporcao(ocupados, capacidade),
+                "ocupados": ocupados,
+                "capacidade": capacidade,
+            }
+        )
+
+    return estados
 
 
 def taxa_ocupacao(data, tipo=None):
