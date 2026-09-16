@@ -35,9 +35,9 @@ foi acrescentada nenhuma):
   "Ver planta".
 
 Camadas: este módulo não calcula ocupação nenhuma. Toda a leitura
-de estado vem de `unidades.estado_detalhe(unidade_id, data)`, que
-devolve o estado já classificado e os números já contados — a GUI
-só escolhe a cor e escreve o texto.
+de estado vem de `unidades.estados_da_semana(unidade_id, inicio)`,
+que devolve os sete dias já classificados e com os números já
+contados — a GUI só escolhe a cor e escreve o texto.
 
 ALTERAÇÕES 13/09/2026 — "Detalhe do dia" passou de popup nativo
 para modal próprio:
@@ -69,7 +69,31 @@ só no `componentes.py`:
 - `_tornar_clicavel` local → `componentes.tornar_cliclavel`.
 - `_colocar_no_topo` local → `componentes.colocar_no_topo`.
 - `_formatar_valor` local → `componentes.formatar_valor`.
-- O resto do ficheiro não mudou.
+
+FASE 5, v1.4.0 (16-17/09/2026) — OTIMIZAÇÃO. O ecrã levava 2,9s a
+responder a cada mudança de semana no Airbnb com 13 unidades.
+Passou a ~0,2s. Quatro alterações, todas medidas antes e depois:
+
+1. Uma leitura à base de dados por unidade, em vez de uma por dia.
+   `unidades.estados_da_semana` substituiu sete chamadas a
+   `estado_detalhe` — as leituras não recebem a data, por isso as
+   sete traziam exatamente as mesmas linhas. 183 ligações ao MySQL
+   por semana navegada passaram a 27 (o `repositorio` abre uma
+   ligação nova por operação, a ~9ms cada).
+2. Widget Pooling: as linhas da grelha são criadas uma vez e
+   reutilizadas, em vez de destruídas e recriadas. Ver
+   `_criar_linha_pool`.
+3. Só se reconfigura o que mudou: no CustomTkinter um `configure`
+   redesenha o widget e os filhos, e custava o mesmo que criar
+   tudo de raiz. Ver `_atualizar_linha`.
+4. Os filtros escolhidos sobrevivem ao fecho da janela, por regime
+   (`_ULTIMO_FILTRO`), e a coluna da esquerda mostra a propriedade
+   por baixo da unidade (`listar_com_propriedade`).
+
+O que resta é quase tudo base de dados: dos ~220ms de um
+recarregamento, ~210 são as leituras. Baixar isso implica mudar o
+`repositorio` para reutilizar ligações, decisão parqueada para
+depois de a v1.4.0 fechar.
 
 Imports mantidos: `clientes` e `contratos` são usados pelo
 `DetalheDiaModal` para ler o hóspede da reserva e o detalhe
@@ -78,6 +102,7 @@ Airbnb. `responsaveis` NÃO é preciso — o nome do hóspede vem do
 """
 
 import datetime
+import tkinter.font as tkfont
 
 import customtkinter as ctk
 
@@ -154,7 +179,20 @@ _LARGURA_NOME = 150
 _LARGURA_CELULA = 100
 _ALTURA_CELULA = 30
 
-# Estado devolvido por `unidades.estado_detalhe` -> (fundo, texto).
+# Largura disponível para o TEXTO da coluna da esquerda, usada pelo
+# `componentes.truncar_texto`. Quatro pixéis a menos do que a coluna,
+# para o corte acontecer antes de a etiqueta encostar à célula
+# seguinte (Fase 5, v1.4.0).
+_LARGURA_TEXTO_NOME = _LARGURA_NOME - 4
+
+# Altura de cada uma das duas linhas da coluna da esquerda. Somam
+# exatamente `_ALTURA_CELULA`, para a linha da grelha não crescer
+# quando o nome da propriedade passou a aparecer por baixo do nome da
+# unidade (Fase 5, v1.4.0 — validado por mockup antes de codar).
+_ALTURA_NOME = 16
+_ALTURA_PROPRIEDADE = 14
+
+# Estado devolvido por `unidades.estados_da_semana` -> (fundo, texto).
 # "parcial"/"cheia" só aparecem no regime mensal; "reservado"/
 # "ocupado" só no Airbnb — mas partilham as cores de propósito, para
 # a leitura ser a mesma nos dois ecrãs (amarelo = a acompanhar,
@@ -190,6 +228,21 @@ _ESTADOS_COM_VAGA = ("livre", "parcial")
 
 _OPCAO_TODAS = "Todas as propriedades"
 _OPCOES_DISPONIBILIDADE = ("Todas as unidades", "Só com disponibilidade")
+
+# As duas mensagens que ocupam o corpo da tabela quando não há
+# linhas para mostrar. Reticências em três pontos ASCII e não no
+# glifo "…", pela mesma razão das setas da navegação: no Windows o
+# glifo Unicode saía como quadrado (tofu).
+_TEXTO_A_CARREGAR = "A carregar calendário..."
+_TEXTO_SEM_UNIDADES = "Nenhuma unidade a mostrar com estes filtros."
+
+# Último filtro escolhido em cada regime, para o calendário reabrir
+# como o utilizador o deixou (Fase 5, v1.4.0). Vive no módulo e não
+# no ecrã `Calendario` porque esse frame é recriado a cada
+# `mostrar_frame` — a memória tem de sobreviver a isso. Dura o que
+# durar o processo: é conveniência de sessão, não configuração para
+# gravar em disco.
+_ULTIMO_FILTRO = {}
 
 
 def _segunda_feira(data):
@@ -234,6 +287,23 @@ def _texto_celula(detalhe, tipo):
         return ""
 
     return f"{detalhe['ocupados']}/{detalhe['capacidade']}"
+
+
+def _fonte_de_medida(tamanho):
+    """Devolve um `tkinter.font.Font` com a mesma família e tamanho
+    do `CTkFont` equivalente, para o `componentes.truncar_texto`
+    poder medir texto (Fase 5, v1.4.0).
+
+    A família sai do próprio `CTkFont` em vez de ser escrita à mão:
+    assim a medida acompanha o que o CustomTkinter desenha mesmo, e
+    continua certa se o tema mudar de fonte um dia. A diferença
+    residual entre as duas (o helper mede com Tk, o ecrã desenha com
+    CTk) é cosmética — corta um caráter a mais ou a menos no limite,
+    nunca deixa texto a colidir.
+    """
+    base = ctk.CTkFont(size=tamanho)
+
+    return tkfont.Font(family=base.cget("family"), size=base.cget("size"))
 
 
 class Calendario(ctk.CTkFrame):
@@ -385,11 +455,6 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
         self.transient(tela)
         _colocar_no_topo(self)
 
-        self.nomes_por_id = {
-            prop["id"]: prop["nome"]
-            for prop in propriedades.listar(incluir_inativas=True)
-        }
-
         # Rótulo com o ID atrás do nome: duas propriedades podem
         # chamar-se quase o mesmo, e o dropdown devolve texto, não o
         # objeto — sem o ID, escolher a errada era silencioso.
@@ -403,7 +468,14 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
         self._construir_tabela()
         self._construir_rodape()
 
-        self._recarregar()
+        # Os 60ms (e não 10) são para o `_colocar_no_topo` — que
+        # agenda o seu lift/focus/grab_set para os +10ms — ter
+        # terminado antes de a construção da grelha começar. Com os
+        # dois na mesma volta do loop de eventos, a janela aparecia e
+        # piscava a meio da construção.
+        self._atualizar_cabecalho()
+        self._mostrar_mensagem(_TEXTO_A_CARREGAR)
+        self.after(60, self._recarregar)
 
     # -- construção --------------------------------------------------
 
@@ -411,14 +483,22 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
         barra = ctk.CTkFrame(self, fg_color="transparent")
         barra.pack(fill="x", padx=20, pady=(16, 4))
 
+        memoria = _ULTIMO_FILTRO.get(self.tipo, {})
+        disponibilidade = memoria.get("disponibilidade")
+
+        if disponibilidade not in _OPCOES_DISPONIBILIDADE:
+            disponibilidade = _OPCOES_DISPONIBILIDADE[0]
+
         self.combo_propriedade = ctk.CTkOptionMenu(
             barra,
             values=[_OPCAO_TODAS] + sorted(self.id_por_rotulo),
             width=260,
             corner_radius=tema.RAIO_CAMPO,
-            command=lambda _valor: self._recarregar(),
+            command=lambda _valor: self._filtro_mudou(),
         )
-        self.combo_propriedade.set(_OPCAO_TODAS)
+        self.combo_propriedade.set(
+            self._rotulo_valido(memoria.get("propriedade"))
+        )
         self.combo_propriedade.pack(side="left")
 
         self.combo_disponibilidade = ctk.CTkOptionMenu(
@@ -426,10 +506,51 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
             values=list(_OPCOES_DISPONIBILIDADE),
             width=200,
             corner_radius=tema.RAIO_CAMPO,
-            command=lambda _valor: self._recarregar(),
+            command=lambda _valor: self._filtro_mudou(),
         )
-        self.combo_disponibilidade.set(_OPCOES_DISPONIBILIDADE[0])
+        self.combo_disponibilidade.set(disponibilidade)
         self.combo_disponibilidade.pack(side="left", padx=(10, 0))
+
+    def _rotulo_valido(self, rotulo):
+        """Devolve o rótulo de propriedade guardado, se ainda existir
+        na lista de agora — senão, "Todas as propriedades".
+
+        Uma propriedade pode ter sido desativada ou mudado de nome
+        desde a última abertura. Nesse caso o rótulo antigo já não
+        está entre as opções do dropdown, e pô-lo com `set()` deixava
+        o combo a mostrar um texto que não corresponde a opção
+        nenhuma — o `_propriedade_escolhida_id` não o encontrava no
+        `id_por_rotulo`, devolvia None, e a grelha mostrava TODAS as
+        propriedades por baixo de um rótulo que dizia só uma. Cair em
+        "Todas as propriedades" é o comportamento honesto.
+        """
+        if rotulo and rotulo in self.id_por_rotulo:
+            return rotulo
+
+        return _OPCAO_TODAS
+
+    def _filtro_mudou(self):
+        """Um dos dois filtros mudou: guarda a escolha e redesenha."""
+        self._guardar_filtros()
+        self._recarregar()
+
+    def _guardar_filtros(self):
+        """Guarda o filtro atual para a próxima abertura do mesmo
+        regime.
+
+        Guarda os RÓTULOS e não os IDs: é o rótulo que o
+        `CTkOptionMenu.set()` precisa de receber na abertura
+        seguinte, e o `_rotulo_valido` já trata do caso de esse
+        rótulo ter deixado de existir entretanto.
+
+        Chamado a partir do `_filtro_mudou` e não do `_recarregar` de
+        propósito — só interessa gravar quando o utilizador mexe num
+        filtro, não a cada navegação de semana.
+        """
+        _ULTIMO_FILTRO[self.tipo] = {
+            "propriedade": self.combo_propriedade.get(),
+            "disponibilidade": self.combo_disponibilidade.get(),
+        }
 
     def _construir_navegacao(self):
         navegacao = ctk.CTkFrame(self, fg_color="transparent")
@@ -496,8 +617,8 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
             anchor="w",
         ).pack(side="left")
 
-        # Guardados para o `_recarregar` lhes trocar o texto: o dia do
-        # mês muda a cada semana, o nome do dia não.
+        # Guardados para o `_atualizar_cabecalho` lhes trocar o
+        # texto: o dia do mês muda a cada semana, o nome do dia não.
         self.rotulos_dias = []
 
         for indice in range(7):
@@ -519,6 +640,23 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
             cartao_tabela, fg_color="transparent"
         )
         self.area_lista.pack(fill="both", expand=True)
+
+        # Widget Pooling (Fase 5, v1.4.0): as linhas da grelha são
+        # criadas uma vez e reutilizadas, em vez de destruídas e
+        # recriadas a cada semana. `pool_linhas` guarda-as todas (só
+        # cresce), `linhas_visiveis` diz quantas estão empacotadas
+        # neste momento — as restantes ficam em `pack_forget`,
+        # prontas a voltar. `rotulo_mensagem` segue a mesma ideia.
+        self.pool_linhas = []
+        self.linhas_visiveis = 0
+        self.rotulo_mensagem = None
+
+        # Fontes de medição do `componentes.truncar_texto`, criadas
+        # uma vez por janela e não por linha — é o que a docstring
+        # desse helper recomenda, e o que o gui_propriedades.py já
+        # faz.
+        self.fonte_nome = _fonte_de_medida(12)
+        self.fonte_propriedade = _fonte_de_medida(10)
 
     def _construir_rodape(self):
         legenda = ctk.CTkFrame(self, fg_color="transparent")
@@ -574,31 +712,63 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
     def _so_com_disponibilidade(self):
         return self.combo_disponibilidade.get() == _OPCOES_DISPONIBILIDADE[1]
 
-    def _recarregar(self):
-        """Limpa e volta a desenhar a grelha da semana atual."""
+    def _atualizar_cabecalho(self):
+        """Escreve o intervalo da semana e o dia do mês em cada uma
+        das sete colunas.
+
+        Separado do `_recarregar` (Fase 5, v1.4.0) para a janela
+        poder mostrar o cabeçalho certo enquanto a grelha ainda está
+        a ser construída — ver o `after` no `__init__`.
+        """
         self.rotulo_semana.configure(text=_texto_intervalo(self.inicio_semana))
 
         for indice, rotulo in enumerate(self.rotulos_dias):
             dia = self.inicio_semana + datetime.timedelta(days=indice)
             rotulo.configure(text=f"{_DIAS_SEMANA[indice]}  {dia.day}")
 
-        for widget in self.area_lista.winfo_children():
-            widget.destroy()
+    def _unidades_a_mostrar(self):
+        """As unidades do regime, já com o nome da propriedade e já
+        ordenadas, filtradas pela propriedade escolhida.
 
-        lista = unidades.listar(
-            tipo=self.tipo,
-            propriedade_id=self._propriedade_escolhida_id(),
-        )
-        lista.sort(
-            key=lambda uni: (
-                self.nomes_por_id.get(uni["propriedade_id"], ""),
-                uni["nome"],
-            )
-        )
+        Usa `listar_com_propriedade` e não `listar` (Fase 5,
+        v1.4.0): traz o `propriedade_nome` que a coluna da esquerda
+        passou a mostrar, e já vem com `ORDER BY p.nome, u.nome` do
+        SQL — que é exatamente a ordenação que este ecrã fazia à mão
+        em Python, com um dicionário de nomes de propriedades lido
+        numa query à parte. As duas coisas desapareceram.
 
-        indice_zebra = 0
+        O filtro por propriedade fica em Python porque o
+        `listar_com_propriedade` não o aceita, por decisão
+        documentada na sua docstring. Com no máximo 22 unidades numa
+        lista já em memória, é irrelevante — e continua a ser uma
+        query, contra as duas de antes.
+        """
+        lista = unidades.listar_com_propriedade(tipo=self.tipo)
+        propriedade_id = self._propriedade_escolhida_id()
 
-        for uni in lista:
+        if propriedade_id is None:
+            return lista
+
+        return [
+            uni for uni in lista if uni["propriedade_id"] == propriedade_id
+        ]
+
+    def _recarregar(self):
+        """Volta a desenhar a grelha da semana atual, reutilizando as
+        linhas do pool.
+
+        Nunca destrói nada: as linhas a mais são escondidas com
+        `pack_forget` e ficam à espera. Ver `_criar_linha_pool` e
+        `_atualizar_linha` para o porquê de cada metade.
+        """
+        self._atualizar_cabecalho()
+
+        if self.rotulo_mensagem is not None:
+            self.rotulo_mensagem.pack_forget()
+
+        visiveis = 0
+
+        for uni in self._unidades_a_mostrar():
             estados = self._estados_da_semana(uni["id"])
 
             if estados is None:
@@ -609,93 +779,316 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
             ):
                 continue
 
-            self._desenhar_linha(uni, estados, indice_zebra % 2 == 1)
-            indice_zebra += 1
+            entrada = self._obter_linha(visiveis)
+            self._atualizar_linha(entrada, uni, estados, visiveis % 2 == 1)
 
-        if indice_zebra == 0:
-            ctk.CTkLabel(
-                self.area_lista,
-                text="Nenhuma unidade a mostrar com estes filtros.",
-                text_color=tema.COR_TEXTO_SECUNDARIO,
-                font=ctk.CTkFont(size=12),
-            ).pack(pady=30)
+            # Linhas com índice abaixo de `linhas_visiveis` já estavam
+            # empacotadas do recarregamento anterior. As de índice
+            # igual ou acima estavam escondidas (ou acabaram de ser
+            # criadas) e voltam ao fim da pilha — como se preenche
+            # sempre de 0 para cima e só se esconde pela cauda, a
+            # ordem visual mantém-se correta.
+            if visiveis >= self.linhas_visiveis:
+                entrada["linha"].pack(fill="x")
 
+            visiveis += 1
+
+        for indice in range(visiveis, self.linhas_visiveis):
+            self.pool_linhas[indice]["linha"].pack_forget()
+
+        self.linhas_visiveis = visiveis
+
+        if visiveis == 0:
+            self._mostrar_mensagem(_TEXTO_SEM_UNIDADES)
+    
     def _estados_da_semana(self, unidade_id):
         """Os sete estados de uma unidade, de segunda a domingo.
+
+        Desde a Fase 5 (v1.4.0) é `unidades.estados_da_semana` que
+        faz o trabalho: uma leitura à base de dados por unidade, em
+        vez de uma por dia. Antes eram sete chamadas a
+        `estado_detalhe`, cada uma a reler as mesmas linhas — as
+        leituras não recebem a data, quem filtra por data é o Python
+        a seguir.
 
         Devolve None se a unidade deixar de existir a meio (só pode
         acontecer se for apagada noutra janela enquanto esta está
         aberta) — a linha é simplesmente saltada.
         """
-        estados = []
+        try:
+            return unidades.estados_da_semana(unidade_id, self.inicio_semana)
+        except ValueError:
+            return None
 
-        for indice in range(7):
-            dia = self.inicio_semana + datetime.timedelta(days=indice)
+    def _criar_linha_pool(self):
+        """Constrói uma linha da grelha vazia, sem a empacotar, e
+        devolve as referências que o `_atualizar_linha` vai
+        reconfigurar.
 
-            try:
-                estados.append(unidades.estado_detalhe(unidade_id, dia))
-            except ValueError:
-                return None
+        Fase 5 (v1.4.0) — Widget Pooling. Antes, cada mudança de
+        semana destruía todas as linhas e voltava a criá-las: medido
+        a 16/09/2026 no Airbnb com 13 unidades, 261ms a destruir,
+        372ms a criar e 645ms a desenhar. Os widgets são sempre os
+        mesmos por linha — o que muda de semana para semana é só
+        texto e cor.
 
-        return estados
+        A coluna da esquerda é um bloco de altura fixa com duas
+        etiquetas empilhadas: o nome da unidade e, por baixo e em
+        cor secundária, o nome da propriedade. As duas alturas somam
+        `_ALTURA_CELULA`, para a linha não crescer por causa da
+        segunda etiqueta.
 
-    def _desenhar_linha(self, uni, estados, tingida):
-        """Desenha a linha de uma unidade: nome + sete células."""
+        Além dos widgets, o dicionário devolvido guarda o ÚLTIMO
+        valor aplicado a cada um. Serve para o `_atualizar_linha`
+        poder saltar os `configure` cujo valor não mudou — ver lá o
+        porquê. Os valores iniciais são os que os widgets têm mesmo
+        à nascença: a linha, o interior e o bloco do nome nascem
+        "transparent", as etiquetas nascem sem texto, e a célula
+        nasce com a cor por omissão do CTkFrame, que nunca é nenhuma
+        das cores de estado (daí o None).
+        """
         linha = ctk.CTkFrame(
-            self.area_lista,
-            fg_color=tema.LINHA_ALTERNADA if tingida else "transparent",
-            corner_radius=0,
+            self.area_lista, fg_color="transparent", corner_radius=0
         )
-        linha.pack(fill="x")
 
         interno = ctk.CTkFrame(linha, fg_color="transparent")
         interno.pack(fill="x", padx=16, pady=4)
 
-        ctk.CTkLabel(
+        bloco_nome = ctk.CTkFrame(
             interno,
-            text=uni["nome"],
-            text_color=tema.COR_TEXTO,
-            font=ctk.CTkFont(size=12),
             width=_LARGURA_NOME,
-            anchor="w",
-        ).pack(side="left")
-
-        for indice, detalhe in enumerate(estados):
-            dia = self.inicio_semana + datetime.timedelta(days=indice)
-            self._desenhar_celula(interno, uni, dia, detalhe)
-
-    def _desenhar_celula(self, master, uni, dia, detalhe):
-        """Desenha uma noite: fundo pela cor do estado, texto pela
-        proporção (mensal) ou vazio (Airbnb).
-        """
-        fundo, cor_texto = _CORES_ESTADO[detalhe["estado"]]
-
-        moldura = ctk.CTkFrame(
-            master,
-            width=_LARGURA_CELULA,
             height=_ALTURA_CELULA,
             fg_color="transparent",
         )
-        moldura.pack(side="left")
-        moldura.pack_propagate(False)
+        bloco_nome.pack(side="left")
+        bloco_nome.pack_propagate(False)
 
-        celula = ctk.CTkFrame(
-            moldura,
-            corner_radius=6,
-            fg_color=fundo,
+        rotulo_nome = ctk.CTkLabel(
+            bloco_nome,
+            text="",
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=12),
+            height=_ALTURA_NOME,
+            anchor="w",
         )
-        celula.pack(fill="both", expand=True, padx=2, pady=1)
+        rotulo_nome.pack(fill="x")
 
-        ctk.CTkLabel(
-            celula,
-            text=_texto_celula(detalhe, self.tipo),
-            text_color=cor_texto,
-            font=ctk.CTkFont(size=11, weight="bold"),
-        ).pack(expand=True)
-
-        _tornar_clicavel(
-            celula, lambda: self._abrir_detalhe_dia(uni, dia, detalhe)
+        rotulo_propriedade = ctk.CTkLabel(
+            bloco_nome,
+            text="",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+            height=_ALTURA_PROPRIEDADE,
+            anchor="w",
         )
+        rotulo_propriedade.pack(fill="x")
+
+        celulas = []
+
+        for _indice in range(7):
+            moldura = ctk.CTkFrame(
+                interno,
+                width=_LARGURA_CELULA,
+                height=_ALTURA_CELULA,
+                fg_color="transparent",
+            )
+            moldura.pack(side="left")
+            moldura.pack_propagate(False)
+
+            celula = ctk.CTkFrame(moldura, corner_radius=6)
+            celula.pack(fill="both", expand=True, padx=2, pady=1)
+
+            rotulo_celula = ctk.CTkLabel(
+                celula,
+                text="",
+                font=ctk.CTkFont(size=11, weight="bold"),
+            )
+            rotulo_celula.pack(expand=True)
+
+            # O clique é ligado UMA vez, aqui, e nunca mais. O que
+            # muda de semana para semana é o conteúdo de `dados`,
+            # que o `_atualizar_linha` reescreve — o handler lê-o no
+            # momento do clique, por isso vê sempre a unidade e o
+            # dia atuais.
+            #
+            # Não se religa a cada atualização porque o `bind` do
+            # CustomTkinter NÃO substitui o handler anterior: o
+            # CTkFrame e o CTkLabel sobrepõem-se ao `bind` do Tk e
+            # forçam `add=True`, para não perderem as suas próprias
+            # ligações internas (hover, etc.). Apanhado a
+            # 16/09/2026 ao testar o pooling: religar a cada semana
+            # acumulava handlers, e um clique abria um
+            # `DetalheDiaModal` por cada semana navegada.
+            dados = {"uni": None, "dia": None, "detalhe": None}
+            _tornar_clicavel(
+                celula,
+                lambda dados=dados: self._clique_celula(dados),
+            )
+
+            celulas.append(
+                {
+                    "celula": celula,
+                    "rotulo": rotulo_celula,
+                    "dados": dados,
+                    "fundo": None,
+                    "texto": "",
+                }
+            )
+
+        return {
+            "linha": linha,
+            "interno": interno,
+            "bloco_nome": bloco_nome,
+            "nome": rotulo_nome,
+            "propriedade": rotulo_propriedade,
+            "celulas": celulas,
+            "cor": "transparent",
+            "texto_nome": "",
+            "texto_propriedade": "",
+        }
+
+    def _obter_linha(self, indice):
+        """A linha número 'indice' do pool, criando-a se ainda não
+        existir.
+
+        O pool só cresce, nunca encolhe: uma linha escondida não
+        custa nada a manter e volta a ser precisa assim que o filtro
+        alargar outra vez.
+        """
+        while len(self.pool_linhas) <= indice:
+            self.pool_linhas.append(self._criar_linha_pool())
+
+        return self.pool_linhas[indice]
+
+    def _atualizar_linha(self, entrada, uni, estados, tingida):
+        """Escreve uma unidade numa linha já existente do pool,
+        tocando só no que mudou.
+
+        Cada `configure` é comparado com o último valor aplicado
+        antes de ser chamado. Não é micro-otimização gratuita: no
+        CustomTkinter um `configure` redesenha o widget E percorre
+        os filhos a mudar-lhes o `bg_color`, o que os redesenha
+        também. Com a cadeia linha → interior → (bloco do nome + 7
+        molduras) → 7 células → 7 etiquetas, reconfigurar tudo
+        custava o mesmo que criar tudo de raiz — medido a
+        16/09/2026: 27ms por linha antes e depois do pooling, sem
+        diferença nenhuma. Ao navegar semanas, o nome da unidade e o
+        tom zebra quase nunca mudam, e boa parte das células mantém
+        a cor.
+
+        O tom zebra é posto na linha, no interior E no bloco do
+        nome. Parece redundante (os dois últimos são transparentes e
+        herdariam), mas um widget transparente resolve o fundo a
+        partir do pai no momento em que é DESENHADO, e ao reutilizar
+        widgets ninguém garante que os netos voltam a ser desenhados
+        só porque o avô mudou de cor. O `configure(fg_color=...)` de
+        um CTkFrame propaga o `bg_color` aos filhos DIRETOS e só a
+        esses — daí ter de se dizer a cor em cada nível que tenha
+        filhos a pintar.
+
+        Os nomes passam pelo `componentes.truncar_texto` antes de
+        serem escritos: a etiqueta tem largura fixa e cortaria a
+        meio da letra, sem aviso nenhum. Com duas linhas isso
+        acontece mais vezes, porque o nome da propriedade costuma
+        ser mais comprido do que o da unidade.
+
+        A cor do texto de uma célula anda sempre com a cor de fundo
+        (saem as duas do mesmo par em `_CORES_ESTADO`), por isso é
+        tratada dentro da mesma comparação; o texto tem a sua,
+        porque muda sozinho de semana para semana no regime mensal.
+
+        O clique NÃO se religa aqui — está ligado desde o
+        `_criar_linha_pool` e lê o dicionário `dados` de cada
+        célula, que é o que esta função reescreve.
+        """
+        cor_linha = tema.LINHA_ALTERNADA if tingida else "transparent"
+
+        if entrada["cor"] != cor_linha:
+            entrada["linha"].configure(fg_color=cor_linha)
+            entrada["interno"].configure(fg_color=cor_linha)
+            entrada["bloco_nome"].configure(fg_color=cor_linha)
+            entrada["cor"] = cor_linha
+
+        nome = componentes.truncar_texto(
+            self.fonte_nome, uni["nome"], _LARGURA_TEXTO_NOME
+        )
+
+        if entrada["texto_nome"] != nome:
+            entrada["nome"].configure(text=nome)
+            entrada["texto_nome"] = nome
+
+        propriedade = componentes.truncar_texto(
+            self.fonte_propriedade,
+            uni.get("propriedade_nome", ""),
+            _LARGURA_TEXTO_NOME,
+        )
+
+        if entrada["texto_propriedade"] != propriedade:
+            entrada["propriedade"].configure(text=propriedade)
+            entrada["texto_propriedade"] = propriedade
+
+        for indice, detalhe in enumerate(estados):
+            celula = entrada["celulas"][indice]
+            fundo, cor_texto = _CORES_ESTADO[detalhe["estado"]]
+            texto = _texto_celula(detalhe, self.tipo)
+
+            if celula["fundo"] != fundo:
+                celula["celula"].configure(fg_color=fundo)
+                celula["rotulo"].configure(text_color=cor_texto)
+                celula["fundo"] = fundo
+
+            if celula["texto"] != texto:
+                celula["rotulo"].configure(text=texto)
+                celula["texto"] = texto
+
+            celula["dados"]["uni"] = uni
+            celula["dados"]["dia"] = self.inicio_semana + datetime.timedelta(
+                days=indice
+            )
+            celula["dados"]["detalhe"] = detalhe
+
+    def _clique_celula(self, dados):
+        """Abre o detalhe da noite que esta célula mostra AGORA.
+
+        Lê o `dados` no momento do clique, e não no momento em que o
+        clique foi ligado — é isso que permite ligar o clique uma
+        única vez, quando a linha é criada, e nunca mais lhe tocar.
+
+        O `None` só acontece numa linha criada e ainda não
+        preenchida, situação que não chega ao ecrã (uma linha só é
+        empacotada depois de atualizada) — mas sair em silêncio é
+        mais barato do que rebentar.
+        """
+        if dados["uni"] is None:
+            return
+
+        self._abrir_detalhe_dia(dados["uni"], dados["dia"], dados["detalhe"])
+
+    def _mostrar_mensagem(self, texto):
+        """Mostra uma mensagem centrada no corpo da tabela, criando a
+        etiqueta só da primeira vez que for precisa.
+
+        Serve os dois casos em que não há linhas para mostrar: a
+        janela ainda está a construir a grelha
+        (`_TEXTO_A_CARREGAR`), ou os filtros não deixaram nenhuma
+        unidade de fora (`_TEXTO_SEM_UNIDADES`). É a mesma etiqueta
+        nos dois — só muda o texto.
+
+        Também entra no pool: criar e destruir uma etiqueta a cada
+        recarregamento vazio seria o mesmo desperdício das linhas,
+        em ponto pequeno.
+        """
+        if self.rotulo_mensagem is None:
+            self.rotulo_mensagem = ctk.CTkLabel(
+                self.area_lista,
+                text=texto,
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=12),
+            )
+        else:
+            self.rotulo_mensagem.configure(text=texto)
+
+        self.rotulo_mensagem.pack(pady=30)
 
     def _abrir_detalhe_dia(self, uni, dia, detalhe):
         """Abre o modal de detalhe de uma noite.
@@ -825,7 +1218,7 @@ class DetalheDiaModal(ctk.CTkToplevel):
         # Chip de estado. O texto mostrado depende do estado — no
         # parcial leva a contagem ("parcial · 2/4"), nos outros é só
         # a palavra. O par (fundo, texto) vem do mesmo sítio que o
-        # `_desenhar_celula` usa, para os dois nunca poderem
+        # `_atualizar_linha` usa, para os dois nunca poderem
         # discordar.
         fundo, cor_texto = _CORES_ESTADO[self.estado]
         texto_chip = _texto_chip_estado(self.estado, self.detalhe)
