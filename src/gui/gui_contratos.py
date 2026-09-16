@@ -74,6 +74,7 @@ import customtkinter as ctk
 import clientes
 import config
 import contratos
+import estoque
 import impressao
 import propriedades
 import responsaveis
@@ -1228,64 +1229,30 @@ class NovaReservaAirbnb(ctk.CTkFrame):
 
         preco_calculado = self._preco_calculado()
 
-        if preco_calculado is not None and preco_praticado < preco_calculado:
-            self._abrir_alterar_valor(
-                preco_calculado=preco_calculado,
-                preco_praticado=preco_praticado,
-                data_inicio=data_inicio,
-                data_fim=data_fim,
-                check_in_tardio=check_in_tardio,
-                hora_chegada=hora_chegada,
-                multa_praticada=multa_praticada,
-            )
-            return
-
-        self._gravar(
+        # FASE 4 — em vez de gravar (ou de abrir o antigo
+        # `_AlterarValorCalculadoModal`), abre sempre o
+        # `_ConfirmacaoAirbnb`. Esse modal mostra a Zona 2 (Rol de
+        # Lavanderia) e, se houver desconto, também a Zona 1. Só
+        # quando o utilizador clicar "Confirmar" é que a reserva é
+        # gravada, já com o responsável/motivo do desconto (se
+        # aplicável).
+        _ConfirmacaoAirbnb(
+            self,
+            unidade=self.unidade_selecionada,
+            cliente=self.clientes_disponiveis[
+                self.combo_cliente.cget("values").index(
+                    self.combo_cliente.get()
+                )
+            ],
             data_inicio=data_inicio,
             data_fim=data_fim,
+            preco_calculado=preco_calculado,
             preco_praticado=preco_praticado,
-            responsavel_desconto_preco_id="",
-            motivo_preco="",
             check_in_tardio=check_in_tardio,
             hora_chegada=hora_chegada,
             multa_praticada=multa_praticada,
-        )
-
-    def _abrir_alterar_valor(
-        self,
-        preco_calculado,
-        preco_praticado,
-        data_inicio,
-        data_fim,
-        check_in_tardio,
-        hora_chegada,
-        multa_praticada,
-    ):
-        """Abre o `_AlterarValorCalculadoModal` como sub-confirmação.
-        O modal devolve (responsavel_id, motivo) ao confirmar; ao
-        "Voltar", fecha-se sem fazer nada.
-        """
-
-        def _on_confirmar(responsavel_id, motivo):
-            self._gravar(
-                data_inicio=data_inicio,
-                data_fim=data_fim,
-                preco_praticado=preco_praticado,
-                responsavel_desconto_preco_id=responsavel_id,
-                motivo_preco=motivo,
-                check_in_tardio=check_in_tardio,
-                hora_chegada=hora_chegada,
-                multa_praticada=multa_praticada,
-            )
-
-        noites = (data_fim - data_inicio).days
-
-        _AlterarValorCalculadoModal(
-            self,
-            noites=noites,
-            valor_calculado=preco_calculado,
-            valor_alterado=preco_praticado,
-            ao_confirmar=_on_confirmar,
+            responsavel_multa_id=self._id_responsavel_multa(),
+            ao_confirmar=self._gravar,
         )
 
     def _gravar(
@@ -1293,24 +1260,20 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         data_inicio,
         data_fim,
         preco_praticado,
-        responsavel_desconto_preco_id,
-        motivo_preco,
-        check_in_tardio,
-        hora_chegada,
-        multa_praticada,
+        responsavel_desconto_preco_id="",
+        motivo_preco="",
+        check_in_tardio=False,
+        hora_chegada="",
+        multa_praticada=None,
     ):
-        """Chama `contratos.registar_airbnb` e trata do sucesso/erro.
-        Este método é a única porta para gravar — chamado tanto pelo
-        caminho direto do `_registar` como pelo callback de
-        confirmação do `_AlterarValorCalculadoModal`.
+        """Chama `contratos.registar_airbnb` e depois gera o Rol de
+        Lavanderia automático.
 
-        Valida a unidade de novo (defesa em profundidade): o
-        `_registar` já garante isto no caminho direto, mas o
-        `_gravar` também é chamado pelo callback do modal de
-        sub-confirmação — e nesse caminho o Pylance não consegue
-        provar que `self.unidade_selecionada` não é None (o método
-        é chamado por closure, não por análise de fluxo direta).
-        Guardar numa variável local resolve o aviso do linter.
+        Chamado pelo `_ConfirmacaoAirbnb` (via `ao_confirmar`) quando
+        o utilizador clica "Confirmar". Os parâmetros do desconto
+        (`responsavel_desconto_preco_id`, `motivo_preco`) vêm do
+        formulário da Zona 1 desse modal; se não houver desconto, o
+        modal chama o método com os valores por omissão.
         """
         unidade = self.unidade_selecionada
 
@@ -1335,22 +1298,64 @@ class NovaReservaAirbnb(ctk.CTkFrame):
             self._mostrar_erro(str(erro))
             return
 
-        aviso = (
-            " (aviso: documento expira durante a estadia)"
-            if (ocupacao["aviso_documento"])
-            else ""
-        )
-        nota_motivo = f" [motivo: {motivo_preco}]" if motivo_preco else ""
-        self._mostrar_sucesso(
-            f"Reserva registada com sucesso: {ocupacao['id']}"
-            f"{aviso}{nota_motivo}"
-        )
+        # FASE 4 — geração automática do Rol de Lavanderia.
+        # Best-effort: a reserva já está gravada; se o Rol falhar,
+        # avisamos mas não desfazemos nada.
+        try:
+            requisicao = estoque.gerar_rol_lavanderia_automatico(
+                ocupacao=ocupacao,
+                responsavel_id=self._id_responsavel_ativo(),
+            )
+        except Exception as erro:
+            # Erro inesperado — a reserva está gravada; só o Rol
+            # falhou. Avisamos e seguimos.
+            self._mostrar_erro(
+                f"Reserva {ocupacao['id']} gravada, mas o Rol de "
+                f"Lavanderia falhou: {erro}.\n\nCorrige a situação "
+                f"e cria o Rol manualmente se for preciso."
+            )
+            if self.popup_pai is not None:
+                self.popup_pai._fechar()
+            return
 
-        # Fecha o popup que contém este formulário — quem trata do
-        # destroy() e do `_recarregar()` da lista por trás é o
-        # próprio popup, no seu `_fechar()`.
+        if requisicao is None:
+            # Sem produtos a enviar (unidade sem lugares ativos, ou
+            # todos os produtos das regras desativados). A reserva
+            # grava-se sempre; só não há Rol a criar.
+            aviso = ""
+            if ocupacao["aviso_documento"]:
+                aviso = " (aviso: documento expira durante a estadia)"
+
+            self._mostrar_sucesso(
+                f"Reserva registada com sucesso: {ocupacao['id']}"
+                f"{aviso}\n\nSem Rol de Lavanderia — a unidade não "
+                f"tem lugares ativos que o justifiquem."
+            )
+        else:
+            aviso = ""
+            if ocupacao["aviso_documento"]:
+                aviso = " (aviso: documento expira durante a estadia)"
+
+            self._mostrar_sucesso(
+                f"Reserva registada com sucesso: {ocupacao['id']}"
+                f"{aviso}\n\nRol de Lavanderia criado: "
+                f"{requisicao['id']} ({requisicao['estado']})."
+            )
+
         if self.popup_pai is not None:
             self.popup_pai._fechar()
+
+    def _id_responsavel_ativo(self):
+        """ID do responsável ativo da sessão — usado como autor do
+        Rol de Lavanderia automático (Fase 4)."""
+        from gui import sessao
+
+        ativo = sessao.obter_responsavel_ativo()
+
+        if ativo is None:
+            return ""
+
+        return ativo["id"]
 
 
 class NovaReservaAirbnbModal(ctk.CTkToplevel):
@@ -1379,37 +1384,85 @@ class NovaReservaAirbnbModal(ctk.CTkToplevel):
         self.destroy()
 
 
-class _AlterarValorCalculadoModal(ctk.CTkToplevel):
-    """Sub-confirmação quando o preço praticado fica abaixo do
-    calculado, no momento de registar uma reserva Airbnb (13/09/2026,
-    ver docstring do módulo).
+# =====================================================================
+# CONFIRMAÇÃO AIRBNB — Fase 4, v1.4.0
+# =====================================================================
+#
+# Modal único de confirmação antes de gravar uma reserva Airbnb:
+#
+# - Zona 1 (condicional): só aparece quando o preço praticado é
+#   inferior ao calculado. Reaproveita o desenho do antigo
+#   `_AlterarValorCalculadoModal` (calculado / praticado / diferença
+#   + motivo + responsável obrigatório).
+#
+# - Zona 2 (sempre): Rol de Lavanderia pré-preenchido, só de leitura,
+#   com os produtos e quantidades calculados a partir dos lugares
+#   ativos da unidade + cama extra. Aviso verde (stock suficiente) ou
+#   amarelo (stock insuficiente) por baixo.
+#
+# O botão "Confirmar" grava a reserva E cria o Rol; "Cancelar" não
+# grava nada. Substitui o `_AlterarValorCalculadoModal`, que é
+# apagado no fim do bloco 5a.
 
-    Não é o "Editar reserva" (esse serve para corrigir uma reserva já
-    criada) — este modal vive dentro do fluxo de criação.
 
-    Recebe `ao_confirmar(responsavel_id, motivo)` — um callback do
-    formulário pai que faz o `contratos.registar_airbnb` final.
-    """
+class _ConfirmacaoAirbnb(ctk.CTkToplevel):
+    """Confirmação da reserva Airbnb — modal único, com as duas
+    zonas descritas acima."""
 
     def __init__(
         self,
         master,
-        noites,
-        valor_calculado,
-        valor_alterado,
+        unidade,
+        cliente,
+        data_inicio,
+        data_fim,
+        preco_calculado,
+        preco_praticado,
+        check_in_tardio,
+        hora_chegada,
+        multa_praticada,
+        responsavel_multa_id,
         ao_confirmar,
     ):
         super().__init__(master)
+
+        self.unidade = unidade
+        self.cliente = cliente
+        self.data_inicio = data_inicio
+        self.data_fim = data_fim
+        self.preco_calculado = preco_calculado
+        self.preco_praticado = preco_praticado
+        self.check_in_tardio = check_in_tardio
+        self.hora_chegada = hora_chegada
+        self.multa_praticada = multa_praticada
+        self.responsavel_multa_id = responsavel_multa_id
         self.ao_confirmar = ao_confirmar
 
-        diferenca = valor_alterado - valor_calculado
+        # FASE 4 — o Rol de Lavanderia é calculado já aqui, no
+        # __init__, para o ecrã abrir já preenchido. A reserva ainda
+        # não existe, mas o cálculo só precisa da unidade.
+        try:
+            self.produtos_rol, self.produtos_desativados = (
+                estoque.calcular_rol_lavanderia(unidade["id"])
+            )
+        except ValueError:
+            # Se a unidade por algum motivo já não existir, abre o
+            # modal na mesma (o cliente ainda pode querer ver a
+            # reserva); a Zona 2 aparece vazia.
+            self.produtos_rol = []
+            self.produtos_desativados = []
 
-        # 480x540 — o conteúdo cabe confortavelmente, sem scroll e
-        # sem cortar os botões no fundo. Antes eram 440 e os botões
-        # "Voltar"/"Confirmar" ficavam fora da área visível (bug
-        # apanhado pelo aluno, 13/09/2026).
-        largura, altura = 480, 540
-        self.title("Alterar valor calculado")
+        tem_desconto = (
+            preco_calculado is not None and preco_praticado < preco_calculado
+        )
+
+        # Altura variável — sem Zona 1, o modal é mais baixo. O
+        # ajuste real de altura faz-se no fim do `__init__` (ver
+        # `_ajustar_altura`), depois de todos os widgets estarem
+        # construídos.
+        largura, altura = 560, 600
+
+        self.title(f"Confirmar Reserva — {unidade['nome']}")
         self.geometry(f"{largura}x{altura}")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
@@ -1417,125 +1470,188 @@ class _AlterarValorCalculadoModal(ctk.CTkToplevel):
         _colocar_no_topo(self)
         self.protocol("WM_DELETE_WINDOW", self.destroy)
 
+        # ---- Cabeçalho (título + cliente + unidade + estadia) ----
+        self._construir_cabecalho()
+
+        # ---- Corpo (Zona 1 condicional + Zona 2 sempre) ----
+        corpo = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        corpo.pack(fill="both", expand=True, padx=20, pady=(0, 4))
+        self.corpo = corpo
+
+        if tem_desconto:
+            self._construir_zona_1(corpo)
+
+        self._construir_zona_2(corpo)
+
+        # ---- Rodapé ----
+        self._construir_rodape()
+
+        # Ajusta a altura ao conteúdo real. Sem isto, o modal com
+        # Zona 1 ficava com scroll desnecessário (o conteúdo cabia
+        # em 600) e o modal sem Zona 1 ficava com espaço vazio em
+        # baixo. `update_idletasks()` primeiro para o Tk calcular as
+        # alturas dos filhos; só depois `winfo_reqheight()`.
+        self.after(20, self._ajustar_altura)
+
+    def _ajustar_altura(self):
+        """Redimensiona o modal à altura que o conteúdo já pede.
+
+        Usa `tkinter.Toplevel.geometry` (a versão de base, não a do
+        customtkinter) porque `CTkToplevel.geometry` volta a
+        multiplicar o valor pela escala da janela — e o
+        `winfo_reqheight()` já vem em pixéis reais, escalados.
+        Mesma técnica de `_ajustar_tamanho` em `gui_propriedades.py`
+        (ver lição sobre geometria, ficheiro 11).
+        """
+        import tkinter
+
+        self.update_idletasks()
+        largura = 560
+        altura = self.winfo_reqheight()
+
+        # Uma folga mínima para o rodapé não colar ao bordo.
+        altura = max(altura, 300)
+
+        tkinter.Toplevel.geometry(self, f"{largura}x{altura}")
+
+    # -- cabeçalho ----------------------------------------------------
+
+    def _construir_cabecalho(self):
+        """Cabeçalho: título + cliente + unidade + estadia."""
+        cabecalho = ctk.CTkFrame(self, fg_color="transparent")
+        cabecalho.pack(fill="x", padx=24, pady=(20, 8))
+
         ctk.CTkLabel(
-            self,
-            text="Alterar valor calculado",
+            cabecalho,
+            text=f"Confirmar Reserva — {self.unidade['nome']}",
             text_color=tema.COR_TEXTO,
             font=ctk.CTkFont(size=16, weight="bold"),
-        ).pack(anchor="w", padx=24, pady=(20, 10))
+            anchor="w",
+        ).pack(fill="x")
+
+        noites = (self.data_fim - self.data_inicio).days
+        meta = (
+            f"Cliente: {self.cliente['nome']} "
+            f"({self.cliente['id']}) · "
+            f"Unidade: {self.unidade['nome']} "
+            f"({self.unidade['id']})\n"
+            f"Estadia: {self.data_inicio.strftime('%d/%m/%Y')} → "
+            f"{self.data_fim.strftime('%d/%m/%Y')} · "
+            f"{noites} noites"
+        )
 
         ctk.CTkLabel(
-            self,
-            text=(
-                f"O valor calculado para {noites} noites é "
-                f"{_formatar_valor(valor_calculado)}."
-            ),
-            text_color=tema.COR_TEXTO,
-            font=ctk.CTkFont(size=12),
+            cabecalho,
+            text=meta,
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
             anchor="w",
-        ).pack(anchor="w", padx=24)
+            justify="left",
+        ).pack(fill="x", pady=(4, 0))
 
+    # -- zona 1 (desconto, condicional) ------------------------------
+
+    def _construir_zona_1(self, master):
+        """Zona 1 — só quando há desconto (preço praticado inferior
+        ao calculado).
+
+        Reaproveita o desenho do antigo `_AlterarValorCalculadoModal`:
+        cartão com calculado / praticado / diferença, mais o motivo
+        (opcional) e o responsável do desconto (obrigatório).
+        """
         ctk.CTkLabel(
-            self,
-            text=(f"Vai gravar {_formatar_valor(valor_alterado)}."),
-            text_color=tema.COR_TEXTO,
-            font=ctk.CTkFont(size=12, weight="bold"),
+            master,
+            text="PREÇO PRATICADO DIVERGENTE DO CALCULADO",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10, weight="bold"),
             anchor="w",
-        ).pack(anchor="w", padx=24, pady=(2, 12))
+        ).pack(fill="x", pady=(4, 6))
 
-        # ---- Cartão calculado / alterado / diferença ----
         cartao = ctk.CTkFrame(
-            self,
+            master,
             fg_color=tema.COR_FUNDO,
             border_width=1,
             border_color=tema.COR_BORDA,
             corner_radius=tema.RAIO_CARTAO,
         )
-        cartao.pack(fill="x", padx=24, pady=(0, 12))
+        cartao.pack(fill="x")
 
         corpo = ctk.CTkFrame(cartao, fg_color="transparent")
         corpo.pack(fill="x", padx=16, pady=12)
 
+        diferenca = self.preco_praticado - self.preco_calculado
+
         self._linha_cartao(
-            corpo, "calculado", _formatar_valor(valor_calculado)
+            corpo, "Preço calculado", _formatar_valor(self.preco_calculado)
         )
-        self._linha_cartao(corpo, "alterado", _formatar_valor(valor_alterado))
+        self._linha_cartao(
+            corpo, "Preço praticado", _formatar_valor(self.preco_praticado)
+        )
+
+        ctk.CTkFrame(corpo, height=1, fg_color=tema.COR_BORDA).pack(
+            fill="x", pady=(6, 4)
+        )
+
         self._linha_cartao(
             corpo,
-            "diferença",
+            "Diferença",
             _formatar_valor(diferenca),
             cor_valor=tema.TEXTO_ERRO,
         )
 
         # ---- Motivo (opcional) ----
         ctk.CTkLabel(
-            self,
-            text="motivo (opcional)",
+            corpo,
+            text="Motivo (opcional)",
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=11),
             anchor="w",
-        ).pack(anchor="w", padx=24)
+        ).pack(fill="x", pady=(12, 2))
 
         self.campo_motivo = ctk.CTkEntry(
-            self,
+            corpo,
             corner_radius=tema.RAIO_CAMPO,
-            placeholder_text="desconto acordado…",
+            placeholder_text="ex.: desconto acordado com cliente habitual",
         )
-        self.campo_motivo.pack(fill="x", padx=24, pady=(2, 12))
+        self.campo_motivo.pack(fill="x", pady=(0, 8))
 
         # ---- Responsável do desconto (obrigatório) ----
         ctk.CTkLabel(
-            self,
+            corpo,
             text="Responsável do desconto *",
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=11),
             anchor="w",
-        ).pack(anchor="w", padx=24)
+        ).pack(fill="x", pady=(4, 2))
 
         self.responsaveis_disponiveis = responsaveis.listar()
-        nomes = ["— Nenhum —"] + [
+        nomes = ["— Escolher —"] + [
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
+
         self.combo_responsavel = ctk.CTkOptionMenu(
-            self,
+            corpo,
             values=nomes,
             corner_radius=tema.RAIO_CAMPO,
         )
         self.combo_responsavel.set(nomes[0])
-        self.combo_responsavel.pack(fill="x", padx=24, pady=(2, 2))
+        self.combo_responsavel.pack(fill="x", pady=(0, 2))
 
         ctk.CTkLabel(
-            self,
-            text="obrigatório quando o valor é inferior ao calculado",
-            text_color=tema.COR_TEXTO_SECUNDARIO,
+            corpo,
+            text=(
+                "Obrigatório quando o preço praticado é inferior ao "
+                "calculado."
+            ),
+            text_color=tema.TEXTO_AVISO,
             font=ctk.CTkFont(size=10),
             anchor="w",
-        ).pack(anchor="w", padx=24)
+        ).pack(fill="x")
 
-        # ---- Rodapé ----
-        rodape = ctk.CTkFrame(self, fg_color="transparent")
-        rodape.pack(fill="x", padx=24, pady=(16, 20), side="bottom")
-
-        ctk.CTkButton(
-            rodape,
-            text="Voltar",
-            fg_color="transparent",
-            border_width=1,
-            border_color=tema.COR_BORDA,
-            text_color=tema.COR_TEXTO,
-            hover_color=tema.COR_BORDA,
-            command=self.destroy,
-        ).pack(side="left")
-
-        ctk.CTkButton(
-            rodape,
-            text="Confirmar",
-            fg_color=tema.AZUL_PRINCIPAL,
-            hover_color=tema.AZUL_CLARO,
-            command=self._confirmar,
-        ).pack(side="right")
+    # -- helper da zona 1 --------------------------------------------
 
     def _linha_cartao(self, master, rotulo, valor, cor_valor=None):
+        """Uma linha rótulo → valor dentro do cartão da Zona 1."""
         linha = ctk.CTkFrame(master, fg_color="transparent")
         linha.pack(fill="x", pady=2)
 
@@ -1556,6 +1672,11 @@ class _AlterarValorCalculadoModal(ctk.CTkToplevel):
         ).pack(side="right")
 
     def _responsavel_escolhido_id(self):
+        """ID do responsável do desconto escolhido no dropdown da
+        Zona 1, ou "" se nenhum."""
+        if not hasattr(self, "combo_responsavel"):
+            return ""
+
         indice = self.combo_responsavel.cget("values").index(
             self.combo_responsavel.get()
         )
@@ -1563,19 +1684,335 @@ class _AlterarValorCalculadoModal(ctk.CTkToplevel):
             return ""
         return self.responsaveis_disponiveis[indice - 1]["id"]
 
-    def _confirmar(self):
-        responsavel_id = self._responsavel_escolhido_id()
+    # -- zona 2 (Rol, sempre) ----------------------------------------
 
-        if not responsavel_id:
-            componentes.mostrar_erro(
-                "Escolhe o responsável que autoriza o desconto."
-            )
+    def _construir_zona_2(self, master):
+        """Zona 2 — Rol de Lavanderia. Sempre presente, só leitura.
+
+        Mostra o chip "ROL LAVANDERIA", a nota "Calculado a partir
+        de: ..." (que ajuda a perceber os números) e a tabela
+        produto / pedido / em armazém. Se houver stock insuficiente
+        ou produtos desativados ignorados, aparece a faixa amarela
+        por baixo; caso contrário, faixa verde.
+        """
+        ctk.CTkLabel(
+            master,
+            text="ROL DE LAVANDERIA",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            anchor="w",
+        ).pack(fill="x", pady=(6, 4))
+
+        cartao = ctk.CTkFrame(
+            master,
+            fg_color=tema.COR_FUNDO,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            corner_radius=tema.RAIO_CARTAO,
+        )
+        cartao.pack(fill="x")
+
+        # ---- Cabeçalho do cartão (título + chip + nota) ----
+        cabecalho = ctk.CTkFrame(
+            cartao,
+            corner_radius=0,
+            fg_color=tema.CABECALHO_TABELA_FUNDO,
+        )
+        cabecalho.pack(fill="x")
+
+        linha_titulo = ctk.CTkFrame(cabecalho, fg_color="transparent")
+        linha_titulo.pack(fill="x", padx=16, pady=(12, 2))
+
+        ctk.CTkLabel(
+            linha_titulo,
+            text="Roupa de cama e banho",
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            anchor="w",
+        ).pack(side="left")
+
+        ctk.CTkLabel(
+            linha_titulo,
+            text="ROL LAVANDERIA",
+            text_color=tema.AZUL_PRINCIPAL,
+            fg_color=tema.ID_CHIP_FUNDO,
+            corner_radius=6,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            padx=8,
+            pady=2,
+        ).pack(side="right")
+
+        nota = self._texto_nota_rol()
+        ctk.CTkLabel(
+            cabecalho,
+            text=nota,
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+            anchor="w",
+            justify="left",
+        ).pack(fill="x", padx=16, pady=(0, 10))
+
+        # ---- Tabela de produtos ----
+        if not self.produtos_rol:
+            ctk.CTkLabel(
+                cartao,
+                text="Sem produtos a enviar para esta unidade.",
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=12),
+                anchor="w",
+            ).pack(fill="x", padx=16, pady=(12, 16))
             return
 
-        motivo = self.campo_motivo.get().strip()
+        # Cabeçalho da tabela
+        linha_cabecalho = ctk.CTkFrame(cartao, fg_color="transparent")
+        linha_cabecalho.pack(fill="x", padx=16, pady=(10, 2))
+
+        for texto, largura, alinhamento in (
+            ("PRODUTO", 280, "w"),
+            ("PEDIDO", 90, "center"),
+            ("EM ARMAZÉM", 110, "center"),
+        ):
+            ctk.CTkLabel(
+                linha_cabecalho,
+                text=texto,
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=10, weight="bold"),
+                width=largura,
+                anchor=alinhamento,
+            ).pack(side="left")
+
+        ctk.CTkFrame(cartao, height=1, fg_color=tema.COR_BORDA).pack(fill="x")
+
+        # Linhas
+        for p in self.produtos_rol:
+            linha = ctk.CTkFrame(cartao, fg_color="transparent")
+            linha.pack(fill="x", padx=16, pady=6)
+
+            ctk.CTkLabel(
+                linha,
+                text=p["nome"],
+                text_color=tema.COR_TEXTO,
+                font=ctk.CTkFont(size=12),
+                width=280,
+                anchor="w",
+            ).pack(side="left")
+
+            ctk.CTkLabel(
+                linha,
+                text=str(p["quantidade"]),
+                text_color=tema.COR_TEXTO,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                width=90,
+                anchor="center",
+            ).pack(side="left")
+
+            try:
+                saldo = estoque.saldo_produto(p["produto_id"])
+            except ValueError:
+                saldo = 0
+
+            falta = saldo < p["quantidade"]
+
+            ctk.CTkLabel(
+                linha,
+                text=str(saldo),
+                text_color=(
+                    tema.TEXTO_ERRO if falta else tema.COR_TEXTO_SECUNDARIO
+                ),
+                font=ctk.CTkFont(
+                    size=12, weight="bold" if falta else "normal"
+                ),
+                width=110,
+                anchor="center",
+            ).pack(side="left")
+
+        # ---- Faixa de stock (verde / amarela) ----
+        ctk.CTkFrame(cartao, height=6, fg_color="transparent").pack()
+        self._construir_faixa_stock(cartao)
+
+    # -- helpers da zona 2 -------------------------------------------
+
+    def _texto_nota_rol(self):
+        """Monta a nota "Calculado a partir de: X + Y + Z" que
+        aparece por baixo do título da Zona 2. Conta os lugares por
+        tipo de cama da unidade."""
+        try:
+            quartos = unidades.listar_quartos(unidade_id=self.unidade["id"])
+        except ValueError:
+            return "Calculado a partir dos lugares da unidade."
+
+        contagem = {"casal": 0, "solteiro": 0, "beliche": 0}
+
+        for quarto in quartos:
+            for lugar in unidades.listar_lugares(quarto_id=quarto["id"]):
+                tipo = lugar["tipo_cama"]
+                if tipo in contagem:
+                    contagem[tipo] += 1
+
+        partes = []
+
+        if contagem["casal"]:
+            partes.append(
+                f"{contagem['casal']} cama"
+                + ("s" if contagem["casal"] > 1 else "")
+                + " de casal"
+            )
+
+        if contagem["solteiro"]:
+            partes.append(
+                f"{contagem['solteiro']} cama"
+                + ("s" if contagem["solteiro"] > 1 else "")
+                + " de solteiro"
+            )
+
+        if contagem["beliche"]:
+            pares = contagem["beliche"] // 2
+            partes.append(f"{pares} beliche" + ("s" if pares > 1 else ""))
+
+        extra = ""
+        if (
+            self.unidade.get("permite_cama_extra")
+            and self.unidade.get("categoria_cama_extra")
+            and (self.unidade.get("qtd_cama_extra") or 0) > 0
+        ):
+            qtd = self.unidade["qtd_cama_extra"]
+            cat = self.unidade["categoria_cama_extra"]
+            extra = (
+                f" + {qtd} cama"
+                + ("s" if qtd > 1 else "")
+                + f" extra de {cat}"
+            )
+
+        if not partes and not extra:
+            return "Sem lugares ativos — Rol vazio."
+
+        return "Calculado a partir de: " + " + ".join(partes) + extra + "."
+
+    def _construir_faixa_stock(self, master):
+        """Faixa verde (stock suficiente) ou amarela (stock
+        insuficiente). Verde se não faltar nada; amarela se algum
+        produto estiver abaixo do pedido."""
+        produtos_em_falta = []
+        for p in self.produtos_rol:
+            try:
+                saldo = estoque.saldo_produto(p["produto_id"])
+            except ValueError:
+                saldo = 0
+            if saldo < p["quantidade"]:
+                produtos_em_falta.append((p, saldo))
+
+        tem_desativados = bool(self.produtos_desativados)
+
+        # ---- Nada a avisar: faixa verde ----
+        if not produtos_em_falta and not tem_desativados:
+            ctk.CTkLabel(
+                master,
+                text="Stock suficiente — o Rol será criado como enviada.",
+                text_color=tema.TEXTO_LIVRE,
+                fg_color=tema.VERDE_LIVRE,
+                corner_radius=tema.RAIO_CAMPO,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                anchor="w",
+            ).pack(fill="x", padx=16, pady=(0, 14))
+            return
+
+        # ---- Com avisos: faixa amarela ----
+        partes = []
+
+        if produtos_em_falta:
+            itens = ", ".join(
+                f"{p['nome']} (faltam "
+                f"{p['quantidade'] - saldo}, {saldo} em armazém)"
+                for p, saldo in produtos_em_falta
+            )
+            partes.append(
+                f"Stock insuficiente — {itens}. O Rol será criado "
+                f"como pendente e fica a aguardar reposição."
+            )
+
+        if tem_desativados:
+            nomes = ", ".join(p["nome"] for p in self.produtos_desativados)
+            partes.append(f"Produtos desativados ignorados: {nomes}.")
+
+        ctk.CTkLabel(
+            master,
+            text=" ".join(partes),
+            text_color=tema.TEXTO_AVISO,
+            fg_color=tema.AMARELO_AVISO,
+            corner_radius=tema.RAIO_CAMPO,
+            font=ctk.CTkFont(size=11),
+            anchor="w",
+            justify="left",
+            wraplength=480,
+        ).pack(fill="x", padx=16, pady=(0, 14))
+
+    # -- rodapé -------------------------------------------------------
+
+    def _construir_rodape(self):
+        """Rodapé com Cancelar/Confirmar."""
+        rodape = ctk.CTkFrame(self, fg_color="transparent")
+        rodape.pack(fill="x", padx=24, pady=(4, 20), side="bottom")
+
+        ctk.CTkButton(
+            rodape,
+            text="Cancelar",
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            rodape,
+            text="Confirmar",
+            fg_color=tema.AZUL_PRINCIPAL,
+            hover_color=tema.AZUL_CLARO,
+            command=self._confirmar,
+        ).pack(side="right")
+
+    def _confirmar(self):
+        """Fecha o modal e chama o `ao_confirmar` (que é o `_gravar`
+        do `NovaReservaAirbnb`) com os dados que ele precisa.
+
+        Se a Zona 1 existir (houve desconto), valida primeiro que
+        um responsável foi escolhido — sem isto o `contratos.
+        registar_airbnb` ia recusar mais tarde, com uma mensagem
+        menos clara.
+        """
+        # Se há desconto, o responsável é obrigatório.
+        if hasattr(self, "combo_responsavel"):
+            responsavel_id = self._responsavel_escolhido_id()
+
+            if not responsavel_id:
+                componentes.mostrar_erro(
+                    "Escolhe o responsável que autoriza o desconto."
+                )
+                return
+
+            motivo = self.campo_motivo.get().strip()
+        else:
+            responsavel_id = ""
+            motivo = ""
+
+        # Guarda referências antes de fechar — o `ao_confirmar` corre
+        # já depois do `destroy()`, e o `self` continua válido em
+        # Python, mas é mais claro assim.
+        ao_confirmar = self.ao_confirmar
+        dados = {
+            "data_inicio": self.data_inicio,
+            "data_fim": self.data_fim,
+            "preco_praticado": self.preco_praticado,
+            "responsavel_desconto_preco_id": responsavel_id,
+            "motivo_preco": motivo,
+            "check_in_tardio": self.check_in_tardio,
+            "hora_chegada": self.hora_chegada,
+            "multa_praticada": self.multa_praticada,
+        }
 
         self.destroy()
-        self.ao_confirmar(responsavel_id, motivo)
+        ao_confirmar(**dados)
 
 
 class EncerrarContratoModal(ctk.CTkToplevel):
