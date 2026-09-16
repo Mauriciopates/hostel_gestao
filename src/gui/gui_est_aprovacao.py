@@ -69,9 +69,12 @@ from .gui_est_requisicoes import _RejeitarRequisicaoModal
 # Aliases dos helpers partilhados — mesma convenção dos outros
 # ficheiros do módulo Stock.
 _OPCAO_TODOS_RESPONSAVEIS = gui_est_comum.OPCAO_TODOS_RESPONSAVEIS
-_LARGURA_PRODUTO = gui_est_comum.LARGURA_PRODUTO
-_LARGURA_ARMAZEM = gui_est_comum.LARGURA_ARMAZEM
-_LARGURA_PEDIDO = gui_est_comum.LARGURA_PEDIDO
+# FASE 4 — filtros Estado e Tipo da Rota de Envio. Os dois
+# primeiros vêm do `gui_est_comum` (já existem lá); o terceiro é
+# novo (não havia opção "Todos os tipos" em lado nenhum).
+_OPCAO_TODOS_ESTADOS = gui_est_comum.OPCAO_TODOS_ESTADOS
+_ESTADOS_REQUISICAO = gui_est_comum.ESTADOS_REQUISICAO
+_OPCAO_TODOS_TIPOS = "Todos os tipos"
 
 _rotulo_responsavel = gui_est_comum.rotulo_responsavel
 
@@ -87,11 +90,21 @@ _LARGURA_ARMAZEM_RESUMO = 100
 _LARGURA_ENVIAR_RESUMO = 100
 
 
+# Colunas da Rota de Envio (Fase 4, 16/09/2026). A ordem segue o
+# Mockup 2 validado:
+#
+# - REQUISIÇÃO: id + data (bloco vertical).
+# - TIPO: chip abreviado "Rol" / "Pedido" (azul / cinza).
+# - RESPONSÁVEL: nome do dono.
+# - OBSERVAÇÕES: texto livre; numa rejeitada, é o motivo.
+# - STATUS: chip de estado (pendente/enviada/fechada/rejeitada/cancelada).
+# - GERIR: botão.
 _COLUNAS_APROVACAO = (
     componentes.Coluna("REQUISIÇÃO", minimo=130, espaco=8),
-    componentes.Coluna("RESPONSÁVEL", peso=1, minimo=180),
-    componentes.Coluna("OBSERVAÇÕES", peso=3, minimo=280),
-    componentes.Coluna("ESTADO", minimo=110, alinhamento="centro"),
+    componentes.Coluna("TIPO", minimo=90, alinhamento="centro"),
+    componentes.Coluna("RESPONSÁVEL", peso=1, minimo=160),
+    componentes.Coluna("OBSERVAÇÕES", peso=3, minimo=260),
+    componentes.Coluna("STATUS", minimo=110, alinhamento="centro"),
     componentes.Coluna("GERIR", minimo=90, alinhamento="e"),
 )
 
@@ -105,9 +118,14 @@ class ListaAprovacao(ctk.CTkFrame):
         super().__init__(master, fg_color=tema.COR_FUNDO)
         self.controlador = controlador
 
-        componentes.Cabecalho(
-            self, titulo="Stock · Aprovação de Requisições"
-        ).pack(fill="x")
+        # FASE 4 (16/09/2026) — a ListaAprovacao passa a ser a Rota
+        # de Envio: mostra TODAS as requisições (não só pendentes),
+        # com três filtros e o chip de tipo abreviado na linha.
+        # Continua a viver neste ficheiro, com o mesmo nome de
+        # classe — o nome interno não aparece ao utilizador.
+        componentes.Cabecalho(self, titulo="Stock · Rota de Envio").pack(
+            fill="x"
+        )
 
         barra = ctk.CTkFrame(self, fg_color="transparent")
         barra.pack(fill="x", padx=20, pady=(4, 8))
@@ -126,8 +144,29 @@ class ListaAprovacao(ctk.CTkFrame):
             ),
         ).pack(side="left")
 
+        # ---- Filtros: Estado, Tipo, Responsável ----
         filtros = ctk.CTkFrame(self, fg_color="transparent")
         filtros.pack(fill="x", padx=20, pady=(0, 6))
+
+        self.combo_estado = ctk.CTkOptionMenu(
+            filtros,
+            values=[_OPCAO_TODOS_ESTADOS] + list(_ESTADOS_REQUISICAO),
+            width=180,
+            corner_radius=tema.RAIO_CAMPO,
+            command=lambda _valor: self._recarregar(),
+        )
+        self.combo_estado.set(_OPCAO_TODOS_ESTADOS)
+        self.combo_estado.pack(side="left")
+
+        self.combo_tipo = ctk.CTkOptionMenu(
+            filtros,
+            values=[_OPCAO_TODOS_TIPOS, "Rol Lavanderia", "Pedido Staff"],
+            width=180,
+            corner_radius=tema.RAIO_CAMPO,
+            command=lambda _valor: self._recarregar(),
+        )
+        self.combo_tipo.set(_OPCAO_TODOS_TIPOS)
+        self.combo_tipo.pack(side="left", padx=(10, 0))
 
         self.responsaveis_disponiveis = responsaveis.listar(
             incluir_inativos=True
@@ -140,21 +179,32 @@ class ListaAprovacao(ctk.CTkFrame):
             r["id"]: r["nome"] for r in self.responsaveis_disponiveis
         }
 
-        self.combo_responsavel = ctk.CTkOptionMenu(
-            filtros,
-            values=([_OPCAO_TODOS_RESPONSAVEIS] + sorted(self.id_por_rotulo)),
-            width=240,
-            corner_radius=tema.RAIO_CAMPO,
-            command=lambda _valor: self._recarregar(),
-        )
-        self.combo_responsavel.set(_OPCAO_TODOS_RESPONSAVEIS)
-        self.combo_responsavel.pack(side="left")
+        # FASE 4 — o filtro "Responsável" só aparece a Admin/Master.
+        # Para Staff, o filtro nem é construído (e o ecrã nem é
+        # acessível pelo hub — ver `gui_est_hub.py`).
+        tipo_utilizador = sessao.tipo_utilizador_ativo()
+        e_administrativo = tipo_utilizador in ("Admin", "Master")
+
+        self.combo_responsavel = None
+
+        if e_administrativo:
+            self.combo_responsavel = ctk.CTkOptionMenu(
+                filtros,
+                values=(
+                    [_OPCAO_TODOS_RESPONSAVEIS] + sorted(self.id_por_rotulo)
+                ),
+                width=240,
+                corner_radius=tema.RAIO_CAMPO,
+                command=lambda _valor: self._recarregar(),
+            )
+            self.combo_responsavel.set(_OPCAO_TODOS_RESPONSAVEIS)
+            self.combo_responsavel.pack(side="left", padx=(10, 0))
 
         self.tabela = componentes.Tabela(
             self,
             colunas=_COLUNAS_APROVACAO,
             altura_linha=52,
-            mensagem_vazia="Não há requisições pendentes de aprovação.",
+            mensagem_vazia="Nenhuma requisição com estes filtros.",
             tom_alternado=True,
         )
         self.tabela.pack(fill="both", expand=True, padx=20, pady=(4, 12))
@@ -163,22 +213,64 @@ class ListaAprovacao(ctk.CTkFrame):
 
     # -- carregamento / atualização ----------------------------------
 
+    def _estado_filtro(self):
+        """Estado escolhido no filtro, ou None para "todos"."""
+        valor = self.combo_estado.get()
+        return None if valor == _OPCAO_TODOS_ESTADOS else valor
+
+    def _tipo_filtro(self):
+        """Origem escolhida no filtro ("rol" ou "pedido"), ou None.
+
+        No dropdown os rótulos são "Rol Lavanderia" / "Pedido Staff"
+        (mais legíveis), mas o `estoque` trabalha com as chaves
+        curtas — daí este mapeamento.
+        """
+        valor = self.combo_tipo.get()
+
+        if valor == "Rol Lavanderia":
+            return "rol"
+
+        if valor == "Pedido Staff":
+            return "pedido"
+
+        return None
+
     def _responsavel_filtro(self):
+        """ID do responsável filtrado, ou None.
+
+        Devolve None quando o combo não existe (Staff) ou quando
+        está em "Todos".
+        """
+        if self.combo_responsavel is None:
+            return None
+
         return self.id_por_rotulo.get(self.combo_responsavel.get())
 
     def _recarregar(self):
-        """Limpa e volta a desenhar a tabela, só com as pendentes.
+        """Limpa e volta a desenhar a tabela.
 
-        Ordenação: mais recentes primeiro (mesma convenção da lista
-        geral) — o que chegou hoje interessa mais do que o que
-        chegou há uma semana.
+        FASE 4 (16/09/2026) — a Rota de Envio mostra TODAS as
+        requisições (não só as pendentes), com três filtros: Estado,
+        Tipo e (só para Admin/Master) Responsável. A ordenação
+        continua a ser por data do pedido, mais recentes primeiro.
         """
         self.tabela.limpar()
 
         requisicoes = estoque.listar_requisicoes(
-            estado="pendente",
+            estado=self._estado_filtro(),
             responsavel_id=self._responsavel_filtro(),
         )
+
+        # O filtro de tipo é aplicado em Python porque `estoque` não
+        # o conhece (é `origem` na tabela, mas o módulo de negócio
+        # não expõe filtro por origem). Uma lista filtrada é mais
+        # simples do que alargar a assinatura de listar_requisicoes
+        # só para isto.
+        tipo = self._tipo_filtro()
+
+        if tipo is not None:
+            requisicoes = [r for r in requisicoes if r["origem"] == tipo]
+
         requisicoes.sort(
             key=lambda r: (
                 r["data_pedido"] is not None,
@@ -197,11 +289,14 @@ class ListaAprovacao(ctk.CTkFrame):
     def _desenhar_linha(self, requisicao):
         """Desenha uma linha da tabela.
 
-        Estrutura das colunas: id + data, responsável, observações,
-        chip de estado, botão "Gerir". Sem a lista de produtos na
-        coluna do meio — essa informação está no resumo, e aqui só
-        fazia ruído (é o mesmo que já se decidiu na lista de
-        Requisições).
+        Estrutura das colunas (Fase 4, 16/09/2026):
+
+        - REQUISIÇÃO: id + data
+        - TIPO: chip abreviado "Rol" (azul) / "Pedido" (cinza)
+        - RESPONSÁVEL: nome do dono
+        - OBSERVAÇÕES: texto livre; numa rejeitada, o motivo
+        - STATUS: chip de estado
+        - GERIR: botão
         """
         linha = self.tabela.nova_linha()
 
@@ -224,10 +319,21 @@ class ListaAprovacao(ctk.CTkFrame):
         ).pack(fill="x")
         self.tabela.colocar(linha, 0, coluna_id)
 
-        # ---- Responsável ----
+        # ---- TIPO (chip abreviado) ----
+        # "Rol" no chip (azul), "Pedido" (cinza). Os nomes completos
+        # ("Rol Lavanderia" / "Pedido Staff") só aparecem no filtro
+        # — o chip da coluna tem 90px de largura, e o nome completo
+        # não cabe.
         self.tabela.colocar(
             linha,
             1,
+            self._chip_tipo(linha, requisicao["origem"]),
+        )
+
+        # ---- Responsável ----
+        self.tabela.colocar(
+            linha,
+            2,
             ctk.CTkLabel(
                 linha,
                 text=self.nomes_por_id.get(
@@ -241,27 +347,37 @@ class ListaAprovacao(ctk.CTkFrame):
         )
 
         # ---- Observações ----
+        texto_obs = requisicao["observacoes"] or "—"
+        cor_obs = tema.COR_TEXTO_SECUNDARIO
+
+        if (
+            requisicao["estado"] == "rejeitada"
+            and requisicao["motivo_rejeicao"]
+        ):
+            texto_obs = f"motivo: {requisicao['motivo_rejeicao']}"
+            cor_obs = tema.TEXTO_ERRO
+
         self.tabela.colocar(
             linha,
-            2,
+            3,
             ctk.CTkLabel(
                 linha,
-                text=requisicao["observacoes"] or "—",
-                text_color=tema.COR_TEXTO_SECUNDARIO,
+                text=texto_obs,
+                text_color=cor_obs,
                 font=ctk.CTkFont(size=11),
                 anchor="w",
             ),
         )
 
-        # ---- Estado ----
+        # ---- Status ----
         self.tabela.colocar(
             linha,
-            3,
+            4,
             gui_est_comum.etiqueta_estado(linha, requisicao["estado"]),
         )
 
         # ---- Gerir ----
-        acoes = self.tabela.celula_acoes(linha, 4)
+        acoes = self.tabela.celula_acoes(linha, 5)
         acoes.adicionar(
             ctk.CTkButton(
                 acoes,
@@ -276,6 +392,30 @@ class ListaAprovacao(ctk.CTkFrame):
                 hover_color=tema.COR_BORDA,
                 command=lambda: ResumoAprovacaoModal(self, requisicao),
             )
+        )
+
+    def _chip_tipo(self, master, origem):
+        """Devolve o chip do TIPO ("Rol" / "Pedido"). Mesma
+        convenção de cores já usada no `gui_est_requisicoes.py`:
+        'rol' → azul, 'pedido' → cinza neutro."""
+        if origem == "rol":
+            texto = "Rol"
+            fg_color = tema.ID_CHIP_FUNDO
+            text_color = tema.AZUL_PRINCIPAL
+        else:
+            texto = "Pedido"
+            fg_color = tema.CINZA_INDISPONIVEL
+            text_color = tema.TEXTO_INDISPONIVEL
+
+        return ctk.CTkLabel(
+            master,
+            text=texto,
+            text_color=text_color,
+            fg_color=fg_color,
+            corner_radius=8,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            width=70,
+            height=22,
         )
 
 
@@ -304,6 +444,13 @@ class ResumoAprovacaoModal(ctk.CTkToplevel):
         self.tela_lista = tela_lista
         self.requisicao = requisicao
 
+        # FASE 4 (16/09/2026) — o modal já não é só para aprovar.
+        # Mostra a ficha em qualquer estado, mas só deixa aprovar/
+        # rejeitar quando a requisição está pendente. Os botões, a
+        # coluna "A enviar" editável e a nota ao responsável só
+        # fazem sentido nesse estado.
+        self.e_pendente = requisicao["estado"] == "pendente"
+
         # Lê o que a requisição pediu, e o saldo atual de cada
         # produto. Os dois números ficam guardados porque a coluna
         # "Em armazém" é só de leitura (o saldo não muda de abrir
@@ -322,13 +469,20 @@ class ResumoAprovacaoModal(ctk.CTkToplevel):
         }
         self.campos_por_produto = {}
 
-        largura, altura = 640, 620
+        # FASE 4 (16/09/2026) — altura passa a ser ajustada ao
+        # conteúdo, no fim do __init__ (ver `_ajustar_altura`). Antes
+        # era fixa em 620px, e com 3+ produtos (ou observação
+        # comprida) o rodapé ficava fora da janela — bug apanhado
+        # pelo aluno ao testar a REQ-015.
+        largura = 640
+        altura_inicial = 620
+
         self.title(f"Aprovar requisição — {requisicao['id']}")
-        self.geometry(f"{largura}x{altura}")
+        self.geometry(f"{largura}x{altura_inicial}")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
         self.transient(tela_lista)
-        _centrar_sobre(self, tela_lista, largura, altura)
+        _centrar_sobre(self, tela_lista, largura, altura_inicial)
         _colocar_no_topo(self)
 
         self._construir_cabecalho()
@@ -337,6 +491,31 @@ class ResumoAprovacaoModal(ctk.CTkToplevel):
         self._construir_avisos()
         self._construir_nota()
         self._construir_rodape()
+        # Ajusta a altura ao conteúdo real. Com 3+ produtos, ou
+        # com observação comprida, o conteúdo excede os 620px
+        # iniciais e o rodapé ficava fora da janela.
+        self.after(20, self._ajustar_altura)
+
+    def _ajustar_altura(self):
+        """Redimensiona o modal à altura que o conteúdo já pede.
+
+        Usa `tkinter.Toplevel.geometry` (a versão de base, não a do
+        customtkinter) porque `CTkToplevel.geometry` volta a
+        multiplicar o valor pela escala da janela — e o
+        `winfo_reqheight()` já vem em pixéis reais, escalados.
+        Mesma técnica de `_ajustar_tamanho` em `gui_propriedades.py`
+        (ver lição sobre geometria, ficheiro 11).
+        """
+        import tkinter
+
+        self.update_idletasks()
+        largura = 640
+        altura = self.winfo_reqheight()
+
+        # Uma folga mínima para o rodapé não colar ao bordo.
+        altura = max(altura, 400)
+
+        tkinter.Toplevel.geometry(self, f"{largura}x{altura}")
 
     # -- construção --------------------------------------------------
 
@@ -437,11 +616,16 @@ class ResumoAprovacaoModal(ctk.CTkToplevel):
         interno = ctk.CTkFrame(cabecalho, fg_color="transparent")
         interno.pack(fill="x", padx=16, pady=8)
 
+        # FASE 4 — o cabeçalho muda consoante o estado: em pendente é
+        # "A ENVIAR" (editável); nos outros estados é "ENVIADO" (só
+        # leitura, mostra o que foi de facto enviado).
+        titulo_ultima_coluna = "A ENVIAR" if self.e_pendente else "ENVIADO"
+
         for texto, largura in (
             ("PRODUTO", _LARGURA_PRODUTO_RESUMO),
             ("PEDIDO", _LARGURA_PEDIDO_RESUMO),
             ("EM ARMAZÉM", _LARGURA_ARMAZEM_RESUMO),
-            ("A ENVIAR", _LARGURA_ENVIAR_RESUMO),
+            (titulo_ultima_coluna, _LARGURA_ENVIAR_RESUMO),
         ):
             ctk.CTkLabel(
                 interno,
@@ -480,13 +664,12 @@ class ResumoAprovacaoModal(ctk.CTkToplevel):
                 anchor="w",
             ).pack(side="left")
 
-            # "Em armazém" a vermelho quando o saldo é insuficiente
-            # para o que foi pedido — a faixa amarela abaixo também
-            # o dirá por extenso, mas o número vermelho ajuda a
-            # localizar o produto certo na linha.
+            # "Em armazém" só fica a vermelho em pendente (é aí
+            # que o saldo insuficiente importa para decidir);
+            # nos outros estados é só informativo.
             cor_saldo = (
                 tema.TEXTO_ERRO
-                if saldo < item["quantidade_pedida"]
+                if self.e_pendente and saldo < item["quantidade_pedida"]
                 else tema.COR_TEXTO_SECUNDARIO
             )
             ctk.CTkLabel(
@@ -498,29 +681,36 @@ class ResumoAprovacaoModal(ctk.CTkToplevel):
                 anchor="w",
             ).pack(side="left")
 
-            # Campo "A enviar" — arranca com o valor pedido, mas
-            # editável para baixo (envio parcial). Nunca aceita
-            # mais do que o pedido nem mais do que o saldo; a
-            # validação fina fica em `_quantidades_enviadas`, aqui
-            # só se limita o número a um inteiro.
-            campo = ctk.CTkEntry(
-                linha,
-                width=_LARGURA_ENVIAR_RESUMO - 20,
-                corner_radius=tema.RAIO_CAMPO,
-                justify="center",
-            )
-            campo.insert(0, str(item["quantidade_pedida"]))
-            campo.pack(side="left")
-            # Atualiza a faixa amarela a cada tecla: o aviso tem de
-            # acompanhar o que está escrito, não só o que já foi
-            # submetido (mesma convenção de `_LinhaProduto`).
-            campo.bind(
-                "<KeyRelease>",
-                lambda _evento, pid=item["produto_id"]: self._atualizar_avisos(
-                    pid
-                ),
-            )
-            self.campos_por_produto[item["produto_id"]] = campo
+            if self.e_pendente:
+                # Coluna "A enviar" — campo editável, arranca com o
+                # valor pedido e pode ser reduzido (envio parcial).
+                campo = ctk.CTkEntry(
+                    linha,
+                    width=_LARGURA_ENVIAR_RESUMO - 20,
+                    corner_radius=tema.RAIO_CAMPO,
+                    justify="center",
+                )
+                campo.insert(0, str(item["quantidade_pedida"]))
+                campo.pack(side="left")
+                campo.bind(
+                    "<KeyRelease>",
+                    lambda _evento, pid=item["produto_id"]: (
+                        self._atualizar_avisos(pid)
+                    ),
+                )
+                self.campos_por_produto[item["produto_id"]] = campo
+            else:
+                # Coluna "Enviado" — só leitura, mostra o que foi
+                # mesmo enviado (o valor gravado em
+                # `quantidade_enviada`).
+                ctk.CTkLabel(
+                    linha,
+                    text=str(item["quantidade_enviada"]),
+                    text_color=tema.COR_TEXTO,
+                    font=ctk.CTkFont(size=12, weight="bold"),
+                    width=_LARGURA_ENVIAR_RESUMO,
+                    anchor="w",
+                ).pack(side="left")
 
     def _construir_avisos(self):
         """Faixa amarela com os avisos de stock insuficiente.
@@ -609,24 +799,86 @@ class ResumoAprovacaoModal(ctk.CTkToplevel):
         return avisos
 
     def _construir_nota(self):
-        """Nota ao responsável (opcional) — texto livre que fica
-        gravado na requisição, para o autor ver no detalhe.
+        """Nota ao responsável — só faz sentido em pendente (é o
+        campo que o admin preenche ao aprovar/rejeitar). Nos outros
+        estados, mostra a observação de receção do responsável, se
+        houver — é o que interessa ler depois de fechada.
         """
+        if self.e_pendente:
+            ctk.CTkLabel(
+                self,
+                text="Nota ao responsável (opcional)",
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=11),
+            ).pack(anchor="w", padx=24, pady=(12, 4))
+
+            self.campo_nota = ctk.CTkTextbox(
+                self, height=60, corner_radius=tema.RAIO_CAMPO
+            )
+            self.campo_nota.pack(fill="x", padx=24, pady=(0, 12))
+            return
+
+        # Não-pendente: se houver observação de receção (numa
+        # fechada), mostra-a em leitura. Se não houver, não mostra
+        # nada — uma caixa vazia não é informação.
+        observacao = self.requisicao.get("observacao_rececao") or ""
+
+        if not observacao:
+            return
+
         ctk.CTkLabel(
             self,
-            text="Nota ao responsável (opcional)",
+            text="Observação de receção",
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=24, pady=(12, 4))
 
-        self.campo_nota = ctk.CTkTextbox(
-            self, height=60, corner_radius=tema.RAIO_CAMPO
+        caixa = ctk.CTkFrame(
+            self,
+            fg_color=tema.AMARELO_AVISO,
+            corner_radius=tema.RAIO_CAMPO,
         )
-        self.campo_nota.pack(fill="x", padx=24, pady=(0, 12))
+        caixa.pack(fill="x", padx=24, pady=(0, 12))
+
+        ctk.CTkLabel(
+            caixa,
+            text=observacao,
+            text_color=tema.TEXTO_AVISO,
+            font=ctk.CTkFont(size=11),
+            wraplength=560,
+            justify="left",
+            anchor="w",
+        ).pack(fill="x", padx=14, pady=10)
+
+        # Guarda o atributo em falta para o `_quantidades_enviadas`
+        # (que só corre em pendente) não falhar ao verificar
+        # `self.campo_nota` por engano. Não devia acontecer, mas é
+        # defesa.
+        self.campo_nota = None
 
     def _construir_rodape(self):
+        """Rodapé do modal — varia consoante o estado.
+
+        Em pendente: dois botões (Rejeitar / Aprovar e enviar).
+        Nos outros estados: só um botão "Fechar" (o resumo é só
+        leitura).
+        """
         rodape = ctk.CTkFrame(self, fg_color="transparent")
         rodape.pack(fill="x", padx=24, pady=(4, 18), side="bottom")
+
+        if not self.e_pendente:
+            ctk.CTkButton(
+                rodape,
+                text="Fechar",
+                corner_radius=tema.RAIO_BOTAO,
+                fg_color="transparent",
+                border_width=1,
+                border_color=tema.COR_BORDA,
+                text_color=tema.COR_TEXTO,
+                hover_color=tema.COR_BORDA,
+                command=self.destroy,
+            ).pack(side="right")
+            return
 
         ctk.CTkButton(
             rodape,
