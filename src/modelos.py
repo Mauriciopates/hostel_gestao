@@ -34,6 +34,33 @@ ALTERAÇÕES 13/09/2026 (fluxo de Stock com Aprovação de Requisições):
     pendente (antes de o admin a ver). Só existe enquanto a
     requisição está pendente — uma vez enviada, já saiu stock, e a
     correção faz-se com movimento de ajuste, não com cancelamento.
+
+ALTERAÇÕES 16/09/2026 (v1.4.0 — Fases 2 e 3 do plano de correções):
+
+- `Responsavel` ganha `tipo_utilizador` ('Master'/'Admin'/'Staff').
+  O perfil ficou como coluna do próprio responsável, e não numa
+  tabela `utilizadores` à parte: `responsaveis` já era o alvo de
+  todas as chaves estrangeiras de autoria do sistema, e separar o
+  perfil obrigava a uma junção em cada leitura de sessão sem
+  acrescentar nenhum campo próprio. Continua sem credenciais —
+  palavra-passe e login chegam com `utilizadores.py` (v1.5.0).
+
+- `Lugar` ganha `posicao_beliche` e `beliche_grupo_id`. Um beliche
+  continua a ser dois lugares de capacidade 1 (decisão 17): estes
+  dois campos apenas dizem qual é a cama de cima e qual a de baixo,
+  e quais duas camas formam a mesma estrutura. Só os lugares com
+  `tipo_cama='beliche'` os preenchem; nos outros ficam a "".
+
+- `Unidade` ganha `permite_cama_extra`, `qtd_cama_extra` e
+  `tipo_cama_extra`. Só fazem sentido em unidades de tipo 'airbnb' —
+  a regra vive em `unidades._validar_cama_extra`, não aqui nem na
+  base de dados (um CHECK teria de ler a coluna `tipo` da mesma
+  linha).
+
+- `Cliente` ganha `pais_emissor_documento` e `pais_residencia`, os
+  dois campos que o boletim de alojamento exige e que só o regime
+  Airbnb preenche. O significado de `incompleto` mudou: ver a
+  docstring da classe.
 """
 
 from dataclasses import dataclass
@@ -64,6 +91,13 @@ class Unidade:
     contratos para uma data(decisão 3). Só 'em_manutencao' persiste,
     pois é uma decisão da gestão da unidade.
 
+    Os três campos de cama extra (v1.4.0) descrevem a cama
+    suplementar que a unidade aceita receber: se permite, quantas e
+    de que tipo. Só fazem sentido em unidades de tipo "airbnb" e só
+    são validados quando 'permite_cama_extra' é True — a regra está
+    em `unidades._validar_cama_extra`, não aqui. 'qtd_cama_extra'
+    fica None quando não há cama extra: um "0" seria um número a
+    fingir que existe, e quando existe é sempre positivo.
     """
 
     id: str
@@ -75,6 +109,9 @@ class Unidade:
     multa_check_in_tardio: Decimal
     epoca_alta_ativa: bool = False
     em_manutencao: bool = False
+    permite_cama_extra: bool = False
+    qtd_cama_extra: int | None = None
+    tipo_cama_extra: str = ""
     ativo: bool = True
 
 
@@ -108,6 +145,14 @@ class Lugar:
     'tipo_cama' ("solteiro"/"casal"/"beliche") só decide a aparência
     do lugar na planta de lugares (GUI) — não deriva nem substitui
     'capacidade' (decisão de 06/09/2026, ao chegar este ecrã).
+
+    'posicao_beliche' ("superior"/"inferior") e 'beliche_grupo_id'
+    (v1.4.0) só se aplicam quando 'tipo_cama' é "beliche": dizem qual
+    é a cama de cima e qual a de baixo, e ligam as duas camas da
+    mesma estrutura pelo mesmo identificador de grupo (BEL-001,
+    BEL-002...). Nos restantes lugares ficam a "". O grupo não é uma
+    entidade própria — não há tabela de beliches, porque uma
+    estrutura de beliche não tem nenhum atributo além do par.
     """
 
     id: str
@@ -115,6 +160,8 @@ class Lugar:
     nome: str
     tipo_cama: str
     capacidade: int = 1
+    posicao_beliche: str = ""
+    beliche_grupo_id: str = ""
     ativo: bool = True
 
 
@@ -126,6 +173,24 @@ class Cliente:
     é conservada na anonimização por não identificar e
     ter valor estatistico.
 
+    Nem todos os campos se aplicam aos dois regimes. Um cliente
+    Mensal preenche quase tudo; um cliente Airbnb preenche só o que
+    o boletim de alojamento exige — nome, nacionalidade, data de
+    nascimento, tipo e número de documento, 'pais_emissor_documento'
+    e 'pais_residencia' (os dois últimos acrescentados em 16/09/2026
+    e usados apenas neste regime). NIF, morada, estado civil,
+    validade do documento, telefone, email e contacto de emergência
+    não fazem parte do regime Airbnb. Quem manda nisto é
+    `validacoes.validar_cliente`, não esta classe.
+
+    ATENÇÃO ao significado de 'incompleto' (16/09/2026): já NÃO quer
+    dizer "faltam campos por preencher". Esse conceito foi
+    descartado quando cada regime passou a ter o seu próprio
+    formulário, que só pede o que precisa — o que é obrigatório
+    bloqueia a gravação, e o resto nem chega a ser pedido. A coluna
+    sobrevive com outro uso: `clientes.anonimizar` marca-a True para
+    sinalizar um registo cujos dados foram apagados por RGPD. Quem
+    ler este campo tem de o ler assim.
     """
 
     id: str
@@ -141,6 +206,8 @@ class Cliente:
     data_nascimento: date | None = None
     validade_documento: date | None = None
     contacto_emergencia: str = ""
+    pais_emissor_documento: str = ""
+    pais_residencia: str = ""
     incompleto: bool = False
     anonimizado: bool = False
     data_anonimizado: date | None = None
@@ -158,14 +225,22 @@ class Responsavel:
 
     Antecipado para a Fase 1 sem credenciais  (decisão 10):
     serve para atribuir autoria a operações - requisições de stock,
-    anonimizações, alterações de configuração. Login e permissões
-    chegam na Fase 2.
+    anonimizações, alterações de configuração.
 
+    'tipo_utilizador' (v1.4.0) é o perfil de permissões: 'Master',
+    'Admin' ou 'Staff'. Decide o que cada pessoa pode fazer — enviar
+    um Rol de Lavanderia, aceitar uma devolução, alterar o perfil de
+    outra pessoa. Não é credencial: continua a não haver palavra-
+    passe nem login, só a identificação escolhida ao arrancar a GUI.
+    A validação de quem pode alterar o quê vive na camada de negócio
+    (`responsaveis.alterar_tipo_utilizador`), nunca só na interface —
+    desativar um campo no ecrã é conforto visual, não segurança.
     """
 
     id: str
     nome: str
     contacto: str = ""
+    tipo_utilizador: str = "Staff"
     ativo: bool = True
 
 
