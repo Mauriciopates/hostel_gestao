@@ -106,10 +106,7 @@ def _hash_password(password):
         _ITERACOES,
     )
 
-    return (
-        f"pbkdf2_sha256${_ITERACOES}$"
-        f"{salt.hex()}${hash_bytes.hex()}"
-    )
+    return f"pbkdf2_sha256${_ITERACOES}$" f"{salt.hex()}${hash_bytes.hex()}"
 
 
 def _validar_password(password, hash_guardado):
@@ -209,18 +206,14 @@ def verificar_permissao(autor, perfis_permitidos, perfil_alvo=None):
     tipo_autor = autor.get("tipo_utilizador")
 
     if tipo_autor not in perfis_permitidos:
-        raise ValueError(
-            "O seu perfil não tem permissão para esta operação."
-        )
+        raise ValueError("O seu perfil não tem permissão para esta operação.")
 
     # Regra adicional do Admin: só opera sobre Staff. Um Master passa
     # por aqui sem restrição (está nos perfis_permitidos das chamadas
     # que usam perfil_alvo).
     if perfil_alvo is not None:
         if tipo_autor == "Admin" and perfil_alvo != "Staff":
-            raise ValueError(
-                "Um Admin só pode operar sobre Staff."
-            )
+            raise ValueError("Um Admin só pode operar sobre Staff.")
 
 
 # ---------------------------------------------------------------------
@@ -329,10 +322,11 @@ def definir_credencial(responsavel_id, username, password, autor):
         )
 
     # Regra 5.1: Admin só define credencial a Staff.
-    if autor["tipo_utilizador"] == "Admin" and alvo["tipo_utilizador"] != "Staff":
-        raise ValueError(
-            "Um Admin só pode definir credenciais a Staff."
-        )
+    if (
+        autor["tipo_utilizador"] == "Admin"
+        and alvo["tipo_utilizador"] != "Staff"
+    ):
+        raise ValueError("Um Admin só pode definir credenciais a Staff.")
 
     # Unicidade do username — o UNIQUE da base também garante isto,
     # mas aqui damos uma mensagem específica em vez de erro do MySQL.
@@ -458,9 +452,7 @@ def desativar(responsavel_id, autor):
         raise ValueError(f"O responsável {responsavel_id} não existe.")
 
     if not alvo["ativo"]:
-        raise ValueError(
-            f"O responsável {responsavel_id} já está inativo."
-        )
+        raise ValueError(f"O responsável {responsavel_id} já está inativo.")
 
     campos = {
         "ativo": False,
@@ -496,15 +488,14 @@ def reativar(responsavel_id, autor):
         raise ValueError(f"O responsável {responsavel_id} não existe.")
 
     if alvo["ativo"]:
-        raise ValueError(
-            f"O responsável {responsavel_id} já está ativo."
-        )
+        raise ValueError(f"O responsável {responsavel_id} já está ativo.")
 
     # Regra 5.3: Admin só reativa Staff.
-    if autor["tipo_utilizador"] == "Admin" and alvo["tipo_utilizador"] != "Staff":
-        raise ValueError(
-            "Um Admin só pode reativar Staff."
-        )
+    if (
+        autor["tipo_utilizador"] == "Admin"
+        and alvo["tipo_utilizador"] != "Staff"
+    ):
+        raise ValueError("Um Admin só pode reativar Staff.")
 
     verificar_permissao(autor, {"Master", "Admin"})
 
