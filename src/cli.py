@@ -1224,6 +1224,7 @@ def _atualizar_lugar(quarto_id):
 
     print(f"Lugar atualizado: {lugar['id']} — {lugar['nome']}")
 
+
 def _listar_lugares(quarto_id):
     incluir_inativos = confirmar("Incluir lugares inativos?")
 
@@ -1243,7 +1244,6 @@ def _listar_lugares(quarto_id):
             f"{lg['id']} — {lg['nome']} "
             f"(capacidade {lg['capacidade']}, {estado})"
         )
-
 
 
 def _desativar_lugar(quarto_id):
@@ -1418,43 +1418,61 @@ def _reativar_responsavel():
 def _criar_cliente():
     """Ecrã de criação de um cliente.
 
+    REESTRUTURAÇÃO 16/09/2026, para acompanhar a GUI: o regime passou
+    a ser a primeira pergunta e cada regime pede só os campos que lhe
+    pertencem, em vez de um questionário único com campos ora
+    obrigatórios ora não (ver `_SeletorRegimeClienteModal` e os dois
+    modais dedicados em gui_clientes.py). O conceito de registo
+    "incompleto" desapareceu daqui: o que é obrigatório bloqueia em
+    `validacoes.validar_cliente`, e o que não pertence ao regime nem
+    chega a ser perguntado.
+
+    Um cliente Airbnb preenche só o que o boletim de alojamento
+    exige. NIF, morada, estado civil, validade do documento,
+    telefone, email e contacto de emergência não fazem parte desse
+    regime — vão vazios para `clientes.criar`, não por esquecimento
+    mas porque o regime não os tem.
+
     'regime' não fica gravado (não é campo do cliente — ver
-    clientes.criar) e serve só para saber quais campos são
-    obrigatórios (decisão 11, revista na decisão de 26/08: cada
-    regime tem o seu próprio conjunto de obrigatórios — ver
-    validacoes.validar_cliente). Peço-o logo a seguir ao número de
-    documento precisamente para poder ajustar a obrigatoriedade já
-    no ecrã, em vez de deixar a rejeição só acontecer dentro de
-    validacoes.validar_cliente depois de já teres preenchido tudo
-    o resto.
+    `clientes.criar`).
     """
     print("\n--- Novo cliente ---")
+
+    regime = ler_escolha("Regime", validacoes.TIPOS_UNIDADE)
 
     nome = ler_texto("Nome: ")
     tipo_documento = ler_escolha(
         "Tipo de documento", validacoes.TIPOS_DOCUMENTO
     )
-
     numero_documento = ler_texto("Número de documento: ")
-    regime = ler_escolha("Regime", validacoes.TIPOS_UNIDADE)
-
-    nif = ler_nif("NIF: ", obrigatorio=(regime == "mensal"))
-    email = ler_texto("Email: ", obrigatorio=False)
-    telefone = ler_texto("Telefone: ", obrigatorio=False)
-    morada = ler_texto("Morada: ", obrigatorio=(regime == "mensal"))
-    nacionalidade = ler_texto(
-        "Nacionalidade: ", obrigatorio=(regime == "airbnb")
-    )
-    estado_civil = ler_escolha(
-        "Estado civil",
-        validacoes.TIPOS_ESTADO_CIVIL,
-        obrigatorio=(regime == "mensal"),
-    )
+    nacionalidade = ler_texto("Nacionalidade: ")
     data_nascimento = ler_data("Data de nascimento: ")
-    validade_documento = ler_data("Validade do documento: ")
-    contacto_emergencia = ler_texto(
-        "Contacto de emergência: ", obrigatorio=False
-    )
+
+    if regime == "mensal":
+        nif = ler_nif("NIF: ")
+        morada = ler_texto("Morada: ")
+        estado_civil = ler_escolha(
+            "Estado civil", validacoes.TIPOS_ESTADO_CIVIL
+        )
+        assert estado_civil is not None  # obrigatorio=True: nunca None
+        telefone = ler_texto("Telefone: ")
+        validade_documento = ler_data("Validade do documento: ")
+        email = ler_texto("Email: ", obrigatorio=False)
+        contacto_emergencia = ler_texto(
+            "Contacto de emergência: ", obrigatorio=False
+        )
+        pais_emissor_documento = ""
+        pais_residencia = ""
+    else:
+        pais_emissor_documento = ler_texto("País emissor do documento: ")
+        pais_residencia = ler_texto("País de residência: ")
+        nif = ""
+        morada = ""
+        estado_civil = ""
+        telefone = ""
+        email = ""
+        contacto_emergencia = ""
+        validade_documento = None
 
     try:
         cliente = clientes.criar(
@@ -1467,42 +1485,33 @@ def _criar_cliente():
             telefone=telefone,
             morada=morada,
             nacionalidade=nacionalidade,
-            estado_civil=estado_civil or "",
+            estado_civil=estado_civil,
             data_nascimento=data_nascimento,
             validade_documento=validade_documento,
             contacto_emergencia=contacto_emergencia,
+            pais_emissor_documento=pais_emissor_documento,
+            pais_residencia=pais_residencia,
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
 
-    aviso = (
-        " [incompleto — verifica os campos em falta]"
-        if cliente["incompleto"]
-        else ""
-    )
-    print(f"Cliente criado: {cliente['id']} — {cliente['nome']}{aviso}")
+    print(f"Cliente criado: {cliente['id']} — {cliente['nome']}")
 
 
 def _listar_clientes():
-    """Inclui o filtro por 'incompleto' — decisão 11 exige que essa
-    listagem exista, senão o aviso de campos em falta não produz
-    efeito nenhum.
+    """O filtro por 'incompleto' saiu daqui em 16/09/2026.
+
+    Deixou de haver registos "a meio": cada regime passou a ter o
+    seu próprio formulário, que só pede o que precisa, e o que é
+    obrigatório bloqueia a gravação. A coluna `incompleto`
+    sobrevive na base com outro significado — `clientes.anonimizar`
+    marca-a para sinalizar dados apagados por RGPD — e esse estado
+    já aparece na marca "[anonimizado]", abaixo.
     """
     incluir_inativos = confirmar("Incluir clientes inativos?")
 
-    filtro = ler_escolha(
-        "Filtrar por completude", ("Todos", "Incompletos", "Completos")
-    )
-    assert filtro is not None  # obrigatorio=True (omisso): nunca é None
-
-    incompleto = {"Todos": None, "Incompletos": True, "Completos": False}[
-        filtro
-    ]
-
-    lista = clientes.listar(
-        incluir_inativos=incluir_inativos, incompleto=incompleto
-    )
+    lista = clientes.listar(incluir_inativos=incluir_inativos)
 
     if not lista:
         print("\nNenhum cliente encontrado.")
@@ -1513,8 +1522,6 @@ def _listar_clientes():
     for c in lista:
         estado = "ativo" if c["ativo"] else "inativo"
         marcas = ""
-        if c["incompleto"]:
-            marcas += " [incompleto]"
         if c["anonimizado"]:
             marcas += " [anonimizado]"
 
@@ -1573,12 +1580,19 @@ def _atualizar_cliente():
         cliente["estado_civil"],
     )
 
-    exige_nif = confirmar(
-        "Cliente em regime mensal (torna obrigatórios o NIF, a "
-        "morada e o estado civil; fora do mensal, obrigatório é a "
-        "nacionalidade)?"
-    )
-    regime = "mensal" if exige_nif else None
+    regime = ler_escolha("Regime do cliente", validacoes.TIPOS_UNIDADE)
+
+    pais_emissor_documento = None
+    pais_residencia = None
+
+    if regime == "airbnb":
+        pais_emissor_documento = ler_atualizacao(
+            "País emissor do documento",
+            cliente["pais_emissor_documento"],
+        )
+        pais_residencia = ler_atualizacao(
+            "País de residência", cliente["pais_residencia"]
+        )
 
     data_nascimento = ler_data(
         "Data de nascimento [atual: "
@@ -1612,13 +1626,14 @@ def _atualizar_cliente():
             data_nascimento=data_nascimento,
             validade_documento=validade_documento,
             contacto_emergencia=contacto_emergencia,
+            pais_emissor_documento=pais_emissor_documento,
+            pais_residencia=pais_residencia,
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
 
-    aviso = " [incompleto]" if cliente["incompleto"] else ""
-    print(f"Cliente atualizado: {cliente['id']} — {cliente['nome']}{aviso}")
+    print(f"Cliente atualizado: {cliente['id']} — {cliente['nome']}")
 
 
 def _desativar_cliente():
