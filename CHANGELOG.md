@@ -3,7 +3,7 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
-## [1.4.0] - 2026-09-17
+## [1.4.0] - 2026-09-17 
 
 Estabilização da interface. As correções foram organizadas por ordem
 de dependência do código, não por ecrã: primeiro a infraestrutura de
