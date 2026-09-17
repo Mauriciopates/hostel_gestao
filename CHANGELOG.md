@@ -3,44 +3,98 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
-## [Não lançado] - rumo a 1.4.0
+## [1.4.0] - 2026-09-17
 
-Fase 2 — estabilização da interface, bloco 1 (infraestrutura de pastas).
-As pastas de trabalho do sistema saem de dentro do repositório e passam a
-viver num sítio fixo fora da pasta de instalação, criado automaticamente
-no arranque. É o que permite correr o sistema como executável
-(PyInstaller) sem erros de permissão de escrita — um executável pode ficar
-instalado numa pasta onde o utilizador não pode escrever, e até aqui o
-código assumia sempre que a raiz do projeto era escrevível.
+Estabilização da interface. As correções foram organizadas por ordem
+de dependência do código, não por ecrã: primeiro a infraestrutura de
+pastas, depois a base de dados e as permissões, e só então os ecrãs
+que assentam em cima delas.
+
+As pastas de trabalho do sistema saem de dentro do repositório e
+passam a viver num sítio fixo fora da pasta de instalação, criado
+automaticamente no arranque. É o que permite correr o sistema como
+executável (PyInstaller) sem erros de permissão de escrita — um
+executável pode ficar instalado numa pasta onde o utilizador não pode
+escrever, e até aqui o código assumia sempre que a raiz do projeto era
+escrevível.
 
 ## Adicionado
 
 - config.DIR_BASE, config.DIR_DADOS, config.DIR_BACKUPS,
-config.DIR_CONTRATOS e config.DIR_LOGS — os cinco caminhos que o sistema
-usa em disco, todos derivados de um só sítio. Em Windows tenta
+config.DIR_CONTRATOS e config.DIR_LOGS — os cinco caminhos que o
+sistema usa em disco, todos derivados de um só sítio. Em Windows tenta
 C:\Hostel_gestao; se não houver permissão de escrita, cai para
-Path.home()/"Hostel_gestao". Deixa de haver caminhos calculados a partir
-da raiz do repositório espalhados por vários módulos.
+Path.home()/"Hostel_gestao". Deixa de haver caminhos calculados a
+partir da raiz do repositório espalhados por vários módulos.
 
-- config.garantir_diretorios() — cria a árvore de pastas se não existir,
-idempotente. Chamada só nos pontos de entrada (main.py e main_gui.py),
-nunca à importação do módulo: se corresse à importação, correr os testes
-criava pastas reais no disco da máquina de quem os corre.
+- config.garantir_diretorios() — cria a árvore de pastas se não
+existir, idempotente. Chamada só nos pontos de entrada (main.py e
+main_gui.py), nunca à importação do módulo: se corresse à importação,
+correr os testes criava pastas reais no disco da máquina de quem os
+corre.
 
 - repositorio._ficheiro_contadores() — substitui a constante de módulo
 FICHEIRO_CONTADORES. O caminho passa a ser calculado a cada chamada, a
-partir de config.DIR_DADOS. Uma constante calculada uma vez à importação
-ficava presa ao caminho inicial e não acompanhava o fallback do
-garantir_diretorios(), se este fosse acionado. Mesmo cuidado vale para
-qualquer código futuro que precise destas pastas: ler sempre o atributo,
-nunca fixar o valor num nome de módulo.
+partir de config.DIR_DADOS. Uma constante calculada uma vez à
+importação ficava presa ao caminho inicial e não acompanhava o
+fallback do garantir_diretorios(), se este fosse acionado. Mesmo
+cuidado vale para qualquer código futuro que precise destas pastas:
+ler sempre o atributo, nunca fixar o valor num nome de módulo.
+
+- Perfis de utilizador. `responsaveis` ganhou a coluna
+`tipo_utilizador` ('Master'/'Admin'/'Staff'), e com ela
+`responsaveis.alterar_tipo_utilizador()` e
+`sessao.tipo_utilizador_ativo()`. O perfil ficou como coluna do
+próprio responsável em vez de numa tabela `utilizadores` à parte:
+`responsaveis` já era o alvo de todas as chaves estrangeiras de
+autoria, e separar obrigava a uma junção em cada leitura de sessão sem
+acrescentar nenhum campo próprio. Continua sem credenciais —
+palavra-passe e login chegam com `utilizadores.py` (v1.5.0).
+
+- Beliches como estrutura, não como duas camas soltas. `lugares`
+ganhou `posicao_beliche` e `beliche_grupo_id`, e `unidades` ganhou
+`criar_beliche()` (cria o par de uma vez) e `agrupar_beliches()`
+(função pura que separa uma lista de lugares em pares e avulsos). Um
+beliche continua a ser dois lugares de capacidade 1 — os campos novos
+só dizem qual é a cama de cima e quais duas camas são a mesma
+estrutura. A Planta de Lugares desenha-os empilhados.
+
+- Cama extra nas unidades Airbnb: `permite_cama_extra`,
+`qtd_cama_extra` e `tipo_cama_extra` em `unidades`, validados por
+`unidades._validar_cama_extra()`. A validação vive na camada de
+negócio, não num CHECK da base — a regra depende da coluna `tipo` da
+mesma linha, que um CHECK não consegue ler de forma fiável.
+
+- Formulários de cliente por regime. "+ Novo Cliente" passa por
+`_SeletorRegimeClienteModal`, dois cartões que abrem modais dedicados:
+`NovoClienteMensalModal` (12 campos, só email e contacto de emergência
+opcionais) e `NovoClienteAirbnbModal` (7 campos, todos obrigatórios —
+só o que o boletim de alojamento exige). `clientes` ganhou
+`pais_emissor_documento` e `pais_residencia`, usados apenas no regime
+Airbnb.
+
+- Rol de Lavanderia automático. Ao criar uma reserva Airbnb,
+`estoque.gerar_rol_lavanderia_automatico()` calcula a roupa de cama e
+banho a partir dos lugares da unidade e da cama extra, e grava a
+requisição já como 'enviada' com o distintivo "Rol Lavanderia".
+Bloqueado para o perfil Staff.
+
+- `estoque.cancelar_requisicao()` — saída alternativa a partir de
+"pendente", distinta de `rejeitar_requisicao` pela autoria: aqui é o
+próprio autor que desiste do pedido antes de o admin o ver. Não toca
+no stock, porque de uma pendente ainda não saiu nada.
+
+- `unidades.listar_com_propriedade()` e
+`unidades.rotulo_com_propriedade()` — o formato "Propriedade - Unidade
+(UNI-XXX)", que várias listas repetiam à mão. Usado nas caixas de
+seleção de contratos e, agora, na barra lateral do calendário.
 
 ## Alterado
 
 - main.py e main_gui.py: garantir_diretorios() passa a ser a primeira
 instrução dos dois pontos de entrada, antes de qualquer leitura ou
-escrita. Na prática é o único sítio do sistema que decide que as pastas
-têm de existir.
+escrita. Na prática é o único sítio do sistema que decide que as
+pastas têm de existir.
 
 - repositorio.py: criar_backup(), limpar_backups_antigos(),
 _carregar_contadores() e _gravar_contadores() passam a usar
@@ -50,21 +104,83 @@ delega em config.garantir_diretorios() — uma só função a decidir onde
 estas pastas vivem.
 
 - impressao.py: _caminho_do_ficheiro() grava o PDF do contrato em
-config.DIR_CONTRATOS em vez de RAIZ_PROJETO/PASTA_CONTRATOS (removida).
+config.DIR_CONTRATOS em vez de RAIZ_PROJETO/PASTA_CONTRATOS
+(removida).
 
 - As pastas backups/, contratos_gerados/, dados/ e logs/ na raiz do
-repositório ficam obsoletas para o sistema em execução. Continuam fora do
-controlo de versões (decisão 13), mas nada volta a escrever nelas; os
-dados reais foram copiados para a localização nova antes desta alteração
-entrar.
+repositório ficam obsoletas para o sistema em execução. Continuam fora
+do controlo de versões (decisão 13), mas nada volta a escrever nelas;
+os dados reais foram copiados para a localização nova antes desta
+alteração entrar.
+
+- Aceitar uma devolução passou a ser exclusivo de 'Admin' e 'Master'.
+O perfil Staff vê a devolução mas não a fecha, e o ecrã diz-lhe porquê
+em vez de esconder o botão. A restrição é verificada na camada de
+negócio: desativar um campo na interface é conforto visual, não
+segurança.
+
+- Ecrã de Aprovação: os dois caminhos de uma requisição pendente
+passaram a estar no rodapé, com o nome do que fazem — "Aprovar e
+enviar" (abate stock) e "Rejeitar" (exige motivo, não toca no stock).
+
+- O conceito de registo "incompleto" foi descartado.
+`validacoes.validar_cliente()` deixou de devolver uma lista de campos
+em falta: o que é obrigatório bloqueia com ValueError, e o que não
+pertence ao regime nem chega a ser pedido. Com dois formulários, um
+por regime, deixou de existir o estado "a meio" que a ideia original
+servia. O filtro "Todos/Incompletos/Completos" saiu da lista de
+clientes e do CLI. A coluna `incompleto` continua na base com outro
+uso — `clientes.anonimizar` marca-a para sinalizar dados apagados por
+RGPD.
+
+- Nacionalidade passou a obrigatória nos dois regimes (antes só era
+exigida fora do regime mensal). No regime mensal, telefone também.
+
+- cli.py alinhado com os formulários por regime: `_criar_cliente()`
+pergunta o regime primeiro e pede só os campos desse regime. Corrige
+um erro que impedia criar qualquer cliente Airbnb pelo CLI — o ecrã
+nunca pedia os dois campos de país que a validação passou a exigir.
+`_atualizar_cliente()` pergunta o regime explicitamente em vez de o
+deduzir, e é hoje o único sítio onde se preenchem esses dois campos
+num cliente Airbnb criado antes desta versão.
+
+- Calendário: navegar entre semanas passou de cerca de 1,5s para cerca
+de 0,2s. Quatro alterações, todas medidas antes e depois. As leituras
+à base passaram a uma por unidade em vez de uma por dia
+(`unidades.estados_da_semana`), o que reduziu de 183 ligações ao MySQL
+por semana navegada para 27. As linhas da grelha são criadas uma vez e
+reutilizadas (`_criar_linha_pool`) em vez de destruídas e recriadas.
+Só se reconfigura o que mudou (`_atualizar_linha`): no CustomTkinter
+um `configure` redesenha o widget e os filhos, e custava o mesmo que
+criar tudo de raiz. Os filtros escolhidos sobrevivem ao fecho da
+janela, por regime.
+
+- Reservas Airbnb: clicar duas vezes numa linha da lista abre o mesmo
+detalhe do botão "Gerir", que passou a mostrar cliente, estadia,
+check-in tardio e motivo de cancelamento. O duplo clique liga-se às
+células, não à linha — em `componentes.Tabela` não existe um widget
+por linha, a grelha é partilhada.
+
+- modelos.py acompanha as colunas novas de `responsaveis`, `lugares`,
+`unidades` e `clientes`.
+
+- config.VERSAO: 1.3.0 -> 1.4.0.
 
 ## Notas
 
-- Registo de ocorrências (logging): deliberadamente fora do âmbito deste
-bloco. Nada no sistema gera logs neste momento, e a intenção é que o
-registo nasça integrado na regra de negócio e pensado para a migração da
-Fase 3, não como captura técnica de exceções na fronteira. A pasta
-config.DIR_LOGS já existe e fica reservada até essa decisão ser retomada.
+- Registo de ocorrências (logging): deliberadamente fora do âmbito
+desta versão. Nada no sistema gera logs neste momento, e a intenção é
+que o registo nasça integrado na regra de negócio e pensado para a
+migração da Fase 3, não como captura técnica de exceções na fronteira.
+A pasta config.DIR_LOGS já existe e fica reservada até essa decisão
+ser retomada.
+
+- Pendências conhecidas e aceites: `EditarClienteModal` não foi
+repartido por regime e não mostra os dois campos de país (usar o CLI
+para os preencher em clientes antigos); `responsaveis.criar` ainda não
+valida quem pode criar um Master ou Admin; em `NovoContratoMensal` o
+botão "+ Novo cliente" só fica bem posicionado depois de uma primeira
+interação na caixa de seleção.
 
 ## [1.3.0] - 2026-09-13
 

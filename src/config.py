@@ -66,7 +66,7 @@ PRAZO_CONSERVACAO_HOSPEDES_DIAS = 365  # boletins SIBA/AIMA
 PRAZO_CONSERVACAO_FISCAL_DIAS = 3650  # art.º 40.º Código Comercial
 PRAZO_CONSERVACAO_LOGS_DIAS = 180  # minimização
 
-VERSAO = "1.3.0"  # mostrada na interface (decisão 21); atualizar a cada fecho de versão
+VERSAO = "1.4.0"  # mostrada na interface (decisão 21); atualizar a cada fecho de versão
 
 
 # --- Diretoria base de dados persistentes (Fase 1, v1.4.0) ------------------
