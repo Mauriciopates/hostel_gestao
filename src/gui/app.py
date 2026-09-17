@@ -1,9 +1,49 @@
+"""Janela principal da aplicação e popup de login.
+
+Substitui o antigo "SelecionarUtilizadorModal" (placeholder sem
+password) por um `LoginModal` a sério, que usa o módulo
+`utilizadores.py` para validar credenciais.
+
+ALTERAÇÕES v1.5.0 (17/09/2026):
+
+  - `SelecionarUtilizadorModal` REMOVIDO. Substituído por
+    `LoginModal` — pede utilizador e password, e valida contra
+    `utilizadores.autenticar`.
+
+  - O arranque da aplicação bloqueia até haver um login válido:
+    sem login, a GUI principal não abre.
+
+  - LOGOFF VERDADEIRO: "Trocar utilizador" fecha a janela toda
+    (com confirmação prévia) e a aplicação reabre do zero — o
+    `main_gui.py` deteta `self.reabrir` e cria uma nova
+    `Aplicacao`. Não há Dashboard com dados do utilizador
+    anterior em pano de fundo.
+
+  - O `LoginModal` é bloqueante (`protocol("WM_DELETE_WINDOW")`
+    desativado): não se fecha pelo "X". Tem um botão "Sair"
+    discreto que fecha a aplicação inteira.
+
+  - Volta ao Dashboard depois do login.
+
+  - FEEDBACK VISUAL: como o `autenticar` demora ~0,4s (hash
+    PBKDF2), o botão muda para "A valida credenciais" com
+    pontos animados enquanto valida. Os campos, o botão "Entrar"
+    e o botão "Sair" ficam desativados durante a validação.
+
+  - SAÍDA: o botão "Sair" do LoginModal marca uma flag
+    (`sair_pedido`) no PRÓPRIO LoginModal antes de destruir a
+    Aplicacao. O `Aplicacao.__init__` lê essa flag depois do
+    `wait_window` — se for True, termina sem desenhar o
+    Dashboard (a app já foi destruída). O `winfo_exists()` não
+    serve aqui: depois do `destroy()`, qualquer chamada ao Tk
+    rebenta com "application has been destroyed".
+"""
+
 import customtkinter as ctk
 
 from pathlib import Path
-from PIL import Image
 
-import responsaveis
+import utilizadores
 from . import tema
 from . import componentes
 from . import sessao
@@ -17,60 +57,10 @@ from .gui_propriedades import ListaPropriedades
 from .gui_relatorios import Relatorios
 from .gui_configuracoes import Configuracoes
 
-# =====================================================================
-# Caminho do ícone da janela
-#
-# O `img/` está na raiz do projeto, e este ficheiro está em
-# `src/gui/`. Mesmo esquema do `componentes.py`: calcula-se a partir
-# de `__file__` (o caminho DESTE ficheiro), não de um caminho
-# relativo frágil.
-#
-# O ícone (`ico_hostel.png`) aparece na barra de título da janela e
-# na barra de tarefas do sistema operativo. É diferente do logo da
-# sidebar (`ico_hostel_transparente.png`): este é quadrado, pensado
-# para ficar bem num espaço quadrado pequeno.
-# =====================================================================
-
 _PASTA_IMG = Path(__file__).resolve().parent.parent.parent / "img"
-
 _ICONE_JANELA = _PASTA_IMG / "ico_hostel.png"
 
 
-# Itens da barra lateral, organizados em secções (decisão do
-# aluno, 13/09/2026, ao desenhar o Dashboard): a lista simples
-# deixou de caber quando os ecrãs passaram de 4 a 10. As secções
-# agrupam por função — PAINEL (o que se vê ao abrir), GESTÃO (o
-# que se cadastra), OPERAÇÃO (o dia-a-dia), SISTEMA (o que ainda
-# por implementar). O widget `componentes.BarraLateral` já
-# suportava `tipo: "secao"` desde o início — esta é a primeira
-# vez que é usado.
-#
-# Ordem dentro de cada secção pensada pelo fluxo:
-#
-# - PAINEL: Dashboard primeiro — é o ecrã de arranque, o que a
-#   pessoa vê assim que escolhe o responsável ativo.
-# - GESTÃO: primeiro o que se cadastra (Propriedades, Clientes),
-#   depois o que se consulta/usa a partir daí (Contratos Mensais,
-#   Reservas Airbnb).
-# - OPERAÇÃO: Calendário antes de Stock — o calendário é consulta
-#   diária, o stock é mais esporádico.
-# - SISTEMA: Relatórios e Configurações, ambos por implementar
-#   (os ecrãs abrem e dizem isso mesmo — ver gui_relatorios.py e
-#   gui_configuracoes.py).
-#
-# Notas de decisões anteriores que continuam em vigor:
-#
-# 07/09/2026: "Novo Contrato Mensal" saiu da barra lateral — ficava
-# parecido demais com "Contrato Mensal" (a lista), um debaixo do
-# outro, só a palavra "Novo" a distinguir. Continua acessível pelo
-# botão "+ Novo Contrato" dentro do próprio ecrã "Contrato Mensal".
-#
-# 07/09/2026: "Planta de Lugares" saiu da barra lateral — só se
-# chega lá pelo botão "Abrir Mapa" de uma unidade mensal, dentro do
-# popup de unidades da Gestão de Propriedades.
-#
-# 08/09/2026: "Stock" e não "Requisições" — o hub que ele abre já
-# tem um cartão "Requisições" lá dentro.
 ITENS_MENU = [
     # ---- PAINEL -----------------------------------------------------
     {"tipo": "secao", "texto": "Painel"},
@@ -105,39 +95,58 @@ ITENS_MENU = [
 ]
 
 
-class SelecionarUtilizadorModal(ctk.CTkToplevel):
-    """ "Quem está a usar a aplicação?" — obrigatório ao arrancar.
+_MENSAGENS_ERRO = {
+    utilizadores.MOTIVO_NAO_ENCONTRADO: "Utilizador não encontrado.",
+    utilizadores.MOTIVO_SEM_CREDENCIAL: (
+        "Este utilizador ainda não tem credencial definida. "
+        "Peça a um Master."
+    ),
+    utilizadores.MOTIVO_PASSWORD_ERRADA: "Password incorreta.",
+    utilizadores.MOTIVO_INATIVO: (
+        "Esta conta está inativa. Contacte um Master."
+    ),
+}
 
-    Substituto provisório de um ecrã de login a sério, enquanto não
-    existir um módulo `utilizadores.py` com conta e palavra-passe
-    próprios (decisão 09/09/2026: fica documentado aqui para não se
-    perder quando esse módulo chegar — a chamada a
-    `sessao.definir_responsavel_ativo` é o único ponto a substituir
-    então, o resto do ecrã pode manter-se).
 
-    Sem isto, a sessão arrancava sempre com
-    `sessao.obter_responsavel_ativo()` a devolver `None` — só se
-    resolvia navegando manualmente a Responsáveis → Gerir → "Definir
-    como responsável ativo" — e toda a gente esquecia esse passo,
-    vendo "Defina um responsável ativo..." na primeira ação que
-    exige um responsável (Confirmar requisição, Confirmar receção,
-    Rejeitar requisição, Reportar sobra, Aceitar devolução).
+class LoginModal(ctk.CTkToplevel):
+    """Autenticação obrigatória ao arrancar a aplicação.
 
-    Modal a sério: `protocol("WM_DELETE_WINDOW", ...)` desativa o
-    "X" da janela, e só o botão "Entrar" fecha o popup — não dá para
-    passar à frente sem escolher (a não ser que ainda não exista
-    responsável nenhum, único caso em que "Continuar" aparece, para
-    não trancar quem está a arrancar a aplicação pela primeira vez).
+    Pede utilizador e password, valida contra
+    `utilizadores.autenticar`, e define o responsável ativo da
+    sessão. Bloqueante: não se fecha pelo "X" nem por Escape — só
+    com credenciais válidas, ou pelo botão "Sair" (que fecha a
+    aplicação inteira).
+
+    FEEDBACK VISUAL: o PBKDF2 demora ~0,4s por autenticação. Nesse
+    intervalo, o botão muda para "A validar credenciais" com os
+    pontos animados, e os campos/botões ficam desativados.
+
+    Em caso de falha, mantém o username escrito e limpa a
+    password.
+
+    SAÍDA: o botão "Sair" marca `self.sair_pedido = True` antes de
+    destruir a Aplicacao. O `Aplicacao.__init__` lê esta flag
+    depois do `wait_window` para saber se deve parar sem desenhar
+    o Dashboard. A flag vive AQUI (no LoginModal), não no master
+    — é uma variável Python pura, sobrevive à destruição do Tk,
+    e não dá dores de cabeça ao Pylance.
     """
+
+    _INTERVALO_ANIMACAO = 300
 
     def __init__(self, master):
         super().__init__(master)
+        # Bloqueia o "X": só sai com login válido, ou com "Sair".
         self.protocol("WM_DELETE_WINDOW", lambda: None)
 
-        self.responsaveis_disponiveis = responsaveis.listar()
+        # Flag lida pelo `Aplicacao.__init__` depois do
+        # `wait_window`. True = utilizador clicou "Sair" e a
+        # Aplicacao vai ser destruída.
+        self.sair_pedido = False
+
+        self.title("Hostel Clean — Entrar")
         largura = 380
-        altura = 230 if self.responsaveis_disponiveis else 190
-        self.title("Hostel Clean")
+        altura = 400
         self.geometry(f"{largura}x{altura}")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
@@ -147,133 +156,248 @@ class SelecionarUtilizadorModal(ctk.CTkToplevel):
         y = self.winfo_screenheight() // 2 - altura // 2
         self.geometry(f"{largura}x{altura}+{x}+{y}")
 
+        self._animacao_id = None
+        self._animacao_passo = 0
+
         ctk.CTkLabel(
             self,
-            text="Quem está a usar a aplicação?",
+            text="Hostel Gestão",
             text_color=tema.COR_TEXTO,
-            font=ctk.CTkFont(size=15, weight="bold"),
-        ).pack(padx=20, pady=(24, 4))
+            font=ctk.CTkFont(size=22, weight="bold"),
+        ).pack(padx=24, pady=(32, 2))
 
-        if not self.responsaveis_disponiveis:
-            self._sem_responsaveis()
-        else:
-            self._escolher_responsavel()
+        ctk.CTkLabel(
+            self,
+            text="Introduza as suas credenciais para entrar",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=12),
+        ).pack(padx=24, pady=(0, 24))
+
+        ctk.CTkLabel(
+            self,
+            text="Utilizador",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+            anchor="w",
+        ).pack(fill="x", padx=24)
+
+        self.campo_username = ctk.CTkEntry(
+            self,
+            corner_radius=tema.RAIO_CAMPO,
+            height=36,
+        )
+        self.campo_username.pack(fill="x", padx=24, pady=(2, 12))
+
+        ctk.CTkLabel(
+            self,
+            text="Password",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+            anchor="w",
+        ).pack(fill="x", padx=24)
+
+        self.campo_password = ctk.CTkEntry(
+            self,
+            corner_radius=tema.RAIO_CAMPO,
+            height=36,
+            show="•",
+        )
+        self.campo_password.pack(fill="x", padx=24, pady=(2, 8))
+
+        self._bind_enter_username = self.campo_username.bind(
+            "<Return>", lambda e: self._entrar()
+        )
+        self._bind_enter_password = self.campo_password.bind(
+            "<Return>", lambda e: self._entrar()
+        )
+
+        self.erro = ctk.CTkLabel(
+            self,
+            text="",
+            text_color=tema.TEXTO_ERRO,
+            font=ctk.CTkFont(size=11),
+            wraplength=320,
+            justify="left",
+            anchor="w",
+        )
+        self.erro.pack(fill="x", padx=24, pady=(4, 8))
+
+        self.botao_entrar = ctk.CTkButton(
+            self,
+            text="Entrar",
+            height=38,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.AZUL_PRINCIPAL,
+            hover_color=tema.AZUL_CLARO,
+            command=self._entrar,
+        )
+        self.botao_entrar.pack(fill="x", padx=24, pady=(4, 8))
+
+        # Botão "Sair" — fecha a aplicação inteira. Discreto, sem
+        # fundo, para não competir com o "Entrar".
+        self.botao_sair = ctk.CTkButton(
+            self,
+            text="Sair",
+            height=28,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            hover_color=tema.COR_BORDA,
+            command=self._sair,
+        )
+        self.botao_sair.pack(fill="x", padx=24, pady=(0, 8))
+
+        ctk.CTkLabel(
+            self,
+            text="v1.5.0",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+        ).pack(pady=(0, 16))
+
+        self.campo_username.focus_set()
 
         self.after(
             10,
             lambda: (self.lift(), self.focus_force(), self.grab_set()),
         )
 
-    def _sem_responsaveis(self):
-        """Ainda não há nenhum responsável criado — acontece só na
-        primeira utilização. "Continuar" evita trancar a aplicação
-        num ciclo sem saída: cria-se o primeiro responsável já
-        dentro do ecrã "Responsáveis", e da próxima vez que a
-        aplicação arrancar já há por quem escolher aqui.
-        """
-        ctk.CTkLabel(
-            self,
-            text=(
-                "Ainda não há nenhum responsável criado. Continue e "
-                'crie um em "Responsáveis" — da próxima vez que '
-                "abrir a aplicação já pode escolher aqui."
-            ),
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=12),
-            wraplength=320,
-            justify="center",
-        ).pack(padx=20, pady=(8, 16))
-
-        ctk.CTkButton(
-            self,
-            text="Continuar",
-            height=36,
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color=tema.AZUL_PRINCIPAL,
-            hover_color=tema.AZUL_CLARO,
-            command=self._sair_sem_escolher,
-        ).pack(padx=20, pady=(0, 20), fill="x")
-
-    def _escolher_responsavel(self):
-        rotulos = [r["nome"] for r in self.responsaveis_disponiveis]
-        self.id_por_rotulo = {
-            r["nome"]: r["id"] for r in self.responsaveis_disponiveis
-        }
-
-        self.combo = ctk.CTkOptionMenu(
-            self,
-            values=rotulos,
-            corner_radius=tema.RAIO_CAMPO,
-            width=300,
-        )
-        self.combo.set(rotulos[0])
-        self.combo.pack(padx=20, pady=(14, 20))
-
-        ctk.CTkButton(
-            self,
-            text="Entrar",
-            height=36,
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color=tema.AZUL_PRINCIPAL,
-            hover_color=tema.AZUL_CLARO,
-            command=self._entrar,
-        ).pack(padx=20, pady=(0, 20), fill="x")
+    # -- validação ---------------------------------------------------
 
     def _entrar(self):
-        escolhido_id = self.id_por_rotulo.get(self.combo.get())
+        """Inicia a validação com feedback visual."""
+        username = self.campo_username.get().strip()
+        password = self.campo_password.get()
 
-        if escolhido_id is not None:
-            sessao.definir_responsavel_ativo(escolhido_id)
+        self._bloquear_interface()
+        self._arrancar_animacao()
+
+        self.update_idletasks()
+
+        registo, motivo = utilizadores.autenticar(username, password)
+
+        self._parar_animacao()
+        self._restaurar_interface()
+
+        if registo is None:
+            self.erro.configure(
+                text=_MENSAGENS_ERRO.get(motivo, "Credenciais inválidas.")
+            )
+            self.campo_password.delete(0, "end")
+            self.campo_password.focus_set()
+            return
+
+        try:
+            sessao.definir_responsavel_ativo(registo["id"])
+        except ValueError as erro:
+            self.erro.configure(text=str(erro))
+            self.campo_password.delete(0, "end")
+            self.campo_password.focus_set()
+            return
 
         self.grab_release()
         self.destroy()
 
-    def _sair_sem_escolher(self):
+    def _bloquear_interface(self):
+        self.campo_username.configure(state="disabled")
+        self.campo_password.configure(state="disabled")
+        self.botao_entrar.configure(state="disabled")
+        self.botao_sair.configure(state="disabled")
+
+        self.campo_username.unbind("<Return>", self._bind_enter_username)
+        self.campo_password.unbind("<Return>", self._bind_enter_password)
+
+    def _restaurar_interface(self):
+        self.campo_username.configure(state="normal")
+        self.campo_password.configure(state="normal")
+        self.botao_entrar.configure(
+            state="normal",
+            text="Entrar",
+            fg_color=tema.AZUL_PRINCIPAL,
+            hover_color=tema.AZUL_CLARO,
+        )
+        self.botao_sair.configure(state="normal")
+
+        self._bind_enter_username = self.campo_username.bind(
+            "<Return>", lambda e: self._entrar()
+        )
+        self._bind_enter_password = self.campo_password.bind(
+            "<Return>", lambda e: self._entrar()
+        )
+
+    # -- animação dos pontos -----------------------------------------
+
+    def _arrancar_animacao(self):
+        self._animacao_passo = 0
+        self._animar()
+
+    def _animar(self):
+        pontos = "." * (self._animacao_passo % 4)
+        self.botao_entrar.configure(
+            text=f"A validar credenciais{pontos}",
+        )
+        self._animacao_passo += 1
+
+        self._animacao_id = self.after(self._INTERVALO_ANIMACAO, self._animar)
+
+    def _parar_animacao(self):
+        if self._animacao_id is not None:
+            self.after_cancel(self._animacao_id)
+            self._animacao_id = None
+
+    # -- saída -------------------------------------------------------
+
+    def _sair(self):
+        """Fecha a aplicação inteira.
+
+        Marca `self.sair_pedido = True` antes de destruir a
+        Aplicacao. O `Aplicacao.__init__` lê esta flag depois do
+        `wait_window` — se for True, termina sem desenhar o
+        Dashboard (a app já foi destruída, e qualquer chamada ao
+        Tk rebentava).
+
+        A flag vive AQUI (no LoginModal), não no master — é uma
+        variável Python pura, não depende do Tk.
+        """
+        self.sair_pedido = True
         self.grab_release()
-        self.destroy()
+        self.master.destroy()
 
 
 class Aplicacao(ctk.CTk):
-    """Janela principal da aplicação. Estrutura fixa: barra lateral
-    de navegação à esquerda (altura toda da janela), área de
-    conteúdo à direita — onde os frames de cada ecrã são trocados
-    consoante a navegação (decisão: tudo em frames dentro desta
-    janela, exceto diálogos pontuais, que usam CTkToplevel). Cada
-    ecrã traz o seu próprio cabeçalho (componentes.Cabecalho); não
-    há cabeçalho global.
+    """Janela principal da aplicação.
+
+    Estrutura fixa: barra lateral de navegação à esquerda, área de
+    conteúdo à direita.
+
+    LOGOFF: quando o utilizador pede para trocar, `self.reabrir`
+    fica True e a janela é destruída. O `main_gui.py` deteta isso
+    e cria uma nova `Aplicacao` (que reabre o LoginModal do zero).
     """
 
     def __init__(self):
         tema.aplicar_tema()
         super().__init__()
 
+        # Flag lida pelo `main_gui.py` depois do `mainloop()`.
+        # False = terminar a aplicação de vez.
+        # True = reabrir uma nova instância (o utilizador pediu
+        # logoff).
+        self.reabrir = False
+
+        # Flag marcada quando o utilizador clica "Sair" no
+        # LoginModal. Nesse caso a app foi destruída DENTRO do
+        # `__init__`, e o `main_gui.py` não pode chamar
+        # `mainloop()` num objeto já destruído. Lê-a antes de
+        # arrancar o loop.
+        self.terminar_pedido = False
+
         self.title("Hostel Clean — Gestão de Alojamento")
 
-        # Ícone da janela (barra de título + barra de tarefas do
-        # sistema). Tem de ser aplicado ANTES da janela ficar
-        # visível — depois disso, alguns gestores de janelas
-        # ignoram a chamada.
-        #
-        # `iconbitmap` espera um `.ico` no Windows e um `.png` no
-        # Linux/Mac; para funcionar em ambos, o caminho é passado
-        # como string e o `iconphoto(True, ...)` (usado abaixo)
-        # cobre o caso do PNG. O `try/except` evita rebentar o
-        # arranque se o ficheiro não existir (por exemplo, num
-        # ambiente onde o `img/` não foi copiado) — a janela abre
-        # sem ícone, mas abre.
         try:
             self.iconbitmap(str(_ICONE_JANELA))
         except Exception:
             pass
 
-        # Janela redimensionável, com maximizar/minimizar (07/09/2026
-        # — pedido do aluno: o tamanho fixo, sem margem nenhuma, era
-        # parte do aperto que as tabelas sentiam para caber tudo).
-        # Tamanho de arranque um pouco maior do que o fixo de antes
-        # (900x700); `minsize` evita encolher a ponto de as colunas
-        # deixarem de caber — grid_columnconfigure(1, weight=1) logo
-        # abaixo já fazia a área de conteúdo esticar, só faltava
-        # permitir à própria janela esticar também.
         self.geometry("1100x700")
         self.minsize(950, 620)
         self.resizable(True, True)
@@ -282,18 +406,6 @@ class Aplicacao(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # Sem cabeçalho global: cada ecrã já traz o seu próprio
-        # componentes.Cabecalho (decisão desde a Parte 2) — um frame
-        # extra aqui só criava uma faixa vazia acima do menu e do
-        # ecrã, sem função nenhuma (visível pela primeira vez agora
-        # que a barra lateral é real). Decisão do aluno, 07/09/2026.
-        #
-        # Largura de 160px (era 150px até 13/09/2026): o logo da
-        # sidebar (`ico_hostel_transparente.png`) é renderizado com
-        # 110px de largura, mais 12px de padding lateral de cada
-        # lado — precisa de pelo menos 134px. Os 160 dão folga para
-        # o "Gestão de Propriedades" (o item mais comprido) caber
-        # sem truncar.
         self.barra_lateral = componentes.BarraLateral(
             self, controlador=self, itens=ITENS_MENU
         )
@@ -308,45 +420,23 @@ class Aplicacao(ctk.CTk):
 
         self.frame_atual = None
 
-        # "Quem está a usar a aplicação?" (decisão 09/09/2026, ver
-        # SelecionarUtilizadorModal acima): pergunta-se ANTES do
-        # ecrã inicial, e `wait_window` bloqueia o arranque até
-        # fechar — impede chegar a qualquer ecrã sem um responsável
-        # ativo definido, sem depender de ninguém se lembrar de ir a
-        # Responsáveis fazê-lo à mão.
         self.update_idletasks()
-        popup_utilizador = SelecionarUtilizadorModal(self)
-        self.wait_window(popup_utilizador)
+        popup_login = LoginModal(self)
+        self.wait_window(popup_login)
 
-        # Ecrã inicial ao arrancar a aplicação — Dashboard desde
-        # 13/09/2026 (antes era Gestão de Propriedades, decisão de
-        # 07/09/2026 que ficou documentada como provisória "enquanto
-        # não existir Dashboard"). O Dashboard mostra os números do
-        # dia e os alertas por resolver, que é o que interessa ao
-        # abrir a aplicação — as listas de Propriedades/Clientes
-        # continuam a um clique na barra lateral.
+        # Se o utilizador clicou "Sair" no LoginModal, a flag
+        # ficou True e a app já foi destruída pelo `_sair`. Não
+        # há nada para desenhar, e marcamos `terminar_pedido`
+        # para o `main_gui.py` saber que não deve chamar
+        # `mainloop()` num objeto já destruído.
+        if popup_login.sair_pedido:
+            self.terminar_pedido = True
+            return
+
         self.mostrar_frame(Dashboard)
 
     def mostrar_frame(self, classe_frame, **kwargs):
-        """Troca o ecrã atual pelo indicado em classe_frame.
-
-        Destrói o frame anterior (se existir) e cria uma nova
-        instância de classe_frame dentro de area_conteudo, passando-
-        -se a si própria como "controlador" — é assim que o ecrã
-        chama de volta mostrar_frame para navegar para outro, ou
-        acede a coisas partilhadas (ex. sessao). kwargs são
-        argumentos extra específicos do ecrã (ex.: o id de uma
-        unidade a abrir).
-
-        Depois de trocar o ecrã, avisa a barra lateral para marcar
-        o botão correspondente como ativo (azul). O `classe_frame`
-        é usado como chave — o mesmo objeto que a barra lateral
-        guardou em `_botoes_por_ecra` quando criou o botão. Se a
-        classe não estiver na barra (ex.: `NovoContratoMensal`, que
-        só se abre por um caminho específico), o `marcar_ativo`
-        simplesmente limpa todos os botões — comportamento
-        aceitável, ver o docstring de `BarraLateral.marcar_ativo`.
-        """
+        """Troca o ecrã atual pelo indicado em classe_frame."""
         if self.frame_atual is not None:
             self.frame_atual.destroy()
 
@@ -358,17 +448,27 @@ class Aplicacao(ctk.CTk):
         self.barra_lateral.marcar_ativo(classe_frame)
 
     def trocar_utilizador(self):
-        """Reabre o "Quem está a usar a aplicação?" a qualquer altura
-        (botão "Trocar utilizador" da barra lateral, 09/09/2026) —
-        mesmo popup do arranque, sem precisar de fechar e reabrir a
-        aplicação para mudar de responsável ativo.
+        """Logoff: fecha a janela e pede reabertura ao `main_gui`.
 
-        Depois de fechar o popup, volta sempre a Gestão de
-        Propriedades, em vez de tentar reconstruir o ecrã em que a
-        pessoa estava: alguns ecrãs recebem argumentos próprios (ex.
-        uma unidade específica) que `mostrar_frame` não tem como
-        adivinhar aqui.
+        Chamado pelo botão "Trocar utilizador" do rodapé da barra
+        lateral. Mantém o nome antigo (`trocar_utilizador`) para
+        não quebrar a BarraLateral, mas o comportamento mudou: já
+        não abre o LoginModal por cima da aplicação — faz logoff
+        verdadeiro.
+
+        Pede confirmação antes (é uma operação "de saída"), limpa
+        a sessão e marca `self.reabrir = True`. O `main_gui.py`
+        vai criar uma nova `Aplicacao`, que abre o LoginModal do
+        zero.
         """
-        popup_utilizador = SelecionarUtilizadorModal(self)
-        self.wait_window(popup_utilizador)
-        self.mostrar_frame(ListaPropriedades)
+        if not componentes.confirmar(
+            "Tem a certeza que quer trocar de utilizador?\n\n"
+            "A aplicação vai fechar e voltar ao ecrã de entrada.",
+            titulo="Trocar utilizador",
+        ):
+            return
+
+        sessao.limpar_responsavel_ativo()
+
+        self.reabrir = True
+        self.destroy()

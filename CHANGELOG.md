@@ -3,6 +3,225 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [Não publicado] — v1.5.0 (em curso)
+
+Módulo `utilizadores.py` — login, credenciais e permissões.
+Primeiro dos três módulos da v1.5.0 (faltam `financeiro.py` e
+`relatorios.py`). Esta entrada será consolidada com os outros dois
+e datada quando a tag v1.5.0 for criada.
+
+### Adicionado
+
+- `src/utilizadores.py` — módulo novo. Login, gestão de credenciais
+  e regras de permissão por perfil. Separado do `responsaveis.py`:
+  os dois tocam na tabela `responsaveis`, cada um com o seu foco —
+  `responsaveis.py` continua a ser o módulo da pessoa (nome,
+  contacto, perfil, ativo/inativo); `utilizadores.py` trata do que
+  é específico de autenticação (procurar pelo username, validar
+  password, registar último acesso, verificar permissões). Mesmo
+  padrão de `estoque.py`/`produtos.py`.
+
+  Funções públicas: `autenticar`, `definir_credencial`,
+  `alterar_password`, `desativar`, `reativar`, `listar_com_estado`,
+  `verificar_permissao`.
+
+  Hash de password no formato modular do Django
+  (`pbkdf2_sha256$<iteracoes>$<salt>$<hash>`), com
+  `hashlib.pbkdf2_hmac`. Escolhido o formato modular porque migra
+  para Django na Fase 3 sem conversão — algoritmo, iterações e salt
+  vivem dentro da própria string, portanto mudar de algoritmo no
+  futuro é só gravar com outro prefixo, sem tocar no esquema.
+
+- Colunas novas em `responsaveis` (aplicadas por `ALTER TABLE` em
+  17/09/2026): `username` (VARCHAR(50) UNIQUE), `password_hash`
+  (VARCHAR(255)), `password_alterada_em` (DATETIME),
+  `ultimo_login` (DATETIME), `desativado_por_id` (VARCHAR(10),
+  FK auto-referente) e `data_desativacao` (DATE).
+
+  O `username` nasce `NULL` — a coluna é `UNIQUE` mas o MySQL não
+  conta nulos como duplicados, portanto vários responsáveis podem
+  coexistir sem credencial. O Master define cada um pela GUI. O
+  `password_hash` acompanha: `NULL` enquanto não há credencial.
+
+  `desativado_por_id` e `data_desativacao` seguem o mesmo padrão já
+  usado em `produtos`, `propriedades` e `unidades` — consistência
+  interna, não preparação especulativa para a Fase 3.
+
+- `repositorio.procurar_responsavel_por_username()` — procura pelo
+  username em vez do id. É o que o `autenticar` usa.
+
+- `repositorio.listar_responsaveis_com_credencial()` — variante de
+  `listar_responsaveis` que devolve também as colunas de credencial
+  já normalizadas. Existe para o ecrã de Gestão de Responsáveis
+  poder mostrar "sem credencial" ou "último acesso" sem segunda
+  consulta.
+
+- Modal "Definir credencial" (gui_responsaveis.py) — atribui
+  username e password a um responsável que ainda não tem. Campos:
+  utilizador, password, confirmar password. Aviso visível de que a
+  password é gravada com hash e não pode ser consultada depois.
+
+- Modal "Alterar password" (gui_responsaveis.py) — troca a password
+  de um responsável. Adapta-se ao contexto: se for o próprio a
+  alterar, pede a password atual (para confirmar identidade); se for
+  um Master a alterar de outro, não pede — o Master não sabe a
+  antiga, e é a operação que permite recuperar acesso quando alguém
+  se esquece.
+
+- Bloco de credencial no popup "Gerir" (gui_responsaveis.py) — no
+  topo do popup, antes das ações habituais. Dois estados: sem
+  credencial mostra um aviso e o botão "Definir credencial"; com
+  credencial mostra o username, o último acesso e o botão "Alterar
+  password". O bloco encolhe quando já há credencial.
+
+- `LoginModal` (app.py) — substitui o antigo
+  `SelecionarUtilizadorModal`. Pede utilizador e password, e valida
+  contra `utilizadores.autenticar`. Bloqueante: sem login válido, a
+  GUI principal não abre. Tem quatro mensagens de erro específicas
+  (utilizador não encontrado, sem credencial definida, password
+  incorreta, conta inativa) e um botão "Sair" discreto que fecha a
+  aplicação inteira.
+
+- Feedback visual no `LoginModal` durante a autenticação: o botão
+  muda para "A validar credenciais" com pontos animados, e os
+  campos/botões ficam desativados. O `update_idletasks()` antes da
+  chamada a `autenticar` força o redesenho — sem ele, a GUI só
+  atualizava quando a validação já tinha terminado (e a espera
+  parecia um bloqueio).
+
+- Logoff verdadeiro: "Trocar utilizador" fecha a janela toda (com
+  confirmação prévia) e a aplicação reabre do zero. O `main_gui.py`
+  ficou com um `while` que deteta `self.reabrir` e cria uma nova
+  `Aplicacao`. Antes, o popup do login abria por cima do Dashboard,
+  deixando os dados do utilizador anterior à vista.
+
+- `utilizadores.verificar_permissao(autor, perfis_permitidos,
+  perfil_alvo=None)` — helper central de permissões. Cobre duas
+  regras com a mesma forma: a regra geral "só Master/Admin" e a
+  regra do Admin "só opera sobre Staff". O `perfil_alvo` opcional
+  ativa a segunda.
+
+### Alterado
+
+- `responsaveis.criar()` ganha `autor` (opcional). Fecha a
+  pendência 11.4 — só Master cria Admin/Master, Admin cria Staff,
+  Staff não cria ninguém. Aceita `None` para não quebrar o CLI
+  (que ainda não passa o autor); quando `autor` é passado, a
+  validação é feita.
+
+- `responsaveis.desativar()` e `responsaveis.reativar()` ganham
+  `autor` e delegam a lógica em `utilizadores.desativar` /
+  `utilizadores.reativar`. Sem duplicação de regras — a validação
+  de permissão vive num sítio só.
+
+- `responsaveis.alterar_tipo_utilizador()` passa a receber `autor`
+  (o dict do responsável ativo) em vez de `tipo_utilizador_autor`
+  (só o tipo em texto). Isto é o que permite implementar a regra
+  3.4 — Masters imunes a rebaixamento por outros. Uniformiza também
+  com o `utilizadores.py`: todas as funções que validam permissão
+  recebem o autor como dict.
+
+- `repositorio.inserir_responsavel()` passa a gravar as 11 colunas
+  (antes 5). Os campos de credencial usam `.get()` com default
+  `None`: na criação de um responsável sem credencial (o caso
+  normal), todos vêm vazios.
+
+- `repositorio._normalizar_responsavel()` trata os `NULL` das
+  colunas novas — `None` vira `""` (convenção do sistema para "sem
+  valor"). Mesmo padrão já aplicado a `data_desativacao` em
+  produtos, propriedades e unidades.
+
+- `modelos.Responsavel` ganha os 6 campos novos. Dataclass é
+  documental — não é instanciada em runtime pelo `repositorio`,
+  que trabalha sempre com dicionários.
+
+- `gui_responsaveis._AcoesResponsavelModal()` — calcula a altura
+  dinamicamente com `update_idletasks()` + `winfo_reqheight()` em
+  vez de fixar em pixels. O bloco de credencial pode ter 2 ou 4
+  linhas conforme o estado, portanto a altura fixa cortava conteúdo
+  num dos casos (regra 11.2 do plano de correções).
+
+- `_FormularioResponsavel` (gui_responsaveis.py) — o combo "Tipo
+  de utilizador" adapta-se ao autor em três estados: sem sessão
+  fica desativado; Master vê todos os perfis; Admin vê só Staff.
+
+- `Aplicacao.__init__` (app.py) e `Aplicacao.trocar_utilizador`
+  passam ambos a mostrar o Dashboard depois do login. Antes, o
+  `__init__` mostrava o Dashboard mas o `trocar_utilizador` voltava
+  à Gestão de Propriedades — inconsistência corrigida.
+
+- `main_gui.py` — passa a ter um `while` que cria a `Aplicacao`,
+  corre o `mainloop()`, e decide se deve reabrir (logoff) ou
+  terminar (fecho normal). Necessário para o logoff verdadeiro.
+
+- `config.VERSAO`: 1.4.0 → 1.5.0.
+
+### Corrigido
+
+- `responsaveis.criar()` não validava quem podia criar um Master
+  ou Admin — qualquer chamada podia criar já com esse tipo. Era a
+  pendência 11.4 do plano de correções, fechada nesta versão.
+
+- `alterar_tipo_utilizador()` não impedia que um Master rebaixasse
+  outro Master — a regra 3.4 ficou explicitamente implementada
+  nesta versão.
+
+### Notas
+
+- Decisão de hash: `pbkdf2_hmac('sha256', ...)` com 100.000
+  iterações. O Django usa 600.000 por omissão (contexto web, muitos
+  utilizadores em paralelo). Aqui, 600.000 fazia cada login levar
+  ~2 segundos — desconfortável para um sistema de secretaria de
+  mesa com uso diário. 100.000 continua sólido para este contexto
+  (4 utilizadores, sem exposição pública) e a autenticação fica em
+  ~0,4 segundos. Se um dia migrar para web com muitos utilizadores,
+  sobem-se as iterações outra vez — os hashes já gravados mantêm as
+  suas iterações (estão dentro do próprio hash), só os novos usam o
+  valor novo.
+
+- Decisão de bootstrap: não há ecrã de "primeiro arranque" no
+  `LoginModal`. Se a base estiver vazia ou nenhum responsável tiver
+  credencial, o login recusa com a mensagem específica. O primeiro
+  Master com credencial é criado por SQL direto na instalação —
+  mesmo padrão do `manage.py createsuperuser` do Django.
+
+- Decisão de permissão: `responsavel_unidade` é INFORMATIVA, não
+  restritiva. Permissões são só por perfil (Master/Admin/Staff). A
+  ligação responsável ↔ unidade serve para mostrar quem gere o quê
+  (o balão sobre o crachá na Gestão de Responsáveis), não para
+  limitar operações.
+
+- Decisão parqueada para a Fase 3 (web): deslogar utilizador à
+  distância (Master, a partir das Configurações). Em secretaria de
+  mesa exigiria polling à BD ou ficheiro de sinal — mais caro do
+  que o problema. O Django resolve com a tabela de sessões nativa
+  (`Session.objects.filter(user_id=X).delete()`).
+
+- Decisão parqueada para a Fase 3 (web): recuperação de password
+  por email. Exige SMTP configurado, coluna `email` em
+  `responsaveis` (que não existe — só há `contacto`, livre) e um
+  servidor HTTP onde o link aterre. Em secretaria de mesa o reset
+  por Master cobre 100% do caso real. O Django traz
+  `password_reset` nativo.
+
+- Decisão parqueada para a Fase 3 (web): tabela de auditoria de
+  sessões (`sessoes_auditoria` com `ip`, `origem`, tentativas
+  falhadas). Não entra na v1.5.0 — em secretaria de mesa não há
+  conceito de IP nem de origem, e o Django traz rate-limit próprio.
+
+- `esquema.sql` da raiz foi substituído pelo
+  `docs/Modelo_de_dados_esquema_v.1.5.3.sql` (export `mysqldump
+  -d` do Workbench). O `v.1.5.2` foi arquivado no drive pessoal do
+  aluno. O ficheiro de v1.5.3 é o que serve de instalação — quem
+  instalar o sistema corre este e fica com a base criada.
+
+- Backup etiquetado da migração: `docs/dump_pre_migracao_utilizadores.sql`
+  (estrutura + dados, com os 4 responsáveis e os seus valores
+  originais antes das colunas de credencial). Serve de rede de
+  segurança — se algo correr mal na migração, restaura-se com este
+  ficheiro.
+
+
 ## [1.4.0] - 2026-09-17 
 
 Estabilização da interface. As correções foram organizadas por ordem

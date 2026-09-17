@@ -221,20 +221,55 @@ class Cliente:
 
 @dataclass
 class Responsavel:
-    """PEssoa que opera o sistema.
+    """Pessoa que opera o sistema.
 
-    Antecipado para a Fase 1 sem credenciais  (decisão 10):
-    serve para atribuir autoria a operações - requisições de stock,
+    Antecipado para a Fase 1 sem credenciais (decisão 10): serve
+    para atribuir autoria a operações — requisições de stock,
     anonimizações, alterações de configuração.
 
     'tipo_utilizador' (v1.4.0) é o perfil de permissões: 'Master',
     'Admin' ou 'Staff'. Decide o que cada pessoa pode fazer — enviar
     um Rol de Lavanderia, aceitar uma devolução, alterar o perfil de
-    outra pessoa. Não é credencial: continua a não haver palavra-
-    passe nem login, só a identificação escolhida ao arrancar a GUI.
-    A validação de quem pode alterar o quê vive na camada de negócio
-    (`responsaveis.alterar_tipo_utilizador`), nunca só na interface —
-    desativar um campo no ecrã é conforto visual, não segurança.
+    outra pessoa. A validação de quem pode alterar o quê vive na
+    camada de negócio (`utilizadores.verificar_permissao`), nunca só
+    na interface.
+
+    CREDENCIAL (v1.5.0): a partir desta versão, o responsável tem
+    login e palavra-passe. A credencial vive na própria linha do
+    responsável — não há tabela `utilizadores` à parte (decisão da
+    Fase 2, mantida). O módulo `utilizadores.py` é que a gere.
+
+    Os seis campos novos:
+
+      - 'username': o nome de login. NULL na base para responsáveis
+        que ainda não têm credencial; no dicionário, "" (string
+        vazia) — a convenção de "sem valor" usada em todo o sistema.
+        UNIQUE na base: dois responsáveis não podem ter o mesmo.
+
+      - 'password_hash': hash da password no formato modular do
+        Django (`pbkdf2_sha256$<iteracoes>$<salt>$<hash>`). A
+        password em texto simples nunca é guardada.
+
+      - 'password_alterada_em': quando a password foi alterada pela
+        última vez. "" enquanto nunca foi definida ou alterada.
+
+      - 'ultimo_login': data e hora do último login bem-sucedido.
+        "" enquanto o responsável nunca entrou desde que ganhou
+        credencial.
+
+      - 'desativado_por_id': quem autorizou a desativação. FK
+        auto-referente. "" enquanto o responsável está ativo.
+
+      - 'data_desativacao': quando foi desativado. "" enquanto
+        ativo. Mesma convenção de `data_desativacao` em produtos,
+        propriedades e unidades.
+
+    ATENÇÃO: os três últimos campos (desativado_por_id,
+    data_desativacao) seguem o mesmo padrão já usado em produtos,
+    propriedades e unidades — é consistência interna, não preparação
+    para a Fase 3. E os três primeiros (username, password_hash,
+    password_alterada_em, ultimo_login) são o mínimo que qualquer
+    login exige, mesmo antes de haver web.
     """
 
     id: str
@@ -242,6 +277,12 @@ class Responsavel:
     contacto: str = ""
     tipo_utilizador: str = "Staff"
     ativo: bool = True
+    username: str = ""
+    password_hash: str = ""
+    password_alterada_em: str = ""
+    ultimo_login: str = ""
+    desativado_por_id: str = ""
+    data_desativacao: str = ""
 
 
 @dataclass

@@ -1,3 +1,10 @@
+-- =====================================================================
+-- FICHEIRO GERADO AUTOMATICAMENTE (mysqldump -d). NAO EDITAR A MAO.
+-- Alteracoes ao esquema fazem-se na base de dados e refletem-se aqui
+-- na proxima geracao. A versao documentada a mao e
+-- docs/Modelo_de_dados_esquema_v.1.5.3.sql.
+-- =====================================================================
+
 -- MySQL dump 10.13  Distrib 8.0.46, for Win64 (x86_64)
 --
 -- Host: localhost    Database: hostel_gestao
@@ -301,6 +308,7 @@ CREATE TABLE `produtos` (
   `ativo` tinyint(1) NOT NULL DEFAULT '1',
   `desativado_por_id` varchar(10) DEFAULT NULL,
   `data_desativacao` date DEFAULT NULL,
+  `tipo_produto` enum('consumivel','roupa_cama','roupa_banho','outro') NOT NULL DEFAULT 'consumivel',
   PRIMARY KEY (`id`),
   KEY `fk_produtos_desativado_por` (`desativado_por_id`),
   CONSTRAINT `fk_produtos_desativado_por` FOREIGN KEY (`desativado_por_id`) REFERENCES `responsaveis` (`id`),
@@ -359,7 +367,7 @@ DROP TABLE IF EXISTS `requisicoes`;
 CREATE TABLE `requisicoes` (
   `id` varchar(10) NOT NULL,
   `responsavel_id` varchar(10) NOT NULL,
-  `estado` enum('pendente','enviada','fechada','rejeitada') NOT NULL DEFAULT 'pendente',
+  `estado` enum('pendente','enviada','fechada','rejeitada','cancelada') NOT NULL DEFAULT 'pendente',
   `data_pedido` date NOT NULL,
   `data_envio` date DEFAULT NULL,
   `data_fecho` date DEFAULT NULL,
@@ -389,7 +397,16 @@ CREATE TABLE `responsaveis` (
   `contacto` varchar(100) DEFAULT NULL,
   `tipo_utilizador` enum('Master','Admin','Staff') NOT NULL DEFAULT 'Staff',
   `ativo` tinyint(1) NOT NULL DEFAULT '1',
-  PRIMARY KEY (`id`)
+  `username` varchar(50) DEFAULT NULL,
+  `password_hash` varchar(255) DEFAULT NULL,
+  `password_alterada_em` datetime DEFAULT NULL,
+  `ultimo_login` datetime DEFAULT NULL,
+  `desativado_por_id` varchar(10) DEFAULT NULL,
+  `data_desativacao` date DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `username` (`username`),
+  KEY `fk_responsaveis_desativado_por` (`desativado_por_id`),
+  CONSTRAINT `fk_responsaveis_desativado_por` FOREIGN KEY (`desativado_por_id`) REFERENCES `responsaveis` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -414,6 +431,26 @@ CREATE TABLE `responsavel_unidade` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `rol_lavanderia_regras`
+--
+
+DROP TABLE IF EXISTS `rol_lavanderia_regras`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `rol_lavanderia_regras` (
+  `id` varchar(10) NOT NULL,
+  `tipo_cama` varchar(20) NOT NULL,
+  `produto_id` varchar(10) NOT NULL,
+  `quantidade` int NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_rlr_tipo_cama` (`tipo_cama`),
+  KEY `idx_rlr_produto` (`produto_id`),
+  CONSTRAINT `fk_rlr_produto` FOREIGN KEY (`produto_id`) REFERENCES `produtos` (`id`),
+  CONSTRAINT `chk_rlr_quantidade` CHECK ((`quantidade` > 0))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `unidades`
 --
 
@@ -433,6 +470,7 @@ CREATE TABLE `unidades` (
   `permite_cama_extra` tinyint(1) NOT NULL DEFAULT '0',
   `qtd_cama_extra` int NOT NULL DEFAULT '0',
   `tipo_cama_extra` varchar(50) DEFAULT NULL,
+  `categoria_cama_extra` enum('solteiro','casal') DEFAULT NULL,
   `ativo` tinyint(1) NOT NULL DEFAULT '1',
   `desativado_por_id` varchar(10) DEFAULT NULL,
   `data_desativacao` date DEFAULT NULL,
@@ -454,4 +492,4 @@ CREATE TABLE `unidades` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-09-16  7:35:34
+-- Dump completed on 2026-09-17 21:02:34

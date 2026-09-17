@@ -1,62 +1,68 @@
 """Gestão dos responsáveis — as pessoas que operam o sistema.
 
-Antecipado para a Fase 1 sem credenciais (decisão 10): existe para
-atribuir autoria a operações — anonimizações (decisão 8),
-requisições de material (decisão 9) e alterações de configuração.
-Login, palavra-passe e permissões chegam na Fase 2, no
-`utilizadores.py`; este módulo não os prepara nem os antecipa.
-
 Entidade independente do `clientes.py`: um responsável não é um
 cliente com outro papel. Não partilham campos nem estrutura.
 
+A credencial (login, palavra-passe) vive no `utilizadores.py`, não
+aqui. Este módulo continua a ser o da gestão da PESSOA — nome,
+contacto, perfil, ativa/inativa. O `utilizadores.py` trata do que
+é específico de autenticação. Os dois tocam na mesma tabela, cada
+um com o seu foco — mesmo padrão de `estoque.py`/`produtos.py`.
+
 MIGRAÇÃO MySQL (Fase 2): tal como `propriedades.py` e `unidades.py`,
 este módulo já não recebe nem devolve `dados` — fala diretamente com
-o MySQL através do `repositorio.py` (inserir_responsavel,
-procurar_responsavel, listar_responsaveis, atualizar_responsavel).
-Não acede a ficheiros nem à interface: devolve resultado e sinaliza
-erro com `raise ValueError`.
+o MySQL através do `repositorio.py`. Não acede a ficheiros nem à
+interface: devolve resultado e sinaliza erro com `raise ValueError`.
+
+ALTERAÇÕES v1.5.0 (ronda de 17/09/2026):
+
+  - `criar` ganha `autor` (opcional). Fecha a pendência 11.4 — só
+    Master cria Admin/Master, Admin cria Staff, Staff não cria
+    ninguém. Se `autor` for None, a validação é ignorada (para o
+    CLI continuar a funcionar até ser adaptado).
+  - `desativar` e `reativar` ganham `autor`. Delegam a lógica ao
+    `utilizadores.py`, que tem as regras.
+  - `alterar_tipo_utilizador` passa a receber `autor` (o dict do
+    responsável ativo) em vez de `tipo_utilizador_autor` (só o
+    tipo em texto). Acrescenta a regra 3.4 — Masters imunes a
+    rebaixamento por outros.
 """
 
 import repositorio
 
 PREFIXO = "RES"
 
-# Perfis de acesso (Fase 2, v1.4.0). A coluna `tipo_utilizador` já
-# existia na tabela (ALTER TABLE de uma entrega anterior); esta é a
-# primeira vez que o próprio módulo passa a conhecer e a validar os
-# valores permitidos, em vez de deixar o ENUM da base ser a única
-# barreira. A ordem aqui não implica hierarquia de código nenhuma —
-# é só a ordem "do mais para o menos amplo" para leitura humana; a
-# lógica de permissões por perfil (próximo passo do plano) é que vai
-# dar significado real a cada um.
+# Perfis de acesso (Fase 2, v1.4.0). A ordem aqui não implica
+# hierarquia de código nenhuma — é só a ordem "do mais para o
+# menos amplo" para leitura humana.
 TIPOS_UTILIZADOR = ("Master", "Admin", "Staff")
 
 
-def criar(nome, contacto="", tipo_utilizador="Staff"):
+def criar(nome, contacto="", tipo_utilizador="Staff", autor=None):
     """Cria um responsável e grava-o imediatamente na base de dados.
 
-    O nome é obrigatório: sem ele, a autoria que este módulo
-    existe para registar não identificaria ninguém. O contacto é
-    opcional e não tem validação de formato — pode ser telefone,
-    email ou extensão interna, e a decisão 11 já dispensa a
-    validação de formato de telefone.
+    Regras de permissão (pendência 11.4, fechada na v1.5.0):
 
-    `tipo_utilizador` por omissão é "Staff", o mesmo valor por
-    omissão da coluna na base — criar um responsável sem indicar o
-    perfil continua a dar o resultado mais restrito, não o mais
-    permissivo. Tem de ser um de TIPOS_UTILIZADOR; qualquer outro
-    valor é erro. Não há bootstrap automático do primeiro "Master"
-    aqui — combinado que o primeiro Master de cada instalação é
-    promovido com um UPDATE manual na base, feito uma única vez.
+      - Só Master cria Admin ou Master.
+      - Admin cria Staff.
+      - Staff não cria ninguém.
 
-    Não marca o registo como incompleto: `Responsavel` não tem
-    esse campo (ver modelos.py). A listagem de incompletos da
-    decisão 11 é dos dados de hóspedes, comunicados às
-    autoridades — não se estende a quem opera o sistema.
+    O `autor` é o dict do responsável ativo — o mesmo que
+    `sessao.obter_responsavel_ativo()` devolve. Aceita None para
+    não quebrar chamadas antigas (por exemplo, do CLI em testes
+    ainda não adaptados) — nesse caso a permissão não é validada.
+    Quando o chamador passa o autor, a validação é feita.
+
+    O nome é obrigatório. O contacto é opcional e não tem
+    validação de formato. `tipo_utilizador` por omissão é "Staff",
+    o mesmo valor por omissão da coluna na base.
+
+    Não marca o registo como incompleto — `Responsavel` não tem
+    esse campo. A listagem de incompletos é dos dados de hóspedes.
 
     Devolve o registo criado. Grava de imediato via repositório —
     mesma convenção de propriedades.criar, unidades.criar e
-    clientes.criar, agora todos em MySQL.
+    clientes.criar.
     """
     nome = nome.strip()
 
@@ -67,6 +73,15 @@ def criar(nome, contacto="", tipo_utilizador="Staff"):
         raise ValueError(
             "Tipo de utilizador inválido. Tem de ser um de: "
             + ", ".join(TIPOS_UTILIZADOR)
+        )
+
+    if autor is not None:
+        import utilizadores
+
+        utilizadores.verificar_permissao(
+            autor,
+            {"Master", "Admin"},
+            perfil_alvo=tipo_utilizador,
         )
 
     responsavel = {
@@ -85,9 +100,7 @@ def procurar(responsavel_id):
     """Devolve o responsável com o identificador indicado, ou None.
 
     A ausência não é erro: quem chama decide se ela impede a
-    operação. Não filtra inativos — procura, não decide (mesma
-    convenção de propriedades.procurar, unidades.procurar e
-    clientes.procurar).
+    operação. Não filtra inativos — procura, não decide.
 
     É por não filtrar que a `reativar` consegue chegar a um
     responsável desativado, e que uma anonimização antiga
@@ -98,14 +111,7 @@ def procurar(responsavel_id):
 
 
 def listar(incluir_inativos=False):
-    """Devolve os responsáveis, ativos ou todos se pedido.
-
-    Não tem filtros de conteúdo: o responsável só tem nome e
-    contacto, e nenhum deles é categoria por onde valha a pena
-    filtrar. O parâmetro de estado chega para as duas listagens
-    que a interface precisa — quem se escolhe hoje e quem já
-    passou pela operação.
-    """
+    """Devolve os responsáveis, ativos ou todos se pedido."""
     return repositorio.listar_responsaveis(incluir_inativos=incluir_inativos)
 
 
@@ -113,18 +119,17 @@ def atualizar(responsavel_id, nome=None, contacto=None):
     """Altera o nome ou o contacto de um responsável existente.
 
     Um parâmetro a None significa não alterar; "" significa
-    limpar o conteúdo (mesma convenção de propriedades.atualizar,
-    unidades.atualizar e clientes.atualizar). O contacto pode
-    ficar vazio, o nome não — é obrigatório, tal como em criar().
+    limpar o conteúdo. O contacto pode ficar vazio, o nome não.
 
     Não altera 'ativo': a desativação e a reativação têm funções
     próprias, com as suas verificações. Deixar mudar o estado por
     aqui abriria um segundo caminho sem essas verificações.
 
-    Devolve o registo atualizado, já com os campos novos aplicados
-    localmente (evita um SELECT extra a seguir ao UPDATE).
-    """
+    Não altera `tipo_utilizador` também — isso é a
+    `alterar_tipo_utilizador`, com as suas próprias regras.
 
+    Devolve o registo atualizado.
+    """
     responsavel = procurar(responsavel_id)
 
     if responsavel is None:
@@ -150,103 +155,55 @@ def atualizar(responsavel_id, nome=None, contacto=None):
     return responsavel
 
 
-def desativar(responsavel_id):
+def desativar(responsavel_id, autor):
     """Marca o responsável como inativo, sem o eliminar.
 
-    Um responsável com autoria registada não pode desaparecer: as
-    anonimizações, os movimentos de stock e as alterações de
-    configuração guardam o seu identificador (decisão 8, decisão
-    9). Eliminar o registo deixaria esses IDs sem tradução — o
-    histórico ficaria a apontar para ninguém.
+    Só Master (regra 5.3). A lógica vive em
+    `utilizadores.desativar`; esta função é uma porta de entrada
+    com a mesma assinatura de antes, mais o `autor`.
 
-    Desativar tira-o das listagens de escolha e impede novas
-    operações em seu nome (ver validar_autoria), sem tocar nas
-    que já estão gravadas. É a saída de quem deixa a operação,
-    não um apagamento.
-
-    Não é anonimização: os dados do responsável mantêm-se
-    intactos, ao contrário do que a clientes.anonimizar faz ao
-    titular. O responsável não é hóspede — a decisão 8 e o prazo
-    de conservação de hóspedes não se lhe aplicam.
+    Devolve o registo atualizado.
     """
+    import utilizadores
 
-    responsavel = procurar(responsavel_id)
-
-    if responsavel is None:
-        raise ValueError(f"O responsável {responsavel_id} não existe.")
-
-    if not responsavel["ativo"]:
-        raise ValueError(
-            f"O responsável {responsavel_id} já está inativo."
-        )
-
-    repositorio.atualizar_responsavel(responsavel_id, {"ativo": False})
-    responsavel["ativo"] = False
-    return responsavel
+    return utilizadores.desativar(responsavel_id, autor)
 
 
-def reativar(responsavel_id):
+def reativar(responsavel_id, autor):
     """Repõe um responsável desativado como ativo.
 
-    Existe porque a desativação por engano seria irreversível sem
-    ela. É a inversa exata da `desativar` — e, ao contrário da
-    clientes.reativar, não tem exceção nenhuma a tratar: não há
-    operação irreversível neste módulo que a impeça.
+    Master ou Admin (Admin só sobre Staff) — regra 5.3. A lógica
+    vive em `utilizadores.reativar`; esta função é uma porta de
+    entrada com a mesma assinatura de antes, mais o `autor`.
 
-    Reativar devolve ao responsável a possibilidade de novas
-    operações em seu nome (ver validar_autoria). Não altera nada
-    do que ficou gravado enquanto esteve inativo — nunca houve
-    nada para alterar, porque a validação de autoria recusa antes
-    de qualquer registo ser criado.
+    Devolve o registo atualizado.
     """
+    import utilizadores
 
-    responsavel = procurar(responsavel_id)
-
-    if responsavel is None:
-        raise ValueError(f"O responsável {responsavel_id} não existe.")
-
-    if responsavel["ativo"]:
-        raise ValueError(
-            f"O responsável {responsavel_id} já está ativo."
-        )
-
-    repositorio.atualizar_responsavel(responsavel_id, {"ativo": True})
-    responsavel["ativo"] = True
-    return responsavel
+    return utilizadores.reativar(responsavel_id, autor)
 
 
-def alterar_tipo_utilizador(responsavel_id, tipo_utilizador,
-                             tipo_utilizador_autor):
+def alterar_tipo_utilizador(responsavel_id, tipo_utilizador, autor):
     """Muda o perfil de acesso de um responsável existente.
 
-    Função própria, à parte de `atualizar`, pela mesma razão que
-    `desativar`/`reativar` têm as suas: mudar o perfil de acesso não
-    é como corrigir um nome ou um contacto, tem a sua própria
-    verificação (o valor tem de ser um de TIPOS_UTILIZADOR) e um
-    segundo caminho sem ela seria uma porta lateral.
+    Regras (ronda de 17/09/2026, v1.5.0):
 
-    `tipo_utilizador_autor` é o tipo_utilizador de quem está a pedir
-    esta alteração — normalmente `sessao.tipo_utilizador_ativo()`,
-    lido por quem chama. Este módulo não importa `sessao` (seria
-    import circular: `sessao.py` já importa `responsaveis`), por
-    isso a verificação de "quem" fica aqui, mas o valor tem de vir
-    de fora (item (c) da Fase 2, 15/09/2026, corrigido no mesmo
-    dia depois de um teste do aluno mostrar que só desativar o
-    combo na GUI não chegava — um responsável sem ser Master
-    conseguiu gravar a alteração à mesma). Só um "Master" pode
-    mudar o tipo de outro responsável; qualquer outro valor
-    (incluindo None, sem sessão ativa) é recusado.
+      - Só um Master pode alterar o tipo de utilizador de outro
+        (regra 3.2).
+      - Um Master NÃO pode rebaixar outro Master (regra 3.4). Um
+        Master só se desce a si mesmo, se quiser.
 
-    Devolve o registo atualizado, já com o novo tipo aplicado
-    localmente — mesma convenção de `atualizar`, `desativar` e
-    `reativar`.
+    O `autor` é o dict do responsável ativo — o mesmo que
+    `sessao.obter_responsavel_ativo()` devolve. Aceitar o dict em
+    vez de dois argumentos separados uniformiza com o
+    `utilizadores.py`: todas as funções que validam permissão
+    recebem o autor como dict.
+
+    Devolve o registo atualizado.
     """
+    import utilizadores
 
-    if tipo_utilizador_autor != "Master":
-        raise ValueError(
-            "Só um responsável do tipo 'Master' pode alterar o tipo "
-            "de utilizador de outro responsável."
-        )
+    utilizadores.verificar_permissao(autor, {"Master"})
 
     if tipo_utilizador not in TIPOS_UTILIZADOR:
         raise ValueError(
@@ -263,6 +220,16 @@ def alterar_tipo_utilizador(responsavel_id, tipo_utilizador,
         raise ValueError(
             f"O responsável {responsavel_id} já tem o tipo "
             f"'{tipo_utilizador}'."
+        )
+
+    # Regra 3.4: Masters imunes a rebaixamento por outros.
+    if (
+        responsavel["tipo_utilizador"] == "Master"
+        and autor["id"] != responsavel_id
+    ):
+        raise ValueError(
+            "Um Master não pode rebaixar outro Master. Só o próprio "
+            "pode descer-se a si mesmo."
         )
 
     repositorio.atualizar_responsavel(
@@ -283,11 +250,9 @@ def validar_autoria(responsavel_id):
     operações novas.
 
     Chamada por quem regista uma operação com autoria: a
-    anonimização de um cliente (decisão 8), as requisições e os
-    movimentos de material (decisão 9) e as alterações de
-    configuração. Recusa antes de o registo ser criado, nunca
-    depois — é isso que garante que um responsável inativo nunca
-    fica associado a nada de novo.
+    anonimização de um cliente, as requisições e os movimentos de
+    material, as alterações de configuração. Recusa antes de o
+    registo ser criado, nunca depois.
 
     Devolve o registo do responsável, para que quem chama possa
     usar o nome sem repetir a procura.
