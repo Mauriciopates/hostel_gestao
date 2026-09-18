@@ -5,10 +5,10 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
 
 ## [Não publicado] — v1.5.0 (em curso)
 
-Módulo `utilizadores.py` — login, credenciais e permissões.
-Primeiro dos três módulos da v1.5.0 (faltam `financeiro.py` e
-`relatorios.py`). Esta entrada será consolidada com os outros dois
-e datada quando a tag v1.5.0 for criada.
+Módulos `utilizadores.py` (fechado a 17/09/2026) e `despesas.py`
+(fechado a 18/09/2026). Faltam `financeiro.py` e `relatorios.py`.
+Esta entrada será consolidada com os outros dois e datada quando a
+tag v1.5.0 for criada.
 
 ### Adicionado
 
@@ -32,6 +32,79 @@ e datada quando a tag v1.5.0 for criada.
   vivem dentro da própria string, portanto mudar de algoritmo no
   futuro é só gravar com outro prefixo, sem tocar no esquema.
 
+- `src/despesas.py` — módulo novo. Despesas operacionais do
+  sistema (o que sai para fora), em duas vias distintas:
+
+    VIA 1 — Despesa manual (EDP, água, internet, obras). Nasce
+    `pendente`, sem itens de produto. `itens_confirmados` nasce
+    True. Categoria escolhida à mão.
+
+    VIA 2 — Despesa via stock (compra de produtos para o armazém,
+    lançada pelo financeiro). Nasce `paga`, com N itens de produto.
+    Categoria fixada automaticamente a "Compra de Stock". Os itens
+    ficam por confirmar (`itens_confirmados=False`) — só depois de
+    um Master/Admin confirmar é que os movimentos de entrada no
+    stock são gerados.
+
+  Distinção explícita entre COGS (consumo de stock por uma unidade
+  via `movimentos` + `requisicoes` — não passa por este módulo) e
+  despesa operacional. O financeiro (próximo módulo) vai somar os
+  dois no mesmo número final, mas as origens ficam distintas na
+  base.
+
+  Funções públicas (24 no total):
+    Leitura: procurar_despesa, listar_despesas, listar_itens_despesa,
+             procurar_categoria, listar_categorias,
+             procurar_fornecedor, listar_fornecedores
+    Auxiliar: esta_vencida(despesa) → bool
+    Categorias (só Master): criar_categoria, atualizar_categoria,
+             desativar_categoria, reativar_categoria
+    Fornecedores (Master + Admin): criar_fornecedor,
+             atualizar_fornecedor, desativar_fornecedor,
+             reativar_fornecedor
+    Despesas: criar_despesa_manual, dividir_despesa_por_propriedade,
+             criar_despesa_stock (devolve tuplo despesa+itens),
+             confirmar_itens_despesa, marcar_paga,
+             cancelar_despesa, editar_valor_despesa (legado),
+             editar_despesa_pendente (edição completa),
+             gerar_recorrencias_pendentes
+
+- `src/gui/gui_despesas.py` — módulo novo de GUI. Segue o padrão
+  dos restantes ecrãs (componentes.Cabecalho, componentes.Tabela,
+  componentes.mostrar_erro/mostrar_sucesso, componentes.colocar_no_topo).
+
+  4 ecrãs:
+    EcraDespesas — Hub com 4 cartões (Despesas · Aprovações ·
+                   Categorias · Fornecedores), mesmo estilo do
+                   EcraStock (gui_est_hub.py).
+    ListaDespesas — Lista principal com filtros (categoria, estado,
+                    unidade, "só vencidas") e "+ Nova Despesa".
+    Aprovacoes   — Pendentes (marcar paga / cancelar) + Itens VIA 2
+                    por confirmar.
+    Categorias   — Gestão (Master).
+    Fornecedores — Gestão (Master + Admin).
+
+  12 modais:
+    _EscolherViaModal (escolha VIA 1 / VIA 2)
+    NovaDespesaManualModal (formulário VIA 1)
+    DividirPorPropriedadeModal (VIA 1 com divisão automática)
+    NovaDespesaStockModal (formulário VIA 2 com tabela dinâmica)
+    _EscolherProdutoModal (sub-modal para criar produto novo — 4
+                           campos completos, reaproveita
+                           estoque.criar_produto)
+    ConfirmarItensModal (confirmação dos itens VIA 2 — gera
+                         movimentos de entrada)
+    _AprovarDespesaModal (marcar paga + cancelar — só no Aprovações)
+    _EditarDespesaModal (edição completa: valor, descrição,
+                         categoria, fornecedor, datas — só no
+                         Despesas)
+    _DetalheDespesaModal (leitura — pagas e canceladas)
+    _CancelarDespesaModal (cancelar com motivo obrigatório)
+    _NovaCategoriaModal / _GerirCategoriaModal /
+        _EditarCategoriaModal (gestão de categorias)
+    _NovoFornecedorModal / _GerirFornecedorModal /
+        _EditarFornecedorModal (gestão de fornecedores)
+
 - Colunas novas em `responsaveis` (aplicadas por `ALTER TABLE` em
   17/09/2026): `username` (VARCHAR(50) UNIQUE), `password_hash`
   (VARCHAR(255)), `password_alterada_em` (DATETIME),
@@ -47,6 +120,27 @@ e datada quando a tag v1.5.0 for criada.
   usado em `produtos`, `propriedades` e `unidades` — consistência
   interna, não preparação especulativa para a Fase 3.
 
+- Tabelas novas na base de dados (aplicadas por
+  `migracao_v1_5_despesas.sql` em 18/09/2026):
+    categorias_despesa — tabela própria (não ENUM) para permitir
+      adicionar categoria nova com um INSERT, sem alterar código.
+      Desativação sem apagar, mesmo padrão de produtos e propriedades.
+    fornecedores — nome, contacto, nif, ativo, desativado_por_id,
+      data_desativacao.
+    despesas — unidade_id (nullable — NULL = armazém/por imputar),
+      categoria_id (obrigatório), fornecedor_id (nullable), valor,
+      data_lancamento (DATE), data_pagamento, data_vencimento,
+      estado (pendente/paga/cancelada), recorrente,
+      despesa_origem_id (self-FK), itens_confirmados,
+      itens_confirmados_por_id, itens_confirmados_em,
+      responsavel_lancamento_id, responsavel_cancelamento_id,
+      motivo_cancelamento, descricao, comprovativo_caminho.
+    itens_despesa — despesa_id, produto_id, quantidade,
+      movimento_id (nullable, preenchido só na confirmação).
+      Sem coluna de valor — decisão explícita: o valor vive só em
+      despesas.valor (digitado à mão pelo utilizador, nunca somado
+      dos itens).
+
 - `repositorio.procurar_responsavel_por_username()` — procura pelo
   username em vez do id. É o que o `autenticar` usa.
 
@@ -55,6 +149,10 @@ e datada quando a tag v1.5.0 for criada.
   já normalizadas. Existe para o ecrã de Gestão de Responsáveis
   poder mostrar "sem credencial" ou "último acesso" sem segunda
   consulta.
+
+- `repositorio` — 19 funções novas no fim do ficheiro para o módulo
+  de despesas: operações CRUD para categorias_despesa, fornecedores,
+  despesas e itens_despesa. Nenhuma função existente foi alterada.
 
 - Modal "Definir credencial" (gui_responsaveis.py) — atribui
   username e password a um responsável que ainda não tem. Campos:
@@ -83,11 +181,10 @@ e datada quando a tag v1.5.0 for criada.
   aplicação inteira.
 
 - Feedback visual no `LoginModal` durante a autenticação: o botão
-  muda para "A validar credenciais" com pontos animados, e os
+  muda para "A validaar credenciais" com pontos animados, e os
   campos/botões ficam desativados. O `update_idletasks()` antes da
   chamada a `autenticar` força o redesenho — sem ele, a GUI só
-  atualizava quando a validação já tinha terminado (e a espera
-  parecia um bloqueio).
+  atualizava quando a validação já tinha terminado.
 
 - Logoff verdadeiro: "Trocar utilizador" fecha a janela toda (com
   confirmação prévia) e a aplicação reabre do zero. O `main_gui.py`
@@ -100,6 +197,22 @@ e datada quando a tag v1.5.0 for criada.
   regras com a mesma forma: a regra geral "só Master/Admin" e a
   regra do Admin "só opera sobre Staff". O `perfil_alvo` opcional
   ativa a segunda.
+
+- Categoria "Compra de Stock" — seed inicial criada na migração de
+  despesas. ID final: CAT-001 (alinhado à convenção PREFIXO-NNN do
+  projeto). Usada automaticamente pela VIA 2. Validada no momento
+  do uso — se o Master a desativar, o lançamento por VIA 2 fica
+  bloqueado com aviso.
+
+- `testes/teste_despesas.py` — esqueleto de testes automáticos.
+  Cobre categorias, fornecedores, VIA 1, VIA 2, divisão,
+  recorrências, `esta_vencida`, permissões. Por executar (o
+  `apoio_BD.py` está desatualizado face ao `repositorio.py` atual —
+  pendência registada).
+
+- `src/gui/app.py` — import do `EcraDespesas` e novo item no
+  `ITENS_MENU` (secção Operação): `{"tipo": "item",
+  "texto": "Despesas", "ecra": EcraDespesas}`.
 
 ### Alterado
 
@@ -132,8 +245,8 @@ e datada quando a tag v1.5.0 for criada.
   produtos, propriedades e unidades.
 
 - `modelos.Responsavel` ganha os 6 campos novos. Dataclass é
-  documental — não é instanciada em runtime pelo `repositorio`,
-  que trabalha sempre com dicionários.
+  documental — não é instanciada em runtime pelo `repositorio`, que
+  trabalha sempre com dicionários.
 
 - `gui_responsaveis._AcoesResponsavelModal()` — calcula a altura
   dinamicamente com `update_idletasks()` + `winfo_reqheight()` em
@@ -156,6 +269,10 @@ e datada quando a tag v1.5.0 for criada.
 
 - `config.VERSAO`: 1.4.0 → 1.5.0.
 
+- Prefixos de ID do módulo despesas: DSP (despesa), IDP (item de
+  despesa), CAT (categoria de despesa), FOR (fornecedor).
+  Consistente com a convenção do projeto (PRD, MOV, REQ, DEV, etc.).
+
 ### Corrigido
 
 - `responsaveis.criar()` não validava quem podia criar um Master
@@ -165,6 +282,12 @@ e datada quando a tag v1.5.0 for criada.
 - `alterar_tipo_utilizador()` não impedia que um Master rebaixasse
   outro Master — a regra 3.4 ficou explicitamente implementada
   nesta versão.
+
+- Categoria "Compra de Stock" foi criada inicialmente com ID
+  `CAT000001` (SQL de seed), fora da convenção do projeto
+  (`PREFIXO-NNN`). Corrigido para `CAT-001` via UPDATE no
+  Workbench. O `contadores.json` foi sincronizado (`"CAT": 1`)
+  para evitar colisão no próximo `proximo_id`.
 
 ### Notas
 
@@ -191,6 +314,50 @@ e datada quando a tag v1.5.0 for criada.
   (o balão sobre o crachá na Gestão de Responsáveis), não para
   limitar operações.
 
+- Decisão de `data_lancamento` em DATE (não DATETIME) — consistente
+  com o resto do projeto (`requisicoes.data_pedido`,
+  `movimentos.data`, `ocupacoes.data_inicio`). Só
+  `password_alterada_em` e `ultimo_login` usam DATETIME, porque a
+  hora tem significado de negócio.
+
+- Decisão de `itens_confirmados` em VIA 1 — nasce True. Nas
+  despesas manuais não há nada para confirmar; a query do cartão
+  "Aprovações" fica simples (`WHERE itens_confirmados = FALSE`) e
+  só apanha despesas VIA 2 por confirmar.
+
+- Decisão de motivo do movimento de entrada gerado por VIA 2:
+  `"Entrada via despesa DSP-XXX"`. Rastreável no histórico de stock,
+  sem obrigar a saltar para a tabela de despesas para perceber de
+  onde veio a entrada.
+
+- Decisão de fronteira entre `ListaDespesas` e `Aprovacoes`:
+  - **Despesas** é o sítio de trabalho com os dados — editar o que
+    está errado, ver o que está feito (Editar + Ver detalhes).
+  - **Aprovações** é o sítio de decisão — aprovar o que está
+    pendente, cancelar o que já não faz sentido (Marcar paga +
+    Cancelar).
+  - Cancelar só aparece no Aprovações — é decisão, e a decisão vive
+    lá.
+
+- Decisão de campos editáveis em despesa pendente: valor, descrição,
+  categoria, fornecedor, datas. Unidade e recorrente NÃO são
+  editáveis (são estruturais — se o utilizador se enganou, cancela
+  e relança). Implementado em `editar_despesa_pendente`.
+
+- Regra de "vencida" calculada em tempo de leitura —
+  `esta_vencida(despesa)` compara `data_vencimento` com hoje. NÃO
+  é um estado guardado na tabela.
+
+- Decisão de bootstrap do seed de despesas: a categoria "Compra de
+  Stock" é criada por SQL na migração, mas o `contadores.json` não
+  é atualizado por SQL (o MySQL não escreve em ficheiro). Foi
+  necessário acrescentar `"CAT": 1` à mão no
+  `dados/contadores.json`. Está registado como sintoma de um
+  problema mais lato — a sincronização entre `contadores.json` e a
+  BD. Solução de longo prazo (tabela `versoes_bd` + ficheiro
+  `migracoes.py`, com seeds a viverem em código em vez de SQL) fica
+  marcada para a reestruturação da v2.0.
+
 - Decisão parqueada para a Fase 3 (web): deslogar utilizador à
   distância (Master, a partir das Configurações). Em secretaria de
   mesa exigiria polling à BD ou ficheiro de sinal — mais caro do
@@ -209,17 +376,32 @@ e datada quando a tag v1.5.0 for criada.
   falhadas). Não entra na v1.5.0 — em secretaria de mesa não há
   conceito de IP nem de origem, e o Django traz rate-limit próprio.
 
+- Decisão parqueada para a reestruturação da GUI: customização do
+  `CTkOptionMenu` para listas grandes (scroll interno, altura
+  máxima). Investigar `CTkScrollableDropdown` (repositório GitHub,
+  não PyPI) ou `CTkMenuBarPlus` (fork no PyPI). Aplicação via
+  função nova em `componentes.py`, reutilizável por todos os
+  módulos. Não foi possível fechar nesta sessão.
+
+- Decisão parqueada para a reestruturação da GUI: a `Aprovacoes`
+  constrói a tabela à mão, com larguras fixas em pixels, em vez de
+  usar a `componentes.Tabela`. Sintoma visível: a coluna AÇÕES
+  desaparece se a janela for mais estreita do que a soma das
+  larguras. Ajuste paliativo feito (larguras reduzidas), mas a
+  solução limpa (reescrever com a classe genérica) fica para a
+  reestruturação.
+
 - `esquema.sql` da raiz foi substituído pelo
   `docs/Modelo_de_dados_esquema_v.1.5.3.sql` (export `mysqldump
   -d` do Workbench). O `v.1.5.2` foi arquivado no drive pessoal do
   aluno. O ficheiro de v1.5.3 é o que serve de instalação — quem
   instalar o sistema corre este e fica com a base criada.
 
-- Backup etiquetado da migração: `docs/dump_pre_migracao_utilizadores.sql`
-  (estrutura + dados, com os 4 responsáveis e os seus valores
-  originais antes das colunas de credencial). Serve de rede de
-  segurança — se algo correr mal na migração, restaura-se com este
-  ficheiro.
+- Backup etiquetado da migração de utilizadores:
+  `docs/dump_pre_migracao_utilizadores.sql` (estrutura + dados,
+  com os 4 responsáveis e os seus valores originais antes das
+  colunas de credencial). Serve de rede de segurança — se algo
+  correr mal na migração, restaura-se com este ficheiro.
 
 
 ## [1.4.0] - 2026-09-17 
