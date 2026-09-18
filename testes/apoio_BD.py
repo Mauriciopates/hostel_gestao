@@ -71,16 +71,36 @@ import repositorio
 DB_NAME_TESTE = os.environ.get("DB_NAME_TESTE", "hostel_gestao_teste")
 
 # Esquema físico das tabelas usadas pelos módulos já migrados para
-# MySQL — cópia de claude/esquema_mysql.sql (ficheiro do projeto),
-# sem o CREATE DATABASE/USE, e com IF NOT EXISTS em cada tabela para
-# a criação ser sempre segura repetir. Se o esquema mudar no ficheiro
-# principal, replicar a alteração aqui também.
+# MySQL — cópia de docs/Modelo_de_dados_esquema_v.1.5.3.sql (o espelho
+# gerado pelo aluno), sem o CREATE DATABASE/USE, e com IF NOT EXISTS
+# em cada tabela para a criação ser sempre segura repetir. Se o
+# esquema mudar no ficheiro principal, replicar a alteração aqui
+# também.
 _ESQUEMA_TABELAS = """
+CREATE TABLE IF NOT EXISTS responsaveis (
+    id                      VARCHAR(10)  PRIMARY KEY,
+    nome                    VARCHAR(150) NOT NULL,
+    contacto                VARCHAR(100),
+    tipo_utilizador         ENUM('Master','Admin','Staff') NOT NULL DEFAULT 'Staff',
+    ativo                   BOOLEAN      NOT NULL DEFAULT 1,
+    username                VARCHAR(50)  UNIQUE,
+    password_hash           VARCHAR(255),
+    password_alterada_em    DATETIME,
+    ultimo_login            DATETIME,
+    desativado_por_id       VARCHAR(10),
+    data_desativacao        DATE,
+    FOREIGN KEY (desativado_por_id) REFERENCES responsaveis(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS propriedades (
-    id      VARCHAR(10)  PRIMARY KEY,
-    nome    VARCHAR(150) NOT NULL,
-    morada  VARCHAR(255),
-    ativo   BOOLEAN      NOT NULL DEFAULT 1
+    id                  VARCHAR(10)  PRIMARY KEY,
+    nome                VARCHAR(150) NOT NULL,
+    morada              VARCHAR(255),
+    ativo               BOOLEAN      NOT NULL DEFAULT 1,
+    desativado_por_id   VARCHAR(10),
+    data_desativacao    DATE,
+    iban                VARCHAR(34),
+    FOREIGN KEY (desativado_por_id) REFERENCES responsaveis(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS unidades (
@@ -93,8 +113,16 @@ CREATE TABLE IF NOT EXISTS unidades (
     multa_check_in_tardio  DECIMAL(10,2) NOT NULL,
     epoca_alta_ativa       BOOLEAN       NOT NULL DEFAULT 0,
     em_manutencao          BOOLEAN       NOT NULL DEFAULT 0,
+    permite_cama_extra     BOOLEAN       NOT NULL DEFAULT 0,
+    qtd_cama_extra         INT           NOT NULL DEFAULT 0,
+    tipo_cama_extra        VARCHAR(50),
+    categoria_cama_extra   ENUM('solteiro','casal'),
     ativo                  BOOLEAN       NOT NULL DEFAULT 1,
-    FOREIGN KEY (propriedade_id) REFERENCES propriedades(id)
+    desativado_por_id      VARCHAR(10),
+    data_desativacao       DATE,
+    FOREIGN KEY (propriedade_id) REFERENCES propriedades(id),
+    FOREIGN KEY (desativado_por_id) REFERENCES responsaveis(id),
+    CHECK (qtd_cama_extra >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS quartos (
@@ -108,19 +136,15 @@ CREATE TABLE IF NOT EXISTS quartos (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS lugares (
-    id          VARCHAR(10)  PRIMARY KEY,
-    quarto_id   VARCHAR(10)  NOT NULL,
-    nome        VARCHAR(100) NOT NULL,
-    capacidade  INT          NOT NULL CHECK (capacidade >= 1),
-    ativo       BOOLEAN      NOT NULL DEFAULT 1,
+    id                 VARCHAR(10)  PRIMARY KEY,
+    quarto_id          VARCHAR(10)  NOT NULL,
+    nome               VARCHAR(100) NOT NULL,
+    tipo_cama          ENUM('solteiro','casal','beliche') NOT NULL DEFAULT 'solteiro',
+    posicao_beliche    ENUM('superior','inferior'),
+    beliche_grupo_id   VARCHAR(10),
+    capacidade         INT          NOT NULL CHECK (capacidade >= 1),
+    ativo              BOOLEAN      NOT NULL DEFAULT 1,
     FOREIGN KEY (quarto_id) REFERENCES quartos(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS responsaveis (
-    id        VARCHAR(10)  PRIMARY KEY,
-    nome      VARCHAR(150) NOT NULL,
-    contacto  VARCHAR(100),
-    ativo     BOOLEAN      NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS clientes (
@@ -133,6 +157,8 @@ CREATE TABLE IF NOT EXISTS clientes (
     telefone                    VARCHAR(30),
     morada                      VARCHAR(255),
     nacionalidade               VARCHAR(100),
+    pais_emissor_documento      VARCHAR(100) NOT NULL DEFAULT '',
+    pais_residencia             VARCHAR(100) NOT NULL DEFAULT '',
     estado_civil                VARCHAR(30),
     data_nascimento             DATE,
     validade_documento          DATE,
@@ -195,23 +221,29 @@ CREATE TABLE IF NOT EXISTS ocupacoes_airbnb (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS produtos (
-    id              VARCHAR(10)  PRIMARY KEY,
-    nome            VARCHAR(150) NOT NULL,
-    unidade_medida  VARCHAR(30)  NOT NULL,
-    stock_minimo    INT          NOT NULL DEFAULT 0 CHECK (stock_minimo >= 0),
-    ativo           BOOLEAN      NOT NULL DEFAULT 1
+    id                  VARCHAR(10)  PRIMARY KEY,
+    nome                VARCHAR(150) NOT NULL,
+    unidade_medida      VARCHAR(30)  NOT NULL,
+    stock_minimo        INT          NOT NULL DEFAULT 0 CHECK (stock_minimo >= 0),
+    ativo               BOOLEAN      NOT NULL DEFAULT 1,
+    desativado_por_id   VARCHAR(10),
+    data_desativacao    DATE,
+    tipo_produto        ENUM('consumivel','roupa_cama','roupa_banho','outro') NOT NULL DEFAULT 'consumivel',
+    FOREIGN KEY (desativado_por_id) REFERENCES responsaveis(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS requisicoes (
     id                        VARCHAR(10) PRIMARY KEY,
     responsavel_id            VARCHAR(10) NOT NULL,
-    estado                    ENUM('pendente', 'enviada', 'fechada', 'rejeitada') NOT NULL DEFAULT 'pendente',
+    estado                    ENUM('pendente','enviada','fechada','rejeitada','cancelada') NOT NULL DEFAULT 'pendente',
     data_pedido               DATE        NOT NULL,
     data_envio                DATE,
     data_fecho                DATE,
     responsavel_rejeicao_id   VARCHAR(10),
     motivo_rejeicao           VARCHAR(255),
     observacoes               VARCHAR(255),
+    observacao_rececao        TEXT,
+    origem                    VARCHAR(20) DEFAULT 'pedido',
     FOREIGN KEY (responsavel_id) REFERENCES responsaveis(id),
     FOREIGN KEY (responsavel_rejeicao_id) REFERENCES responsaveis(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -230,7 +262,7 @@ CREATE TABLE IF NOT EXISTS devolucoes (
     id              VARCHAR(10) PRIMARY KEY,
     requisicao_id   VARCHAR(10) NOT NULL,
     responsavel_id  VARCHAR(10) NOT NULL,
-    estado          ENUM('pendente', 'fechada') NOT NULL DEFAULT 'pendente',
+    estado          ENUM('pendente','fechada') NOT NULL DEFAULT 'pendente',
     data_reportada  DATE        NOT NULL,
     data_fecho      DATE,
     FOREIGN KEY (requisicao_id) REFERENCES requisicoes(id),
@@ -249,7 +281,7 @@ CREATE TABLE IF NOT EXISTS itens_devolucao (
 CREATE TABLE IF NOT EXISTS movimentos (
     id              VARCHAR(10) PRIMARY KEY,
     produto_id      VARCHAR(10) NOT NULL,
-    tipo            ENUM('entrada', 'saida', 'ajuste') NOT NULL,
+    tipo            ENUM('entrada','saida','ajuste') NOT NULL,
     quantidade      INT         NOT NULL CHECK (quantidade <> 0),
     data            DATE        NOT NULL,
     responsavel_id  VARCHAR(10),
@@ -258,6 +290,24 @@ CREATE TABLE IF NOT EXISTS movimentos (
     FOREIGN KEY (produto_id) REFERENCES produtos(id),
     FOREIGN KEY (responsavel_id) REFERENCES responsaveis(id),
     FOREIGN KEY (requisicao_id) REFERENCES requisicoes(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS responsavel_unidade (
+    id              VARCHAR(10) PRIMARY KEY,
+    responsavel_id  VARCHAR(10) NOT NULL,
+    unidade_id      VARCHAR(10) NOT NULL,
+    ativo           BOOLEAN     NOT NULL DEFAULT 1,
+    UNIQUE KEY uk_responsavel_unidade (responsavel_id, unidade_id),
+    FOREIGN KEY (responsavel_id) REFERENCES responsaveis(id),
+    FOREIGN KEY (unidade_id) REFERENCES unidades(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS rol_lavanderia_regras (
+    id          VARCHAR(10) PRIMARY KEY,
+    tipo_cama   VARCHAR(20) NOT NULL,
+    produto_id  VARCHAR(10) NOT NULL,
+    quantidade  INT         NOT NULL CHECK (quantidade > 0),
+    FOREIGN KEY (produto_id) REFERENCES produtos(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS configuracoes (
@@ -277,6 +327,69 @@ CREATE TABLE IF NOT EXISTS configuracoes_historico (
     FOREIGN KEY (chave) REFERENCES configuracoes(chave),
     FOREIGN KEY (responsavel_id) REFERENCES responsaveis(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS categorias_despesa (
+    id                  VARCHAR(10)  PRIMARY KEY,
+    nome                VARCHAR(100) NOT NULL,
+    ativo               BOOLEAN      NOT NULL DEFAULT 1,
+    desativado_por_id   VARCHAR(10),
+    data_desativacao    DATE,
+    UNIQUE KEY uk_categorias_despesa_nome (nome),
+    FOREIGN KEY (desativado_por_id) REFERENCES responsaveis(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS fornecedores (
+    id                  VARCHAR(10)  PRIMARY KEY,
+    nome                VARCHAR(150) NOT NULL,
+    contacto            VARCHAR(100),
+    nif                 VARCHAR(20),
+    ativo               BOOLEAN      NOT NULL DEFAULT 1,
+    desativado_por_id   VARCHAR(10),
+    data_desativacao    DATE,
+    FOREIGN KEY (desativado_por_id) REFERENCES responsaveis(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS despesas (
+    id                              VARCHAR(10)   PRIMARY KEY,
+    unidade_id                      VARCHAR(10),
+    categoria_id                    VARCHAR(10)   NOT NULL,
+    fornecedor_id                   VARCHAR(10),
+    valor                           DECIMAL(10,2) NOT NULL,
+    data_lancamento                 DATE          NOT NULL,
+    data_pagamento                  DATE,
+    data_vencimento                 DATE,
+    estado                          ENUM('pendente','paga','cancelada') NOT NULL DEFAULT 'pendente',
+    recorrente                      BOOLEAN       NOT NULL DEFAULT 0,
+    despesa_origem_id               VARCHAR(10),
+    itens_confirmados               BOOLEAN       NOT NULL DEFAULT 1,
+    itens_confirmados_por_id        VARCHAR(10),
+    itens_confirmados_em            DATETIME,
+    responsavel_lancamento_id       VARCHAR(10)   NOT NULL,
+    responsavel_cancelamento_id     VARCHAR(10),
+    motivo_cancelamento             VARCHAR(255),
+    descricao                       VARCHAR(255),
+    comprovativo_caminho            VARCHAR(255),
+    FOREIGN KEY (unidade_id) REFERENCES unidades(id),
+    FOREIGN KEY (categoria_id) REFERENCES categorias_despesa(id),
+    FOREIGN KEY (fornecedor_id) REFERENCES fornecedores(id),
+    FOREIGN KEY (despesa_origem_id) REFERENCES despesas(id),
+    FOREIGN KEY (responsavel_lancamento_id) REFERENCES responsaveis(id),
+    FOREIGN KEY (responsavel_cancelamento_id) REFERENCES responsaveis(id),
+    FOREIGN KEY (itens_confirmados_por_id) REFERENCES responsaveis(id),
+    CHECK (valor >= 0),
+    CHECK (estado <> 'cancelada' OR (motivo_cancelamento IS NOT NULL AND responsavel_cancelamento_id IS NOT NULL))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS itens_despesa (
+    id              VARCHAR(10) PRIMARY KEY,
+    despesa_id      VARCHAR(10) NOT NULL,
+    produto_id      VARCHAR(10) NOT NULL,
+    quantidade      INT         NOT NULL CHECK (quantidade > 0),
+    movimento_id    VARCHAR(10),
+    FOREIGN KEY (despesa_id) REFERENCES despesas(id),
+    FOREIGN KEY (produto_id) REFERENCES produtos(id),
+    FOREIGN KEY (movimento_id) REFERENCES movimentos(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 """
 
 # Ordem de TRUNCATE segura para chaves estrangeiras: as tabelas
@@ -285,23 +398,36 @@ CREATE TABLE IF NOT EXISTS configuracoes_historico (
 # a estrita correção das FKs durante o TRUNCATE, mas mantém-se
 # explícita e documentada, para clareza de quem lê.)
 _TABELAS_EM_ORDEM_DE_LIMPEZA = (
+    # Despesas (tabelas novas — filhas primeiro)
+    "itens_despesa",
+    "despesas",
+    "fornecedores",
+    "categorias_despesa",
+    # Configurações
     "configuracoes_historico",
     "configuracoes",
+    # Stock (filhas primeiro)
+    "rol_lavanderia_regras",
     "itens_devolucao",
     "devolucoes",
     "itens_requisicao",
     "movimentos",
     "requisicoes",
     "produtos",
+    # Ocupações
     "ocupacoes_airbnb",
     "ocupacoes_mensal",
     "ocupacoes",
+    # Clientes e responsáveis
     "clientes",
-    "responsaveis",
+    "responsavel_unidade",
+    # Estrutura física
     "lugares",
     "quartos",
     "unidades",
     "propriedades",
+    # Responsáveis (por último — é FK de muitas tabelas)
+    "responsaveis",
 )
 
 

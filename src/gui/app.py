@@ -52,6 +52,7 @@ from .gui_clientes import ListaClientes
 from .gui_contratos import ListaContratosMensais, ListaReservasAirbnb
 from .gui_calendario import Calendario
 from .gui_est_hub import EcraStock
+from .gui_despesas import EcraDespesas
 from .gui_responsaveis import ListaResponsaveis
 from .gui_propriedades import ListaPropriedades
 from .gui_relatorios import Relatorios
@@ -87,6 +88,7 @@ ITENS_MENU = [
     {"tipo": "secao", "texto": "Operação"},
     {"tipo": "item", "texto": "Calendário", "ecra": Calendario},
     {"tipo": "item", "texto": "Stock", "ecra": EcraStock},
+    {"tipo": "item", "texto": "Despesas", "ecra": EcraDespesas},
     {"tipo": "item", "texto": "Responsáveis", "ecra": ListaResponsaveis},
     # ---- SISTEMA ----------------------------------------------------
     {"tipo": "secao", "texto": "Sistema"},
