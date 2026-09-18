@@ -1,10 +1,3 @@
--- =====================================================================
--- FICHEIRO GERADO AUTOMATICAMENTE (mysqldump -d). NAO EDITAR A MAO.
--- Alteracoes ao esquema fazem-se na base de dados e refletem-se aqui
--- na proxima geracao. A versao documentada a mao e
--- docs/Modelo_de_dados_esquema_v.1.5.3.sql.
--- =====================================================================
-
 -- MySQL dump 10.13  Distrib 8.0.46, for Win64 (x86_64)
 --
 -- Host: localhost    Database: hostel_gestao
@@ -21,6 +14,26 @@
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `categorias_despesa`
+--
+
+DROP TABLE IF EXISTS `categorias_despesa`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `categorias_despesa` (
+  `id` varchar(10) NOT NULL,
+  `nome` varchar(100) NOT NULL,
+  `ativo` tinyint(1) NOT NULL DEFAULT '1',
+  `desativado_por_id` varchar(10) DEFAULT NULL,
+  `data_desativacao` date DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_categorias_despesa_nome` (`nome`),
+  KEY `fk_categorias_despesa_desativado_por` (`desativado_por_id`),
+  CONSTRAINT `fk_categorias_despesa_desativado_por` FOREIGN KEY (`desativado_por_id`) REFERENCES `responsaveis` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `clientes`
@@ -95,6 +108,55 @@ CREATE TABLE `configuracoes_historico` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `despesas`
+--
+
+DROP TABLE IF EXISTS `despesas`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `despesas` (
+  `id` varchar(10) NOT NULL,
+  `unidade_id` varchar(10) DEFAULT NULL,
+  `categoria_id` varchar(10) NOT NULL,
+  `fornecedor_id` varchar(10) DEFAULT NULL,
+  `valor` decimal(10,2) NOT NULL,
+  `data_lancamento` date NOT NULL,
+  `data_pagamento` date DEFAULT NULL,
+  `data_vencimento` date DEFAULT NULL,
+  `estado` enum('pendente','paga','cancelada') NOT NULL DEFAULT 'pendente',
+  `recorrente` tinyint(1) NOT NULL DEFAULT '0',
+  `despesa_origem_id` varchar(10) DEFAULT NULL,
+  `itens_confirmados` tinyint(1) NOT NULL DEFAULT '1',
+  `itens_confirmados_por_id` varchar(10) DEFAULT NULL,
+  `itens_confirmados_em` datetime DEFAULT NULL,
+  `responsavel_lancamento_id` varchar(10) NOT NULL,
+  `responsavel_cancelamento_id` varchar(10) DEFAULT NULL,
+  `motivo_cancelamento` varchar(255) DEFAULT NULL,
+  `descricao` varchar(255) DEFAULT NULL,
+  `comprovativo_caminho` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_despesas_unidade` (`unidade_id`),
+  KEY `idx_despesas_categoria` (`categoria_id`),
+  KEY `idx_despesas_fornecedor` (`fornecedor_id`),
+  KEY `idx_despesas_estado` (`estado`),
+  KEY `idx_despesas_data_lancamento` (`data_lancamento`),
+  KEY `idx_despesas_despesa_origem` (`despesa_origem_id`),
+  KEY `fk_despesas_responsavel_lancamento` (`responsavel_lancamento_id`),
+  KEY `fk_despesas_responsavel_cancelamento` (`responsavel_cancelamento_id`),
+  KEY `fk_despesas_itens_confirmados_por` (`itens_confirmados_por_id`),
+  CONSTRAINT `fk_despesas_categoria` FOREIGN KEY (`categoria_id`) REFERENCES `categorias_despesa` (`id`),
+  CONSTRAINT `fk_despesas_despesa_origem` FOREIGN KEY (`despesa_origem_id`) REFERENCES `despesas` (`id`),
+  CONSTRAINT `fk_despesas_fornecedor` FOREIGN KEY (`fornecedor_id`) REFERENCES `fornecedores` (`id`),
+  CONSTRAINT `fk_despesas_itens_confirmados_por` FOREIGN KEY (`itens_confirmados_por_id`) REFERENCES `responsaveis` (`id`),
+  CONSTRAINT `fk_despesas_responsavel_cancelamento` FOREIGN KEY (`responsavel_cancelamento_id`) REFERENCES `responsaveis` (`id`),
+  CONSTRAINT `fk_despesas_responsavel_lancamento` FOREIGN KEY (`responsavel_lancamento_id`) REFERENCES `responsaveis` (`id`),
+  CONSTRAINT `fk_despesas_unidade` FOREIGN KEY (`unidade_id`) REFERENCES `unidades` (`id`),
+  CONSTRAINT `despesas_chk_cancelamento` CHECK (((`estado` <> _utf8mb4'cancelada') or ((`motivo_cancelamento` is not null) and (`responsavel_cancelamento_id` is not null)))),
+  CONSTRAINT `despesas_chk_valor` CHECK ((`valor` >= 0))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `devolucoes`
 --
 
@@ -113,6 +175,51 @@ CREATE TABLE `devolucoes` (
   KEY `responsavel_id` (`responsavel_id`),
   CONSTRAINT `devolucoes_ibfk_1` FOREIGN KEY (`requisicao_id`) REFERENCES `requisicoes` (`id`),
   CONSTRAINT `devolucoes_ibfk_2` FOREIGN KEY (`responsavel_id`) REFERENCES `responsaveis` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `fornecedores`
+--
+
+DROP TABLE IF EXISTS `fornecedores`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `fornecedores` (
+  `id` varchar(10) NOT NULL,
+  `nome` varchar(150) NOT NULL,
+  `contacto` varchar(100) DEFAULT NULL,
+  `nif` varchar(20) DEFAULT NULL,
+  `ativo` tinyint(1) NOT NULL DEFAULT '1',
+  `desativado_por_id` varchar(10) DEFAULT NULL,
+  `data_desativacao` date DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fk_fornecedores_desativado_por` (`desativado_por_id`),
+  CONSTRAINT `fk_fornecedores_desativado_por` FOREIGN KEY (`desativado_por_id`) REFERENCES `responsaveis` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `itens_despesa`
+--
+
+DROP TABLE IF EXISTS `itens_despesa`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `itens_despesa` (
+  `id` varchar(10) NOT NULL,
+  `despesa_id` varchar(10) NOT NULL,
+  `produto_id` varchar(10) NOT NULL,
+  `quantidade` int NOT NULL,
+  `movimento_id` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_itens_despesa_despesa` (`despesa_id`),
+  KEY `idx_itens_despesa_produto` (`produto_id`),
+  KEY `idx_itens_despesa_movimento` (`movimento_id`),
+  CONSTRAINT `fk_itens_despesa_despesa` FOREIGN KEY (`despesa_id`) REFERENCES `despesas` (`id`),
+  CONSTRAINT `fk_itens_despesa_movimento` FOREIGN KEY (`movimento_id`) REFERENCES `movimentos` (`id`),
+  CONSTRAINT `fk_itens_despesa_produto` FOREIGN KEY (`produto_id`) REFERENCES `produtos` (`id`),
+  CONSTRAINT `itens_despesa_chk_quantidade` CHECK ((`quantidade` > 0))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -492,4 +599,4 @@ CREATE TABLE `unidades` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-09-17 21:02:34
+-- Dump completed on 2026-09-18 23:33:00
