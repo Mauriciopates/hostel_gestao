@@ -82,6 +82,7 @@ else:
 DIR_DADOS = DIR_BASE / "dados"
 DIR_BACKUPS = DIR_BASE / "backups"
 DIR_CONTRATOS = DIR_BASE / "contratos"
+DIR_RELATORIOS = DIR_BASE / "relatorios"
 DIR_LOGS = DIR_BASE / "logs"
 
 
@@ -98,7 +99,7 @@ def garantir_diretorios():
     na raiz do disco, no Windows), cai para `Path.home() /
     "Hostel_gestao"` e todas as subpastas passam a viver aí.
     """
-    global DIR_BASE, DIR_DADOS, DIR_BACKUPS, DIR_CONTRATOS, DIR_LOGS
+    global DIR_BASE, DIR_DADOS, DIR_BACKUPS, DIR_CONTRATOS, DIR_RELATORIOS, DIR_LOGS
     try:
         DIR_BASE.mkdir(parents=True, exist_ok=True)
     except OSError:
@@ -106,8 +107,15 @@ def garantir_diretorios():
         DIR_DADOS = DIR_BASE / "dados"
         DIR_BACKUPS = DIR_BASE / "backups"
         DIR_CONTRATOS = DIR_BASE / "contratos"
+        DIR_RELATORIOS = DIR_BASE / "relatorios"
         DIR_LOGS = DIR_BASE / "logs"
         DIR_BASE.mkdir(parents=True, exist_ok=True)
 
-    for diretoria in (DIR_DADOS, DIR_BACKUPS, DIR_CONTRATOS, DIR_LOGS):
+    for diretoria in (
+        DIR_DADOS,
+        DIR_BACKUPS,
+        DIR_CONTRATOS,
+        DIR_RELATORIOS,
+        DIR_LOGS,
+    ):
         diretoria.mkdir(parents=True, exist_ok=True)
