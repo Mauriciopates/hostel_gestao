@@ -1395,6 +1395,8 @@ def listar_ocupacoes(
     cliente_id=None,
     tipo=None,
     aviso_documento=None,
+    data_inicio=None,
+    data_fim=None,
 ):
     """Devolve as ocupações, filtráveis por unidade, cliente, tipo e
     aviso de documento — os filtros aplicam-se na própria consulta
@@ -1404,6 +1406,16 @@ def listar_ocupacoes(
     (`contratos._ocupantes_mensal`, `contratos._existe_sobreposicao`,
     `unidades._estado_mensal`, `unidades._estado_airbnb`,
     `unidades.desativar`, `unidades.quarto_privativo_ocupado`).
+
+    `data_inicio` e `data_fim` filtram por SOBREPOSIÇÃO de intervalo
+    (Fase financeiro, v1.5.0): devolve as ocupações que tocam o
+    período, mesmo que comecem antes ou acabem depois. A condição
+    é `ocupacao.data_inicio < data_fim AND (ocupacao.data_fim IS
+    NULL OR ocupacao.data_fim > data_inicio)` — uma ocupação sem
+    data_fim (contrato mensal em vigor) conta como se estendendo
+    indefinidamente. Um filtro sem os dois parâmetros (ou só um)
+    não se aplica — a condição só entra quando AMBOS são
+    indicados, porque meio intervalo não define uma janela.
     """
     condicoes = []
     valores = []
@@ -1427,6 +1439,12 @@ def listar_ocupacoes(
         condicoes.append("aviso_documento = %s")
         valores.append(aviso_documento)
 
+    if data_inicio is not None and data_fim is not None:
+        condicoes.append("data_inicio < %s")
+        valores.append(data_fim)
+        condicoes.append("(data_fim IS NULL OR data_fim > %s)")
+        valores.append(data_inicio)
+
     sql = "SELECT * FROM ocupacoes"
     if condicoes:
         sql += " WHERE " + " AND ".join(condicoes)
@@ -1440,7 +1458,6 @@ def listar_ocupacoes(
         conexao.close()
 
     return [_normalizar_ocupacao(linha) for linha in linhas]
-
 
 def atualizar_ocupacao(ocupacao_id, campos):
     """Atualiza os campos indicados (dicionário nome -> valor novo) da

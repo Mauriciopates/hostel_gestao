@@ -105,6 +105,81 @@ tag v1.5.0 for criada.
     _NovoFornecedorModal / _GerirFornecedorModal /
         _EditarFornecedorModal (gestão de fornecedores)
 
+- `src/financeiro.py` — módulo novo. Motor de cálculo puro do
+  relatório financeiro — a "Opção 1" do handoff original, num só
+  número final:
+
+      Receita − Descontos − Despesas Operacionais = Resultado Líquido
+
+  Módulo de LEITURA. Não escreve nada na base de dados — nem cria
+  tabelas, nem faz INSERT/UPDATE. Não tem GUI, não tem ecrã, não
+  entra no `ITENS_MENU` do `app.py`. Quem o consome é o
+  `relatorios.py` (4.º e último módulo da v1.5.0), que trata da
+  apresentação — tabelas, gráficos, exportação. A fronteira ficou
+  assim definida: o financeiro calcula e devolve números; o
+  relatórios apresenta e exporta.
+
+  DECISÕES DE NEGÓCIO (fechadas na sessão de 19/09/2026):
+
+    - Receita mensal: todos os meses de vigência dentro do
+      período × `renda_praticada`. Um contrato que atravessa o
+      período conta uma vez por cada mês em que vigorou.
+    - Receita airbnb: rateio por noites —
+      `preco_praticado × (noites no período / noites totais)`.
+    - Descontos: calculado − praticado, com o mesmo rateio da
+      receita (mensal = meses × (renda_calculada −
+      renda_praticada); airbnb = rateio × (preco_calculado −
+      preco_praticado) + rateio × (multa_calculada −
+      multa_praticada)).
+    - Mês parcial conta como mês inteiro se o contrato vigorou
+      em qualquer dia desse mês. Sem rateio de dias.
+    - Despesas operacionais: só `estado="paga"`, agregadas por
+      `data_pagamento`. As `pendente` e `cancelada` não entram,
+      nem as vencidas — o lado da despesa é fluxo de caixa.
+    - COGS: saídas (`tipo="saida"`) menos entradas de devolução
+      (`tipo="entrada"` com `requisicao_id` preenchido), pela
+      `data` do movimento. Reportado em QUANTIDADE, à parte do
+      resultado — não soma ao Resultado Líquido. A tabela
+      `produtos` não tem preço unitário, e o COGS em euros não
+      é calculável nesta versão (Ponto 5.1 do handoff, opção c).
+    - Âmbito: todas as ocupações que tenham vigorado dentro do
+      período, ativas ou encerradas/canceladas. Um relatório
+      histórico não muda conforme as ocupações vão encerrando.
+    - API: funções por eixo + função agregada. O
+      `relatorios.py` consome o que quiser.
+
+  Funções públicas (5):
+
+    resultado(data_inicio, data_fim)              → dict
+    receita_por_unidade(data_inicio, data_fim)    → list[dict]
+    receita_por_propriedade(data_inicio, data_fim) → list[dict]
+    despesas_por_categoria(data_inicio, data_fim) → list[dict]
+    cogs_por_produto(data_inicio, data_fim)       → list[dict]
+
+  A função `resultado` devolve um dicionário com as chaves
+  `receita`, `descontos`, `despesas_operacionais`,
+  `resultado_liquido` e `cogs_quantidade`. Esta última é `int`,
+  não `Decimal` — é uma contagem, não um valor monetário.
+
+  O cálculo interno não duplica lógica: `resultado` soma as
+  agregações do Bloco 2, e cada agregação usa o mesmo helper
+  central (`_valores_da_ocupacao_no_periodo`) para decidir
+  quanto uma ocupação contribuiu. Se uma regra de negócio mudar,
+  muda num sítio só.
+
+- `repositorio.listar_ocupacoes()` ganha dois parâmetros novos —
+  `data_inicio` e `data_fim` — com filtro por SOBREPOSIÇÃO de
+  intervalo. A condição é
+  `ocupacao.data_inicio < data_fim AND (ocupacao.data_fim IS
+  NULL OR ocupacao.data_fim > data_inicio)`: devolve as ocupações
+  que tocam o período, mesmo que comecem antes ou acabem depois.
+  Uma ocupação sem `data_fim` (contrato mensal em vigor) conta
+  como se estendesse indefinidamente. A condição só entra quando
+  AMBOS os parâmetros são indicados — meio intervalo não define
+  uma janela. É o que permite ao `financeiro.py` receber só as
+  ocupações que interessam ao relatório, em vez de as trazer
+  todas e filtrar em Python.
+
 - Colunas novas em `responsaveis` (aplicadas por `ALTER TABLE` em
   17/09/2026): `username` (VARCHAR(50) UNIQUE), `password_hash`
   (VARCHAR(255)), `password_alterada_em` (DATETIME),
