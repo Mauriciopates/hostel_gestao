@@ -12,6 +12,105 @@ tag v1.5.0 for criada.
 
 ### Adicionado
 
+- `src/gui/gui_relatorios.py` — módulo novo. Ecrã de Relatórios,
+  último dos 4 módulos da v1.5.0. Hub com 3 cartões (Financeiro ·
+  Contratos · Stock) e popup por área. Consome o `financeiro.py`
+  (motor puro) e, para Contratos e Stock, fala diretamente com os
+  módulos de negócio (`contratos`, `clientes`, `propriedades`,
+  `estoque`, `unidades`, `responsaveis`). Nunca fala com o
+  `repositorio`.
+
+  Estrutura de navegação:
+    Relatórios (menu lateral)
+      → hub com 3 cartões
+        → clicar num cartão abre popup grande dessa área
+          → popup tem cabeçalho ("Relatórios · <Área>" + data +
+            responsável), barra de período, lista lateral de
+            relatórios, área de conteúdo e rodapé com "Fechar"
+            → "Fechar" volta ao hub.
+
+  12 relatórios distribuídos por 3 áreas (a área "Clientes" foi
+  cortada da v1.5.0 — o modelo não tem os dados necessários):
+
+    FINANCEIRO (5): Resultado · Receita por unidade · Receita por
+      propriedade · Despesas por categoria · COGS por produto
+    CONTRATOS (4): Ocupações no período · Contratos mensais ·
+      Reservas Airbnb · Encerramentos
+    STOCK (4): Movimentos · Stock atual · Requisições · Devoluções
+
+  Nota: o relatório "Taxa de ocupação" do handoff original foi
+  substituído por "Encerramentos" (contratos mensais encerrados
+  fora das regras — duração abaixo do mínimo OU aviso prévio
+  insuficiente). A "Taxa de ocupação" saiu do âmbito da v1.5.0.
+
+  Barra de período com chips: Mês atual · Mês anterior · Últimos
+  30 dias · Este ano · Personalizado. Default = Mês atual.
+  Calendário `tkcalendar` para o modo personalizado.
+
+  Exportação em 3 formatos no fim de cada relatório: PDF · CSV ·
+  Excel. Alinhados à direita, dentro da área de conteúdo.
+
+- `src/impressao/` — pacote novo (migração do antigo
+  `src/impressao.py`, ficheiro único, que foi apagado nesta
+  sessão). Dividido em 5 ficheiros:
+
+    __init__.py   ← reexporta a API pública
+    base.py       ← helpers comuns (nome de ficheiro, pasta,
+                    formatação, sanitização Latin-1, abrir no
+                    sistema)
+    pdf.py        ← gerar_contrato_pdf + gerar_relatorio_pdf
+    csv.py        ← gerar_relatorio_csv
+    excel.py      ← gerar_relatorio_excel
+
+  Motivo da divisão: três formatos com exigências diferentes
+  (CSV puro, Excel formatado, PDF Latin-1). No mesmo ficheiro,
+  um bug num formato tocava nos outros. Com a divisão, cada
+  formato vive no seu ficheiro e a parte comum está num só sítio.
+
+  API pública (não muda para quem consome):
+    impressao.gerar_contrato_pdf(...)
+    impressao.gerar_relatorio_pdf(...)
+    impressao.gerar_relatorio_csv(...)
+    impressao.gerar_relatorio_excel(...)
+
+  O `gui_contratos.py` e o `gui_relatorios.py` fazem
+  `import impressao` e continuam a chamar as funções como antes
+  — não sabem que está dividido. Com o `impressao.py` antigo
+  apagado, o Python passa a carregar o pacote (a regra ".py ganha
+  sobre pasta" deixa de se aplicar).
+
+- Exportação PDF — cabeçalho com logo: `impressao/pdf.py` ganhou
+  `_desenhar_cabecalho`, que desenha o título à esquerda, a meta
+  (período + data de geração) por baixo, e o logo
+  `ico_hostel_transparente.png` no canto superior direito (25mm
+  de largura, altura proporcional). O caminho do logo calcula-se
+  a partir de `__file__`, para funcionar de qualquer sítio.
+
+- Exportação PDF — rodapé: `impressao/pdf.py` ganhou
+  `_desenhar_rodape`, que desenha "© 2026 Hostel Clean" à
+  esquerda e "Página N" à direita, no fundo da página, em cinza
+  itálico.
+
+- Exportação PDF — tabela em grelha com zebra: a
+  `gerar_relatorio_pdf` foi reescrita para desenhar a tabela como
+  grelha (linhas verticais entre colunas, linhas horizontais
+  entre linhas, borda exterior, zebra nas linhas pares).
+  Larguras 40% / restantes repartidas igualmente, tudo alinhado
+  à esquerda dentro de cada coluna.
+
+- `src/gui/gui_relatorios.py` — três botões de exportação
+  (PDF · CSV · Excel) no fim de cada relatório, com as cores
+  definidas no handoff (PDF azul `AZUL_PRINCIPAL`, CSV
+  transparente com borda, Excel verde `VERDE`). O `_exportar`
+  ganhou o ramo "excel" e o `_abrir_no_sistema` é chamado para
+  os três formatos.
+
+- `src/config.py` — `DIR_RELATORIOS = DIR_BASE / "relatorios"`
+  acrescentado, e `garantir_diretorios()` cria-o.
+
+- `requirements.txt` — `tkcalendar` e `openpyxl>=3.1.0`
+  acrescentados.
+
 - `src/utilizadores.py` — módulo novo. Login, gestão de credenciais
   e regras de permissão por perfil. Separado do `responsaveis.py`:
   os dois tocam na tabela `responsaveis`, cada um com o seu foco —
@@ -291,6 +390,7 @@ tag v1.5.0 for criada.
 
 ### Alterado
 
+
 - `responsaveis.criar()` ganha `autor` (opcional). Fecha a
   pendência 11.4 — só Master cria Admin/Master, Admin cria Staff,
   Staff não cria ninguém. Aceita `None` para não quebrar o CLI
@@ -348,6 +448,54 @@ tag v1.5.0 for criada.
   despesa), CAT (categoria de despesa), FOR (fornecedor).
   Consistente com a convenção do projeto (PRD, MOV, REQ, DEV, etc.).
 
+
+- `src/impressao.py` (ficheiro único, versão antiga) — APAGADO.
+  Substituído pelo pacote `src/impressao/`. A partir daí,
+  `import impressao` carrega o pacote.
+
+- `src/gui/gui_relatorios.py` — os 12 desenhadores passaram a
+  enviar `Decimal` (em vez de `_formatar_valor(...)`) e `date`
+  (em vez de `_formatar_data(...)`) nas `linhas_export`. O
+  `impressao/csv.py` e o `impressao/excel.py` já sabiam tratar
+  estes tipos: o CSV escreve o valor puro (`4200.00`), o Excel
+  escreve o número com máscara de moeda (`4.200,00 €`). O PDF
+  continua formatado em PT-PT via `_celula_para_pdf`.
+
+- `src/gui/gui_relatorios.py` — caixa "Área Clientes" removida
+  do hub. O hub mostra só os 3 cartões (Financeiro, Contratos,
+  Stock). O método `_desenhar_nota_cortado` e a sua chamada
+  foram retirados.
+
+- `src/gui/gui_relatorios.py` — `_atualizar_campo_periodo` passa
+  a mostrar `Período: ... a ...` em vez do emoji `📅 ... → ...`
+  (que aparecia como quadrado).
+
+- `src/gui/gui_relatorios.py` — `_abrir_calendario` reescrito
+  porque o `tkcalendar` desta versão só aceita
+  `selectmode="day"` (com `"range"` rebenta com `ValueError`).
+  O intervalo em dois cliques passou a ser gerido por nós:
+  `_clicar_dia` guarda cada clique em
+  `self._selecao_personalizada` e mostra o progresso num rótulo;
+  `_aplicar_calendario` lê do estado próprio, não do calendário.
+
+- `src/gui/gui_relatorios.py` — "Taxa de ocupação" substituído
+  por "Encerramentos" (Contratos). Mostra contratos mensais
+  encerrados fora das regras: duração abaixo do mínimo OU aviso
+  prévio insuficiente. Colunas: ID, Unidade, Cliente, Início,
+  Fim, Duração, Renda prat., Motivo, Avisos (chips amarelos
+  "curto" / "aviso"). Sem total.
+
+- `src/impressao/excel.py` — retiradas as linhas 1-2-3 (título,
+  meta, linha vazia). O cabeçalho da tabela passou para a linha
+  1 e os dados começam na linha 2. O ficheiro sai só com a
+  tabela.
+
+- `src/impressao/pdf.py` — `set_auto_page_break(auto=False)`
+  antes do `_desenhar_rodape`, para o PDF não saltar para uma
+  segunda página sozinho. Os relatórios passam a caber numa
+  página.
+
+
 ### Corrigido
 
 - `responsaveis.criar()` não validava quem podia criar um Master
@@ -363,6 +511,25 @@ tag v1.5.0 for criada.
   (`PREFIXO-NNN`). Corrigido para `CAT-001` via UPDATE no
   Workbench. O `contadores.json` foi sincronizado (`"CAT": 1`)
   para evitar colisão no próximo `proximo_id`.
+
+- `src/impressao/excel.py` — `assert ws is not None` após
+  `ws = wb.active` no `gerar_relatorio_excel`. Resolve os avisos
+  do Pylance ("cell/title is not a known attribute of None").
+
+- PDF do "Receita por unidade" — deixou de rebentar por causa do
+  `€`. O `base.sanitizar_texto_pdf` troca-o por `EUR`.
+
+- Calendário personalizado — o `tkcalendar` só aceita
+  `selectmode="day"`; a versão anterior usava `"range"` e
+  rebentava com `ValueError`. Resolvido com gestão própria do
+  intervalo em dois cliques.
+
+- Emoji do calendário aparecia como quadrado na barra de
+  período — substituído por texto simples.
+
+- Cabeçalho do PDF saltava para segunda página sozinho por
+  causa da paginação automática do fpdf — desativado com
+  `set_auto_page_break(auto=False)` antes do rodapé.
 
 ### Notas
 
