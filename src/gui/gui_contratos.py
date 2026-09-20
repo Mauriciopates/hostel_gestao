@@ -73,6 +73,7 @@ import customtkinter as ctk
 
 import clientes
 import config
+import configuracoes
 import contratos
 import estoque
 import impressao
@@ -277,7 +278,8 @@ class NovoContratoMensal(ctk.CTkFrame):
 
         self._linha(corpo, 1, "Dia de vencimento")
         self.campo_dia_vencimento = ctk.CTkEntry(
-            corpo, placeholder_text=f"Enter para {config.DIA_VENCIMENTO}"
+            corpo,
+            placeholder_text=f" Manter vazio para registrar o dia {config.DIA_VENCIMENTO}",
         )
         self.campo_dia_vencimento.grid(row=1, column=1, sticky="ew", pady=6)
 
@@ -2144,16 +2146,27 @@ class EncerrarContratoModal(ctk.CTkToplevel):
         avisos = contratos.avisos_encerramento(self.ocupacao, data_fim)
         linhas = []
 
+        # Lê as configurações da BD (podem ter sido alteradas na GUI),
+        # com o mesmo fallback automático que o
+        # `contratos.avisos_encerramento` usa para decidir se o aviso
+        # se aplica. Sem isto, o texto entre parênteses ficava
+        # dessincronizado do valor real (bug apanhado pelo aluno,
+        # 20/09/2026).
+        duracao_minima = configuracoes.obter_int(
+            "operacao.duracao_minima_meses"
+        )
+        aviso_previo = configuracoes.obter_int("operacao.aviso_previo_dias")
+
         if avisos["duracao_abaixo_minima"]:
             linhas.append(
                 f"⚠  Duração abaixo do mínimo "
-                f"({config.DURACAO_MINIMA_MESES} meses)"
+                f"({duracao_minima} meses)"
             )
 
         if avisos["aviso_previo_insuficiente"]:
             linhas.append(
                 f"⚠  Aviso prévio insuficiente "
-                f"({config.AVISO_PREVIO_DIAS} dias)"
+                f"({aviso_previo} dias)"
             )
 
         if not linhas:

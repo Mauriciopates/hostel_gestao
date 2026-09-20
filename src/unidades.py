@@ -146,7 +146,7 @@ def criar(
         "em_manutencao": False,
         "ativo": True,
         "permite_cama_extra": permite_cama_extra,
-        "qtd_cama_extra": qtd_cama_extra if permite_cama_extra else None,
+        "qtd_cama_extra": qtd_cama_extra if permite_cama_extra else 0,
         "tipo_cama_extra": (
             tipo_cama_extra.strip()
             if permite_cama_extra and tipo_cama_extra

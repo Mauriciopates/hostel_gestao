@@ -52,12 +52,28 @@ CORREÇÃO 13/09/2026 — alinhamento da coluna ESTADO:
   abrir (bug apanhado pelo aluno, 13/09/2026, ao clicar no cartão
   "Aprovação de Requisições" do hub de Stock). Corrigido para
   `"centro"`.
+
+ALTERAÇÕES 20/09/2026 (Fase 3 — Configurações lidas da BD):
+
+- `import configuracoes` no topo — para ler a chave
+  `stock.permitir_envio_parcial`.
+
+- `ResumoAprovacaoModal` ganha o atributo `self.permite_envio_parcial`.
+  Quando é False:
+  * aparece uma faixa amarela por cima da tabela a avisar;
+  * os campos "A enviar" ficam `disabled` (cinzentos, não editáveis);
+  * `_quantidades_enviadas` devolve None — o envio é sempre pela
+    totalidade pedida.
+
+  A barreira real fica em `estoque.enviar_requisicao` — aqui é
+  conforto visual, para o Admin perceber logo que não pode reduzir.
 """
 
 import datetime
 
 import customtkinter as ctk
 
+import configuracoes
 import estoque
 import responsaveis
 from . import componentes
@@ -437,6 +453,13 @@ class ResumoAprovacaoModal(ctk.CTkToplevel):
     movimentos de saída e a requisição passa a `enviada`. Se algum
     valor ficou mal, o caminho é um movimento de ajuste (decisão 9),
     não uma edição à requisição.
+
+    FASE 3 (20/09/2026) — o atributo `self.permite_envio_parcial` é
+    lido da chave `stock.permitir_envio_parcial` na abertura do
+    modal. Quando é False:
+    * aparece uma faixa amarela de aviso por cima da tabela;
+    * os campos "A enviar" ficam disabled;
+    * `_quantidades_enviadas` devolve None — envio pela totalidade.
     """
 
     def __init__(self, tela_lista, requisicao):
@@ -450,6 +473,17 @@ class ResumoAprovacaoModal(ctk.CTkToplevel):
         # coluna "A enviar" editável e a nota ao responsável só
         # fazem sentido nesse estado.
         self.e_pendente = requisicao["estado"] == "pendente"
+
+        # FASE 3 (20/09/2026) — o envio parcial é controlado pela
+        # chave `stock.permitir_envio_parcial`. Quando está ligada,
+        # a coluna "A enviar" é editável (comportamento até agora).
+        # Quando está desligada, a coluna passa a ser só de leitura
+        # e aparece um aviso por cima da tabela. A barreira real
+        # fica em `estoque.enviar_requisicao` — aqui é conforto
+        # visual, para o Admin perceber logo que não pode reduzir.
+        self.permite_envio_parcial = configuracoes.obter_bool(
+            "stock.permitir_envio_parcial"
+        )
 
         # Lê o que a requisição pediu, e o saldo atual de cada
         # produto. Os dois números ficam guardados porque a coluna
@@ -599,6 +633,31 @@ class ResumoAprovacaoModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=10, weight="bold"),
         ).pack(anchor="w", padx=24, pady=(0, 6))
 
+        # FASE 3 (20/09/2026) — aviso só quando o envio parcial
+        # está desligado, e só em pendente (é aí que a coluna é
+        # editável). Nos outros estados, o aviso não aparece.
+        if self.e_pendente and not self.permite_envio_parcial:
+            aviso = ctk.CTkFrame(
+                self,
+                fg_color=tema.AMARELO_AVISO,
+                corner_radius=tema.RAIO_CAMPO,
+            )
+            aviso.pack(fill="x", padx=24, pady=(0, 8))
+
+            ctk.CTkLabel(
+                aviso,
+                text=(
+                    "⚠  O envio parcial está desativado nas "
+                    "Configurações → Sistema. A requisição será "
+                    "enviada sempre pela totalidade pedida."
+                ),
+                text_color=tema.TEXTO_AVISO,
+                font=ctk.CTkFont(size=11),
+                wraplength=560,
+                justify="left",
+                anchor="w",
+            ).pack(fill="x", padx=12, pady=8)
+
         cartao = ctk.CTkFrame(
             self,
             corner_radius=tema.RAIO_CARTAO,
@@ -684,6 +743,13 @@ class ResumoAprovacaoModal(ctk.CTkToplevel):
             if self.e_pendente:
                 # Coluna "A enviar" — campo editável, arranca com o
                 # valor pedido e pode ser reduzido (envio parcial).
+                #
+                # FASE 3 (20/09/2026) — quando o envio parcial está
+                # desligado (`permite_envio_parcial = False`), o
+                # campo aparece disabled: mostra o valor pedido,
+                # mas não se pode alterar. O Admin percebe logo que
+                # não pode reduzir, sem precisar de tentar e levar
+                # com o erro da camada de negócio.
                 campo = ctk.CTkEntry(
                     linha,
                     width=_LARGURA_ENVIAR_RESUMO - 20,
@@ -691,13 +757,22 @@ class ResumoAprovacaoModal(ctk.CTkToplevel):
                     justify="center",
                 )
                 campo.insert(0, str(item["quantidade_pedida"]))
+
+                if not self.permite_envio_parcial:
+                    campo.configure(
+                        state="disabled",
+                        fg_color=tema.LINHA_ALTERNADA,
+                        text_color=tema.COR_TEXTO_SECUNDARIO,
+                    )
+                else:
+                    campo.bind(
+                        "<KeyRelease>",
+                        lambda _evento, pid=item["produto_id"]: (
+                            self._atualizar_avisos(pid)
+                        ),
+                    )
+
                 campo.pack(side="left")
-                campo.bind(
-                    "<KeyRelease>",
-                    lambda _evento, pid=item["produto_id"]: (
-                        self._atualizar_avisos(pid)
-                    ),
-                )
                 self.campos_por_produto[item["produto_id"]] = campo
             else:
                 # Coluna "Enviado" — só leitura, mostra o que foi
@@ -913,10 +988,21 @@ class ResumoAprovacaoModal(ctk.CTkToplevel):
         normal. Só quando alguém mexe numa quantidade é que o
         dicionário ganha entradas.
 
+        FASE 3 (20/09/2026) — quando o envio parcial está
+        desligado, nunca passamos quantidades específicas: o
+        `estoque.enviar_requisicao` envia pela totalidade pedida
+        por omissão. Evita mandar uma estrutura que a camada de
+        negócio ia recusar de qualquer forma.
+
         Levanta ValueError se alguma quantidade estiver inválida
         (não inteira, negativa ou zero) — é apanhado pelo `_aprovar`
         e mostrado com `mostrar_erro`.
         """
+        # FASE 3 (20/09/2026) — se o envio parcial está desligado,
+        # nunca mandamos quantidades específicas.
+        if not self.permite_envio_parcial:
+            return None
+
         quantidades = {}
         mexeu_em_alguma = False
 

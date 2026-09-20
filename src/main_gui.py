@@ -19,6 +19,7 @@ janela. Este ficheiro deteta isso num `while` e cria uma nova
 """
 
 import config
+import configuracoes
 from gui.app import Aplicacao
 
 
@@ -35,6 +36,7 @@ def main():
     (a árvore já existe), mas também não faz mal se acontecer.
     """
     config.garantir_diretorios()
+    configuracoes.garantir_seed()
 
     while True:
         app = Aplicacao()

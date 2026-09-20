@@ -37,6 +37,19 @@ ALTERAÇÕES v1.5.0 (17/09/2026):
     Dashboard (a app já foi destruída). O `winfo_exists()` não
     serve aqui: depois do `destroy()`, qualquer chamada ao Tk
     rebenta com "application has been destroyed".
+
+ALTERAÇÕES v1.5.x (19/09/2026):
+
+  - O item "Configurações" da sidebar passa a estar marcado com
+    `"so_admin": True` — só aparece a utilizadores Master ou
+    Admin. O Staff não vê o item (a barreira real está no
+    próprio ecrã de Configurações e no módulo `configuracoes.py`,
+    que validam o perfil em cada escrita; esta é a camada de
+    conforto visual da sidebar).
+
+  - Nova função `_itens_visiveis()` que filtra o `ITENS_MENU`
+    conforme o perfil ativo. É passada à `BarraLateral` em vez
+    da lista crua.
 """
 
 import customtkinter as ctk
@@ -57,6 +70,7 @@ from .gui_responsaveis import ListaResponsaveis
 from .gui_propriedades import ListaPropriedades
 from .gui_relatorios import Relatorios
 from .gui_configuracoes import Configuracoes
+from .sessao import tipo_utilizador_ativo  # <<< NOVO >>> — filtro de itens
 
 _PASTA_IMG = Path(__file__).resolve().parent.parent.parent / "img"
 _ICONE_JANELA = _PASTA_IMG / "ico_hostel.png"
@@ -93,8 +107,35 @@ ITENS_MENU = [
     # ---- SISTEMA ----------------------------------------------------
     {"tipo": "secao", "texto": "Sistema"},
     {"tipo": "item", "texto": "Relatórios", "ecra": Relatorios},
-    {"tipo": "item", "texto": "Configurações", "ecra": Configuracoes},
+    {
+        "tipo": "item",
+        "texto": "Configurações",
+        "ecra": Configuracoes,
+        "so_admin": True,  # <<< NOVO >>> — só Master/Admin veem
+    },
 ]
+
+
+def _itens_visiveis():
+    """Devolve a lista do ITENS_MENU filtrada pelo perfil ativo.
+
+    <<< NOVO >>> — função acrescentada em 19/09/2026.
+
+    Itens marcados com `so_admin=True` (como o "Configurações")
+    só aparecem a Master ou Admin. Tudo o resto é visível a
+    todos os perfis.
+
+    Chamada uma única vez, na construção da `BarraLateral` —
+    quando já há sessão ativa (o LoginModal já correu).
+    """
+    tipo = tipo_utilizador_ativo()
+    e_administrativo = tipo in ("Admin", "Master")
+
+    return [
+        item
+        for item in ITENS_MENU
+        if not item.get("so_admin") or e_administrativo
+    ]
 
 
 _MENSAGENS_ERRO = {
@@ -408,8 +449,25 @@ class Aplicacao(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
+        # A barra lateral e a área de conteúdo são construídas
+        # DEPOIS do login — o `_itens_visiveis()` só funciona com
+        # sessão ativa (antes disso, `tipo_utilizador_ativo()`
+        # devolve None e o filtro remove os itens `so_admin`).
+        self.frame_atual = None
+
+        self.update_idletasks()
+        popup_login = LoginModal(self)
+        self.wait_window(popup_login)
+
+        if popup_login.sair_pedido:
+            self.terminar_pedido = True
+            return
+
+        # Agora sim — já há sessão ativa.
         self.barra_lateral = componentes.BarraLateral(
-            self, controlador=self, itens=ITENS_MENU
+            self,
+            controlador=self,
+            itens=_itens_visiveis(),
         )
         self.barra_lateral.configure(width=160)
         self.barra_lateral.grid(row=0, column=0, sticky="ns")
@@ -419,21 +477,6 @@ class Aplicacao(ctk.CTk):
             self, corner_radius=0, fg_color=tema.COR_FUNDO
         )
         self.area_conteudo.grid(row=0, column=1, sticky="nsew")
-
-        self.frame_atual = None
-
-        self.update_idletasks()
-        popup_login = LoginModal(self)
-        self.wait_window(popup_login)
-
-        # Se o utilizador clicou "Sair" no LoginModal, a flag
-        # ficou True e a app já foi destruída pelo `_sair`. Não
-        # há nada para desenhar, e marcamos `terminar_pedido`
-        # para o `main_gui.py` saber que não deve chamar
-        # `mainloop()` num objeto já destruído.
-        if popup_login.sair_pedido:
-            self.terminar_pedido = True
-            return
 
         self.mostrar_frame(Dashboard)
 

@@ -27,12 +27,20 @@ interno e passam a ser a forma correta de o `cli.py` ler os dados
 específicos de um contrato/reserva sem duplicar a função (ver nota
 antiga em `cli.py._detalhes_mensal` sobre esta ser "a alternativa
 mais limpa").
+
+MIGRAÇÃO FASE 3 (20/09/2026): as cinco chaves configuráveis que
+este módulo usava como constantes do `config.py` passam a ser lidas
+via `configuracoes.obter_*`, com fallback automático para o valor
+do `config.py` quando a BD não tem a chave. As constantes de
+Airbnb (`ESTADIA_MINIMA_NOITES`, `ESTADIA_MAXIMA_NOITES`) ficam
+como estão — não fazem parte do ecrã de Configurações.
 """
 
 from datetime import date, timedelta
 from decimal import Decimal
 
 import config
+import configuracoes
 import clientes
 import repositorio
 import responsaveis
@@ -215,12 +223,22 @@ def criar_mensal(
     else:
         responsavel_desconto_renda_id = ""
 
+    # Lê o multiplicador máximo da configuração (pode ter sido
+    # alterado na GUI), com fallback para o valor do `config.py`
+    # quando a BD não tem a chave.
+    multiplicador_maximo = configuracoes.obter_decimal(
+        "financeiro.multiplicador_maximo_caucao"
+    )
+
     caucao_exige_confirmacao = validacoes.validar_caucao(
-        caucao, renda_praticada, config.MULTIPLICADOR_MAXIMO_CAUCAO
+        caucao, renda_praticada, multiplicador_maximo
     )
 
     if dia_vencimento is None:
-        dia_vencimento = config.DIA_VENCIMENTO
+        # Lê da configuração (pode ter sido alterada na GUI), com
+        # fallback automático para o `config.DIA_VENCIMENTO`
+        # quando a BD não tem a chave.
+        dia_vencimento = configuracoes.obter_int("operacao.dia_vencimento")
     else:
         _validar_dia_vencimento(dia_vencimento)
 
@@ -309,8 +327,8 @@ def listar(
 def avisos_encerramento(ocupacao, data_fim):
     """Devolve os dois sinais de encerramento de um contrato mensal,
     para uma data de fim pretendida: duração abaixo do mínimo
-    (config.DURACAO_MINIMA_MESES) e aviso prévio insuficiente
-    (config.AVISO_PREVIO_DIAS, contado a partir de hoje).
+    (operacao.duracao_minima_meses) e aviso prévio insuficiente
+    (operacao.aviso_previo_dias, contado a partir de hoje).
 
     Nenhum dos dois bloqueia o encerramento (decisão 14: regra da
     casa, não imposição legal) — só ficam registados. Existe como
@@ -327,10 +345,16 @@ def avisos_encerramento(ocupacao, data_fim):
         data_fim.month - ocupacao["data_inicio"].month
     )
 
+    # Lê as duas configurações da casa (podem ter sido alteradas na
+    # GUI), com fallback automático para os valores do `config.py`
+    # quando a BD não tem as chaves.
+    duracao_minima = configuracoes.obter_int("operacao.duracao_minima_meses")
+    aviso_previo = configuracoes.obter_int("operacao.aviso_previo_dias")
+
     return {
-        "duracao_abaixo_minima": meses < config.DURACAO_MINIMA_MESES,
+        "duracao_abaixo_minima": meses < duracao_minima,
         "aviso_previo_insuficiente": (data_fim - date.today()).days
-        < config.AVISO_PREVIO_DIAS,
+        < aviso_previo,
     }
 
 
@@ -338,9 +362,9 @@ def encerrar_mensal(ocupacao_id, data_fim, motivo=""):
     """Encerra um contrato de arrendamento mensal, preenchendo a
     data de fim.
 
-    A duração abaixo do mínimo (config.DURACAO_MINIMA_MESES) e o
-    aviso prévio insuficiente (config.AVISO_PREVIO_DIAS, contado a
-    partir de hoje) ficam sinalizados no registo específico
+    A duração abaixo do mínimo (operacao.duracao_minima_meses) e o
+    aviso prévio insuficiente (operacao.aviso_previo_dias, contado
+    a partir de hoje) ficam sinalizados no registo específico
     ('ocupacoes_mensal') — nunca bloqueiam o encerramento (mesmo
     princípio da decisão 14: regra da casa, não imposição legal).
     Os dois sinais são calculados por `avisos_encerramento`, a mesma
@@ -555,16 +579,25 @@ def _preco_calculado_airbnb(unidade, data_inicio, data_fim):
     se aplica (exige o indicador manual ativo na unidade E a data
     dentro do período configurado — validacoes.em_epoca_alta, já
     escrita).
+
+    O período de época alta (início e fim) é lido da configuração
+    a cada chamada — pode ter sido alterado na GUI. O fallback
+    para os valores do `config.py` é automático (via `_CHAVES`).
     """
     total = Decimal("0.00")
     noite = data_inicio
+
+    epoca_alta_inicio = configuracoes.obter_tupla(
+        "financeiro.epoca_alta_inicio"
+    )
+    epoca_alta_fim = configuracoes.obter_tupla("financeiro.epoca_alta_fim")
 
     while noite < data_fim:
         if validacoes.em_epoca_alta(
             noite,
             unidade["epoca_alta_ativa"],
-            config.EPOCA_ALTA_INICIO,
-            config.EPOCA_ALTA_FIM,
+            epoca_alta_inicio,
+            epoca_alta_fim,
         ):
             total += unidade["preco_epoca_alta"]
         else:
@@ -778,8 +811,14 @@ def atualizar_mensal(
 
     nova_caucao = caucao if caucao is not None else mensal["caucao"]
 
+    # Lê o multiplicador máximo da configuração (pode ter sido
+    # alterado na GUI), com fallback para o valor do `config.py`.
+    multiplicador_maximo = configuracoes.obter_decimal(
+        "financeiro.multiplicador_maximo_caucao"
+    )
+
     caucao_exige_confirmacao = validacoes.validar_caucao(
-        nova_caucao, nova_renda, config.MULTIPLICADOR_MAXIMO_CAUCAO
+        nova_caucao, nova_renda, multiplicador_maximo
     )
 
     campos["renda_praticada"] = nova_renda

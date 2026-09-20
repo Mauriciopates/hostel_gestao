@@ -2956,3 +2956,293 @@ def atualizar_item_despesa(item_id, campos):
     finally:
         conexao.close()
 
+
+# --- backup com nome + reset total -----------------------------------
+#
+# Duas funções usadas pela operação "Começar do zero" (sistema.py).
+# O backup com nome próprio permite distinguir os backups automáticos
+# diários (dump_YYYY-MM-DD.sql) dos backups de segurança antes de
+# uma operação destrutiva (pre_reset_YYYY-MM-DD_HHhMM.sql).
+
+
+def criar_backup_com_nome(prefixo):
+    """Faz um dump da base MySQL com um nome próprio.
+
+    Diferente de `criar_backup()` (que só faz um por dia, com nome
+    fixo `dump_<data>.sql`), esta versão aceita um prefixo e gera
+    sempre um ficheiro novo, com data e hora no nome:
+
+        <prefixo>_<data>_<hora>.sql
+
+    Exemplos:
+      - prefixo="pre_reset" → "pre_reset_2026-09-19_15h42.sql"
+      - prefixo="manual"    → "manual_2026-09-19_15h42.sql"
+
+    Devolve o `Path` do ficheiro, ou None se o `mysqldump` falhar.
+    Não substitui nenhum ficheiro existente.
+
+    Usa a mesma proteção do `criar_backup()`: a password vai pela
+    variável de ambiente `MYSQL_PWD`, nunca como argumento.
+    """
+    _garantir_pastas()
+
+    agora = date.today()
+    from datetime import datetime as _datetime
+
+    hora_minuto = _datetime.now().strftime("%Hh%M")
+
+    nome = f"{prefixo}_{agora.isoformat()}_{hora_minuto}.sql"
+    destino = config.DIR_BACKUPS / nome
+
+    comando = [
+        "mysqldump",
+        f"--host={config.DB_HOST}",
+        f"--port={config.DB_PORT}",
+        f"--user={config.DB_USER}",
+        "--single-transaction",
+        "--routines",
+        "--triggers",
+        config.DB_NAME,
+    ]
+
+    ambiente = {**os.environ, "MYSQL_PWD": config.DB_PASSWORD}
+
+    try:
+        with open(destino, "w", encoding="utf-8") as f:
+            subprocess.run(
+                comando,
+                stdout=f,
+                stderr=subprocess.PIPE,
+                env=ambiente,
+                check=True,
+                text=True,
+            )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        destino.unlink(missing_ok=True)
+        return None
+
+    return destino
+
+
+def apagar_tudo():
+    """Apaga o conteúdo de TODAS as tabelas do sistema.
+
+    OPERAÇÃO DESTRUTIVA — usada só pelo `sistema.comecar_do_zero`,
+    depois de um backup automático. Nunca chamar sem esse backup.
+
+    Estratégia:
+      1. Desliga temporariamente as verificações de FK
+         (`FOREIGN_KEY_CHECKS=0`) para permitir apagar em
+         qualquer ordem.
+      2. Corre TRUNCATE TABLE em cada tabela do sistema.
+      3. Religa as verificações de FK.
+
+    TRUNCATE (em vez de DELETE) porque é mais rápido e ignora as
+    FKs quando as verificações estão desligadas.
+
+    IMPORTANTE: o ficheiro `dados/contadores.json` NÃO é apagado.
+    Os contadores continuam a existir — o próximo ID gerado é o
+    mesmo que seria sem reset. Isto é deliberado: impede que dois
+    registos históricos (guardados em backups) colidam com novos
+    registos por reutilização de IDs.
+    """
+    tabelas = [
+        "ocupacoes_mensal",
+        "ocupacoes_airbnb",
+        "itens_devolucao",
+        "itens_requisicao",
+        "itens_despesa",
+        "movimentos",
+        "devolucoes",
+        "requisicoes",
+        "despesas",
+        "responsavel_unidade",
+        "configuracoes_historico",
+        "configuracoes",
+        "ocupacoes",
+        "lugares",
+        "quartos",
+        "rol_lavanderia_regras",
+        "unidades",
+        "propriedades",
+        "produtos",
+        "fornecedores",
+        "categorias_despesa",
+        "clientes",
+        "responsaveis",
+    ]
+
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor()
+
+        cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
+
+        try:
+            for tabela in tabelas:
+                cursor.execute(f"TRUNCATE TABLE {tabela}")
+        finally:
+            cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
+
+        conexao.commit()
+    finally:
+        conexao.close()
+
+# --- configuracoes ---------------------------------------------------
+#
+# Tabelas `configuracoes` e `configuracoes_historico`, criadas no
+# esquema v1.5.4 (ver Modelo_de_dados_esquema_v.1.5.4.sql).
+#
+# A tabela `configuracoes` guarda par chave/valor:
+#   - chave      (PK, VARCHAR 60)  — ex.: "operacao.dia_vencimento"
+#   - valor      (VARCHAR 255)     — sempre texto; conversão fica
+#                                     no `configuracoes.py`
+#   - descricao  (VARCHAR 255)     — legível, mostrada na GUI
+#
+# A tabela `configuracoes_historico` guarda cada alteração:
+#   - id, chave (FK), valor_anterior, valor_novo,
+#     data, responsavel_id (FK), motivo
+#
+# A leitura/escrita é feita pelo módulo `configuracoes.py` — estas
+# funções só tocam na BD. Não validam nada de negócio (permissões,
+# tipos, valores por omissão) — isso vive no `configuracoes.py`.
+
+
+def procurar_configuracao(chave):
+    """Devolve o registo da configuração com a chave indicada, ou None.
+
+    A ausência não é erro: quem chama decide se cai no default ou
+    levanta. Não normaliza nada — o valor vem cru (texto), a
+    conversão é responsabilidade do `configuracoes.py`.
+    """
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT * FROM configuracoes WHERE chave = %s", (chave,)
+        )
+        linha = cast(dict, cursor.fetchone())
+    finally:
+        conexao.close()
+
+    return linha
+
+
+def listar_configuracoes(prefixo=None):
+    """Devolve todas as configurações, opcionalmente filtradas por
+    prefixo da chave (ex.: "operacao." para a tab Operação).
+
+    'prefixo' é comparado com LIKE '<prefixo>%' — se for None, devolve
+    tudo. Ordenado por chave, para a leitura ser estável.
+    """
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor(dictionary=True)
+
+        if prefixo is None:
+            cursor.execute(
+                "SELECT * FROM configuracoes ORDER BY chave"
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM configuracoes "
+                "WHERE chave LIKE %s ORDER BY chave",
+                (f"{prefixo}%",),
+            )
+
+        linhas = cast(list, cursor.fetchall())
+    finally:
+        conexao.close()
+
+    return linhas
+
+
+def gravar_configuracao(chave, valor, descricao=""):
+    """Insere ou atualiza uma configuração (upsert).
+
+    Se a chave já existir, faz UPDATE ao valor e à descrição.
+    Se não existir, faz INSERT.
+
+    Isto evita que o `configuracoes.py` tenha de decidir entre
+    inserir e atualizar — a BD trata disso sozinha com
+    `INSERT ... ON DUPLICATE KEY UPDATE`.
+    """
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(
+            "INSERT INTO configuracoes (chave, valor, descricao) "
+            "VALUES (%s, %s, %s) "
+            "ON DUPLICATE KEY UPDATE "
+            "valor = VALUES(valor), "
+            "descricao = VALUES(descricao)",
+            (chave, valor, descricao),
+        )
+        conexao.commit()
+    finally:
+        conexao.close()
+
+
+def inserir_configuracao_historico(registo):
+    """Insere um registo no histórico de alterações.
+
+    Espera um dicionário com id, chave, valor_anterior, valor_novo,
+    data, responsavel_id, motivo.
+
+    O `valor_anterior` é guardado como string vazia "" quando a
+    chave estava a ser criada pela primeira vez — o esquema tem
+    essa coluna como NOT NULL, por isso não pode ser NULL.
+    """
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(
+            "INSERT INTO configuracoes_historico "
+            "(id, chave, valor_anterior, valor_novo, data, "
+            "responsavel_id, motivo) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (
+                registo["id"],
+                registo["chave"],
+                registo["valor_anterior"],
+                registo["valor_novo"],
+                registo["data"],
+                registo["responsavel_id"],
+                registo["motivo"] or None,
+            ),
+        )
+        conexao.commit()
+    finally:
+        conexao.close()
+
+
+def listar_configuracao_historico(chave=None):
+    """Devolve o histórico de alterações, opcionalmente filtrado por
+    chave. Ordenado por data descendente, mais recentes primeiro.
+
+    Quando 'chave' é None, devolve o histórico completo (todas as
+    chaves). Útil para a GUI mostrar tudo de uma vez, se precisar.
+    """
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor(dictionary=True)
+
+        if chave is None:
+            cursor.execute(
+                "SELECT * FROM configuracoes_historico "
+                "ORDER BY data DESC, id DESC"
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM configuracoes_historico "
+                "WHERE chave = %s "
+                "ORDER BY data DESC, id DESC",
+                (chave,),
+            )
+
+        linhas = cast(list, cursor.fetchall())
+    finally:
+        conexao.close()
+
+    return linhas
+

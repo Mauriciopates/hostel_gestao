@@ -92,10 +92,27 @@ ALTERAÇÕES 16/09/2026 (Fase 4 — permissões e visibilidade por perfil):
     validação.
 
   * Admin/Master: sem filtro adicional, vê tudo.
+
+ALTERAÇÕES 20/09/2026 (Fase 3 — Configurações lidas da BD):
+
+- `import configuracoes` no topo — para ler as duas chaves de
+  stock, que até agora só existiam na GUI (`stock.rol_automatico_airbnb`
+  e `stock.permitir_envio_parcial`).
+
+- `gerar_rol_lavanderia_automatico` consulta
+  `stock.rol_automatico_airbnb`. Quando está desligada, devolve
+  `None` sem criar nada — o `NovaReservaAirbnb._gravar` já estava
+  preparado para o None e mostra a mensagem "Sem Rol de Lavanderia".
+
+- `enviar_requisicao` consulta `stock.permitir_envio_parcial`.
+  Quando está desligada, só aceita envio em que TODOS os itens vão
+  pela quantidade pedida — qualquer redução em qualquer item é
+  recusada com `ValueError`.
 """
 
 from datetime import date
 
+import configuracoes
 import repositorio
 import responsaveis
 
@@ -851,6 +868,13 @@ def enviar_requisicao(
     para todos os itens nas quantidades pedidas para este envio, ou
     nenhum movimento é gerado e a requisição continua pendente.
 
+    FASE 3 (20/09/2026) — respeita a chave
+    `stock.permitir_envio_parcial`. Quando está desligada, qualquer
+    tentativa de enviar menos do que o pedido em qualquer item é
+    recusada com ValueError — mesmo que a GUI (ou o CLI) tenha
+    passado `quantidades_enviadas`. A barreira real vive aqui, não
+    só na GUI (regra 11.2 do projeto).
+
     Grava de imediato via repositório — mesma convenção dos outros
     módulos de negócio, agora todos em MySQL.
     """
@@ -878,6 +902,24 @@ def enviar_requisicao(
                     f"O produto {produto_id} não faz parte desta "
                     f"requisição."
                 )
+
+        # FASE 3 (20/09/2026) — se o envio parcial estiver
+        # desligado nas Configurações, só se aceita envio em que
+        # TODOS os itens vão pela quantidade pedida. Qualquer
+        # redução em qualquer item é recusada.
+        if not configuracoes.obter_bool("stock.permitir_envio_parcial"):
+            for item in itens:
+                qtd_a_enviar = quantidades_enviadas.get(
+                    item["produto_id"], item["quantidade_pedida"]
+                )
+
+                if qtd_a_enviar != item["quantidade_pedida"]:
+                    raise ValueError(
+                        "O envio parcial está desativado nas "
+                        "Configurações. Ou envias a totalidade "
+                        "de cada produto, ou pedes a um Master "
+                        "para ativar esta opção."
+                    )
 
     a_enviar = []
 
@@ -1753,7 +1795,15 @@ def gerar_rol_lavanderia_automatico(ocupacao, responsavel_id):
     reserva (vem de `sessao.obter_responsavel_ativo()`, lido por
     quem chama).
 
-    Fluxo:
+    FASE 3 (20/09/2026) — respeita a chave
+    `stock.rol_automatico_airbnb` (Configurações → Sistema). Quando
+    está desligada, devolve None sem criar nada — o
+    `NovaReservaAirbnb._gravar` já estava preparado para o None e
+    mostra a mensagem "Sem Rol de Lavanderia". A reserva em si
+    grava-se na mesma (esta função só decide se gera o Rol, não se
+    grava a reserva).
+
+    Fluxo normal (chave ligada):
 
     1. Chama `calcular_rol_lavanderia` para obter os produtos a
        enviar. Produtos desativados são ignorados (não vão para a
@@ -1787,6 +1837,12 @@ def gerar_rol_lavanderia_automatico(ocupacao, responsavel_id):
     `None` em qualquer dos casos, e quem chama decide o que
     mostrar ao utilizador.
     """
+    # FASE 3 (20/09/2026) — chave `stock.rol_automatico_airbnb`.
+    # Quando está desligada, não gera nada. A reserva já foi
+    # gravada por quem chamou — esta função só trata do Rol.
+    if not configuracoes.obter_bool("stock.rol_automatico_airbnb"):
+        return None
+
     unidade_id = ocupacao["unidade_id"]
 
     produtos_a_enviar, produtos_desativados = calcular_rol_lavanderia(

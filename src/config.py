@@ -68,6 +68,15 @@ PRAZO_CONSERVACAO_LOGS_DIAS = 180  # minimização
 
 VERSAO = "1.4.0"  # mostrada na interface (decisão 21); atualizar a cada fecho de versão
 
+# --- Utilizador Master padrão (reset do sistema) ----------------------------
+# Usados pela função "Começar do zero" (gui_configuracoes.py → Fase 4).
+# Depois de um reset, o sistema fica só com este utilizador.
+# A password fica em texto na primeira gravação, mas é logo convertida
+# para hash pelo `utilizadores.definir_credencial` — nunca é guardada
+# em claro na base de dados.
+NOME_MASTER_PADRAO = "Admin"
+UTILIZADOR_PADRAO = "admin"
+PASSWORD_PADRAO = "adm12345678"
 
 # --- Diretoria base de dados persistentes (Fase 1, v1.4.0) ------------------
 # Fica FORA da pasta de instalação/repositório: evita erros de permissão
