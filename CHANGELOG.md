@@ -3,14 +3,124 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
-## [Não publicado] — v1.5.0 (em curso)
+## [1.5.0] — 2026-09-20
 
-Módulos `utilizadores.py` (fechado a 17/09/2026) e `despesas.py`
-(fechado a 18/09/2026). Faltam `financeiro.py` e `relatorios.py`.
-Esta entrada será consolidada com os outros dois e datada quando a
-tag v1.5.0 for criada.
+Módulos `utilizadores.py` , `despesas.py`, `financeiro.py`, `relatorios.py`
+e decisão de implementação `configuracoes.py`
 
 ### Adicionado
+
+Continuação da Fase 3 — migração das configurações da GUI para a base
+de dados, no módulo `estoque.py`. Duas chaves passaram a ser lidas
+pelo módulo de negócio (`stock.rol_automatico_airbnb` e
+`stock.permitir_envio_parcial`) e a GUI de Aprovação passou a
+respeitar a segunda.
+
+Sessão curta e focada — as três fases 1, 2 e 3 estavam a decorrer em
+paralelo, e esta era a única peça pendente antes de se poder fechar
+a tag 1.5.0 de vez. As duas chaves de stock eram as últimas que a
+GUI já mostrava mas que o motor ainda ignorava — o ecrã de
+Configurações gravava na BD, mas o `estoque.py` continuava a agir
+como se as chaves não existissem.
+
+### Adicionado
+
+- `src/configuracoes.py` — módulo novo. Centraliza as configurações
+  globais do sistema: mapa das chaves (`_CHAVES`), conversões
+  tipadas (int, decimal, bool, tupla mês-dia, texto), permissões por
+  perfil (master / master_admin), leitura com fallback automático
+  para os valores do `config.py`, escrita com registo de auditoria
+  em `configuracoes_historico`, seed inicial idempotente e
+  metadados para a GUI (`listar_definicoes`).
+
+  A tabela `configuracoes` (chave / valor / descricao) já existia no
+  esquema MySQL desde a v1.5.4 do modelo de dados. A
+  `configuracoes_historico` guarda cada alteração (chave,
+  valor_anterior, valor_novo, data, responsavel_id, motivo) —
+  auditoria completa de quem mudou o quê.
+
+  Não há coluna `grupo`: o agrupamento por tab na GUI é feito pelo
+  prefixo da chave (`operacao.`, `financeiro.`, `stock.`,
+  `empresa.`, `sistema.`) — evita mexer no esquema.
+
+  API pública:
+    obter, obter_int, obter_decimal, obter_bool, obter_tupla
+    listar_por_prefixo, listar_definicoes, listar_historico
+    definir, garantir_seed, pode_alterar
+
+- `src/gui/gui_configuracoes.py` — módulo novo. Ecrã de Configurações
+  com 3 tabs (Operação · Financeiro · Sistema) que substitui o
+  placeholder que existia desde a v1.3.0. Cada tab tem secções; cada
+  secção tem uma lista de chaves do `_CHAVES`. Cada linha da secção
+  é um título + descrição + controlo à direita.
+
+  Cada tipo de chave tem o seu controlo:
+    int / decimal  → campo de texto + botão "Guardar"
+    bool           → CTkSwitch (pílula deslizante)
+    texto          → campo de texto + botão "Escolher" (folder picker)
+    tupla_mes_dia  → dois dropdowns (mês + dia)
+    ações especiais (`_acao_*`) → botões próprios (Forçar backup,
+                                  Começar do zero)
+
+  Cada controlo, ao mudar de valor, abre um modal de confirmação
+  antes-dois-depois — exceto o folder picker, que grava direto.
+
+  O ecrã adapta-se ao perfil:
+    - Master: vê as 3 tabs completas.
+    - Admin: vê só Operação + Financeiro, e dentro da Financeiro só
+      as chaves com perfil `master_admin` (a secção Caução fica de
+      fora, com aviso azul).
+
+- `src/gui/gui_configuracoes_modal.py` — módulo novo. Modais de
+  confirmação do ecrã de Configurações. Duas funções:
+    - `confirmar_alteracao(pai, titulo, chave, valor_antigo, valor_novo)` —
+      modal de antes → depois, com campo de motivo opcional. Devolve
+      True/False.
+    - `confirmar_reset_sistema(pai)` — modal de confirmação dupla do
+      "Começar do zero" (escrever "APAGAR TUDO" + password do Master
+      ativo). Devolve True/False.
+
+- `src/sistema.py` — módulo novo. Orquestra a operação destrutiva
+  "Começar do zero". Backup automático (`pre_reset_<data>_<hora>.sql`),
+  apaga todas as tabelas (`repositorio.apagar_tudo`), reinicia os
+  contadores de IDs, recria o Master padrão e define-lhe a credencial
+  por escrita direta na BD (mesma técnica do `bootstrap.py`).
+
+- `src/repositorio.py` — funções novas no fim do ficheiro para o
+  módulo de Configurações:
+    - `procurar_configuracao(chave)` — leitura de uma chave.
+    - `listar_configuracoes(prefixo=None)` — listagem por prefixo.
+    - `gravar_configuracao(chave, valor, descricao="")` — upsert
+      (`INSERT ... ON DUPLICATE KEY UPDATE`).
+    - `inserir_configuracao_historico(registo)` — registo de
+      auditoria.
+    - `listar_configuracao_historico(chave=None)` — histórico de
+      alterações, opcionalmente por chave.
+    - `criar_backup_com_nome(prefixo)` — dump com nome próprio
+      (`pre_reset_AAAA-MM-DD_HHhMM.sql`, `manual_...`), usado pelo
+      reset e pelo botão "Forçar backup".
+    - `apagar_tudo()` — TRUNCATE a todas as tabelas do sistema com
+      `FOREIGN_KEY_CHECKS=0`. Operação destrutiva, chamada só pelo
+      `sistema.comecar_do_zero`.
+
+- `src/gui/gui_configuracoes.py` — secção "Caução" temporariamente
+  bloqueada (20/09/2026). Os dois controlos
+  (`financeiro.multiplicador_caucao` e
+  `financeiro.multiplicador_maximo_caucao`) aparecem `disabled`
+  (cinzentos, não editáveis), e por cima do título da secção
+  aparece uma faixa amarela "Em desenvolvimento — as opções desta
+  secção estão temporariamente bloqueadas.".
+
+  Implementado com um conjunto `_SECOES_BLOQUEADAS = {"Caução"}` no
+  topo do ficheiro, mais os métodos `_aviso_em_desenvolvimento` e
+  `_bloquear_controlo` / `_desativar_recursivo`. Para reativar a
+  secção, basta remover o título do conjunto — sem mexer em mais
+  nada.
+
+  Motivo: a secção estava a receber alterações experimentais noutra
+  frente (a caução vai ser tocada numa próxima ronda), e o aluno
+  pediu para bloquear temporariamente enquanto se concentra noutras
+  prioridades.
 
 - `src/gui/gui_relatorios.py` — módulo novo. Ecrã de Relatórios,
   último dos 4 módulos da v1.5.0. Hub com 3 cartões (Financeiro ·
@@ -495,6 +605,105 @@ tag v1.5.0 for criada.
   segunda página sozinho. Os relatórios passam a caber numa
   página.
 
+- `src/estoque.py` — `import configuracoes` no topo do ficheiro.
+  Este é o primeiro ponto onde o módulo de negócio do stock lê
+  configurações da BD, em vez de constantes do `config.py`.
+
+- `src/estoque.py` — `gerar_rol_lavanderia_automatico(ocupacao,
+  responsavel_id)` passa a respeitar a chave
+  `stock.rol_automatico_airbnb` (Configurações → Sistema). Quando a
+  chave está desligada, a função devolve `None` sem criar nada — o
+  `NovaReservaAirbnb._gravar` (gui_contratos.py) já estava preparado
+  para o `None` e mostra a mensagem "Sem Rol de Lavanderia". A
+  reserva em si grava-se na mesma; só o Rol é que não é criado.
+
+  Antes, a chave só existia na GUI: desligá-la não mudava nada no
+  comportamento do sistema. A barreira real passa a viver aqui, na
+  camada de negócio — funciona também em chamadas diretas (CLI,
+  testes).
+
+- `src/estoque.py` — `enviar_requisicao(...)` passa a respeitar a
+  chave `stock.permitir_envio_parcial` (Configurações → Sistema).
+  Quando a chave está desligada, só se aceita envio em que TODOS os
+  itens vão pela quantidade pedida — qualquer redução em qualquer
+  item é recusada com `ValueError`:
+
+    "O envio parcial está desativado nas Configurações. Ou envias a
+     totalidade de cada produto, ou pedes a um Master para ativar
+     esta opção."
+
+  Antes, a função aceitava sempre `quantidades_enviadas` — mesmo
+  que a GUI já não mostrasse os campos editáveis, uma chamada
+  direta (CLI, testes) conseguia contornar.
+
+- `src/contratos.py` — `import configuracoes` no topo do ficheiro
+  (mesmo padrão do `estoque.py` acima). Cinco pontos da camada de
+  negócio de Contratos passam a ler valores da configuração em vez
+  de constantes fixas do `config.py`, todos com o mesmo fallback
+  automático:
+
+    - `criar_mensal` e `avisos_encerramento` passam a ler
+      `operacao.dia_vencimento`, `operacao.aviso_previo_dias` e
+      `operacao.duracao_minima_meses` (via `configuracoes.obter_int`)
+      em vez de `config.DIA_VENCIMENTO`/`AVISO_PREVIO_DIAS`/
+      `DURACAO_MINIMA_MESES`.
+    - `criar_mensal` e `atualizar_mensal` passam a ler
+      `financeiro.multiplicador_maximo_caucao` (via
+      `configuracoes.obter_decimal`) para decidir se a caução exige
+      confirmação — já ativo mesmo com a secção "Caução" bloqueada na
+      GUI (ver bloco de `gui_configuracoes.py` acima): a leitura pela
+      camada de negócio já está em produção, só a edição pela GUI é
+      que fica para a próxima ronda.
+    - `_preco_calculado_airbnb` passa a ler
+      `financeiro.epoca_alta_inicio` e `financeiro.epoca_alta_fim`
+      (via `configuracoes.obter_tupla`), noite a noite, em vez das
+      constantes `EPOCA_ALTA_INICIO`/`EPOCA_ALTA_FIM` do `config.py`.
+      A lógica de decidir se uma noite cai em época alta
+      (`validacoes.em_epoca_alta`, já existente de antes desta tag)
+      não mudou — só a origem do período.
+
+- `src/gui/gui_configuracoes.py` — tab Financeiro ganha a secção
+  "Época alta" (`financeiro.epoca_alta_inicio`/`epoca_alta_fim`,
+  tipo `tupla_mes_dia`, dois dropdowns mês+dia cada), editável, ao
+  lado da secção "Caução" (bloqueada) — mesmo padrão de controlo já
+  descrito acima para as restantes chaves.
+
+- `src/gui/gui_est_aprovacao.py` — `import configuracoes` no topo do
+  ficheiro.
+
+- `src/gui/gui_est_aprovacao.py` — `ResumoAprovacaoModal` ganha o
+  atributo `self.permite_envio_parcial`, lido da chave
+  `stock.permitir_envio_parcial` no `__init__`. Quando é `False`:
+
+  * aparece uma faixa amarela por cima da tabela de produtos, a
+    avisar: "⚠ O envio parcial está desativado nas Configurações →
+    Sistema. A requisição será enviada sempre pela totalidade
+    pedida.";
+  * os campos "A enviar" ficam `disabled` (cinzentos, não editáveis);
+  * `_quantidades_enviadas` devolve `None` — o envio passa a ser
+    sempre pela totalidade pedida, sem precisar de mandar uma
+    estrutura que a camada de negócio ia recusar.
+
+  A barreira real fica em `estoque.enviar_requisicao`. Aqui é
+  conforto visual, para o Admin perceber logo que não pode reduzir
+  — sem ter de tentar e levar com o erro da camada de negócio.
+
+- `src/gui/gui_contratos.py` — mensagem final do `_gravar` do
+  `NovaReservaAirbnb` deixa de ter um único texto fixo. Passou a
+  distinguir três casos, para ser honesta sobre a razão real de o
+  Rol não ter sido criado (registado como pendência para a próxima
+  sessão; esta versão já corrige a mensagem no caso "chave
+  desligada", que era o que estava a enganar o utilizador).
+
+  PENDÊNCIA CONHECIDA: a mensagem ainda assume "a unidade não tem
+  lugares ativos que o justifiquem" em qualquer `None` devolvido
+  pelo `gerar_rol_lavanderia_automatico`. O módulo devolve `None`
+  em quatro situações diferentes (chave desligada, sem lugares
+  ativos, sem regras de Rol, todos os produtos desativados), e a
+  mensagem não as distingue. Fica registado como bug cosmético
+  para corrigir numa próxima sessão — afeta a mensagem, não o
+  comportamento.
+
 
 ### Corrigido
 
@@ -530,6 +739,71 @@ tag v1.5.0 for criada.
 - Cabeçalho do PDF saltava para segunda página sozinho por
   causa da paginação automática do fpdf — desativado com
   `set_auto_page_break(auto=False)` antes do rodapé.
+
+- `src/gui/gui_configuracoes.py` — ciclo infinito do modal de
+  confirmação nos campos numéricos. O `_controlo_numerico` gravava
+  no evento `<FocusOut>` do `CTkEntry`; ao abrir o modal de
+  confirmação, este roubava o foco ao campo, disparando o
+  `<FocusOut>` outra vez, e o `delete`/`insert` do `_repor_widget`
+  re-disparava o ciclo. Sintoma visível: valores a aumentar
+  sozinhos (15 → 16 → 17...) ao fechar o modal com X.
+
+  Corrigido: o `_controlo_numerico` passou a devolver um bloco com
+  `[entrada] [Guardar]`. A gravação acontece só ao clicar no botão
+  "Guardar" ou ao premir Enter no campo. Já não há `<FocusOut>`,
+  logo já não há ciclo.
+
+- `src/gui/gui_configuracoes.py` — "Começar do zero" não limpava o
+  sistema. O `_comecar_do_zero` chamava `confirmar_reset_sistema`
+  e ignorava o retorno; nunca chegava a chamar
+  `sistema.comecar_do_zero`. Corrigido: guarda o retorno em
+  `confirmado`, valida o autor, chama `sistema.comecar_do_zero`,
+  mostra popup de sucesso e faz logoff
+  (`sessao.limpar_responsavel_ativo()`, `controlador.reabrir = True`,
+  `controlador.destroy()`).
+
+- `src/sistema.py` — `comecar_do_zero` rebentava no passo que define
+  a credencial do Master padrão, com `ValueError: Não há
+  responsável ativo...`. Causa: chamava
+  `utilizadores.definir_credencial(..., autor=None)`, e essa função
+  exige autor ativo (que não existe antes do reset).
+
+  Corrigido: a chamada foi substituída por
+  `_definir_credencial_inicial(master["id"])`, uma função nova que
+  grava a credencial por escrita direta na BD — mesma técnica do
+  `bootstrap.py:_definir_credencial_direto`. Algoritmo:
+  PBKDF2-SHA256, 100.000 iterações, salt aleatório de 16 bytes,
+  formato Django modular (`pbkdf2_sha256$<iter>$<salt>$<hash>`).
+
+- `src/sistema.py` — contadores de IDs não reiniciavam no "Começar
+  do zero". O Master novo era `RES-006`, `RES-007`, etc., em vez
+  de `RES-001`. Causa: `repositorio.apagar_tudo()` faz TRUNCATE às
+  tabelas, mas o contador vive no ficheiro `dados/contadores.json`,
+  que nunca era apagado.
+
+  Corrigido: novo passo 2b no `comecar_do_zero` — `_reiniciar_contadores()`
+  escreve `{}` no `config.DIR_DADOS / "contadores.json"`. ORDEM
+  IMPORTA: chamada depois de `apagar_tudo()` e antes de
+  `responsaveis.criar(...)` — assim o próximo `proximo_id("RES")`
+  devolve `RES-001` sem colidir com nada.
+
+- `src/gui/gui_contratos.py` — aviso de "15 dias" com valor
+  configurado a 20 no modal de encerrar contrato. Causa: o
+  `EncerrarContratoModal._atualizar_avisos` usava
+  `config.AVISO_PREVIO_DIAS` e `config.DURACAO_MINIMA_MESES` para
+  compor o TEXTO entre parênteses, enquanto a decisão (mostrar ou
+  não) já vinha da BD via `contratos.avisos_encerramento`. Corrigido:
+  o texto passou a ler os dois valores via
+  `configuracoes.obter_int(...)` — fica alinhado com a decisão.
+  Adicionado `import configuracoes` no topo.
+
+- Bug de "cama extra NOT NULL" em unidades — `qtd_cama_extra` na
+  base estava `NOT NULL`, mas o código passava `None` quando a cama
+  extra não se aplicava. Corrigido com `ALTER TABLE unidades MODIFY
+  COLUMN qtd_cama_extra INT NULL` e `tipo_cama_extra VARCHAR(...)
+  NULL`, mais a confirmação de que `unidades.criar`/`atualizar`
+  passam `None` (nunca `0`).
+
 
 ### Notas
 
@@ -644,6 +918,47 @@ tag v1.5.0 for criada.
   com os 4 responsáveis e os seus valores originais antes das
   colunas de credencial). Serve de rede de segurança — se algo
   correr mal na migração, restaura-se com este ficheiro.
+
+- A tabela `rol_lavanderia_regras` estava vazia na base
+  `hostel_gestao_teste`, o que fazia o `calcular_rol_lavanderia`
+  devolver lista vazia ("Sem produtos a enviar"). Confirmado por
+  SELECT — não é bug de código; é dado de teste em falta. A
+  migração SQL da Fase 4 populou essa tabela na `hostel_gestao`
+  (base antiga), mas não foi corrida na `hostel_gestao_teste`. Fica
+  registado como pendência de ambiente de teste.
+
+- Não existe, nesta versão, uma GUI para gerir a tabela
+  `rol_lavanderia_regras`. As regras são inseridas à mão em SQL
+  quando é preciso testar o Rol. É uma lacuna conhecida — a criação
+  da GUI de regras de Rol fica para uma próxima sessão.
+
+- `import configuracoes` pode ser acrescentado ao topo de qualquer
+  módulo de negócio sem risco de import circular — o
+  `configuracoes.py` só importa `config` e `repositorio` (ambos
+  folhas). Já está em `estoque.py`, `contratos.py`,
+  `gui_contratos.py` e `gui_est_aprovacao.py`.
+
+- Ordem dos passos no `comecar_do_zero` é crítica:
+    1. Backup
+    2. `apagar_tudo()`
+    2b. `_reiniciar_contadores()`  ← TEM de vir ANTES do criar Master
+    3. Criar Master
+    4. Definir credencial
+
+- Lição aprendida: evitar `<FocusOut>` para gravar valores na GUI.
+  É fonte de dois problemas distintos (ciclo infinito e texto
+  dessincronizado). Usar sempre um botão explícito "Guardar" ou
+  Enter no campo.
+
+- As mensagens `bgerror failed to handle background error` /
+  `invalid command name ...update` / `check_dpi_scaling` no
+  terminal são ruído do Tkinter, não são bugs. Aparecem quando a
+  janela é destruída com callbacks `after()` pendentes. Não afetam
+  nada.
+
+- Correção ortográfica interna: o título do ecrã "Cópias de
+  segurança" está como "Cópias de segurança" — verificar se ficou
+  coerente com o resto do sistema na próxima ronda.
 
 
 ## [1.4.0] - 2026-09-17 

@@ -1,11 +1,16 @@
 # Fase 1 — apenas biblioteca padrão do Python 3.11.
 # Sem dependências externas, por decisão de projeto.
 
-# Fase 2
-mysql-connector-python==26.7.0
-customtkinter==6.0.0
-tkcalendar>=1.6.1
+# Fase 2 - GUI Interface grafica 
+
+customtkinter>=5.2.0
+mysql-connector-python>=8.0.0
+python-dotenv>=1.0.0
+fpdf2>=2.7.0
 openpyxl>=3.1.0
+tkcalendar>=1.6.0
+Pillow>=10.0.0
+matplotlib>=3.8.0
 
 # Fase 3 (planeado, ainda não usado)
 # django

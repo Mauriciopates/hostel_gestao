@@ -1,6 +1,6 @@
 # Hostel_Cleaning — Sistema de Gestão de Alojamento
 
-Sistema de gestão administrativa e comercial de alojamento local no Porto,
+Sistema de gestão administrativa e comercial de alojamento local no Portugal,
 em regime misto: arrendamento mensal partilhado e estadias curtas (Airbnb).
 
 Projeto individual da UFCD 26.0462 — Desenvolvimento de projeto de tecnologias
@@ -13,7 +13,7 @@ e programação de sistemas de informação.
 
 ## Estado
 
-**Fase 1 — em desenvolvimento.** Análise e desenho concluídos.
+**Fase 2 — em desenvolvimento.** 
 
 | Fase | Âmbito | Estado |
 |------|--------|--------|
@@ -25,42 +25,80 @@ e programação de sistemas de informação.
 
 ## Âmbito
 
-Gestão de 22 unidades distribuídas por 7 propriedades, em dois regimes de
-ocupação com regras distintas:
+Gestão de fluxo geral:
 
 - **Mensal** — contrato por pessoa, vários ativos em simultâneo na mesma
   unidade; ocupação apresentada como proporção dos lugares
 - **Airbnb** — reserva exclusiva do apartamento; qualquer sobreposição de
   datas é recusada
 
-Módulos: propriedades, unidades (com quartos e lugares), clientes, contratos,
-stock e responsáveis.
+**Consultar manual para a instalação.
 
 ---
 
-## Ambiente
+## Ambiente 
+# Instalação - Windows 
 
 - Python 3.11
 - Apenas biblioteca padrão na Fase 1
 - Testes com `unittest`
 
-```bash
+```
+bash
 python -m venv .venv
 source .venv/Scripts/activate    # Windows (Git Bash)
+pip install -r requirements.txt
+
+```
+
+## Ambiente
+# Instalação — Linux
+
+- **Python 3.11**
+- **MySQL 8.0+**
+- Ubuntu 22.04+ / Debian equivalente
+
+# 1. Preparar o Python
+
+```
+bash
+
+sudo apt update
+sudo apt install -y software-properties-common
+sudo add-apt-repository ppa:deadsnakes/ppa -y
+sudo apt update
+
+sudo apt install -y python3.11 python3.11-venv python3.11-dev python3.11-tk
+```
+Recomendado a criação de ambiente virtual para a instalação
+
+```
+bash
+
+python3.11 -m venv .venv
+source .venv/bin/activate
+
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
 ---
 
-## Estrutura
+## Estrutura 
 
 src/ módulos da aplicação
 testes/ testes unitários (prefixo teste_)
 docs/ análise, desenho, testes e manual
+img/ imagem do logo de sistema 
+
+Disco Local C:/ (Criado automaticamente no arranque)
+
 dados/ ficheiros de dados — fora do controlo de versões
+contratos/ ficheiro de armazenamento dos contratos emitidos 
 backups/ cópias de segurança — fora do controlo de versões
 logs/ registos — fora do controlo de versões
-img/ imagem do logo de sistema 
+relatorios/ fihceiros de armazenamento dos relatorios emitidos 
+
 
 ---
 
@@ -79,5 +117,6 @@ Fase 2 e por camada web na Fase 3 sem reescrever lógica de negócio.
 ## Proteção de dados
 
 Os dados operacionais não são versionados. O sistema prevê anonimização
-irreversível a pedido do titular (RGPD), conservando os registos contratuais
-e financeiros exigidos por lei.
+irreversível a pedido do titular (RGPD), dados de Airbnb conforme
+necessidade de envio ao portal SIBA (Aima)
+conservando os registos contratuais e financeiros exigidos por lei.
