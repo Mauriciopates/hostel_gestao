@@ -1093,6 +1093,491 @@ class Tabela(ctk.CTkFrame):
 
 
 # =====================================================================
+# SELETOR — o CTkOptionMenu com painel de scroll e pesquisa
+#
+# Decisão de arquitetura do aluno (21/09/2026): daqui para a frente os
+# ecrãs deixam de instanciar widgets do CustomTkinter diretamente e
+# passam por uma classe daqui, que HERDA a do CustomTkinter. Foi o que
+# faltou no caso do `CTkOptionMenu`: como cada ecrã o instanciava à
+# sua maneira, não havia um sítio só onde mudar — ao contrário da
+# `Tabela`, onde uma correção chegou a todos os ecrãs de uma vez.
+# =====================================================================
+
+# A partir de quantos itens é que o menu nativo deixa de servir. Uma
+# lista de meses, de estados civis ou de tipos de cama continua no
+# menu de sempre: é mais rápido, é o que o utilizador já conhece, e
+# trocá-lo não traria ganho nenhum.
+_LIMITE_MENU_NATIVO = 8
+
+# Linhas visíveis no painel antes de ser preciso rolar.
+_LINHAS_VISIVEIS = 6
+
+_ALTURA_OPCAO = 30
+_LARGURA_MINIMA_PAINEL = 280
+
+# Teto de opções desenhadas de uma vez. Cada linha é um CTkButton, e
+# criar centenas deles demora o suficiente para se notar ao abrir.
+# Com o teto, o painel abre sempre instantâneo e o rodapé diz que há
+# mais — que é também a melhor deixa para usar a pesquisa.
+_MAX_OPCOES_DESENHADAS = 60
+
+# Quantas vezes se vai ver se o menu nativo já fechou, de 200 em 200
+# ms (ver `_vigiar_menu_nativo`). Sessenta segundos é folgado para
+# alguém escolher uma opção; passado isso desiste-se, e a captura
+# acaba por ser reposta na interação seguinte.
+_TENTATIVAS_MENU_NATIVO = 300
+
+
+class Seletor(ctk.CTkOptionMenu):
+    """`CTkOptionMenu` que troca o menu nativo por um painel com
+    scroll e pesquisa quando a lista é grande.
+
+    PORQUÊ: o dropdown do `CTkOptionMenu` é um `DropdownMenu`, que
+    herda de `tkinter.Menu` — um menu nativo do sistema operativo.
+    Menus nativos não têm barra de scroll interna nem se deixam
+    limitar a um número de linhas, e com 100 clientes a lista passa a
+    ser impossível de navegar (problema levantado pelo aluno em
+    21/09/2026, a partir do campo Cliente da Nova Reserva Airbnb).
+
+    COMO: herda mesmo a classe e substitui UM método —
+    `_open_dropdown_menu`, cujo trabalho inteiro é mandar abrir o
+    menu. Tudo o resto vem de graça e continua a ser o do
+    CustomTkinter: o aspeto, a geometria, a escala, e a API
+    (`get`, `set`, `configure(values=...)`, `cget("values")`). Por
+    isso entra no lugar de um `CTkOptionMenu` sem mais nenhuma
+    alteração no código de quem o usa, e qualquer `isinstance` que
+    já exista sobre `CTkOptionMenu` continua a dar verdadeiro.
+
+    Listas curtas continuam no menu nativo. A decisão é tomada em
+    execução, pelo comprimento da lista, para os ecrãs não terem de
+    classificar campo a campo o que merece o painel novo.
+
+    A LISTA NUNCA É ALTERADA. A pesquisa filtra apenas o que se
+    desenha; `self._values` continua a ser a lista original, pela
+    ordem original. Isto não é um detalhe de estilo: o código dos
+    ecrãs faz `combo.cget("values").index(combo.get())` para voltar
+    do texto ao registo real (o cliente, o responsável, a unidade).
+    Se a lista fosse substituída pela filtrada, esse `.index()`
+    passaria a devolver o registo errado em silêncio — uma reserva
+    atribuída a outro cliente, sem erro nenhum no ecrã.
+
+    A escolha é entregue ao `_dropdown_callback` da classe base, o
+    mesmo que o menu nativo usa — atualiza o valor, a etiqueta, a
+    variável ligada e chama o `command`. Não há aqui uma segunda
+    cópia dessa lógica que pudesse divergir.
+
+    Uso — igual ao `CTkOptionMenu`, porque é um:
+
+        self.combo_cliente = componentes.Seletor(
+            bloco, values=["—"], width=1, command=self._ao_escolher
+        )
+    """
+
+    def __init__(
+        self,
+        master,
+        *args,
+        limite=_LIMITE_MENU_NATIVO,
+        linhas_visiveis=_LINHAS_VISIVEIS,
+        pesquisa=True,
+        **kwargs,
+    ):
+        super().__init__(master, *args, **kwargs)
+
+        self._limite = limite
+        self._linhas_visiveis = linhas_visiveis
+        self._com_pesquisa = pesquisa
+        self._painel = None
+        self._campo_pesquisa = None
+        self._lista_painel = None
+        self._rodape_painel = None
+        self._grab_anterior = None
+
+    # -- decisão -----------------------------------------------------
+
+    def _open_dropdown_menu(self):
+        """Único método da classe base que é substituído.
+
+        O `hasattr` no `super()` não é preciso aqui — este método
+        existe porque o estamos a redefinir — mas o caminho da lista
+        curta chama o original, e é esse que depende da biblioteca.
+        Se uma versão futura do CustomTkinter lhe mudar o nome, é
+        este método que deixa de ser chamado: o widget volta a
+        comportar-se como um `CTkOptionMenu` normal, com o menu
+        nativo, em vez de ficar um campo que não abre.
+        """
+        if len(self._values) <= self._limite:
+            anterior = self.grab_current()
+            super()._open_dropdown_menu()
+            self._vigiar_menu_nativo(anterior)
+            return
+
+        self._alternar_painel()
+
+    def _vigiar_menu_nativo(self, anterior, apareceu=False, tentativas=0):
+        """Devolve a captura de eventos ao modal depois de o menu
+        nativo fechar.
+
+        BUG ANTIGO, NÃO INTRODUZIDO AQUI (medido em 21/09/2026 com um
+        `CTkOptionMenu` original, sem nada deste ficheiro): ao abrir,
+        o menu nativo toma a captura de eventos; ao fechar, NÃO a
+        devolve — fica ela com o menu já fechado. Consequência real:
+        num modal, basta abrir um dropdown uma vez para o modal
+        deixar de bloquear a janela por trás, e o utilizador passa a
+        poder clicar no que devia estar bloqueado, sem aviso nenhum.
+
+        Como todos os seletores do sistema passam a ser desta classe,
+        este é o sítio onde isso se corrige de uma vez.
+
+        O `apareceu` existe por causa do tempo: logo a seguir a pedir
+        a abertura, o menu ainda não está no ecrã, e sem esta
+        bandeira a primeira verificação concluía "já fechou" e tirava
+        a captura ao menu que estava mesmo a abrir.
+        """
+        if anterior is None:
+            return
+
+        try:
+            mapeado = bool(self._dropdown_menu.winfo_ismapped())
+        except tkinter.TclError:
+            return
+
+        if mapeado:
+            apareceu = True
+        elif apareceu:
+            try:
+                anterior.grab_set()
+            except tkinter.TclError:
+                pass
+
+            return
+
+        if tentativas >= _TENTATIVAS_MENU_NATIVO:
+            return
+
+        try:
+            self.after(
+                200,
+                lambda: self._vigiar_menu_nativo(
+                    anterior, apareceu, tentativas + 1
+                ),
+            )
+        except tkinter.TclError:
+            pass
+
+    # -- painel ------------------------------------------------------
+
+    def _alternar_painel(self):
+        """Segundo clique no campo fecha o painel, em vez de abrir
+        outro por cima.
+        """
+        if self._painel is not None:
+            self._fechar_painel()
+            return
+
+        self._abrir_painel()
+
+    def _abrir_painel(self):
+        # Quem tem a captura de eventos neste momento — quase sempre
+        # o modal de onde este seletor foi aberto (a Nova Reserva
+        # Airbnb, por exemplo, chama `grab_set` através do
+        # `colocar_no_topo`). Guardar isto agora é o que permite
+        # devolver-lhe a captura quando o painel fechar; sem isso, o
+        # modal por baixo ficava a não responder a nada.
+        self._grab_anterior = self.grab_current()
+
+        painel = ctk.CTkToplevel(self)
+        self._painel = painel
+
+        # Sem barra de título nem moldura do sistema: isto é um
+        # painel colado ao campo, não uma janela.
+        painel.overrideredirect(True)
+        painel.configure(fg_color=tema.COR_BORDA)
+
+        moldura = ctk.CTkFrame(
+            painel,
+            corner_radius=tema.RAIO_CARTAO,
+            fg_color=tema.COR_FUNDO,
+            border_width=0,
+        )
+        moldura.pack(fill="both", expand=True, padx=1, pady=1)
+
+        if self._com_pesquisa:
+            self._campo_pesquisa = ctk.CTkEntry(
+                moldura,
+                corner_radius=tema.RAIO_CAMPO,
+                placeholder_text="Escrever para filtrar...",
+                height=30,
+            )
+            self._campo_pesquisa.pack(fill="x", padx=8, pady=(8, 4))
+            # KeyRelease e não FocusOut: gravar ou reagir no
+            # `<FocusOut>` de um campo é fonte de ciclos infinitos
+            # neste projeto (lição do `gui_configuracoes.py`,
+            # `_controlo_numerico`).
+            self._campo_pesquisa.bind(
+                "<KeyRelease>", self._ao_filtrar, add=True
+            )
+
+        self._lista_painel = ctk.CTkScrollableFrame(
+            moldura,
+            fg_color="transparent",
+            height=self._linhas_visiveis * _ALTURA_OPCAO,
+        )
+        self._lista_painel.pack(fill="both", expand=True, padx=4)
+
+        self._rodape_painel = ctk.CTkLabel(
+            moldura,
+            text="",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+            anchor="w",
+        )
+        self._rodape_painel.pack(fill="x", padx=12, pady=(2, 8))
+
+        self._desenhar_opcoes()
+        self._colocar_painel(painel)
+
+        # A captura passa para o painel. É ela que faz os cliques
+        # fora chegarem cá (ver `_ao_clicar`) e que deixa o campo de
+        # pesquisa receber o que se escreve mesmo com o modal de trás
+        # a ter pedido a captura antes.
+        painel.bind("<Button-1>", self._ao_clicar, add=True)
+        painel.bind("<Escape>", self._fechar_painel, add=True)
+
+        # Rodar a roda do rato FORA do painel fecha-o. Sem isto, um
+        # seletor dentro de um formulário com scroll (o
+        # `_FormularioCliente` e os cartões dos contratos vivem todos
+        # dentro de um `CTkScrollableFrame`) deixava o painel
+        # pendurado no sítio antigo enquanto o campo lhe fugia por
+        # baixo — medido em 21/09/2026: o campo desceu 360px e o
+        # painel não se mexeu um pixel. Rodar DENTRO do painel
+        # continua a rolar a lista, como deve ser.
+        #
+        # `<MouseWheel>` cobre Windows e macOS; `<Button-4>` e
+        # `<Button-5>` são o equivalente em Linux.
+        for evento_roda in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            painel.bind(evento_roda, self._ao_rodar, add=True)
+
+        painel.after(10, self._capturar)
+
+    def _capturar(self):
+        painel = self._painel
+
+        if painel is None:
+            return
+
+        try:
+            painel.grab_set()
+        except tkinter.TclError:
+            return
+
+        # Alguém dentro do painel tem de ficar com o foco do teclado,
+        # senão o Escape não chega cá: a caixa de pesquisa quando
+        # existe, o próprio painel quando não existe.
+        if self._campo_pesquisa is not None:
+            self._campo_pesquisa.focus_set()
+        else:
+            painel.focus_set()
+
+    def _colocar_painel(self, painel):
+        """Coloca o painel por baixo do campo, ou por cima se não
+        houver espaço até ao fundo do ecrã.
+
+        `tkinter.Toplevel.geometry` e não `painel.geometry`: o
+        `CTkToplevel` volta a multiplicar o valor pela escala da
+        janela, e estes números já vêm em pixéis reais
+        (`winfo_rootx`, `winfo_width`). É a lição de geometria de
+        16/09/2026 — com o `.geometry()` do CustomTkinter, o painel
+        crescia a cada abertura.
+        """
+        painel.update_idletasks()
+
+        largura = max(self.winfo_width(), _LARGURA_MINIMA_PAINEL)
+        altura = painel.winfo_reqheight()
+
+        x = self.winfo_rootx()
+        abaixo = self.winfo_rooty() + self.winfo_height() + 2
+
+        if abaixo + altura > painel.winfo_screenheight():
+            y = max(self.winfo_rooty() - altura - 2, 0)
+        else:
+            y = abaixo
+
+        tkinter.Toplevel.geometry(painel, f"{largura}x{altura}+{x}+{y}")
+        painel.lift()
+
+    # -- conteúdo ----------------------------------------------------
+
+    def _termo(self):
+        if self._campo_pesquisa is None:
+            return ""
+
+        return self._campo_pesquisa.get().strip().lower()
+
+    def _desenhar_opcoes(self):
+        """Desenha as opções que passam o filtro.
+
+        Lê `self._values` e não lhe toca — ver a nota sobre o
+        `.index()` na docstring da classe.
+        """
+        if self._lista_painel is None:
+            return
+
+        for widget in self._lista_painel.winfo_children():
+            widget.destroy()
+
+        termo = self._termo()
+        correspondem = [v for v in self._values if termo in v.lower()]
+        desenhadas = correspondem[:_MAX_OPCOES_DESENHADAS]
+
+        for valor in desenhadas:
+            escolhido = valor == self._current_value
+
+            ctk.CTkButton(
+                self._lista_painel,
+                text=valor,
+                anchor="w",
+                height=_ALTURA_OPCAO - 4,
+                corner_radius=tema.RAIO_BOTAO,
+                fg_color=(tema.ID_CHIP_FUNDO if escolhido else "transparent"),
+                text_color=tema.COR_TEXTO,
+                hover_color=tema.COR_BORDA,
+                font=ctk.CTkFont(size=12),
+                command=lambda v=valor: self._escolher(v),
+            ).pack(fill="x", pady=1)
+
+        if not correspondem:
+            ctk.CTkLabel(
+                self._lista_painel,
+                text="Sem resultados.",
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=12),
+            ).pack(pady=14)
+
+        self._atualizar_rodape(len(correspondem), len(desenhadas))
+
+    def _atualizar_rodape(self, encontradas, desenhadas):
+        if self._rodape_painel is None:
+            return
+
+        total = len(self._values)
+
+        if desenhadas < encontradas:
+            texto = (
+                f"a mostrar {desenhadas} de {encontradas} — "
+                f"filtra para ver o resto"
+            )
+        elif self._termo():
+            texto = f"{encontradas} de {total}"
+        else:
+            texto = f"{total} registos"
+
+        self._rodape_painel.configure(text=texto)
+
+    def _ao_filtrar(self, _evento=None):
+        self._desenhar_opcoes()
+
+    # -- fecho -------------------------------------------------------
+
+    def _ao_clicar(self, evento):
+        """Fecha o painel quando se clica fora dele.
+
+        LIÇÃO (21/09/2026, bug apanhado pelo aluno — o painel abria e
+        não havia maneira de sair sem escolher uma opção): com a
+        captura de eventos no painel, um clique em qualquer outro
+        sítio da aplicação É entregue ao painel, mas chega
+        disfarçado. O `evento.widget` aponta para o próprio painel (a
+        janela que tem a captura) e não para o sítio onde se clicou,
+        por isso perguntar "este widget pertence ao painel?"
+        respondia sempre que sim, e o painel nunca fechava. O
+        `evento.x`/`evento.y` também não servem: vêm relativos a essa
+        janela e caem dentro dos limites dela.
+
+        O que não mente são as coordenadas absolutas do ecrã
+        (`x_root`/`y_root`). Comparadas com a posição e o tamanho
+        reais do painel, dizem sem ambiguidade se o clique caiu cá
+        dentro ou lá fora, independentemente de a quem o evento foi
+        entregue.
+        """
+        if self._fora_do_painel(evento):
+            self._fechar_painel()
+
+    def _ao_rodar(self, evento):
+        """Fecha o painel se a roda do rato for usada fora dele.
+
+        Mesma pergunta do `_ao_clicar`, mesma resposta: o painel é
+        uma janela independente e não acompanha o formulário quando
+        este rola. Rodar dentro do painel rola a lista e não fecha
+        nada.
+        """
+        if self._fora_do_painel(evento):
+            self._fechar_painel()
+
+    def _fora_do_painel(self, evento):
+        """Diz se um evento de rato caiu fora do painel."""
+        painel = self._painel
+
+        if painel is None:
+            return False
+
+        esquerda = painel.winfo_rootx()
+        topo = painel.winfo_rooty()
+
+        return (
+            evento.x_root < esquerda
+            or evento.y_root < topo
+            or evento.x_root >= esquerda + painel.winfo_width()
+            or evento.y_root >= topo + painel.winfo_height()
+        )
+
+    def _escolher(self, valor):
+        self._fechar_painel()
+        # O mesmo caminho que o menu nativo usa: atualiza valor,
+        # etiqueta, variável ligada e chama o `command`.
+        self._dropdown_callback(valor)
+
+    def _fechar_painel(self, _evento=None):
+        painel = self._painel
+
+        if painel is None:
+            return
+
+        self._painel = None
+        self._campo_pesquisa = None
+        self._lista_painel = None
+        self._rodape_painel = None
+
+        try:
+            painel.grab_release()
+        except tkinter.TclError:
+            pass
+
+        painel.destroy()
+
+        # Devolver a captura a quem a tinha. O Tk não a repõe
+        # sozinho quando a janela que a tinha desaparece: sem isto, o
+        # modal de onde o seletor foi aberto ficava sem captura e,
+        # pior, a janela principal voltava a aceitar cliques por trás
+        # de um modal que era suposto bloqueá-la.
+        if self._grab_anterior is not None:
+            try:
+                self._grab_anterior.grab_set()
+            except tkinter.TclError:
+                pass
+
+        self._grab_anterior = None
+
+    def destroy(self):
+        """Fecha o painel se o próprio seletor for destruído.
+
+        Sem isto, fechar o modal com o painel aberto deixava uma
+        janela sem dono no ecrã e a captura de eventos por devolver.
+        """
+        self._fechar_painel()
+        super().destroy()
+
+
+# =====================================================================
 # Helpers visuais genéricos — partilhados por todos os ecrãs
 #
 # Estavam copiados por 5 módulos da GUI (gui_propriedades, gui_clientes,

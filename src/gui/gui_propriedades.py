@@ -701,7 +701,7 @@ class _ConfirmarForcarModal(ctk.CTkToplevel):
         nomes = ["— Nenhum —"] + [
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
-        self.combo_responsavel = ctk.CTkOptionMenu(self, values=nomes)
+        self.combo_responsavel = componentes.Seletor(self, values=nomes)
         self.combo_responsavel.set(nomes[0])
         self.combo_responsavel.pack(fill="x", padx=20, pady=(2, 10))
 
@@ -1191,7 +1191,7 @@ class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
         self.campo_busca.pack(side="left")
         self.campo_busca.bind("<Return>", lambda evento: self._recarregar())
 
-        self.combo_estado = ctk.CTkOptionMenu(
+        self.combo_estado = componentes.Seletor(
             barra,
             values=["Todos"] + list(_ESTADOS_FILTRO),
             command=lambda _valor: self._recarregar(),
@@ -2193,7 +2193,7 @@ class NovaUnidadeModal(ctk.CTkToplevel):
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=20)
-        self.combo_tipo = ctk.CTkOptionMenu(
+        self.combo_tipo = componentes.Seletor(
             self, values=["Mensal", "Airbnb"], command=self._ao_mudar_tipo
         )
         self.combo_tipo.set("Mensal")

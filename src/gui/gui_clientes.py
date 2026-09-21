@@ -927,7 +927,7 @@ class _FormularioCliente(ctk.CTkToplevel):
 
     def _campo_dropdown(self, rotulo, valores):
         linha = self._linha(rotulo)
-        combo = ctk.CTkOptionMenu(self.corpo, values=list(valores))
+        combo = componentes.Seletor(self.corpo, values=list(valores))
         combo.grid(row=linha, column=1, sticky="ew", pady=6)
         return combo
 
@@ -957,7 +957,7 @@ class _FormularioCliente(ctk.CTkToplevel):
         entrada.grid(row=1, column=0, sticky="ew", pady=(6, 0))
         entrada.grid_remove()  # escondida por omissão, só "Outra" mostra
 
-        combo = ctk.CTkOptionMenu(
+        combo = componentes.Seletor(
             bloco,
             values=(
                 [NACIONALIDADE_PLACEHOLDER]
@@ -1372,7 +1372,7 @@ class _AnonimizarModal(ctk.CTkToplevel):
         nomes = ["— Nenhum —"] + [
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
-        self.combo_responsavel = ctk.CTkOptionMenu(self, values=nomes)
+        self.combo_responsavel = componentes.Seletor(self, values=nomes)
         self.combo_responsavel.set(nomes[0])
         self.combo_responsavel.pack(fill="x", padx=20, pady=(2, 10))
 

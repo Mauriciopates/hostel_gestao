@@ -229,7 +229,7 @@ class NovoContratoMensal(ctk.CTkFrame):
         corpo = self._criar_cartao("Unidade e lugar")
 
         self._linha(corpo, 0, "Unidade *")
-        self.combo_unidade = ctk.CTkOptionMenu(
+        self.combo_unidade = componentes.Seletor(
             corpo,
             values=["—"],
             command=self._ao_escolher_unidade,
@@ -237,7 +237,7 @@ class NovoContratoMensal(ctk.CTkFrame):
         self.combo_unidade.grid(row=0, column=1, sticky="ew", pady=6)
 
         self._linha(corpo, 1, "Lugar (opcional)")
-        self.combo_lugar = ctk.CTkOptionMenu(corpo, values=["— Nenhum —"])
+        self.combo_lugar = componentes.Seletor(corpo, values=["— Nenhum —"])
         self.combo_lugar.grid(row=1, column=1, sticky="ew", pady=6)
 
     def _montar_cartao_cliente(self):
@@ -250,7 +250,7 @@ class NovoContratoMensal(ctk.CTkFrame):
         bloco.grid(row=0, column=1, sticky="ew", pady=6)
         bloco.grid_columnconfigure(0, weight=1)
 
-        self.combo_cliente = ctk.CTkOptionMenu(bloco, values=["—"], width=1)
+        self.combo_cliente = componentes.Seletor(bloco, values=["—"], width=1)
         self.combo_cliente.grid(row=0, column=0, sticky="ew")
 
         ctk.CTkButton(
@@ -305,7 +305,7 @@ class NovoContratoMensal(ctk.CTkFrame):
         self.campo_motivo_renda.grid(row=4, column=1, sticky="ew", pady=6)
 
         self._linha(corpo, 5, "Responsável do desconto")
-        self.combo_responsavel = ctk.CTkOptionMenu(
+        self.combo_responsavel = componentes.Seletor(
             corpo, values=["— Nenhum —"]
         )
         self.combo_responsavel.grid(row=5, column=1, sticky="ew", pady=6)
@@ -731,7 +731,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         corpo = self._criar_cartao("Unidade e cliente")
 
         self._linha(corpo, 0, "Unidade *")
-        self.combo_unidade = ctk.CTkOptionMenu(
+        self.combo_unidade = componentes.Seletor(
             corpo,
             values=["—"],
             command=self._ao_escolher_unidade,
@@ -744,7 +744,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         bloco.grid(row=1, column=1, sticky="ew", pady=6)
         bloco.grid_columnconfigure(0, weight=1)
 
-        self.combo_cliente = ctk.CTkOptionMenu(bloco, values=["—"], width=1)
+        self.combo_cliente = componentes.Seletor(bloco, values=["—"], width=1)
         self.combo_cliente.grid(row=0, column=0, sticky="ew")
 
         ctk.CTkButton(
@@ -878,7 +878,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
             width=160,
         ).grid(row=3, column=0, sticky="w", pady=6, padx=(0, 12))
 
-        self.combo_responsavel_multa = ctk.CTkOptionMenu(
+        self.combo_responsavel_multa = componentes.Seletor(
             corpo, values=["— Nenhum —"]
         )
         self.combo_responsavel_multa.grid(row=3, column=1, sticky="ew", pady=6)
@@ -1631,7 +1631,7 @@ class _ConfirmacaoAirbnb(ctk.CTkToplevel):
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
 
-        self.combo_responsavel = ctk.CTkOptionMenu(
+        self.combo_responsavel = componentes.Seletor(
             corpo,
             values=nomes,
             corner_radius=tema.RAIO_CAMPO,
@@ -2335,7 +2335,7 @@ class ListaContratosMensais(ctk.CTkFrame):
         barra = ctk.CTkFrame(self, fg_color="transparent")
         barra.pack(fill="x", padx=20, pady=(0, 4))
 
-        self.combo_aviso = ctk.CTkOptionMenu(
+        self.combo_aviso = componentes.Seletor(
             barra,
             values=["Todos", "Com aviso", "Sem aviso"],
             command=lambda _valor: self._recarregar(),
@@ -2733,7 +2733,7 @@ class _ImprimirContratoModal(ctk.CTkToplevel):
         nomes = ["— Escolher responsável —"] + [
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
-        self.combo_senhorio = ctk.CTkOptionMenu(
+        self.combo_senhorio = componentes.Seletor(
             self, values=nomes, corner_radius=tema.RAIO_CAMPO
         )
         self.combo_senhorio.set(nomes[0])
@@ -2967,7 +2967,7 @@ class ListaReservasAirbnb(ctk.CTkFrame):
         barra = ctk.CTkFrame(self, fg_color="transparent")
         barra.pack(fill="x", padx=20, pady=(0, 4))
 
-        self.combo_aviso = ctk.CTkOptionMenu(
+        self.combo_aviso = componentes.Seletor(
             barra,
             values=["Todos", "Com aviso", "Sem aviso"],
             command=lambda _valor: self._recarregar(),
@@ -3350,7 +3350,7 @@ class EditarReservaAirbnbModal(ctk.CTkToplevel):
         self.campo_motivo_preco.grid(row=2, column=1, sticky="ew", pady=6)
 
         self._linha(corpo, 3, "Responsável do desconto")
-        self.combo_responsavel_preco = ctk.CTkOptionMenu(
+        self.combo_responsavel_preco = componentes.Seletor(
             corpo, values=["— Nenhum —"]
         )
         self.combo_responsavel_preco.grid(row=3, column=1, sticky="ew", pady=6)
@@ -3385,7 +3385,7 @@ class EditarReservaAirbnbModal(ctk.CTkToplevel):
             )
 
             self._linha(corpo_ct, 2, "Responsável do desconto")
-            self.combo_responsavel_multa = ctk.CTkOptionMenu(
+            self.combo_responsavel_multa = componentes.Seletor(
                 corpo_ct, values=["— Nenhum —"]
             )
             self.combo_responsavel_multa.grid(

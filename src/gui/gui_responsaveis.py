@@ -41,7 +41,6 @@ from . import componentes
 from . import sessao
 from . import tema
 
-
 _colocar_no_topo = componentes.colocar_no_topo
 
 
@@ -63,9 +62,7 @@ _COLUNAS_RESPONSAVEL = (
     componentes.Coluna(
         "ESTADO", peso=1, minimo=_LARGURA_ESTADO, alinhamento="centro"
     ),
-    componentes.Coluna(
-        "AÇÕES", minimo=_LARGURA_ACOES, alinhamento="centro"
-    ),
+    componentes.Coluna("AÇÕES", minimo=_LARGURA_ACOES, alinhamento="centro"),
 )
 
 _ALTURA_LINHA = 44
@@ -204,9 +201,9 @@ class ListaResponsaveis(ctk.CTkFrame):
         super().__init__(master, fg_color=tema.COR_FUNDO)
         self.controlador = controlador
 
-        componentes.Cabecalho(
-            self, titulo="Gestão de Responsáveis"
-        ).pack(fill="x")
+        componentes.Cabecalho(self, titulo="Gestão de Responsáveis").pack(
+            fill="x"
+        )
 
         barra_criar = ctk.CTkFrame(self, fg_color="transparent")
         barra_criar.pack(fill="x", padx=20, pady=(4, 8))
@@ -289,8 +286,7 @@ class ListaResponsaveis(ctk.CTkFrame):
             lista = [
                 registo
                 for registo in lista
-                if texto_busca
-                in f"{registo['nome']} {registo['id']}".lower()
+                if texto_busca in f"{registo['nome']} {registo['id']}".lower()
             ]
 
         if not lista:
@@ -518,9 +514,7 @@ class _AcoesResponsavelModal(ctk.CTkToplevel):
                 "Editar",
                 text_color=tema.COR_TEXTO,
                 hover_color=tema.COR_BORDA,
-                acao=lambda: EditarResponsavelModal(
-                    self.tela_lista, registo
-                ),
+                acao=lambda: EditarResponsavelModal(self.tela_lista, registo),
             )
             self._separador()
             self._botao(
@@ -634,7 +628,8 @@ class _AcoesResponsavelModal(ctk.CTkToplevel):
 
             ultimo = self.registo.get("ultimo_login") or ""
             texto_ultimo = (
-                f"Último acesso: {ultimo}" if ultimo
+                f"Último acesso: {ultimo}"
+                if ultimo
                 else "Último acesso: nunca"
             )
 
@@ -1016,7 +1011,7 @@ class UnidadesDoResponsavelModal(ctk.CTkToplevel):
         barra = ctk.CTkFrame(self, fg_color="transparent")
         barra.pack(fill="x", padx=20)
 
-        self.combo_unidade = ctk.CTkOptionMenu(
+        self.combo_unidade = componentes.Seletor(
             barra,
             values=["—"],
             width=300,
@@ -1170,9 +1165,7 @@ class UnidadesDoResponsavelModal(ctk.CTkToplevel):
             return
 
         try:
-            unidades.remover_atribuicao(
-                unidade["id"], self.registo["id"]
-            )
+            unidades.remover_atribuicao(unidade["id"], self.registo["id"])
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
             return
@@ -1195,8 +1188,15 @@ class _FormularioResponsavel(ctk.CTkToplevel):
       - Autor Admin: só Staff (para criar/editar Staff).
     """
 
-    def __init__(self, tela_lista, titulo, texto_botao, nome="",
-                 contacto="", tipo_utilizador="Staff"):
+    def __init__(
+        self,
+        tela_lista,
+        titulo,
+        texto_botao,
+        nome="",
+        contacto="",
+        tipo_utilizador="Staff",
+    ):
         super().__init__(tela_lista)
         self.tela_lista = tela_lista
 
@@ -1221,9 +1221,7 @@ class _FormularioResponsavel(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=20)
 
-        self.campo_nome = ctk.CTkEntry(
-            self, corner_radius=tema.RAIO_CAMPO
-        )
+        self.campo_nome = ctk.CTkEntry(self, corner_radius=tema.RAIO_CAMPO)
         self.campo_nome.pack(fill="x", padx=20, pady=(2, 12))
         self.campo_nome.insert(0, nome)
 
@@ -1250,7 +1248,7 @@ class _FormularioResponsavel(ctk.CTkToplevel):
             combo_ativo = True
             ajuda = "Um Admin só pode criar ou editar Staff."
 
-        self.campo_tipo_utilizador = ctk.CTkOptionMenu(
+        self.campo_tipo_utilizador = componentes.Seletor(
             self,
             values=opcoes,
             corner_radius=tema.RAIO_CAMPO,

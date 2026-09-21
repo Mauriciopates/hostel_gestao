@@ -95,7 +95,7 @@ class ListaDevolucoes(ctk.CTkFrame):
 
         filtros = ctk.CTkFrame(self, fg_color="transparent")
         filtros.pack(fill="x", padx=20, pady=(0, 6))
-        self.combo_estado = ctk.CTkOptionMenu(
+        self.combo_estado = componentes.Seletor(
             filtros,
             values=[_OPCAO_TODOS_ESTADOS] + list(_ESTADOS_DEVOLUCAO),
             width=180,

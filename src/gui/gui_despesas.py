@@ -353,7 +353,7 @@ class ListaDespesas(ctk.CTkFrame):
         filtros = ctk.CTkFrame(barra, fg_color="transparent")
         filtros.pack(side="right")
 
-        self.combo_categoria = ctk.CTkOptionMenu(
+        self.combo_categoria = componentes.Seletor(
             filtros,
             values=[_OPCAO_TODAS_CATEGORIAS],
             width=180,
@@ -363,7 +363,7 @@ class ListaDespesas(ctk.CTkFrame):
         self.combo_categoria.set(_OPCAO_TODAS_CATEGORIAS)
         self.combo_categoria.pack(side="left")
 
-        self.combo_estado = ctk.CTkOptionMenu(
+        self.combo_estado = componentes.Seletor(
             filtros,
             values=[
                 _OPCAO_TODOS_ESTADOS,
@@ -378,7 +378,7 @@ class ListaDespesas(ctk.CTkFrame):
         self.combo_estado.set(_OPCAO_TODOS_ESTADOS)
         self.combo_estado.pack(side="left", padx=(8, 0))
 
-        self.combo_unidade = ctk.CTkOptionMenu(
+        self.combo_unidade = componentes.Seletor(
             filtros,
             values=[_OPCAO_TODAS_UNIDADES],
             width=200,
@@ -982,7 +982,7 @@ class NovaDespesaManualModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
             anchor="w",
         ).pack(fill="x")
-        combo = ctk.CTkOptionMenu(
+        combo = componentes.Seletor(
             bloco,
             values=opcoes or ["—"],
             corner_radius=tema.RAIO_CAMPO,
@@ -1232,7 +1232,7 @@ class DividirPorPropriedadeModal(ctk.CTkToplevel):
             anchor="w",
         ).pack(fill="x", padx=10, pady=(8, 2))
 
-        self.combo_propriedade = ctk.CTkOptionMenu(
+        self.combo_propriedade = componentes.Seletor(
             bloco_prop,
             values=["—"],
             corner_radius=tema.RAIO_CAMPO,
@@ -1384,7 +1384,7 @@ class DividirPorPropriedadeModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
             anchor="w",
         ).pack(fill="x")
-        combo = ctk.CTkOptionMenu(
+        combo = componentes.Seletor(
             bloco,
             values=opcoes or ["—"],
             corner_radius=tema.RAIO_CAMPO,
@@ -1698,7 +1698,7 @@ class NovaDespesaStockModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
             anchor="w",
         ).pack(fill="x")
-        self.combo_fornecedor = ctk.CTkOptionMenu(
+        self.combo_fornecedor = componentes.Seletor(
             bloco_forn,
             values=["— Nenhum —"],
             corner_radius=tema.RAIO_CAMPO,
@@ -1925,7 +1925,7 @@ class NovaDespesaStockModal(ctk.CTkToplevel):
         moldura = ctk.CTkFrame(self._area_linhas, fg_color="transparent")
         moldura.pack(fill="x", pady=3)
 
-        combo = ctk.CTkOptionMenu(
+        combo = componentes.Seletor(
             moldura,
             values=self._rotulos_produtos(),
             width=320,
@@ -2206,7 +2206,7 @@ class _EscolherProdutoModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
             anchor="w",
         ).pack(fill="x", padx=24)
-        self.combo_tipo = ctk.CTkOptionMenu(
+        self.combo_tipo = componentes.Seletor(
             self,
             values=["consumivel", "roupa_cama", "roupa_banho", "outro"],
             corner_radius=tema.RAIO_CAMPO,
@@ -3315,7 +3315,7 @@ class _EditarDespesaModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
             anchor="w",
         ).pack(fill="x")
-        self.combo_categoria = ctk.CTkOptionMenu(
+        self.combo_categoria = componentes.Seletor(
             bloco_cat, values=["—"], corner_radius=tema.RAIO_CAMPO
         )
         self.combo_categoria.pack(fill="x", pady=(2, 0))
@@ -3329,7 +3329,7 @@ class _EditarDespesaModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
             anchor="w",
         ).pack(fill="x")
-        self.combo_fornecedor = ctk.CTkOptionMenu(
+        self.combo_fornecedor = componentes.Seletor(
             bloco_forn, values=["— Nenhum —"], corner_radius=tema.RAIO_CAMPO
         )
         self.combo_fornecedor.pack(fill="x", pady=(2, 0))

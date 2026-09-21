@@ -190,7 +190,7 @@ class ListaRequisicoes(ctk.CTkFrame):
         filtros = ctk.CTkFrame(self, fg_color="transparent")
         filtros.pack(fill="x", padx=20, pady=(0, 6))
 
-        self.combo_estado = ctk.CTkOptionMenu(
+        self.combo_estado = componentes.Seletor(
             filtros,
             values=[_OPCAO_TODOS_ESTADOS] + list(_ESTADOS_REQUISICAO),
             width=180,
@@ -211,7 +211,7 @@ class ListaRequisicoes(ctk.CTkFrame):
             r["id"]: r["nome"] for r in self.responsaveis_disponiveis
         }
 
-        self.combo_responsavel = ctk.CTkOptionMenu(
+        self.combo_responsavel = componentes.Seletor(
             filtros,
             values=([_OPCAO_TODOS_RESPONSAVEIS] + sorted(self.id_por_rotulo)),
             width=240,
@@ -1540,7 +1540,7 @@ class _LinhaProduto:
         self.moldura = ctk.CTkFrame(master, fg_color="transparent")
         self.moldura.pack(fill="x", padx=16, pady=3)
 
-        self.combo_produto = ctk.CTkOptionMenu(
+        self.combo_produto = componentes.Seletor(
             self.moldura,
             values=modal.rotulos_produtos,
             width=_LARGURA_PRODUTO,
@@ -1712,7 +1712,7 @@ class NovaRequisicaoModal(ctk.CTkToplevel):
             for r in self.responsaveis_disponiveis
         }
 
-        self.combo_responsavel = ctk.CTkOptionMenu(
+        self.combo_responsavel = componentes.Seletor(
             self,
             values=rotulos or ["— Nenhum —"],
             corner_radius=tema.RAIO_CAMPO,
@@ -2101,7 +2101,7 @@ class RolLavanderiaModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
             anchor="w",
         ).pack(fill="x")
-        self.combo_recebe = ctk.CTkOptionMenu(
+        self.combo_recebe = componentes.Seletor(
             coluna_recebe,
             values=rotulos or ["— Nenhum —"],
             corner_radius=tema.RAIO_CAMPO,
@@ -2119,7 +2119,7 @@ class RolLavanderiaModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
             anchor="w",
         ).pack(fill="x")
-        self.combo_envia = ctk.CTkOptionMenu(
+        self.combo_envia = componentes.Seletor(
             coluna_envia,
             values=rotulos or ["— Nenhum —"],
             corner_radius=tema.RAIO_CAMPO,

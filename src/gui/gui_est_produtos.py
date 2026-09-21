@@ -518,7 +518,7 @@ class _ConfirmarForcarProdutoModal(ctk.CTkToplevel):
         nomes = ["— Nenhum —"] + [
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
-        self.combo_responsavel = ctk.CTkOptionMenu(self, values=nomes)
+        self.combo_responsavel = componentes.Seletor(self, values=nomes)
         self.combo_responsavel.set(nomes[0])
         self.combo_responsavel.pack(fill="x", padx=20, pady=(2, 10))
 
@@ -779,7 +779,7 @@ class _FormularioProduto(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=24, pady=(10, 0))
 
-        self.combo_tipo_produto = ctk.CTkOptionMenu(
+        self.combo_tipo_produto = componentes.Seletor(
             self,
             values=list(TIPOS_PRODUTO_GUI),
             corner_radius=tema.RAIO_CAMPO,
@@ -859,7 +859,7 @@ class _FormularioProduto(ctk.CTkToplevel):
         self.campo_unidade.grid_remove()
 
         # Seletor — dropdown com placeholder + lista + "Outro".
-        self.combo_unidade = ctk.CTkOptionMenu(
+        self.combo_unidade = componentes.Seletor(
             bloco,
             values=(
                 [UNIDADE_PLACEHOLDER] + list(UNIDADES_MEDIDA) + [OUTRA_UNIDADE]
@@ -938,9 +938,7 @@ class _FormularioProduto(ctk.CTkToplevel):
         elif texto_minimo.isdigit():
             stock_minimo = int(texto_minimo)
         else:
-            raise ValueError(
-                "O stock mínimo tem de ser um número inteiro."
-            )
+            raise ValueError("O stock mínimo tem de ser um número inteiro.")
 
         tipo_produto = self.combo_tipo_produto.get()
 
@@ -959,7 +957,7 @@ class NovoProdutoModal(_FormularioProduto):
             titulo="Novo Produto",
             texto_botao="Criar",
         )
-        
+
     def _gravar(self):
         try:
             (

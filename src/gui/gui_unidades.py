@@ -385,7 +385,7 @@ class PlantaLugares(ctk.CTkFrame):
             font=ctk.CTkFont(size=12, weight="bold"),
         ).pack(side="left", padx=(0, 8))
 
-        self.seletor_unidade = ctk.CTkOptionMenu(
+        self.seletor_unidade = componentes.Seletor(
             barra,
             values=["Sem unidades disponíveis"],
             command=self._ao_escolher_unidade,
@@ -948,7 +948,7 @@ class _NovoQuartoModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=24)
 
-        self.combo_privativo = ctk.CTkOptionMenu(
+        self.combo_privativo = componentes.Seletor(
             self,
             values=["Não — partilhado", "Sim — privativo"],
             corner_radius=tema.RAIO_CAMPO,
@@ -963,7 +963,7 @@ class _NovoQuartoModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=24)
 
-        self.combo_limpeza = ctk.CTkOptionMenu(
+        self.combo_limpeza = componentes.Seletor(
             self,
             values=["Sim", "Não"],
             corner_radius=tema.RAIO_CAMPO,
@@ -1089,7 +1089,7 @@ class _NovoLugarModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=24)
 
-        self.combo_tipo_cama = ctk.CTkOptionMenu(
+        self.combo_tipo_cama = componentes.Seletor(
             self,
             values=["solteiro", "casal", "beliche"],
             corner_radius=tema.RAIO_CAMPO,
@@ -1517,7 +1517,7 @@ class _EditarQuartoModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=24)
 
-        self.combo_privativo = ctk.CTkOptionMenu(
+        self.combo_privativo = componentes.Seletor(
             self,
             values=["Não — partilhado", "Sim — privativo"],
             corner_radius=tema.RAIO_CAMPO,
@@ -1534,7 +1534,7 @@ class _EditarQuartoModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=24)
 
-        self.combo_limpeza = ctk.CTkOptionMenu(
+        self.combo_limpeza = componentes.Seletor(
             self,
             values=["Sim", "Não"],
             corner_radius=tema.RAIO_CAMPO,
@@ -1753,7 +1753,7 @@ class _EditarLugarModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=24)
 
-        self.combo_tipo_cama = ctk.CTkOptionMenu(
+        self.combo_tipo_cama = componentes.Seletor(
             self,
             values=["solteiro", "casal", "beliche"],
             corner_radius=tema.RAIO_CAMPO,

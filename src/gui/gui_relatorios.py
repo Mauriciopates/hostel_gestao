@@ -3285,7 +3285,7 @@ class RelatorioModal(ctk.CTkToplevel):
             )
             valor_atual = filtros_rel.get(chave, opcoes_resolvidas[0])
 
-            combo = ctk.CTkOptionMenu(
+            combo = componentes.Seletor(
                 barra,
                 values=opcoes_resolvidas,
                 width=170,

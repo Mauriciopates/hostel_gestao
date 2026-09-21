@@ -704,7 +704,7 @@ class Configuracoes(ctk.CTkFrame):
             "nov",
             "dez",
         )
-        combo_mes = ctk.CTkOptionMenu(
+        combo_mes = componentes.Seletor(
             bloco,
             values=list(meses),
             width=80,
@@ -715,7 +715,7 @@ class Configuracoes(ctk.CTkFrame):
 
         # Dia
         dias = tuple(str(d) for d in range(1, 32))
-        combo_dia = ctk.CTkOptionMenu(
+        combo_dia = componentes.Seletor(
             bloco,
             values=list(dias),
             width=70,
