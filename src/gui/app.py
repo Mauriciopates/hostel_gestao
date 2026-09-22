@@ -56,6 +56,8 @@ import customtkinter as ctk
 
 from pathlib import Path
 
+import config
+import termos
 import utilizadores
 from . import tema
 from . import componentes
@@ -292,7 +294,7 @@ class LoginModal(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             self,
-            text="v1.5.0",
+            text=f"v{config.VERSAO}",
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=10),
         ).pack(pady=(0, 16))
@@ -403,7 +405,160 @@ class LoginModal(ctk.CTkToplevel):
         """
         self.sair_pedido = True
         self.grab_release()
+        componentes.cancelar_agendamentos(self)
         self.master.destroy()
+
+
+class TermoModal(ctk.CTkToplevel):
+    """Pede a aceitação do termo a quem ainda não aceitou a versão
+    em vigor.
+
+    <<< NOVO v1.6.0 >>>
+
+    Só aparece quando o `termos.verificar` diz que é preciso. Quem
+    já aceitou entra direto e nunca vê este ecrã — e é esta
+    verificação que resolve sozinha os utilizadores que já existiam
+    antes da v1.6.0: cada um aceita no seu próximo acesso, sem
+    migração nenhuma à tabela.
+
+    Bloqueante como o `LoginModal`: não se fecha pelo "X". Ou
+    aceita, ou sai — porque o termo é condição de acesso, não um
+    pedido de consentimento (esse nunca poderia bloquear).
+
+    `self.aceite` é lido pela `Aplicacao` depois do `wait_window`.
+    Fica False quando a pessoa clicou "Sair".
+    """
+
+    def __init__(self, master, responsavel, estado):
+        super().__init__(master)
+        self.protocol("WM_DELETE_WINDOW", lambda: None)
+
+        self.aceite = False
+        self.responsavel = responsavel
+
+        self.title("Hostel Clean — Termo de uso")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(master)
+
+        ctk.CTkLabel(
+            self,
+            text="Antes de entrar",
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=18, weight="bold"),
+        ).pack(anchor="w", padx=24, pady=(24, 2))
+
+        ctk.CTkLabel(
+            self,
+            text=f"{responsavel['nome']} — {responsavel['id']} · "
+            f"{responsavel['tipo_utilizador']}",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24, pady=(0, 16))
+
+        texto = estado["texto"]
+        versao = texto["versao"]
+
+        # A faixa de aviso só aparece a quem já tinha aceitado uma
+        # versão anterior. A quem nunca aceitou não há "atualização"
+        # nenhuma a anunciar — seria uma mensagem falsa.
+        aviso = None
+
+        if estado["versao_aceite"]:
+            aviso = (
+                "O termo de confidencialidade foi atualizado. Para "
+                "continuar a usar o sistema, é preciso aceitar a "
+                "versão em vigor."
+            )
+
+        self.bloco_termo = componentes.BlocoTermo(
+            self,
+            titulo="Termo de confidencialidade e uso do sistema",
+            texto=texto["texto"],
+            versao=versao,
+            rotulo=f"Li e aceito a versão {versao} do termo. *",
+            versao_anterior=estado["versao_aceite"],
+            data_anterior=estado["data_aceite"],
+            aviso=aviso,
+            ao_mudar=self._ao_mudar,
+        )
+        self.bloco_termo.pack(fill="x", padx=24)
+
+        rodape = ctk.CTkFrame(self, fg_color="transparent")
+        rodape.pack(fill="x", padx=24, pady=(16, 20))
+
+        ctk.CTkButton(
+            rodape,
+            text="Sair",
+            width=100,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="left")
+
+        self.botao_aceitar = ctk.CTkButton(
+            rodape,
+            text="Aceitar e entrar",
+            width=170,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.COR_BORDA,
+            hover_color=tema.AZUL_CLARO,
+            text_color_disabled=tema.TEXTO_INDISPONIVEL,
+            state="disabled",
+            command=self._aceitar,
+        )
+        self.botao_aceitar.pack(side="right")
+
+        # A altura sai do conteúdo, não de um número à mão: a faixa
+        # de aviso só existe em metade dos casos, e um valor fixo
+        # deixava um vazio grande no outro. Mesma técnica do
+        # `_AcoesResponsavelModal` no gui_responsaveis.
+        self.update_idletasks()
+        largura = 520
+        altura = self.winfo_reqheight()
+        x = self.winfo_screenwidth() // 2 - largura // 2
+        y = self.winfo_screenheight() // 2 - altura // 2
+        self.geometry(f"{largura}x{altura}+{max(x, 0)}+{max(y, 0)}")
+
+        self.after(
+            10,
+            lambda: (self.lift(), self.focus_force(), self.grab_set()),
+        )
+
+    def _ao_mudar(self):
+        """Liga e desliga o botão conforme a caixa."""
+        ligado = self.bloco_termo.esta_aceite()
+
+        self.botao_aceitar.configure(
+            state="normal" if ligado else "disabled",
+            fg_color=tema.AZUL_PRINCIPAL if ligado else tema.COR_BORDA,
+        )
+
+    def _aceitar(self):
+        """Grava a aceitação e deixa entrar.
+
+        O `registado_por_id` é a própria pessoa: ninguém aceita um
+        termo por outra. Na atribuição da credencial é diferente —
+        aí há um Master a registar.
+        """
+        try:
+            termos.registar(
+                termos.TITULAR_RESPONSAVEL,
+                self.responsavel["id"],
+                termos.CONFIDENCIALIDADE,
+                registado_por_id=self.responsavel["id"],
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        self.aceite = True
+        self.grab_release()
+        self.destroy()
 
 
 class Aplicacao(ctk.CTk):
@@ -463,6 +618,15 @@ class Aplicacao(ctk.CTk):
             self.terminar_pedido = True
             return
 
+        # v1.6.0 — o termo. Corre DEPOIS do login (é preciso saber
+        # quem é) e ANTES de desenhar seja o que for. Quem já
+        # aceitou a versão em vigor nem dá por isto.
+        if not self._verificar_termo():
+            self.terminar_pedido = True
+            componentes.cancelar_agendamentos(self)
+            self.destroy()
+            return
+
         # Agora sim — já há sessão ativa.
         self.barra_lateral = componentes.BarraLateral(
             self,
@@ -479,6 +643,38 @@ class Aplicacao(ctk.CTk):
         self.area_conteudo.grid(row=0, column=1, sticky="nsew")
 
         self.mostrar_frame(Dashboard)
+
+    def _verificar_termo(self):
+        """True se a pessoa pode entrar; False se deve sair.
+
+        <<< NOVO v1.6.0 >>>
+        """
+        responsavel = sessao.obter_responsavel_ativo()
+
+        if responsavel is None:
+            return False
+
+        try:
+            estado = termos.verificar(
+                termos.TITULAR_RESPONSAVEL,
+                responsavel["id"],
+                termos.CONFIDENCIALIDADE,
+            )
+        except ValueError:
+            # Não há texto publicado. Entra em silêncio: a falta de
+            # um documento é falha de configuração, não do
+            # utilizador. Quem publica vê o estado nas Configurações
+            # — avisar aqui, em todos os arranques, só treinava as
+            # pessoas a fechar caixas sem ler.
+            return True
+
+        if not estado["precisa_aceitar"]:
+            return True
+
+        popup = TermoModal(self, responsavel, estado)
+        self.wait_window(popup)
+
+        return popup.aceite
 
     def mostrar_frame(self, classe_frame, **kwargs):
         """Troca o ecrã atual pelo indicado em classe_frame."""
@@ -516,4 +712,5 @@ class Aplicacao(ctk.CTk):
         sessao.limpar_responsavel_ativo()
 
         self.reabrir = True
+        componentes.cancelar_agendamentos(self)
         self.destroy()

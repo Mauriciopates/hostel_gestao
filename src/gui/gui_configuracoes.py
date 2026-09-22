@@ -38,10 +38,13 @@ import customtkinter as ctk
 
 import configuracoes
 import sistema
+import termos
+import utilizadores
 from . import componentes
 from . import sessao
 from . import tema
 from .gui_configuracoes_modal import confirmar_alteracao
+from .gui_documentos_legais import publicar_documento, ver_texto
 
 # =====================================================================
 # MAPA DAS SECÇÕES
@@ -106,6 +109,10 @@ _TABS = (
                     "stock.rol_automatico_airbnb",
                     "stock.permitir_envio_parcial",
                 ),
+            },
+            {
+                "titulo": "Documentos legais",
+                "chaves": ("_acao_documentos_legais",),
             },
             {
                 "titulo": "Cópias de segurança",
@@ -744,6 +751,8 @@ class Configuracoes(ctk.CTkFrame):
             self._linha_forcar_backup(master)
         elif chave_acao == "_acao_comecar_do_zero":
             self._linha_comecar_do_zero(master)
+        elif chave_acao == "_acao_documentos_legais":
+            self._linha_documentos_legais(master)
 
     def _linha_forcar_backup(self, master):
         linha = ctk.CTkFrame(master, fg_color="transparent")
@@ -832,6 +841,163 @@ class Configuracoes(ctk.CTkFrame):
             hover_color="#A02D22",
             command=self._comecar_do_zero,
         ).pack(side="right", padx=(20, 0))
+
+# -- documentos legais (v1.6.0) ------------------------------------
+
+    def _linha_documentos_legais(self, master):
+        """Uma linha por documento legal, dentro do cartão da secção.
+
+        Guarda o cartão em `self._cartao_documentos` para poder
+        redesenhar só esta secção depois de publicar — em vez de
+        reconstruir o ecrã todo, que devolvia o utilizador à tab
+        Operação a meio do trabalho dele.
+        """
+        self._cartao_documentos = master
+        self._desenhar_documentos(master)
+
+    def _desenhar_documentos(self, master):
+        documentos = termos.estado_documentos()
+        total = self._total_colaboradores()
+
+        for indice, documento in enumerate(documentos):
+            if indice > 0:
+                ctk.CTkFrame(
+                    master, height=1, fg_color=tema.COR_BORDA
+                ).pack(fill="x")
+
+            self._linha_documento(master, documento, total)
+
+    def _recarregar_documentos(self):
+        """Redesenha só a secção dos documentos."""
+        for filho in self._cartao_documentos.winfo_children():
+            filho.destroy()
+
+        self._desenhar_documentos(self._cartao_documentos)
+
+    def _total_colaboradores(self):
+        """Quantas pessoas podem entrar no sistema.
+
+        É o denominador do "2 de 4": conta os responsáveis ativos
+        que já têm credencial definida. Quem não tem credencial não
+        entra, logo não tem termo nenhum para aceitar e não faz
+        sentido aparecer na conta.
+        """
+        try:
+            lista = utilizadores.listar_com_estado(incluir_inativos=False)
+        except ValueError:
+            return 0
+
+        return len([r for r in lista if r.get("username")])
+
+    def _linha_documento(self, master, documento, total_colaboradores):
+        texto = documento["texto"]
+        publicado = texto is not None
+
+        linha = ctk.CTkFrame(master, fg_color="transparent")
+        linha.pack(fill="x", padx=16, pady=14)
+
+        bloco_texto = ctk.CTkFrame(linha, fg_color="transparent")
+        bloco_texto.pack(side="left", fill="x", expand=True)
+
+        ctk.CTkLabel(
+            bloco_texto,
+            text=documento["rotulo"],
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=13),
+            anchor="w",
+        ).pack(fill="x")
+
+        ctk.CTkLabel(
+            bloco_texto,
+            text=self._resumo_documento(documento, total_colaboradores),
+            text_color=(
+                tema.COR_TEXTO_SECUNDARIO if publicado else tema.TEXTO_ERRO
+            ),
+            font=ctk.CTkFont(size=11),
+            anchor="w",
+            justify="left",
+            wraplength=520,
+        ).pack(fill="x", pady=(2, 0))
+
+        acoes = ctk.CTkFrame(linha, fg_color="transparent")
+        acoes.pack(side="right", padx=(20, 0))
+
+        ctk.CTkButton(
+            acoes,
+            text="Ver texto",
+            width=90,
+            height=30,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            font=ctk.CTkFont(size=11),
+            state="normal" if publicado else "disabled",
+            command=lambda: ver_texto(self, documento),
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            acoes,
+            text=(
+                "Publicar versão nova"
+                if publicado
+                else "Publicar 1.ª versão"
+            ),
+            width=150,
+            height=30,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=(
+                "transparent" if publicado else tema.AZUL_PRINCIPAL
+            ),
+            border_width=1,
+            border_color=tema.AZUL_PRINCIPAL,
+            text_color=(
+                tema.AZUL_PRINCIPAL if publicado else "#FFFFFF"
+            ),
+            hover_color=(
+                tema.ID_CHIP_FUNDO if publicado else tema.AZUL_CLARO
+            ),
+            font=ctk.CTkFont(size=11),
+            command=lambda: self._publicar_documento(documento),
+        ).pack(side="left", padx=(8, 0))
+
+    def _resumo_documento(self, documento, total_colaboradores):
+        """A linha pequena por baixo do nome do documento."""
+        texto = documento["texto"]
+
+        if texto is None:
+            return (
+                "Sem versão publicada — o sistema não tem nada para "
+                "mostrar a quem entra."
+            )
+
+        publicado_em = texto["publicado_em"]
+        data = (
+            publicado_em.strftime("%d/%m/%Y")
+            if hasattr(publicado_em, "strftime")
+            else str(publicado_em)
+        )
+
+        base = f"Versão {texto['versao']} · publicada em {data}"
+        aceites = documento["aceitacoes"]
+
+        if documento["bloqueia"]:
+            return (
+                f"{base}  ·  {aceites} de {total_colaboradores} "
+                "colaboradores aceitaram"
+            )
+
+        return (
+            f"{base}  ·  entregue a {aceites} — é informação, não "
+            "aceitação, e por isso não bloqueia ninguém"
+        )
+
+    def _publicar_documento(self, documento):
+        """Abre o modal e, se publicou, redesenha a secção."""
+        if publicar_documento(self, documento):
+            self._recarregar_documentos()
 
     # -- gravação ------------------------------------------------------
 
@@ -1015,4 +1181,5 @@ class Configuracoes(ctk.CTkFrame):
         """Fecha a janela e pede ao `main_gui` para reabrir."""
         sessao.limpar_responsavel_ativo()
         self.controlador.reabrir = True
+        componentes.cancelar_agendamentos(self)
         self.controlador.destroy()

@@ -1576,7 +1576,161 @@ class Seletor(ctk.CTkOptionMenu):
         self._fechar_painel()
         super().destroy()
 
+# =====================================================================
+# BLOCO DE TERMO LEGAL (v1.6.0)
+#
+# O quadro que mostra um documento legal e recolhe a confirmação de
+# quem o leu. Vive aqui, e não em cada ecrã, porque aparece em dois
+# sítios diferentes — na atribuição da credencial e no arranque de
+# quem ainda não aceitou a versão em vigor — e vai aparecer num
+# terceiro quando a ficha do cliente passar a registar a informação
+# prestada ao hóspede.
+#
+# Não sabe nada de base de dados nem de regras: recebe o texto já
+# resolvido pelo `termos.verificar` e devolve, quando perguntado, se
+# a caixa está marcada. Quem decide o que fazer com isso é o ecrã.
+#
+# As duas cores do aviso não estão no `tema.py` porque são as
+# primeiras do género no sistema. Se aparecer uma segunda utilização,
+# mudam para lá — não vale a pena inventar já uma entrada no tema
+# para um sítio só.
+# =====================================================================
 
+
+_ALTURA_TEXTO_TERMO = 150
+
+
+class BlocoTermo(ctk.CTkFrame):
+    """Mostra um documento legal e a caixa de confirmação.
+
+    Parâmetros:
+
+      titulo          - o cabeçalho pequeno em maiúsculas
+      texto           - o corpo do documento (string)
+      versao          - a versão em vigor, mostrada no rodapé
+      rotulo          - o que fica ao lado da caixa de marcar
+      versao_anterior - a versão que a pessoa já tinha aceitado,
+                        ou None se nunca aceitou nenhuma
+      data_anterior   - a data dessa aceitação, ou None
+      aviso           - texto da faixa âmbar no topo; None esconde-a
+      ao_mudar        - chamado sem argumentos sempre que a caixa
+                        muda de estado
+
+    A caixa de texto é um `CTkTextbox` desativado: rola, seleciona-se
+    para copiar, mas não se edita. Um `CTkLabel` com o texto todo não
+    servia — crescia sem limite e empurrava os botões para fora do
+    ecrã num documento comprido.
+    """
+
+    def __init__(
+        self,
+        master,
+        titulo,
+        texto,
+        versao,
+        rotulo,
+        versao_anterior=None,
+        data_anterior=None,
+        aviso=None,
+        ao_mudar=None,
+        **kwargs,
+    ):
+        super().__init__(
+            master,
+            fg_color=tema.LINHA_ALTERNADA,
+            corner_radius=8,
+            **kwargs,
+        )
+
+        self._ao_mudar = ao_mudar
+        self.versao = versao
+
+        if aviso:
+            faixa = ctk.CTkLabel(
+                self,
+                text=aviso,
+                text_color=tema.TEXTO_AVISO,
+                fg_color=tema.AMARELO_AVISO,
+                corner_radius=6,
+                font=ctk.CTkFont(size=11),
+                anchor="w",
+                justify="left",
+                wraplength=380,
+            )
+            faixa.pack(fill="x", padx=12, pady=(12, 0))
+
+        ctk.CTkLabel(
+            self,
+            text=titulo.upper(),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            anchor="w",
+        ).pack(fill="x", padx=12, pady=(12, 4))
+
+        self.caixa_texto = ctk.CTkTextbox(
+            self,
+            height=_ALTURA_TEXTO_TERMO,
+            corner_radius=6,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            fg_color=tema.COR_FUNDO,
+            font=ctk.CTkFont(size=12),
+            wrap="word",
+        )
+        self.caixa_texto.pack(fill="x", padx=12)
+        self.caixa_texto.insert("1.0", texto)
+        self.caixa_texto.configure(state="disabled")
+
+        self.aceite = ctk.BooleanVar(value=False)
+
+        ctk.CTkCheckBox(
+            self,
+            text=rotulo,
+            variable=self.aceite,
+            command=self._mudou,
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=12),
+            checkbox_width=18,
+            checkbox_height=18,
+            corner_radius=4,
+            fg_color=tema.AZUL_PRINCIPAL,
+            hover_color=tema.AZUL_CLARO,
+        ).pack(anchor="w", padx=12, pady=(10, 0))
+
+        ctk.CTkLabel(
+            self,
+            text=self._rodape(versao, versao_anterior, data_anterior),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+            anchor="w",
+        ).pack(fill="x", padx=12, pady=(6, 12))
+
+    @staticmethod
+    def _rodape(versao, versao_anterior, data_anterior):
+        """A linha pequena do fundo.
+
+        Quem nunca aceitou vê só a versão em vigor. Quem já aceitou
+        uma anterior vê as duas, para perceber porque é que o ecrã
+        lhe apareceu outra vez.
+        """
+        if not versao_anterior:
+            return f"Versão {versao}"
+
+        data = str(data_anterior)[:10] if data_anterior else "—"
+
+        return (
+            f"Aceitou a versão {versao_anterior} em {data} · "
+            f"em vigor agora: {versao}"
+        )
+
+    def _mudou(self):
+        if self._ao_mudar is not None:
+            self._ao_mudar()
+
+    def esta_aceite(self):
+        """True se a caixa estiver marcada."""
+        return bool(self.aceite.get())
+    
 # =====================================================================
 # Helpers visuais genéricos — partilhados por todos os ecrãs
 #
@@ -1718,3 +1872,49 @@ def formatar_valor(valor):
     texto = texto.replace(",", "X").replace(".", ",").replace("X", ".")
 
     return f"{texto} €"
+
+def cancelar_agendamentos(janela):
+    """Cancela os `after(...)` pendentes antes de destruir a janela.
+
+    <<< NOVO v1.6.0 >>>
+
+    Resolve as mensagens que apareciam no terminal ao fazer logoff:
+
+        invalid command name "...update"
+        invalid command name "...check_dpi_scaling"
+        bgerror failed to handle background error
+
+    Quem as provoca é o próprio CustomTkinter. O `ScalingTracker`
+    reagenda-se sozinho de 100 em 100 ms (`scaling_tracker.py`,
+    `add_widget` e `check_dpi_scaling`), e escolhe para isso uma
+    janela qualquer das que estão registadas. Quando essa janela é
+    destruída, o agendamento que já estava marcado dispara contra um
+    interpretador Tcl que já não existe — e o Tcl queixa-se. A
+    segunda mensagem é o próprio tratador de erros a falhar, pela
+    mesma razão.
+
+    Não é possível evitar isto do lado de fora sem cancelar os
+    agendamentos primeiro: quem os criou foi a biblioteca, na janela
+    que estamos prestes a fechar.
+
+    O `after info` é por interpretador, não por widget, por isso pode
+    ser chamado com qualquer widget da janela — o ecrã, o frame, a
+    própria `Aplicacao`. Devolve quantos cancelou, o que dá jeito
+    para confirmar em depuração.
+
+    Chamar isto só faz sentido imediatamente antes de um `destroy()`
+    definitivo. Num sítio qualquer, matava temporizadores que o
+    sistema ainda precisa.
+    """
+    try:
+        pendentes = janela.tk.eval("after info").split()
+    except tkinter.TclError:
+        return 0
+
+    for identificador in pendentes:
+        try:
+            janela.after_cancel(identificador)
+        except (tkinter.TclError, ValueError):
+            pass
+
+    return len(pendentes)

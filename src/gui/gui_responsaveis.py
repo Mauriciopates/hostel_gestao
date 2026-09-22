@@ -35,6 +35,7 @@ Decisões anteriores que continuam em vigor (09/09/2026):
 import customtkinter as ctk
 
 import responsaveis
+import termos
 import unidades
 import utilizadores
 from . import componentes
@@ -700,6 +701,21 @@ class DefinirCredencialModal(ctk.CTkToplevel):
         self.tela_lista = tela_lista
         self.registo = registo
 
+        # v1.6.0 — o termo é condição de acesso: sem texto em vigor
+        # não há credencial a atribuir. A verificação vem ANTES do
+        # `_colocar_no_topo` de propósito — um `grab_set()` numa
+        # janela que vai ser destruída deixa a aplicação sem foco.
+        try:
+            self.estado_termo = termos.verificar(
+                termos.TITULAR_RESPONSAVEL,
+                registo["id"],
+                termos.CONFIDENCIALIDADE,
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            self.after(0, self.destroy)
+            return
+
         self.title(f"Definir credencial — {registo['id']}")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
@@ -719,7 +735,19 @@ class DefinirCredencialModal(ctk.CTkToplevel):
             f"{registo['tipo_utilizador']}",
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=11),
-        ).pack(anchor="w", padx=24, pady=(0, 18))
+        ).pack(anchor="w", padx=24, pady=(0, 14))
+
+        texto = self.estado_termo["texto"]
+
+        self.bloco_termo = componentes.BlocoTermo(
+            self,
+            titulo="Termo de confidencialidade e uso do sistema",
+            texto=texto["texto"],
+            versao=texto["versao"],
+            rotulo="Li e aceito o termo de confidencialidade. *",
+            ao_mudar=self._ao_mudar_termo,
+        )
+        self.bloco_termo.pack(fill="x", padx=24, pady=(0, 16))
 
         ctk.CTkLabel(
             self,
@@ -729,7 +757,11 @@ class DefinirCredencialModal(ctk.CTkToplevel):
         ).pack(anchor="w", padx=24)
 
         self.campo_username = ctk.CTkEntry(
-            self, corner_radius=tema.RAIO_CAMPO, width=380
+            self,
+            corner_radius=tema.RAIO_CAMPO,
+            width=380,
+            state="disabled",
+            fg_color=tema.LINHA_ALTERNADA,
         )
         self.campo_username.pack(padx=24, pady=(2, 12))
 
@@ -745,6 +777,8 @@ class DefinirCredencialModal(ctk.CTkToplevel):
             corner_radius=tema.RAIO_CAMPO,
             width=380,
             show="•",
+            state="disabled",
+            fg_color=tema.LINHA_ALTERNADA,
         )
         self.campo_password.pack(padx=24, pady=(2, 12))
 
@@ -790,26 +824,77 @@ class DefinirCredencialModal(ctk.CTkToplevel):
             command=self.destroy,
         ).pack(side="left")
 
-        ctk.CTkButton(
+        self.botao_definir = ctk.CTkButton(
             rodape,
             text="Definir",
             corner_radius=tema.RAIO_BOTAO,
-            fg_color=tema.AZUL_PRINCIPAL,
+            fg_color=tema.COR_BORDA,
             hover_color=tema.AZUL_CLARO,
+            text_color_disabled=tema.TEXTO_INDISPONIVEL,
+            state="disabled",
             command=self._gravar,
-        ).pack(side="right")
+        )
+        self.botao_definir.pack(side="right")
 
-        self.campo_username.focus_set()
+    def _ao_mudar_termo(self):
+        """Destranca (ou volta a trancar) os campos e o botão.
+
+        Bloquear é legítimo aqui porque isto não é consentimento —
+        é uma condição de acesso. Um consentimento RGPD nunca
+        poderia travar nada.
+        """
+        aceite = self.bloco_termo.esta_aceite()
+        estado = "normal" if aceite else "disabled"
+        fundo = tema.COR_FUNDO if aceite else tema.LINHA_ALTERNADA
+
+        for campo in (
+            self.campo_username,
+            self.campo_password,
+            self.campo_confirmar,
+        ):
+            campo.configure(state=estado, fg_color=fundo)
+
+        self.botao_definir.configure(
+            state=estado,
+            fg_color=tema.AZUL_PRINCIPAL if aceite else tema.COR_BORDA,
+        )
+
+        if aceite:
+            self.campo_username.focus_set()
 
     def _gravar(self):
         username = self.campo_username.get().strip()
         password = self.campo_password.get()
         confirmar = self.campo_confirmar.get()
 
+        if not self.bloco_termo.esta_aceite():
+            componentes.mostrar_erro(
+                "É preciso aceitar o termo de confidencialidade."
+            )
+            return
+
         if password != confirmar:
             componentes.mostrar_erro(
                 "A password e a confirmação não coincidem."
             )
+            return
+
+        # A aceitação grava-se ANTES da credencial, de propósito. Se
+        # falhar, ninguém fica com acesso. Pela ordem contrária, uma
+        # falha aqui deixava a pessoa a entrar no sistema sem registo
+        # nenhum de ter aceitado — que é exatamente o que esta tabela
+        # existe para evitar.
+        autor = self.tela_lista._autor()
+
+        try:
+            termos.registar(
+                termos.TITULAR_RESPONSAVEL,
+                self.registo["id"],
+                termos.CONFIDENCIALIDADE,
+                registado_por_id=autor["id"] if autor else None,
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
             return
 
         try:
