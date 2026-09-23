@@ -28,7 +28,11 @@ ALTERAÇÕES v1.5.0 (ronda de 17/09/2026):
     rebaixamento por outros.
 """
 
+import logging
+
 import repositorio
+
+logger = logging.getLogger(__name__)
 
 PREFIXO = "RES"
 
@@ -93,6 +97,12 @@ def criar(nome, contacto="", tipo_utilizador="Staff", autor=None):
     }
 
     repositorio.inserir_responsavel(responsavel)
+    logger.info(
+        "Responsável criado — id=%s, tipo=%s, autor_id=%s",
+        responsavel["id"],
+        tipo_utilizador,
+        autor.get("id") if autor is not None else None,
+    )
     return responsavel
 
 
@@ -227,15 +237,30 @@ def alterar_tipo_utilizador(responsavel_id, tipo_utilizador, autor):
         responsavel["tipo_utilizador"] == "Master"
         and autor["id"] != responsavel_id
     ):
+        logger.warning(
+            "Tentativa de rebaixar outro Master recusada — alvo_id=%s, "
+            "autor_id=%s",
+            responsavel_id,
+            autor["id"],
+        )
         raise ValueError(
             "Um Master não pode rebaixar outro Master. Só o próprio "
             "pode descer-se a si mesmo."
         )
 
+    tipo_anterior = responsavel["tipo_utilizador"]
+
     repositorio.atualizar_responsavel(
         responsavel_id, {"tipo_utilizador": tipo_utilizador}
     )
     responsavel["tipo_utilizador"] = tipo_utilizador
+    logger.info(
+        "Tipo de utilizador alterado — alvo_id=%s, %s → %s, autor_id=%s",
+        responsavel_id,
+        tipo_anterior,
+        tipo_utilizador,
+        autor["id"],
+    )
     return responsavel
 
 

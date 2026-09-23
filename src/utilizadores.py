@@ -33,10 +33,13 @@ responsável ativo) e validam antes de agir.
 """
 
 import hashlib
+import logging
 import os
 from datetime import date, datetime
 
 import repositorio
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------
 # Constantes
@@ -206,6 +209,12 @@ def verificar_permissao(autor, perfis_permitidos, perfil_alvo=None):
     tipo_autor = autor.get("tipo_utilizador")
 
     if tipo_autor not in perfis_permitidos:
+        logger.warning(
+            "Permissão recusada — autor_id=%s, tipo=%s, permitidos=%s",
+            autor.get("id"),
+            tipo_autor,
+            sorted(perfis_permitidos),
+        )
         raise ValueError("O seu perfil não tem permissão para esta operação.")
 
     # Regra adicional do Admin: só opera sobre Staff. Um Master passa
@@ -213,6 +222,12 @@ def verificar_permissao(autor, perfis_permitidos, perfil_alvo=None):
     # que usam perfil_alvo).
     if perfil_alvo is not None:
         if tipo_autor == "Admin" and perfil_alvo != "Staff":
+            logger.warning(
+                "Permissão recusada — Admin sobre não-Staff: autor_id=%s, "
+                "perfil_alvo=%s",
+                autor.get("id"),
+                perfil_alvo,
+            )
             raise ValueError("Um Admin só pode operar sobre Staff.")
 
 
@@ -249,21 +264,45 @@ def autenticar(username, password):
     username = (username or "").strip()
     password = password or ""
 
+    # Nunca se regista o username tentado nem a password — o que foi
+    # escrito no campo do utilizador pode ser uma password digitada
+    # no sítio errado.
     if not username or not password:
+        logger.warning(
+            "Falha de autenticação — motivo=%s", MOTIVO_NAO_ENCONTRADO
+        )
         return None, MOTIVO_NAO_ENCONTRADO
 
     responsavel = repositorio.procurar_responsavel_por_username(username)
 
     if responsavel is None:
+        logger.warning(
+            "Falha de autenticação — motivo=%s", MOTIVO_NAO_ENCONTRADO
+        )
         return None, MOTIVO_NAO_ENCONTRADO
 
     if not responsavel["password_hash"]:
+        logger.warning(
+            "Falha de autenticação — motivo=%s, responsavel_id=%s",
+            MOTIVO_SEM_CREDENCIAL,
+            responsavel["id"],
+        )
         return None, MOTIVO_SEM_CREDENCIAL
 
     if not responsavel["ativo"]:
+        logger.warning(
+            "Falha de autenticação — motivo=%s, responsavel_id=%s",
+            MOTIVO_INATIVO,
+            responsavel["id"],
+        )
         return None, MOTIVO_INATIVO
 
     if not _validar_password(password, responsavel["password_hash"]):
+        logger.warning(
+            "Falha de autenticação — motivo=%s, responsavel_id=%s",
+            MOTIVO_PASSWORD_ERRADA,
+            responsavel["id"],
+        )
         return None, MOTIVO_PASSWORD_ERRADA
 
     # Sucesso — regista o último acesso. `datetime.now()` porque a
@@ -275,6 +314,9 @@ def autenticar(username, password):
     )
     responsavel["ultimo_login"] = agora
 
+    logger.info(
+        "Autenticação bem-sucedida — responsavel_id=%s", responsavel["id"]
+    )
     return responsavel, MOTIVO_OK
 
 
@@ -371,6 +413,11 @@ def definir_credencial(responsavel_id, username, password, autor):
     repositorio.atualizar_responsavel(responsavel_id, campos)
     alvo.update(campos)
 
+    logger.info(
+        "Credencial definida — alvo_id=%s, autor_id=%s",
+        responsavel_id,
+        autor["id"],
+    )
     return alvo
 
 
@@ -413,6 +460,11 @@ def alterar_password(responsavel_id, password_atual, password_nova, autor):
     e_master = autor["tipo_utilizador"] == "Master"
 
     if not e_o_proprio and not e_master:
+        logger.warning(
+            "Alteração de password recusada — alvo_id=%s, autor_id=%s",
+            responsavel_id,
+            autor["id"],
+        )
         raise ValueError(
             "Só o próprio ou um Master podem alterar esta password."
         )
@@ -420,6 +472,11 @@ def alterar_password(responsavel_id, password_atual, password_nova, autor):
     # O próprio tem de confirmar a password atual; o Master não.
     if e_o_proprio:
         if not _validar_password(password_atual, alvo["password_hash"]):
+            logger.warning(
+                "Alteração de password — password atual errada, "
+                "responsavel_id=%s",
+                responsavel_id,
+            )
             raise ValueError("A password atual não corresponde.")
 
     agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -432,6 +489,12 @@ def alterar_password(responsavel_id, password_atual, password_nova, autor):
     repositorio.atualizar_responsavel(responsavel_id, campos)
     alvo.update(campos)
 
+    logger.info(
+        "Password alterada — alvo_id=%s, autor_id=%s, modo=%s",
+        responsavel_id,
+        autor["id"],
+        "proprio" if e_o_proprio else "reposicao_master",
+    )
     return alvo
 
 
@@ -485,6 +548,11 @@ def desativar(responsavel_id, autor):
     repositorio.atualizar_responsavel(responsavel_id, campos)
     alvo.update(campos)
 
+    logger.info(
+        "Responsável desativado — alvo_id=%s, autor_id=%s",
+        responsavel_id,
+        autor["id"],
+    )
     return alvo
 
 
@@ -517,11 +585,17 @@ def reativar(responsavel_id, autor):
         autor["tipo_utilizador"] == "Admin"
         and alvo["tipo_utilizador"] != "Staff"
     ):
+        logger.warning(
+            "Reativação recusada — Admin sobre não-Staff: alvo_id=%s, "
+            "autor_id=%s",
+            responsavel_id,
+            autor["id"],
+        )
         raise ValueError("Um Admin só pode reativar Staff.")
 
     verificar_permissao(autor, {"Master", "Admin"})
 
-    # src/utilizadores.py, função reativar (perto da linha 508)
+
 
     campos = {
         "ativo": True,
@@ -532,6 +606,11 @@ def reativar(responsavel_id, autor):
     repositorio.atualizar_responsavel(responsavel_id, campos)
     alvo.update(campos)
 
+    logger.info(
+        "Responsável reativado — alvo_id=%s, autor_id=%s",
+        responsavel_id,
+        autor["id"],
+    )
     return alvo
 
 

@@ -35,8 +35,11 @@ imprime nem lê do teclado. Erros de utilização saem como
 """
 
 import datetime
+import logging
 
 import repositorio
+
+logger = logging.getLogger(__name__)
 
 
 # --- tipos de documento -----------------------------------------------
@@ -103,6 +106,11 @@ def texto_em_vigor(tipo):
     texto = repositorio.obter_texto_em_vigor(tipo)
 
     if texto is None:
+        logger.error(
+            "Nenhuma versão em vigor do documento '%s' — erro de "
+            "configuração",
+            tipo,
+        )
         raise ValueError(
             f"Não há nenhuma versão em vigor do documento "
             f"'{tipo}'. Publique uma versão antes de a usar."
@@ -131,9 +139,7 @@ def verificar(titular_tipo, titular_id, tipo):
     _validar(titular_tipo, titular_id, tipo)
 
     texto = texto_em_vigor(tipo)
-    ultimo = repositorio.obter_ultimo_aviso(
-        titular_tipo, titular_id, tipo
-    )
+    ultimo = repositorio.obter_ultimo_aviso(titular_tipo, titular_id, tipo)
 
     versao_aceite = ultimo["versao_texto"] if ultimo else None
     data_aceite = ultimo["data_entrega"] if ultimo else None
@@ -180,9 +186,7 @@ def registar(
     texto = texto_em_vigor(tipo)
     versao = texto["versao"]
 
-    ultimo = repositorio.obter_ultimo_aviso(
-        titular_tipo, titular_id, tipo
-    )
+    ultimo = repositorio.obter_ultimo_aviso(titular_tipo, titular_id, tipo)
 
     if ultimo is not None and ultimo["versao_texto"] == versao:
         return versao
@@ -222,9 +226,7 @@ def historico(titular_tipo, titular_id):
 ROTULOS = {
     CONFIDENCIALIDADE: "Termo de confidencialidade e uso do sistema",
     PRIVACIDADE_HOSPEDE: "Informação de privacidade — hóspedes",
-    PRIVACIDADE_COLABORADOR: (
-        "Informação de privacidade — colaboradores"
-    ),
+    PRIVACIDADE_COLABORADOR: ("Informação de privacidade — colaboradores"),
 }
 
 _MAX_VERSAO = 20
@@ -270,9 +272,15 @@ def publicar(tipo, versao, texto, autor, publicado_em=None):
         )
 
     if autor.get("tipo_utilizador") != "Master":
+        logger.warning(
+            "Publicação de texto legal recusada — autor_id=%s, "
+            "tipo_utilizador=%s, documento=%s",
+            autor.get("id"),
+            autor.get("tipo_utilizador"),
+            tipo,
+        )
         raise ValueError(
-            "Só um Master pode publicar uma versão de um documento "
-            "legal."
+            "Só um Master pode publicar uma versão de um documento " "legal."
         )
 
     if tipo not in TIPOS:
@@ -302,6 +310,13 @@ def publicar(tipo, versao, texto, autor, publicado_em=None):
         publicado_em = datetime.date.today()
 
     repositorio.publicar_texto(tipo, versao, texto, publicado_em)
+
+    logger.info(
+        "Publicação de texto legal — tipo=%s, versao=%s, autor_id=%s",
+        tipo,
+        versao,
+        autor.get("id"),
+    )
 
     return versao
 

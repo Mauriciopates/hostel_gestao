@@ -18,9 +18,14 @@ janela. Este ficheiro deteta isso num `while` e cria uma nova
 `while` termina e a aplicação fecha de vez.
 """
 
+import logging
+
 import config
 import configuracoes
+import registo_logs
 from gui.app import Aplicacao
+
+logger = logging.getLogger(__name__)
 
 
 def main():
@@ -36,6 +41,7 @@ def main():
     (a árvore já existe), mas também não faz mal se acontecer.
     """
     config.garantir_diretorios()
+    registo_logs.configurar("gui")
     configuracoes.garantir_seed()
 
     while True:
@@ -56,7 +62,10 @@ def main():
 
         # Se chegou aqui, foi pedido logoff — o `while` recomeça
         # e cria uma nova `Aplicacao`.
+        logger.info("Logoff — a reabrir a aplicação")
         del app
+
+    logger.info("Aplicação terminada")
 
 
 if __name__ == "__main__":

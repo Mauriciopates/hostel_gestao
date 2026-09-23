@@ -110,11 +110,14 @@ ALTERAÇÕES 20/09/2026 (Fase 3 — Configurações lidas da BD):
   recusada com `ValueError`.
 """
 
+import logging
 from datetime import date
 
 import configuracoes
 import repositorio
 import responsaveis
+
+logger = logging.getLogger(__name__)
 
 PREFIXO = "PRD"
 PREFIXO_MOVIMENTO = "MOV"
@@ -152,8 +155,9 @@ TIPOS_PRODUTO = ("consumivel", "roupa_cama", "roupa_banho", "outro")
 _TIPOS_ADMINISTRATIVOS = ("Admin", "Master")
 
 
-def criar_produto(nome, unidade_medida, stock_minimo=0,
-                   tipo_produto="consumivel"):
+def criar_produto(
+    nome, unidade_medida, stock_minimo=0, tipo_produto="consumivel"
+):
     """Cria um produto no catálogo e grava-o imediatamente na base de
     dados.
 
@@ -360,6 +364,16 @@ def desativar_produto(produto_id, forcar=False, responsavel_id=None):
 
     repositorio.atualizar_produto(produto_id, campos)
     produto.update(campos)
+
+    if total_dependencias:
+        logger.warning(
+            "Produto desativado à força — id=%s, dependencias=%d, "
+            "responsavel_id=%s",
+            produto_id,
+            total_dependencias,
+            campos["desativado_por_id"],
+        )
+
     return produto
 
 
@@ -502,6 +516,18 @@ def registar_movimento(
     }
 
     repositorio.inserir_movimento(movimento)
+
+    if tipo == "ajuste":
+        logger.info(
+            "Movimento de ajuste — id=%s, produto=%s, quantidade=%s, "
+            "responsavel_id=%s, motivo=%s",
+            movimento["id"],
+            produto_id,
+            quantidade,
+            responsavel_id,
+            motivo,
+        )
+
     return movimento
 
 
@@ -797,6 +823,13 @@ def criar_requisicao(
         }
         repositorio.inserir_item_requisicao(item_requisicao)
 
+    logger.info(
+        "Requisição criada — id=%s, responsavel_id=%s, origem=%s, itens=%d",
+        requisicao["id"],
+        requisicao["responsavel_id"],
+        origem,
+        len(itens),
+    )
     return requisicao
 
 
@@ -956,24 +989,42 @@ def enviar_requisicao(
     if data_envio is None:
         raise ValueError("A data de envio é obrigatória.")
 
-    for item, quantidade in a_enviar:
-        registar_movimento(
-            produto_id=item["produto_id"],
-            tipo="saida",
-            quantidade=quantidade,
-            data=data_envio,
-            responsavel_id=quem_envia["id"],
-            requisicao_id=requisicao["id"],
-        )
-        repositorio.atualizar_item_requisicao(
-            item["id"], {"quantidade_enviada": quantidade}
-        )
-        item["quantidade_enviada"] = quantidade
+    # Os movimentos abaixo NÃO correm numa só transação: cada um
+    # grava sozinho. Se algum falhar a meio, os anteriores ficam
+    # gravados e a requisição continua pendente — fica registado
+    # para se poder corrigir à mão com um movimento de ajuste.
+    try:
+        for item, quantidade in a_enviar:
+            registar_movimento(
+                produto_id=item["produto_id"],
+                tipo="saida",
+                quantidade=quantidade,
+                data=data_envio,
+                responsavel_id=quem_envia["id"],
+                requisicao_id=requisicao["id"],
+            )
+            repositorio.atualizar_item_requisicao(
+                item["id"], {"quantidade_enviada": quantidade}
+            )
+            item["quantidade_enviada"] = quantidade
 
-    campos = {"data_envio": data_envio, "estado": "enviada"}
-    repositorio.atualizar_requisicao(requisicao_id, campos)
-    requisicao.update(campos)
+        campos = {"data_envio": data_envio, "estado": "enviada"}
+        repositorio.atualizar_requisicao(requisicao_id, campos)
+        requisicao.update(campos)
+    except Exception:
+        logger.exception(
+            "Envio da requisição %s interrompido a meio — podem já "
+            "existir movimentos de saída com a requisição ainda pendente",
+            requisicao_id,
+        )
+        raise
 
+    logger.info(
+        "Requisição enviada — id=%s, enviado_por=%s, parcial=%s",
+        requisicao_id,
+        quem_envia["id"],
+        any(q < i["quantidade_pedida"] for i, q in a_enviar),
+    )
     return requisicao
 
 
@@ -1025,6 +1076,11 @@ def rejeitar_requisicao(requisicao_id, responsavel_id, motivo):
     repositorio.atualizar_requisicao(requisicao_id, campos)
     requisicao.update(campos)
 
+    logger.info(
+        "Requisição rejeitada — id=%s, por=%s",
+        requisicao_id,
+        responsavel["id"],
+    )
     return requisicao
 
 
@@ -1080,6 +1136,13 @@ def cancelar_requisicao(
     e_administrativo = tipo_utilizador_autor in _TIPOS_ADMINISTRATIVOS
 
     if not (e_o_autor or e_administrativo):
+        logger.warning(
+            "%s recusado — requisicao_id=%s, responsavel_id=%s, tipo=%s",
+            "Cancelamento",
+            requisicao_id,
+            responsavel["id"],
+            tipo_utilizador_autor,
+        )
         raise ValueError(
             f"Só o responsável que pediu "
             f"({requisicao['responsavel_id']}) ou um Admin/Master "
@@ -1090,6 +1153,11 @@ def cancelar_requisicao(
     repositorio.atualizar_requisicao(requisicao_id, campos)
     requisicao.update(campos)
 
+    logger.info(
+        "Requisição cancelada — id=%s, por=%s",
+        requisicao_id,
+        responsavel["id"],
+    )
     return requisicao
 
 
@@ -1154,6 +1222,13 @@ def confirmar_rececao_requisicao(
     e_administrativo = tipo_utilizador_autor in _TIPOS_ADMINISTRATIVOS
 
     if not (e_o_autor or e_administrativo):
+        logger.warning(
+            "%s recusado — requisicao_id=%s, responsavel_id=%s, tipo=%s",
+            "Confirmação de receção",
+            requisicao_id,
+            responsavel["id"],
+            tipo_utilizador_autor,
+        )
         raise ValueError(
             f"Só o responsável que pediu "
             f"({requisicao['responsavel_id']}) ou um Admin/Master "
@@ -1171,6 +1246,12 @@ def confirmar_rececao_requisicao(
     repositorio.atualizar_requisicao(requisicao_id, campos)
     requisicao.update(campos)
 
+    logger.info(
+        "Receção confirmada — id=%s, por=%s, com_observacao=%s",
+        requisicao_id,
+        responsavel["id"],
+        bool(campos["observacao_rececao"]),
+    )
     return requisicao
 
 
@@ -1239,6 +1320,13 @@ def reportar_devolucao(
     e_administrativo = tipo_utilizador_autor in _TIPOS_ADMINISTRATIVOS
 
     if not (e_o_autor or e_administrativo):
+        logger.warning(
+            "%s recusado — requisicao_id=%s, responsavel_id=%s, tipo=%s",
+            "Reporte de devolução",
+            requisicao_id,
+            responsavel["id"],
+            tipo_utilizador_autor,
+        )
         raise ValueError(
             f"Só o responsável que pediu "
             f"({requisicao['responsavel_id']}) ou um Admin/Master "
@@ -1325,6 +1413,12 @@ def reportar_devolucao(
         }
         repositorio.inserir_item_devolucao(item_devolucao)
 
+    logger.info(
+        "Devolução reportada — id=%s, requisicao_id=%s, por=%s",
+        devolucao["id"],
+        requisicao_id,
+        responsavel["id"],
+    )
     return devolucao
 
 
@@ -1526,30 +1620,57 @@ def fechar_devolucao(
             "diferente da reportada."
         )
 
-    for item in itens:
-        registar_movimento(
-            produto_id=item["produto_id"],
-            tipo="entrada",
-            quantidade=item["quantidade"],
-            data=data_fecho,
-            responsavel_id=aceite["id"],
-            requisicao_id=devolucao["requisicao_id"],
-        )
+    # Mesma ressalva do `enviar_requisicao`: os movimentos não correm
+    # numa só transação. Uma falha a meio deixa entradas/ajustes
+    # gravados com a devolução ainda pendente — fica registado.
+    try:
+        for item in itens:
+            registar_movimento(
+                produto_id=item["produto_id"],
+                tipo="entrada",
+                quantidade=item["quantidade"],
+                data=data_fecho,
+                responsavel_id=aceite["id"],
+                requisicao_id=devolucao["requisicao_id"],
+            )
 
-    for produto_id, diferenca in ajustes:
-        registar_movimento(
-            produto_id=produto_id,
-            tipo="ajuste",
-            quantidade=diferenca,
-            data=data_fecho,
-            responsavel_id=aceite["id"],
-            requisicao_id=devolucao["requisicao_id"],
-            motivo=motivo_ajuste,
-        )
+        for produto_id, diferenca in ajustes:
+            registar_movimento(
+                produto_id=produto_id,
+                tipo="ajuste",
+                quantidade=diferenca,
+                data=data_fecho,
+                responsavel_id=aceite["id"],
+                requisicao_id=devolucao["requisicao_id"],
+                motivo=motivo_ajuste,
+            )
 
-    campos = {"estado": "fechada", "data_fecho": data_fecho}
-    repositorio.atualizar_devolucao(devolucao_id, campos)
-    devolucao.update(campos)
+        campos = {"estado": "fechada", "data_fecho": data_fecho}
+        repositorio.atualizar_devolucao(devolucao_id, campos)
+        devolucao.update(campos)
+    except Exception:
+        logger.exception(
+            "Fecho da devolução %s interrompido a meio — podem já existir "
+            "entradas/ajustes com a devolução ainda pendente",
+            devolucao_id,
+        )
+        raise
+
+    if ajustes:
+        logger.warning(
+            "Devolução fechada com ajuste — id=%s, aceite_por=%s, "
+            "diferencas=%s, motivo=%s",
+            devolucao_id,
+            aceite["id"],
+            dict(ajustes),
+            motivo_ajuste,
+        )
+    else:
+        logger.info(
+            "Devolução fechada — id=%s, aceite_por=%s",
+            devolucao_id,
+            aceite["id"],
+        )
 
     return devolucao
 
@@ -1841,6 +1962,11 @@ def gerar_rol_lavanderia_automatico(ocupacao, responsavel_id):
     # Quando está desligada, não gera nada. A reserva já foi
     # gravada por quem chamou — esta função só trata do Rol.
     if not configuracoes.obter_bool("stock.rol_automatico_airbnb"):
+        logger.info(
+            "Rol não gerado — ocupacao=%s, razao=%s",
+            ocupacao.get("id"),
+            "chave_desligada",
+        )
         return None
 
     unidade_id = ocupacao["unidade_id"]
@@ -1850,6 +1976,15 @@ def gerar_rol_lavanderia_automatico(ocupacao, responsavel_id):
     )
 
     if not produtos_a_enviar:
+        logger.info(
+            "Rol não gerado — ocupacao=%s, razao=%s",
+            ocupacao.get("id"),
+            (
+                "todos_produtos_desativados"
+                if produtos_desativados
+                else "sem_lugares_ou_regras"
+            ),
+        )
         return None
 
     itens = [
@@ -1887,6 +2022,13 @@ def gerar_rol_lavanderia_automatico(ocupacao, responsavel_id):
         )
 
     observacoes = " ".join(partes_observacoes)
+
+    if not stock_suficiente:
+        logger.warning(
+            "Rol com stock insuficiente — ocupacao=%s, em_falta=%s",
+            ocupacao.get("id"),
+            ", ".join(em_falta),
+        )
 
     requisicao = criar_requisicao(
         responsavel_id=responsavel_id,

@@ -87,6 +87,7 @@ ALTERAÇÕES 13/09/2026 (Aprovação de Requisições + cancelamento):
 """
 
 import json
+import logging
 import os
 import subprocess
 from datetime import date, timedelta
@@ -95,6 +96,8 @@ from typing import cast
 import mysql.connector
 
 import config
+
+logger = logging.getLogger(__name__)
 
 ## Funções de leitura e escrita de ficheiros
 
@@ -174,9 +177,14 @@ def criar_backup():
                 text=True,
             )
     except (subprocess.CalledProcessError, FileNotFoundError):
+        logger.warning(
+            "Falha ao criar backup diário — mysqldump indisponível ou "
+            "credenciais inválidas"
+        )
         destino.unlink(missing_ok=True)
         return None
 
+    logger.info("Backup diário criado: %s", destino.name)
     return destino
 
 
@@ -250,10 +258,14 @@ def _gravar_contadores(contadores):
     ficheiro = _ficheiro_contadores()
     temporario = ficheiro.with_suffix(".tmp")
 
-    with open(temporario, "w", encoding="utf-8") as f:
-        json.dump(contadores, f, ensure_ascii=False, indent=2)
+    try:
+        with open(temporario, "w", encoding="utf-8") as f:
+            json.dump(contadores, f, ensure_ascii=False, indent=2)
 
-    temporario.replace(ficheiro)
+        temporario.replace(ficheiro)
+    except OSError:
+        logger.exception("Falha ao gravar contadores de ID")
+        raise
 
 
 def proximo_id(prefixo):
@@ -3011,9 +3023,15 @@ def criar_backup_com_nome(prefixo):
                 text=True,
             )
     except (subprocess.CalledProcessError, FileNotFoundError):
+        logger.error(
+            "Falha ao criar backup '%s' — mysqldump indisponível ou "
+            "credenciais inválidas",
+            prefixo,
+        )
         destino.unlink(missing_ok=True)
         return None
 
+    logger.info("Backup '%s' criado: %s", prefixo, destino.name)
     return destino
 
 
@@ -3065,6 +3083,8 @@ def apagar_tudo():
         "responsaveis",
     ]
 
+    logger.warning("RESET DO SISTEMA iniciado — apagar_tudo()")
+
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor()
@@ -3078,6 +3098,9 @@ def apagar_tudo():
             cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
 
         conexao.commit()
+        logger.warning(
+            "RESET DO SISTEMA concluído — %d tabelas truncadas", len(tabelas)
+        )
     finally:
         conexao.close()
 
@@ -3171,6 +3194,7 @@ def gravar_configuracao(chave, valor, descricao=""):
             (chave, valor, descricao),
         )
         conexao.commit()
+        logger.info("Configuração gravada — chave=%s", chave)
     finally:
         conexao.close()
 
@@ -3428,6 +3452,14 @@ def registar_aviso(
         )
         conexao.commit()
         novo_id = cursor.lastrowid
+        logger.info(
+            "Aviso de privacidade registado — titular_tipo=%s, "
+            "titular_id=%s, documento=%s, suporte=%s",
+            titular_tipo,
+            titular_id,
+            documento,
+            suporte,
+        )
     finally:
         conexao.close()
 
@@ -3517,6 +3549,9 @@ def publicar_texto(tipo, versao, texto, publicado_em):
         )
         novo_id = cursor.lastrowid
         conexao.commit()
+        logger.info(
+            "Texto legal publicado — tipo=%s, versao=%s", tipo, versao
+        )
     finally:
         conexao.close()
 
