@@ -15,6 +15,22 @@ Airbnb, e um cliente para cada regime — reutilizada por todas as
 subclasses abaixo, através de `criar(...)` normal em cada módulo, tal
 como qualquer outro código chamaria.
 
+Os clientes de fixture (self.cliente_mensal/self.cliente_airbnb no
+setUp, e os avulsos em vários testes) passam sempre TODOS os campos
+que o seu regime exige (validacoes.validar_cliente, depois das
+decisões de 26/08/2026 e 16/09/2026):
+
+- Mensal: nome, tipo_documento, numero_documento, nacionalidade,
+  data_nascimento, validade_documento, nif, morada, estado_civil
+  e telefone.
+- Airbnb: nome, tipo_documento, numero_documento, nacionalidade,
+  data_nascimento, validade_documento, pais_emissor_documento e
+  pais_residencia.
+
+Um cliente sem estes campos rebentaria dentro de `clientes.criar`,
+antes do teste propriamente dito começar — os testes que o confirmam
+já vivem em `teste_clientes.py`, não aqui.
+
 NOTA sobre identidade: `procurar()`/`listar()` fazem sempre um SELECT
 novo à base de dados — já não devolvem o MESMO objeto Python que
 `criar_mensal`/`registar_airbnb` devolveram. Por isso comparamos com
@@ -22,13 +38,6 @@ novo à base de dados — já não devolvem o MESMO objeto Python que
 possível verificar "ficou gravado" com `assertIn(x, dados["algo"])`
 — confirma-se antes com `contratos.procurar(...)`/`detalhes_mensal(...)`
 a devolver o mesmo valor.
-
-Os clientes criados aqui (self.cliente_mensal/self.cliente_airbnb no
-setUp, e os avulsos em vários testes) passam sempre validade do
-documento, data de nascimento e — consoante o regime — morada/
-estado_civil ou nacionalidade: desde a decisão de 26/08 (ponto 2, ver
-claude/Pendencias_Antes_v1.0.0.txt), clientes.criar já não aceita um
-cliente sem esses campos, consoante o regime.
 """
 
 import sys
@@ -39,7 +48,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest
 
 import clientes
 import config
@@ -94,7 +103,9 @@ class BaseContratosTest(BaseMySQLTest):
             "mensal",
             nif="123456789",
             morada="Rua do Porto, 12",
+            nacionalidade="Portuguesa",
             estado_civil="Solteiro(a)",
+            telefone="912345678",
             data_nascimento=date(1990, 5, 20),
             validade_documento=date(2030, 1, 1),
         )
@@ -103,7 +114,9 @@ class BaseContratosTest(BaseMySQLTest):
             "Passaporte",
             "X9999999",
             "airbnb",
-            nacionalidade="Americana",
+            nacionalidade="Brasileira",
+            pais_emissor_documento="Brasil",
+            pais_residencia="Brasil",
             data_nascimento=date(1985, 3, 12),
             validade_documento=date(2030, 1, 1),
         )
@@ -124,12 +137,6 @@ class TesteCriarMensal(BaseContratosTest):
         self.assertTrue(ocupacao["ativo"])
         self.assertEqual(mensal["renda_calculada"], Decimal("250.00"))
         self.assertEqual(ocupacao, contratos.procurar(ocupacao["id"]))
-        # detalhes_mensal devolve também campos com valor por omissão
-        # que só ficam definidos ao encerrar (motivo_encerramento,
-        # duracao_abaixo_minima, aviso_previo_insuficiente) — por
-        # isso compara-se só os campos que criar_mensal preencheu,
-        # para confirmar que o que foi devolvido é mesmo o que ficou
-        # persistido.
         persistido = contratos.detalhes_mensal(ocupacao["id"])
         self.assertEqual(
             mensal, {chave: persistido[chave] for chave in mensal}
@@ -166,8 +173,6 @@ class TesteCriarMensal(BaseContratosTest):
             )
 
     def test_unidade_inativa_recusada(self):
-        # Decisão de 27/08, item 10: uma unidade desativada não pode
-        # receber um novo contrato mensal.
         unidades.desativar(self.unidade_mensal["id"])
 
         with self.assertRaises(ValueError):
@@ -209,7 +214,9 @@ class TesteCriarMensal(BaseContratosTest):
             "mensal",
             nif="222222220",
             morada="Rua X, 1",
+            nacionalidade="Portuguesa",
             estado_civil="Solteiro(a)",
+            telefone="912222222",
             data_nascimento=date(1992, 4, 10),
             validade_documento=date(2030, 1, 1),
         )
@@ -220,7 +227,9 @@ class TesteCriarMensal(BaseContratosTest):
             "mensal",
             nif="333333330",
             morada="Rua Y, 2",
+            nacionalidade="Portuguesa",
             estado_civil="Solteiro(a)",
+            telefone="912333333",
             data_nascimento=date(1988, 7, 1),
             validade_documento=date(2030, 1, 1),
         )
@@ -289,7 +298,9 @@ class TesteCriarMensal(BaseContratosTest):
             "mensal",
             nif="222222220",
             morada="Rua X, 1",
+            nacionalidade="Portuguesa",
             estado_civil="Solteiro(a)",
+            telefone="912222222",
             data_nascimento=date(1992, 4, 10),
             validade_documento=date(2030, 1, 1),
         )
@@ -301,7 +312,6 @@ class TesteCriarMensal(BaseContratosTest):
             Decimal("250.00"),
             lugar_id=self.lugar["id"],
         )
-        # segundo contrato no mesmo lugar (capacidade 2) tem de passar
         ocupacao, _ = contratos.criar_mensal(
             self.unidade_mensal["id"],
             cliente_2["id"],
@@ -320,12 +330,12 @@ class TesteCriarMensal(BaseContratosTest):
             "mensal",
             nif="222222220",
             morada="Rua X, 1",
+            nacionalidade="Portuguesa",
             estado_civil="Solteiro(a)",
+            telefone="912222222",
             data_nascimento=date(1992, 4, 10),
             validade_documento=date(2030, 1, 1),
         )
-        # capacidade total da unidade sobe para 3, para isolar o teste
-        # do lugar (capacidade 2) e não colidir com a capacidade total
         outro_quarto = unidades.criar_quarto(
             self.unidade_mensal["id"], "Quarto 2"
         )
@@ -338,7 +348,9 @@ class TesteCriarMensal(BaseContratosTest):
             "mensal",
             nif="333333330",
             morada="Rua Y, 2",
+            nacionalidade="Portuguesa",
             estado_civil="Solteiro(a)",
+            telefone="912333333",
             data_nascimento=date(1988, 7, 1),
             validade_documento=date(2030, 1, 1),
         )
@@ -396,7 +408,9 @@ class TesteCriarMensal(BaseContratosTest):
             "mensal",
             nif="444444440",
             morada="Rua Z, 3",
+            nacionalidade="Portuguesa",
             estado_civil="Solteiro(a)",
+            telefone="912444444",
             data_nascimento=date(1991, 2, 2),
             validade_documento=date(2025, 12, 31),
         )
@@ -417,7 +431,9 @@ class TesteCriarMensal(BaseContratosTest):
             "mensal",
             nif="555555550",
             morada="Rua W, 4",
+            nacionalidade="Portuguesa",
             estado_civil="Solteiro(a)",
+            telefone="912555555",
             data_nascimento=date(1993, 6, 15),
             validade_documento=date(2030, 1, 1),
         )
@@ -494,8 +510,6 @@ class TesteCriarMensal(BaseContratosTest):
         self.assertTrue(mensal["caucao_exige_confirmacao"])
 
     def test_renda_abaixo_da_calculada_sem_responsavel_e_recusada(self):
-        """Réplica da decisão 18 (Airbnb) para o mensal: renda abaixo
-        da calculada é um desconto e exige responsável validado."""
         with self.assertRaises(ValueError):
             contratos.criar_mensal(
                 self.unidade_mensal["id"],
@@ -531,8 +545,6 @@ class TesteCriarMensal(BaseContratosTest):
         self.assertEqual(mensal["responsavel_desconto_renda_id"], "")
 
     def test_renda_acima_da_calculada_ignora_responsavel_passado(self):
-        # sem desconto, o campo fica sempre em branco — mesmo que
-        # algo tenha sido passado nele (mesma regra do Airbnb).
         responsavel = responsaveis.criar("Gestor de Turno")
         _, mensal = contratos.criar_mensal(
             self.unidade_mensal["id"],
@@ -545,8 +557,6 @@ class TesteCriarMensal(BaseContratosTest):
         self.assertEqual(mensal["responsavel_desconto_renda_id"], "")
 
     def test_recusa_cliente_sem_nif_para_contrato_mensal(self):
-        # self.cliente_airbnb nunca preencheu NIF (regime airbnb não
-        # o exige) — um contrato mensal exige NIF, item 6.
         with self.assertRaises(ValueError):
             contratos.criar_mensal(
                 self.unidade_mensal["id"],
@@ -582,8 +592,6 @@ class TesteCriarMensal(BaseContratosTest):
             Decimal("250.00"),
         )
         contratos.encerrar_mensal(ocupacao["id"], date(2026, 3, 1))
-        # o contrato anterior já não está ativo — o NIF fica livre
-        # para um novo contrato, mesmo cliente ou não.
         novo_ocupacao, _ = contratos.criar_mensal(
             self.unidade_mensal["id"],
             self.cliente_mensal["id"],
@@ -596,21 +604,6 @@ class TesteCriarMensal(BaseContratosTest):
     def test_recusa_segundo_contrato_mensal_por_nif_entre_clientes_diferentes(
         self,
     ):
-        # Duas fichas de cliente ativas com o mesmo NIF não deviam
-        # ser alcançáveis pelas funções públicas de clientes.py
-        # (item 5, e agora também reativar) — mas o bloqueio do item 6
-        # cruza por NIF e não por cliente_id, como defesa extra, para
-        # o caso de esse estado ser alcançado por outra via (nos
-        # testes antigos, em memória, simulava-se editando o
-        # dicionário `dados` à mão; em MySQL, mutar o dicionário
-        # Python devolvido por clientes.criar não teria efeito nenhum
-        # na base de dados — contratos.criar_mensal voltaria a ler o
-        # NIF original ao procurar o cliente. Simula-se aqui o mesmo
-        # estado escrevendo diretamente na base de dados, através de
-        # repositorio.atualizar_cliente — a função de baixo nível,
-        # sem as validações de clientes.py — para contornar
-        # deliberadamente as defesas de clientes.criar/atualizar,
-        # tal como o teste original contornava a estrutura em memória.
         cliente_b = clientes.criar(
             "Maria Duplicada",
             "Passaporte",
@@ -618,7 +611,9 @@ class TesteCriarMensal(BaseContratosTest):
             "mensal",
             nif="222222220",
             morada="Rua Nova, 5",
+            nacionalidade="Portuguesa",
             estado_civil="Solteiro(a)",
+            telefone="912222222",
             data_nascimento=date(1992, 4, 15),
             validade_documento=date(2030, 1, 1),
         )
@@ -660,12 +655,9 @@ class TesteAtualizarMensal(BaseContratosTest):
             self.ocupacao["id"], renda_praticada=Decimal("260.00")
         )
         self.assertEqual(mensal["renda_praticada"], Decimal("260.00"))
-        # renda_calculada nunca muda
         self.assertEqual(mensal["renda_calculada"], Decimal("250.00"))
 
     def test_revalida_caucao_quando_so_a_renda_muda(self):
-        # caução igual à renda original (250); baixar a renda para 100
-        # faz o teto (100 * 2 = 200) ficar abaixo da caução guardada (250)
         with self.assertRaises(ValueError):
             contratos.atualizar_mensal(
                 self.ocupacao["id"],
@@ -797,7 +789,6 @@ class TesteEncerrarMensal(BaseContratosTest):
         ocupacao, mensal = contratos.encerrar_mensal(
             self.ocupacao["id"], date(2026, 2, 1)
         )
-        # início 10/01, fim 01/02 -> menos de 3 meses
         self.assertTrue(mensal["duracao_abaixo_minima"])
         self.assertFalse(ocupacao["ativo"])
 
@@ -878,8 +869,6 @@ class TesteRegistarAirbnb(BaseContratosTest):
             )
 
     def test_unidade_inativa_recusada(self):
-        # Decisão de 27/08, item 10: uma unidade desativada não pode
-        # receber uma nova reserva Airbnb.
         unidades.desativar(self.unidade_airbnb["id"])
 
         with self.assertRaises(ValueError):
@@ -892,8 +881,6 @@ class TesteRegistarAirbnb(BaseContratosTest):
             )
 
     def test_estadia_de_uma_noite_aceite(self):
-        # ESTADIA_MINIMA_NOITES = 1: uma reserva de 1 noite passou a
-        # ser o caso-limite válido, não um caso abaixo do mínimo.
         ocupacao, airbnb = contratos.registar_airbnb(
             self.unidade_airbnb["id"],
             self.cliente_airbnb["id"],
@@ -939,7 +926,6 @@ class TesteRegistarAirbnb(BaseContratosTest):
             date(2026, 1, 15),
             Decimal("225.00"),
         )
-        # entra exatamente no dia em que a outra sai — não é conflito
         ocupacao, _ = contratos.registar_airbnb(
             self.unidade_airbnb["id"],
             self.cliente_airbnb["id"],
@@ -950,8 +936,6 @@ class TesteRegistarAirbnb(BaseContratosTest):
         self.assertEqual(ocupacao["data_inicio"], date(2026, 1, 15))
 
     def test_preco_calculado_soma_epoca_alta_por_noite(self):
-        # 29/06 e 30/06 fora de época alta (45 cada); 01/07 e 02/07
-        # dentro (90 cada) -> total 270.00
         _, airbnb = contratos.registar_airbnb(
             self.unidade_airbnb["id"],
             self.cliente_airbnb["id"],
@@ -970,7 +954,6 @@ class TesteRegistarAirbnb(BaseContratosTest):
             date(2026, 7, 4),
             Decimal("135.00"),
         )
-        # sem o indicador ativo, mesmo em julho, preço fica sempre base
         self.assertEqual(airbnb["preco_calculado"], Decimal("135.00"))
 
     def test_preco_invalido_gera_erro(self):
@@ -1008,8 +991,6 @@ class TesteRegistarAirbnb(BaseContratosTest):
         self.assertEqual(airbnb["multa_praticada"], Decimal("20.00"))
 
     def test_check_in_tardio_multa_praticada_editavel(self):
-        # perdão total (0.00) continua a exigir responsável, tal como
-        # um desconto parcial — decisão do aluno, 25/08/2026.
         responsavel = responsaveis.criar("Gestor de Turno")
         _, airbnb = contratos.registar_airbnb(
             self.unidade_airbnb["id"],
@@ -1101,8 +1082,6 @@ class TesteAtualizarAirbnb(BaseContratosTest):
             check_in_tardio=True,
             hora_chegada="18:00",
         )
-        # perdão total (0.00) continua a exigir responsável, tal como
-        # um desconto parcial — decisão do aluno, 25/08/2026.
         responsavel = responsaveis.criar("Gestor de Turno")
         _, airbnb = contratos.atualizar_airbnb(
             ocupacao["id"],
@@ -1141,7 +1120,6 @@ class TesteCancelarAirbnb(BaseContratosTest):
         )
         self.assertFalse(ocupacao["ativo"])
         self.assertEqual(airbnb["motivo_cancelamento"], "cliente desistiu")
-        # data_fim original não se mexe
         self.assertEqual(ocupacao["data_fim"], date(2026, 1, 15))
 
     def test_ja_cancelada_gera_erro(self):
@@ -1162,7 +1140,6 @@ class TesteCancelarAirbnb(BaseContratosTest):
 
     def test_liberta_as_datas_para_nova_reserva(self):
         contratos.cancelar_airbnb(self.ocupacao["id"])
-        # as mesmas datas, agora livres, têm de ser aceites
         ocupacao, _ = contratos.registar_airbnb(
             self.unidade_airbnb["id"],
             self.cliente_airbnb["id"],
@@ -1224,16 +1201,14 @@ class TesteProcurarListar(BaseContratosTest):
         self.assertEqual(len(resultado), 2)
 
     def test_listar_filtra_por_aviso_documento(self):
-        # validade cai a meio da estadia (1 a 5 de março) — é o caso
-        # que documento_expira_durante_estadia() sinaliza para uma
-        # reserva com termo definido (ao contrário do mensal, que
-        # compara só com o início)
         cliente_expirado = clientes.criar(
             "Expirado",
             "Passaporte",
             "777",
             "airbnb",
             nacionalidade="Britânica",
+            pais_emissor_documento="Reino Unido",
+            pais_residencia="Reino Unido",
             data_nascimento=date(1980, 11, 5),
             validade_documento=date(2026, 3, 3),
         )
@@ -1261,11 +1236,6 @@ class TesteProcurarListar(BaseContratosTest):
 
 
 class TesteSobreposicao(unittest.TestCase):
-    """Testes diretos à fórmula da secção 4 — isolada, sem
-    depender de 'dados' nem de nenhuma outra estrutura. Não precisa
-    de base de dados (por isso continua a estender unittest.TestCase
-    diretamente, e não BaseMySQLTest).
-    """
 
     def test_sem_sobreposicao_quando_saida_coincide_com_entrada(self):
         self.assertFalse(
@@ -1309,10 +1279,6 @@ class TesteSobreposicao(unittest.TestCase):
 
 
 class TesteAvisosEncerramento(unittest.TestCase):
-    """contratos.avisos_encerramento — os dois sinais registados ao
-    encerrar um contrato mensal (decisão 14: sinalizam, nunca
-    bloqueiam).
-    """
 
     def test_duracao_acima_do_minimo_nao_levanta_aviso(self):
         inicio = date.today() - timedelta(days=365)
@@ -1324,16 +1290,13 @@ class TesteAvisosEncerramento(unittest.TestCase):
 
     def test_duracao_abaixo_do_minimo_levanta_aviso(self):
         inicio = date(2026, 3, 1)
-        fim = date(2026, 4, 30)  # 1 mês de diferença, mínimo são 3
+        fim = date(2026, 4, 30)
 
         avisos = contratos.avisos_encerramento({"data_inicio": inicio}, fim)
 
         self.assertTrue(avisos["duracao_abaixo_minima"])
 
     def test_duracao_conta_meses_de_calendario_nao_dias(self):
-        """31/03 → 01/04 é 1 dia, mas conta como 1 mês — mesma regra
-        que encerrar_mensal já usava antes desta função existir.
-        """
         avisos = contratos.avisos_encerramento(
             {"data_inicio": date(2026, 3, 31)}, date(2026, 4, 1)
         )
@@ -1359,9 +1322,6 @@ class TesteAvisosEncerramento(unittest.TestCase):
         self.assertFalse(avisos["aviso_previo_insuficiente"])
 
     def test_limite_exato_do_aviso_previo_e_suficiente(self):
-        """Exatamente AVISO_PREVIO_DIAS dias já cumpre — a regra é
-        'menos de', não 'menos ou igual'.
-        """
         fim = date.today() + timedelta(days=config.AVISO_PREVIO_DIAS)
 
         avisos = contratos.avisos_encerramento(
@@ -1371,9 +1331,6 @@ class TesteAvisosEncerramento(unittest.TestCase):
         self.assertFalse(avisos["aviso_previo_insuficiente"])
 
     def test_devolve_so_as_duas_chaves(self):
-        """O motivo do encerramento não entra aqui — é acrescentado
-        por encerrar_mensal, que junta este resultado ao motivo.
-        """
         avisos = contratos.avisos_encerramento(
             {"data_inicio": date(2026, 1, 1)}, date(2026, 12, 31)
         )

@@ -10,6 +10,34 @@ não devolve o MESMO objeto Python que `criar()` devolveu. Por isso
 comparamos com `assertEqual`, nunca com `assertIs`, e "está na base
 de dados" verifica-se com `assertIn(id, [r["id"] for r in listar()])`
 em vez de `assertIn(r, dados["responsaveis"])`.
+
+NOTA sobre chaves dos dicionários (v1.6.0): `criar()` devolve o
+dicionário que construiu (id, nome, contacto, ativo, tipo_utilizador);
+`procurar()`/`listar()` devolvem o que está gravado no MySQL, com
+`SELECT *` — trazem também `username`, `password_hash`,
+`password_alterada_em`, `ultimo_login`, `desativado_por_id` e
+`data_desativacao`. Comparar o dicionário devolvido por `criar()` com
+o devolvido por `procurar()` por igualdade literal NÃO funciona: os
+testes comparam por ID (ou pelo campo específico que estão a
+verificar), nunca o dicionário todo — mesma convenção já aplicada em
+teste_unidades.py, teste_clientes.py e teste_contratos.py.
+
+NOTA sobre `responsaveis.desativar`/`reativar` (v1.5.0): ambos exigem
+`autor` — o dict do responsável ativo que executa a operação.
+`desativar` é só Master, e recusa a auto-desativação
+(`utilizadores.desativar`); `reativar` é Master ou Admin (Admin só
+sobre Staff). Por isso cada teste que desativa/reativa cria o seu
+próprio `_criar_master()` ALÉM do responsável visado — o autor tem de
+ser outra pessoa. Os testes que só verificam o comportamento do
+`validar_autoria` sobre um inativo também precisam do Master, para o
+passo de desativar chegar ao fim.
+
+NOTA sobre a asserção de `TesteListar.teste_lista_so_ativos_por_omissao`:
+o Master criado como autor fica ativo e aparece em `listar()`. A
+asserção filtra por não-Master, para continuar a verificar exatamente
+o que o teste original verificava (que o responsável desativado
+desaparece da listagem), sem depender do número de Masters que cada
+teste cria como fixture.
 """
 
 import sys
@@ -18,9 +46,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest
 
 import responsaveis
+
+
+def _criar_master(nome="Master de Teste"):
+    """Cria um Master, para servir de `autor` nas chamadas a
+    `responsaveis.desativar`/`reativar` — desde a v1.5.0, ambos exigem
+    autor, e só um Master desativa (utilizadores.desativar)."""
+    return responsaveis.criar(nome, tipo_utilizador="Master")
 
 
 class TesteCriar(BaseMySQLTest):
@@ -63,18 +98,24 @@ class TesteCriar(BaseMySQLTest):
 class TesteProcurar(BaseMySQLTest):
 
     def teste_encontra_responsavel_existente(self):
+        """Comparação por ID — `criar()` devolve só as chaves que
+        construiu; `procurar()` traz também as de credencial
+        (`username`, `password_hash`, ..., `data_desativacao`).
+        O que interessa é que é a MESMA linha na base de dados.
+        """
         criado = responsaveis.criar("Ana Ferreira")
 
         encontrado = responsaveis.procurar(criado["id"])
 
-        self.assertEqual(criado, encontrado)
+        self.assertIsNotNone(encontrado)
+        self.assertEqual(encontrado["id"], criado["id"])  # type: ignore
 
     def teste_devolve_none_para_id_inexistente(self):
         self.assertIsNone(responsaveis.procurar("RES-999"))
 
     def teste_encontra_responsavel_inativo(self):
         criado = responsaveis.criar("Ana Ferreira")
-        responsaveis.desativar(criado["id"])
+        responsaveis.desativar(criado["id"], autor=_criar_master())
 
         self.assertIsNotNone(responsaveis.procurar(criado["id"]))
 
@@ -85,22 +126,33 @@ class TesteListar(BaseMySQLTest):
         self.assertEqual([], responsaveis.listar())
 
     def teste_lista_so_ativos_por_omissao(self):
+        """O Master usado como autor fica ativo e aparece na
+        listagem — a asserção filtra por não-Master, para continuar
+        a verificar só o que o teste original verificava: que o
+        responsável desativado desaparece da listagem."""
+        master = _criar_master()
         ativo = responsaveis.criar("Ana Ferreira")
         inativo = responsaveis.criar("Bruno Alves")
-        responsaveis.desativar(inativo["id"])
+        responsaveis.desativar(inativo["id"], autor=master)
 
         resultado = responsaveis.listar()
 
-        self.assertEqual([r["id"] for r in resultado], [ativo["id"]])
+        ids_nao_master = [
+            r["id"] for r in resultado if r["tipo_utilizador"] != "Master"
+        ]
+        self.assertEqual(ids_nao_master, [ativo["id"]])
 
     def teste_lista_incluir_inativos(self):
-        responsaveis.criar("Ana Ferreira")
+        master = _criar_master()
+        ativo = responsaveis.criar("Ana Ferreira")
         inativo = responsaveis.criar("Bruno Alves")
-        responsaveis.desativar(inativo["id"])
+        responsaveis.desativar(inativo["id"], autor=master)
 
         resultado = responsaveis.listar(incluir_inativos=True)
 
-        self.assertEqual(2, len(resultado))
+        ids = [r["id"] for r in resultado]
+        self.assertIn(ativo["id"], ids)
+        self.assertIn(inativo["id"], ids)
 
     def teste_devolve_lista_nova(self):
         responsaveis.criar("Ana Ferreira")
@@ -171,43 +223,53 @@ class TesteAtualizar(BaseMySQLTest):
 class TesteDesativar(BaseMySQLTest):
 
     def teste_desativa_responsavel_ativo(self):
+        """O autor é outro Master — `utilizadores.desativar` recusa
+        auto-desativação ("Não pode desativar-se a si mesmo")."""
+        master = _criar_master()
         r = responsaveis.criar("Ana Ferreira")
 
-        desativado = responsaveis.desativar(r["id"])
+        desativado = responsaveis.desativar(r["id"], autor=master)
 
         self.assertFalse(desativado["ativo"])
 
     def teste_recusa_desativar_duas_vezes(self):
+        master = _criar_master()
         r = responsaveis.criar("Ana Ferreira")
-        responsaveis.desativar(r["id"])
+        responsaveis.desativar(r["id"], autor=master)
 
         with self.assertRaises(ValueError):
-            responsaveis.desativar(r["id"])
+            responsaveis.desativar(r["id"], autor=master)
 
     def teste_recusa_desativar_inexistente(self):
+        master = _criar_master()
+
         with self.assertRaises(ValueError):
-            responsaveis.desativar("RES-999")
+            responsaveis.desativar("RES-999", autor=master)
 
 
 class TesteReativar(BaseMySQLTest):
 
     def teste_reativa_responsavel_inativo(self):
+        master = _criar_master()
         r = responsaveis.criar("Ana Ferreira")
-        responsaveis.desativar(r["id"])
+        responsaveis.desativar(r["id"], autor=master)
 
-        reativado = responsaveis.reativar(r["id"])
+        reativado = responsaveis.reativar(r["id"], autor=master)
 
         self.assertTrue(reativado["ativo"])
 
     def teste_recusa_reativar_ja_ativo(self):
+        master = _criar_master()
         r = responsaveis.criar("Ana Ferreira")
 
         with self.assertRaises(ValueError):
-            responsaveis.reativar(r["id"])
+            responsaveis.reativar(r["id"], autor=master)
 
     def teste_recusa_reativar_inexistente(self):
+        master = _criar_master()
+
         with self.assertRaises(ValueError):
-            responsaveis.reativar("RES-999")
+            responsaveis.reativar("RES-999", autor=master)
 
 
 class TesteValidarAutoria(BaseMySQLTest):
@@ -236,8 +298,9 @@ class TesteValidarAutoria(BaseMySQLTest):
             responsaveis.validar_autoria("RES-999")
 
     def teste_recusa_inativo(self):
+        master = _criar_master()
         r = responsaveis.criar("Ana Ferreira")
-        responsaveis.desativar(r["id"])
+        responsaveis.desativar(r["id"], autor=master)
 
         with self.assertRaises(ValueError):
             responsaveis.validar_autoria(r["id"])
