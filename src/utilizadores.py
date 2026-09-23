@@ -293,6 +293,15 @@ def definir_credencial(responsavel_id, username, password, autor):
     Valida: política de password, unicidade do username, perfil do
     autor face ao perfil do alvo.
 
+    CORREÇÃO 22/09/2026 (PASSO 9): a barreira de perfil passou a
+    estar no próprio módulo, via `verificar_permissao`. Antes, o
+    único `if` verificava que o autor não era um Admin a mexer num
+    não-Staff — deixava um Staff autenticado passar (bastava que o
+    alvo fosse Staff para o ramo do `if` não disparar). A barreira
+    real vive no módulo (regra 11.2 do plano de correções); a GUI
+    já escondia o botão a quem não é Master/Admin, mas a barreira
+    de negócio era a que estava a faltar.
+
     O username é `strip()`-ado e comparado com os já existentes.
     Se já estiver em uso por outro responsável, levanta ValueError
     — o UNIQUE da coluna também o faria, mas esta validação dá uma
@@ -321,12 +330,25 @@ def definir_credencial(responsavel_id, username, password, autor):
             "em vez de 'Definir credencial'."
         )
 
-    # Regra 5.1: Admin só define credencial a Staff.
-    if (
-        autor["tipo_utilizador"] == "Admin"
-        and alvo["tipo_utilizador"] != "Staff"
-    ):
-        raise ValueError("Um Admin só pode definir credenciais a Staff.")
+    # Regra 5.1 — barreira de perfil no próprio módulo.
+    #
+    # `verificar_permissao` cobre as três combinações que
+    # interessam:
+    #   - Master sobre qualquer perfil  → passa
+    #   - Admin sobre Staff             → passa
+    #   - Admin sobre Admin/Master      → recusa ("Admin só sobre Staff")
+    #   - Staff como autor              → recusa (não está em
+    #                                     {"Master", "Admin"})
+    #
+    # A posição da chamada é intencional: vem DEPOIS das validações
+    # de dados (username, password, alvo existe, alvo já tem
+    # credencial) e ANTES do UPDATE. Se os dados do formulário
+    # estão mal, o erro diz isso — não "não tens permissão".
+    verificar_permissao(
+        autor,
+        {"Master", "Admin"},
+        perfil_alvo=alvo["tipo_utilizador"],
+    )
 
     # Unicidade do username — o UNIQUE da base também garante isto,
     # mas aqui damos uma mensagem específica em vez de erro do MySQL.
@@ -499,10 +521,12 @@ def reativar(responsavel_id, autor):
 
     verificar_permissao(autor, {"Master", "Admin"})
 
+    # src/utilizadores.py, função reativar (perto da linha 508)
+
     campos = {
         "ativo": True,
-        "desativado_por_id": "",
-        "data_desativacao": "",
+        "desativado_por_id": None,
+        "data_desativacao": None,
     }
 
     repositorio.atualizar_responsavel(responsavel_id, campos)

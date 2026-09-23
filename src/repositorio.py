@@ -3208,12 +3208,36 @@ def inserir_configuracao_historico(registo):
         conexao.close()
 
 
+def _normalizar_configuracao_historico(linha):
+    """Repõe "" em `motivo` quando vier NULL — mesma convenção de
+    string vazia usada em todo o sistema para "sem valor".
+
+    PORQUÊ (22/09/2026): o `inserir_configuracao_historico` já
+    converte `""` em `NULL` na gravação (`registo["motivo"] or
+    None`), porque a coluna é nullable por desenho — o motivo é
+    opcional. Faltava o inverso na leitura: as linhas lidas com o
+    motivo em branco chegavam ao consumidor com `None`, o que
+    obrigava quem lê a tratar os dois casos (`None` e `""`) como
+    coisas diferentes. Todas as outras tabelas do sistema já
+    normalizam assim; o `configuracoes_historico` era a única
+    exceção.
+    """
+    if linha.get("motivo") is None:
+        linha["motivo"] = ""
+
+    return linha
+
+
 def listar_configuracao_historico(chave=None):
     """Devolve o histórico de alterações, opcionalmente filtrado por
     chave. Ordenado por data descendente, mais recentes primeiro.
 
     Quando 'chave' é None, devolve o histórico completo (todas as
     chaves). Útil para a GUI mostrar tudo de uma vez, se precisar.
+
+    As linhas devolvidas passam por `_normalizar_configuracao_historico`
+    — o `motivo` vem sempre como string (nunca None), mesmo quando
+    foi gravado como NULL por ser opcional.
     """
     conexao = obter_conexao()
     try:
@@ -3236,7 +3260,7 @@ def listar_configuracao_historico(chave=None):
     finally:
         conexao.close()
 
-    return linhas
+    return [_normalizar_configuracao_historico(linha) for linha in linhas]
 
 
 # --- textos legais e avisos de privacidade (v1.6.0) -------------------
@@ -3408,6 +3432,7 @@ def registar_aviso(
         conexao.close()
 
     return novo_id
+
 
 def listar_textos(tipo=None):
     """Todas as versões, da mais recente para a mais antiga.

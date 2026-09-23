@@ -149,15 +149,39 @@ def _meses_do_periodo(data_inicio, data_fim):
 
     Um período de 2026-06-01 a 2026-06-30 devolve [(2026, 6)].
 
-    A lista é a unidade de contagem do lado mensal: para cada mês
-    desta lista, testa-se se o contrato o tocou (ver
-    `_meses_de_vigencia_no_periodo`).
+    CORREÇÃO 22/09/2026 (PASSO 9 — teste_financeiro): o `data_fim` é
+    EXCLUSIVO em todo o motor — ver `_validar_periodo`. Sem esta
+    correção, um `data_fim` que calhasse no dia 1 de um mês
+    acrescentava esse mês inteiro à lista, mesmo que o período só
+    chegasse ao fim do mês anterior.
+
+    Casos que falhavam (reproduzidos em `teste_financeiro.py`):
+
+        (2026-03-01, 2026-06-01) → devolvia [(2026,3), (2026,4),
+        (2026,5), (2026,6)] — 4 meses, quando o período só cobre
+        março a maio. Um contrato em vigor contava 4× a renda em vez
+        de 3×.
+
+        (2026-06-01, 2026-07-01) → devolvia [(2026,6), (2026,7)] —
+        2 meses, quando só junho pertence ao período. Dava o dobro.
+
+    O caso sem ocupação a tocar o mês extra não se notava, porque o
+    `_mes_tocado_pela_ocupacao` filtrava-o depois. Só aparecia com
+    contratos em vigor (que tocam todos os meses desde o início),
+    onde não há filtro a salvar.
     """
     meses = []
     ano, mes = data_inicio.year, data_inicio.month
     ano_fim, mes_fim = data_fim.year, data_fim.month
 
     while (ano, mes) <= (ano_fim, mes_fim):
+        # O `data_fim` é exclusivo: um mês cujo primeiro dia seja
+        # >= data_fim NÃO pertence ao período. É este corte que faz
+        # a diferença — sem ele, o mês do `data_fim` entrava sempre,
+        # mesmo quando o `data_fim` era o dia 1 desse mês.
+        if _primeiro_dia_do_mes(ano, mes) >= data_fim:
+            break
+
         meses.append((ano, mes))
 
         if mes == 12:
@@ -167,7 +191,6 @@ def _meses_do_periodo(data_inicio, data_fim):
             mes += 1
 
     return meses
-
 
 def _primeiro_dia_do_mes(ano, mes):
     """Devolve o `date` do dia 1 do mês indicado."""
