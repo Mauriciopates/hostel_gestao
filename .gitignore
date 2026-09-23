@@ -11,6 +11,7 @@ dados/
 backups/
 logs/
 contratos_gerados/
+testes/teste_logs/
 *.db
 *.sqlite3
 *.env*
