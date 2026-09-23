@@ -625,5 +625,56 @@ class TesteListar(BaseMySQLTest):
         self.assertEqual(historico[0]["chave"], "operacao.dia_vencimento")
 
 
+# =====================================================================
+# Logs (v1.6.0, 23/09/2026)
+# =====================================================================
+
+
+class TesteLogsConfiguracoes(BaseMySQLTest):
+    """O que o módulo deixa no log — e, tão importante, o que NÃO
+    deixa."""
+
+    def setUp(self):
+        super().setUp()
+        configuracoes.garantir_seed()
+
+    def test_recusa_de_staff_fica_registada(self):
+        staff = _criar_staff()
+        with self.assertLogs("configuracoes", level="WARNING") as registo:
+            with self.assertRaises(ValueError):
+                configuracoes.definir(
+                    "operacao.dia_vencimento", 10, autor=staff
+                )
+        self.assertIn("Alteração de configuração recusada", registo.output[0])
+        self.assertIn(staff["id"], registo.output[0])
+
+    def test_pode_alterar_nao_regista_recusa(self):
+        """O `pode_alterar` é o que a GUI usa para decidir o que mostrar.
+        Se registasse, cada ecrã aberto por um Admin enchia o log de
+        "recusas" que ninguém tentou. A recusa só se regista no
+        `definir`, que é a operação real."""
+        staff = _criar_staff()
+        with self.assertNoLogs("configuracoes", level="WARNING"):
+            configuracoes.pode_alterar("operacao.dia_vencimento", staff)
+            configuracoes.pode_alterar("stock.permitir_envio_parcial", staff)
+
+    def test_alteracao_regista_chave_e_autor(self):
+        master = _criar_master()
+        with self.assertLogs("configuracoes", level="INFO") as registo:
+            configuracoes.definir("operacao.dia_vencimento", 10, autor=master)
+        texto = "\n".join(registo.output)
+        self.assertIn("operacao.dia_vencimento", texto)
+        self.assertIn(master["id"], texto)
+
+    def test_valor_corrompido_na_bd_fica_registado(self):
+        """Um valor que não se consegue converter é sinal de base de
+        dados corrompida — rebenta e fica registado."""
+        repositorio.gravar_configuracao("operacao.dia_vencimento", "abc", "")
+        with self.assertLogs("configuracoes", level="ERROR") as registo:
+            with self.assertRaises(ValueError):
+                configuracoes.obter("operacao.dia_vencimento")
+        self.assertIn("operacao.dia_vencimento", registo.output[0])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

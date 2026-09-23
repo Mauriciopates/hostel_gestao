@@ -761,5 +761,91 @@ class TesteListarComEstado(BaseMySQLTest):
         self.assertNotEqual(por_id[alvo["id"]]["password_hash"], "")
 
 
+# ---------------------------------------------------------------------
+# Verificar password — confirmações que NÃO são logins (23/09/2026)
+# ---------------------------------------------------------------------
+
+
+class TesteVerificarPassword(BaseMySQLTest):
+    """`verificar_password` confirma uma password sem fazer login.
+
+    Existe para confirmações (a do reset do sistema): não pode mexer
+    no `ultimo_login` nem registar acessos — era esse o problema de
+    usar o `autenticar` para confirmar.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.master = _criar_master()
+        self.alvo = _criar_staff("Ana")
+        _definir_credencial(self.alvo, "ana", autor=self.master)
+
+    def test_password_certa_devolve_true(self):
+        self.assertTrue(
+            utilizadores.verificar_password(self.alvo["id"], "password123")
+        )
+
+    def test_password_errada_devolve_false(self):
+        self.assertFalse(
+            utilizadores.verificar_password(self.alvo["id"], "errada123")
+        )
+
+    def test_password_vazia_devolve_false(self):
+        self.assertFalse(utilizadores.verificar_password(self.alvo["id"], ""))
+
+    def test_responsavel_sem_credencial_devolve_false(self):
+        sem_credencial = _criar_staff("Sem credencial")
+        self.assertFalse(
+            utilizadores.verificar_password(sem_credencial["id"], "x")
+        )
+
+    def test_responsavel_inexistente_devolve_false(self):
+        self.assertFalse(utilizadores.verificar_password("RES-999", "x"))
+
+    def test_nao_atualiza_ultimo_login(self):
+        utilizadores.verificar_password(self.alvo["id"], "password123")
+        depois = repositorio.procurar_responsavel(self.alvo["id"])
+        assert depois is not None
+        self.assertEqual(depois["ultimo_login"], "")
+
+    def test_nao_regista_nada_no_log(self):
+        """Nem sucesso nem falha: quem chama é que sabe o contexto e
+        regista. Um "Autenticação bem-sucedida" aqui seria um login
+        que nunca aconteceu."""
+        with self.assertNoLogs("utilizadores"):
+            utilizadores.verificar_password(self.alvo["id"], "password123")
+            utilizadores.verificar_password(self.alvo["id"], "errada123")
+
+
+class TesteLogsAutenticacao(BaseMySQLTest):
+    """O que o `autenticar` e o `verificar_permissao` deixam no log."""
+
+    def test_falha_regista_motivo_sem_o_username_tentado(self):
+        """O username tentado NUNCA vai para o log — pode ser uma
+        password escrita no campo errado."""
+        with self.assertLogs("utilizadores", level="WARNING") as registo:
+            utilizadores.autenticar("utilizador_que_nao_existe", "x")
+        self.assertIn("nao_encontrado", registo.output[0])
+        self.assertNotIn("utilizador_que_nao_existe", registo.output[0])
+
+    def test_password_errada_nao_vai_para_o_log(self):
+        master = _criar_master()
+        alvo = _criar_staff("Ana")
+        _definir_credencial(alvo, "ana", autor=master)
+        with self.assertLogs("utilizadores", level="WARNING") as registo:
+            utilizadores.autenticar("ana", "segredo_errado_123")
+        texto = "\n".join(registo.output)
+        self.assertNotIn("segredo_errado_123", texto)
+        self.assertIn(alvo["id"], texto)
+
+    def test_recusa_de_permissao_fica_registada(self):
+        staff = _criar_staff()
+        with self.assertLogs("utilizadores", level="WARNING") as registo:
+            with self.assertRaises(ValueError):
+                utilizadores.verificar_permissao(staff, {"Master"})
+        self.assertIn("Permissão recusada", registo.output[0])
+        self.assertIn(staff["id"], registo.output[0])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

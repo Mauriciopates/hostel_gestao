@@ -7,7 +7,8 @@ UTILIZADOR_PADRAO, PASSWORD_PADRAO).
 
 OPERATION CRÍTICA — o protocolo é:
 
-  1. Validar o autor (tem de ser Master).
+  1. Validar o autor (tem de ser Master) e confirmar a password
+     dele (regra movida da GUI para aqui em 23/09/2026).
   2. Fazer backup automático com prefixo "pre_reset" — o ficheiro
      .sql fica em `config.DIR_BACKUPS` e serve de rede de segurança.
   3. Apagar todas as tabelas do sistema (`repositorio.apagar_tudo`).
@@ -38,12 +39,19 @@ import utilizadores
 logger = logging.getLogger(__name__)
 
 
-def comecar_do_zero(autor):
+def comecar_do_zero(autor, password):
     """Apaga todos os dados e recria o Master padrão.
 
     Parâmetros:
-      - `autor`: o responsável ativo que está a executar o reset.
-                 Tem de ser Master. Validado aqui, não só na GUI.
+      - `autor`:    o responsável ativo que está a executar o reset.
+                    Tem de ser Master. Validado aqui, não só na GUI.
+      - `password`: a password do próprio autor, a confirmar a
+                    operação. Verificada AQUI (23/09/2026): até esta
+                    data a confirmação vivia só no modal da GUI, e
+                    qualquer outro caminho (CLI, um ecrã futuro)
+                    apagava tudo só com um Master na sessão. Usa o
+                    `utilizadores.verificar_password` — é uma
+                    confirmação, não um login.
 
     Devolve o registo do Master criado.
 
@@ -52,6 +60,16 @@ def comecar_do_zero(autor):
     rebenta antes de apagar.
     """
     _validar_autor_master(autor)
+
+    if not utilizadores.verificar_password(autor["id"], password):
+        logger.warning(
+            "Reset do sistema recusado — password errada, autor_id=%s",
+            autor["id"],
+        )
+        raise ValueError(
+            "A password não corresponde ao utilizador ativo. O reset "
+            "não foi executado."
+        )
 
     logger.warning("Reset do sistema pedido — autor_id=%s", autor["id"])
 

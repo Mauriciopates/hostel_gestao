@@ -320,6 +320,38 @@ def autenticar(username, password):
     return responsavel, MOTIVO_OK
 
 
+def verificar_password(responsavel_id, password):
+    """Confirma a password de um responsável, SEM fazer login.
+
+    Devolve True se a password bater com a guardada, False em todos
+    os outros casos (password vazia, responsável inexistente, sem
+    credencial).
+
+    Existe para as CONFIRMAÇÕES — por exemplo, a password pedida no
+    modal do "Começar do zero". Uma confirmação não é um login, e o
+    `autenticar` não serve para isto porque:
+
+      - atualiza o `ultimo_login` na base de dados;
+      - regista "Autenticação bem-sucedida" / "Falha de
+        autenticação" no log.
+
+    Usado para confirmar, o `autenticar` escrevia no histórico de
+    acessos logins que nunca aconteceram.
+
+    Não regista nada no log de propósito: quem chama sabe o contexto
+    (qual operação estava a ser confirmada) e é quem deve registar.
+    """
+    if not password:
+        return False
+
+    responsavel = repositorio.procurar_responsavel(responsavel_id)
+
+    if responsavel is None or not responsavel.get("password_hash"):
+        return False
+
+    return _validar_password(password, responsavel["password_hash"])
+
+
 # ---------------------------------------------------------------------
 # Credenciais — definir e alterar
 # ---------------------------------------------------------------------
@@ -594,8 +626,6 @@ def reativar(responsavel_id, autor):
         raise ValueError("Um Admin só pode reativar Staff.")
 
     verificar_permissao(autor, {"Master", "Admin"})
-
-
 
     campos = {
         "ativo": True,

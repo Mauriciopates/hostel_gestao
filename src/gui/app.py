@@ -52,6 +52,12 @@ ALTERAÇÕES v1.5.x (19/09/2026):
     da lista crua.
 """
 
+import logging
+import sys
+import tkinter
+import traceback
+from types import TracebackType
+
 import customtkinter as ctk
 
 from pathlib import Path
@@ -73,6 +79,8 @@ from .gui_propriedades import ListaPropriedades
 from .gui_relatorios import Relatorios
 from .gui_configuracoes import Configuracoes
 from .sessao import tipo_utilizador_ativo  # <<< NOVO >>> — filtro de itens
+
+logger = logging.getLogger(__name__)
 
 _PASTA_IMG = Path(__file__).resolve().parent.parent.parent / "img"
 _ICONE_JANELA = _PASTA_IMG / "ico_hostel.png"
@@ -334,6 +342,10 @@ class LoginModal(ctk.CTkToplevel):
         try:
             sessao.definir_responsavel_ativo(registo["id"])
         except ValueError as erro:
+            logger.warning(
+                "Autenticado mas sessão recusada — responsavel_id=%s",
+                registo["id"],
+            )
             self.erro.configure(text=str(erro))
             self.campo_password.delete(0, "end")
             self.campo_password.focus_set()
@@ -576,6 +588,14 @@ class Aplicacao(ctk.CTk):
         tema.aplicar_tema()
         super().__init__()
 
+        # Erros inesperados de qualquer botão/evento, em qualquer
+        # janela, vêm parar aqui. Atribui-se em vez de fazer override:
+        # no Tk isto é um ATRIBUTO que se substitui, não um método
+        # (é assim que o typeshed o declara, e um `def` com o mesmo
+        # nome dava aviso de override incompatível no Pylance).
+        # Fica logo no início para cobrir também o LoginModal.
+        self.report_callback_exception = self._tratar_erro_interface
+
         # Flag lida pelo `main_gui.py` depois do `mainloop()`.
         # False = terminar a aplicação de vez.
         # True = reabrir uma nova instância (o utilizador pediu
@@ -622,6 +642,11 @@ class Aplicacao(ctk.CTk):
         # quem é) e ANTES de desenhar seja o que for. Quem já
         # aceitou a versão em vigor nem dá por isto.
         if not self._verificar_termo():
+            ativo = sessao.obter_responsavel_ativo()
+            logger.info(
+                "Termo não aceite — acesso recusado, responsavel_id=%s",
+                ativo["id"] if ativo else None,
+            )
             self.terminar_pedido = True
             componentes.cancelar_agendamentos(self)
             self.destroy()
@@ -644,6 +669,73 @@ class Aplicacao(ctk.CTk):
 
         self.mostrar_frame(Dashboard)
 
+    def _tratar_erro_interface(
+        self,
+        exc: type[BaseException],
+        val: BaseException,
+        tb: TracebackType | None,
+    ) -> None:
+        """Apanha os erros inesperados de TODOS os ecrãs e modais.
+
+        Ligado no `__init__` (`self.report_callback_exception = ...`).
+
+        O Tkinter encaminha para a janela raiz qualquer exceção que
+        rebente dentro de um botão, de um evento ou de um `after` —
+        seja em que janela for. A raiz é sempre esta `Aplicacao`, por
+        isso este método único cobre o sistema inteiro.
+
+        Faz três coisas, por esta ordem:
+          1. Regista no log, com o traceback completo.
+          2. Mantém o comportamento normal do Tkinter (imprimir no
+             terminal) — útil durante o desenvolvimento.
+          3. Avisa o utilizador com um popup genérico. Antes disto, o
+             botão simplesmente "não fazia nada" e ninguém sabia que
+             tinha havido um erro.
+
+        Os `ValueError` de validação NÃO chegam aqui: esses são
+        apanhados pelos `try/except` de cada ecrã, que mostram a
+        mensagem própria. Aqui só cai o que ninguém previu.
+
+        Duas proteções no popup:
+          - Se a janela já foi destruída (erro durante um logoff, por
+            exemplo), não se mostra nada: abrir um popup sem janela
+            criava uma janela Tk nova e vazia.
+          - Se um erro se repetir em cadeia (um `after` que rebenta a
+            cada ciclo), só aparece um popup de cada vez.
+          Uma falha a mostrar o popup nunca pode gerar outro erro por
+          cima — fica só registada.
+        """
+        logger.error(
+            "Erro inesperado num evento da interface",
+            exc_info=(exc, val, tb),
+        )
+
+        # O que o Tkinter faria por omissão: imprimir no terminal.
+        print("Exception in Tkinter callback", file=sys.stderr)
+        traceback.print_exception(exc, val, tb)
+
+        if getattr(self, "_popup_erro_aberto", False):
+            return
+
+        try:
+            if not self.winfo_exists():
+                return
+        except tkinter.TclError:
+            return
+
+        self._popup_erro_aberto = True
+        try:
+            componentes.mostrar_erro(
+                "Ocorreu um erro inesperado e a operação não foi "
+                "concluída.\n\nO erro ficou registado no ficheiro de "
+                "log. Se voltar a acontecer, avise quem mantém o "
+                "sistema."
+            )
+        except Exception:
+            logger.exception("Falha ao mostrar o aviso de erro inesperado")
+        finally:
+            self._popup_erro_aberto = False
+
     def _verificar_termo(self):
         """True se a pessoa pode entrar; False se deve sair.
 
@@ -661,6 +753,11 @@ class Aplicacao(ctk.CTk):
                 termos.CONFIDENCIALIDADE,
             )
         except ValueError:
+            logger.warning(
+                "Entrada sem verificação do termo (nenhuma versão em "
+                "vigor) — responsavel_id=%s",
+                responsavel["id"],
+            )
             # Não há texto publicado. Entra em silêncio: a falta de
             # um documento é falha de configuração, não do
             # utilizador. Quem publica vê o estado nas Configurações
@@ -708,6 +805,11 @@ class Aplicacao(ctk.CTk):
             titulo="Trocar utilizador",
         ):
             return
+
+        ativo = sessao.obter_responsavel_ativo()
+        logger.info(
+            "Logoff — responsavel_id=%s", ativo["id"] if ativo else None
+        )
 
         sessao.limpar_responsavel_ativo()
 

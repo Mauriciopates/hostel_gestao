@@ -10,8 +10,8 @@ Este módulo tem duas funções públicas, ambas bloqueantes
 
   - `confirmar_reset_sistema(...)` — aparece quando o Master clica
     em "Começar do zero". Exige confirmação dupla (escrever
-    "APAGAR TUDO" + password do Master ativo). Devolve `True` se
-    confirmar, `False` se cancelar. NÃO executa o reset — só
+    "APAGAR TUDO" + password do Master ativo). Devolve a password
+    se confirmar, `None` se cancelar. NÃO executa o reset — só
     recolhe a confirmação; quem executa é o `sistema.py` (Ficheiro 6).
 
 Os dois modais seguem o mesmo estilo dos outros da aplicação:
@@ -19,12 +19,16 @@ Os dois modais seguem o mesmo estilo dos outros da aplicação:
 trazer à frente, cores do `tema.py`.
 """
 
+import logging
+
 import customtkinter as ctk
 
 import utilizadores
 from . import componentes
 from . import sessao
 from . import tema
+
+logger = logging.getLogger(__name__)
 
 # =====================================================================
 # MODAL 1 — CONFIRMAR ALTERAÇÃO
@@ -262,16 +266,20 @@ def confirmar_reset_sistema(pai):
       - A password do Master ativo.
 
     Devolve:
-      - `True` se as duas confirmações passarem e o utilizador
-        clicar em "Começar do zero".
-      - `False` em todos os outros casos (cancelar, X, ou campos
-        inválidos).
+      - A PASSWORD introduzida, se as duas confirmações passarem e
+        o utilizador clicar em "Começar do zero".
+      - `None` em todos os outros casos (cancelar, X).
 
-    NÃO executa o reset — só recolhe a confirmação. Quem executa é
-    o `sistema.comecar_do_zero(autor)`, chamado por quem invocou
-    esta função.
+    Devolve a password, e não só True/False, porque quem executa o
+    reset — o `sistema.comecar_do_zero(autor, password)` — volta a
+    verificá-la (alteração de 23/09/2026: a confirmação com password
+    passou a ser regra do módulo, não só deste ecrã). A verificação
+    feita aqui fica só pelo conforto: com a password errada o modal
+    não fecha e a pessoa tenta outra vez.
+
+    NÃO executa o reset — só recolhe a confirmação.
     """
-    resultado: dict = {"confirmado": False}
+    resultado: dict = {"password": None}
 
     janela = ctk.CTkToplevel(pai)
     janela.title("Começar do zero")
@@ -280,11 +288,11 @@ def confirmar_reset_sistema(pai):
     janela.transient(pai)
     componentes.colocar_no_topo(janela)
 
-    def fechar(confirmado):
-        resultado["confirmado"] = confirmado
+    def fechar(password):
+        resultado["password"] = password
         janela.destroy()
 
-    janela.protocol("WM_DELETE_WINDOW", lambda: fechar(False))
+    janela.protocol("WM_DELETE_WINDOW", lambda: fechar(None))
 
     # ---------------------------------------------------------------
     # Cabeçalho vermelho
@@ -385,8 +393,34 @@ def confirmar_reset_sistema(pai):
         border_color=tema.COR_BORDA,
         text_color=tema.COR_TEXTO,
         hover_color=tema.COR_BORDA,
-        command=lambda: fechar(False),
+        command=lambda: fechar(None),
     ).pack(side="left")
+
+    def tentar_confirmar():
+        """Verifica a password UMA vez, só ao clicar.
+
+        Antes (até 23/09/2026) a password era verificada a cada tecla,
+        com o `utilizadores.autenticar`: enchia o log de falsas
+        "falhas de autenticação" (uma por letra), registava um login
+        que não aconteceu e atualizava o `ultimo_login` do Master.
+        """
+        password = campo_password.get()
+
+        if _password_do_master_valida(password):
+            fechar(password)
+            return
+
+        ativo = sessao.obter_responsavel_ativo()
+        logger.warning(
+            "Password errada na confirmação do reset — autor_id=%s",
+            ativo["id"] if ativo else None,
+        )
+        componentes.mostrar_erro(
+            "A password não corresponde ao utilizador ativo."
+        )
+        campo_password.delete(0, "end")
+        campo_password.focus_set()
+        validar()
 
     botao_confirmar = ctk.CTkButton(
         rodape,
@@ -397,7 +431,7 @@ def confirmar_reset_sistema(pai):
         fg_color=tema.TEXTO_ERRO,
         hover_color="#A02D22",
         state="disabled",
-        command=lambda: fechar(True),
+        command=tentar_confirmar,
     )
     botao_confirmar.pack(side="right")
 
@@ -405,8 +439,10 @@ def confirmar_reset_sistema(pai):
     # Validação em tempo real dos dois campos
     # ---------------------------------------------------------------
     def validar(*_args):
+        # Só liga o botão. A password é verificada ao clicar, em
+        # `tentar_confirmar` — nunca a cada tecla.
         texto_ok = campo_texto.get().strip() == "APAGAR TUDO"
-        password_ok = _password_do_master_valida(campo_password.get())
+        password_ok = bool(campo_password.get())
 
         if texto_ok and password_ok:
             botao_confirmar.configure(state="normal")
@@ -426,7 +462,7 @@ def confirmar_reset_sistema(pai):
 
     janela.wait_window()
 
-    return resultado["confirmado"]
+    return resultado["password"]
 
 
 # =====================================================================
@@ -437,9 +473,9 @@ def confirmar_reset_sistema(pai):
 def _password_do_master_valida(password):
     """Confirma se a password bate com o Master ativo.
 
-    Chama o `utilizadores.autenticar` com o username do Master ativo
-    e a password introduzida. Devolve True só se autenticar
-    corretamente.
+    Usa o `utilizadores.verificar_password`, e NÃO o `autenticar`:
+    isto é uma confirmação, não um login — não deve atualizar o
+    `ultimo_login` nem registar acessos no log.
     """
     if not password:
         return False
@@ -449,14 +485,7 @@ def _password_do_master_valida(password):
     if ativo is None:
         return False
 
-    username = ativo.get("username")
-
-    if not username:
-        return False
-
-    registo, motivo = utilizadores.autenticar(username, password)
-
-    return registo is not None
+    return utilizadores.verificar_password(ativo["id"], password)
 
 
 def _formatar_valor(valor):

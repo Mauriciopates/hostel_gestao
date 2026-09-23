@@ -910,6 +910,64 @@ def enviar_requisicao(
 
     Grava de imediato via repositório — mesma convenção dos outros
     módulos de negócio, agora todos em MySQL.
+
+    REGRA MOVIDA DA GUI (23/09/2026): aprovar e enviar é só para
+    Master ou Admin. Até aqui a regra vivia só no hub de Stock, que
+    escondia o cartão "Rota de Envio" a quem é Staff — um Staff que
+    chamasse esta função aprovava pedidos e tirava stock do armazém.
+    A barreira real vive no módulo (regra 11.2).
+
+    O corpo do envio vive em `_executar_envio`. A única exceção à
+    regra de perfil é o Rol de Lavanderia automático, que chama o
+    `_executar_envio` diretamente — ver `gerar_rol_lavanderia_automatico`.
+    """
+    quem_envia = responsaveis.validar_autoria(enviado_por_id)
+
+    if quem_envia.get("tipo_utilizador") not in _TIPOS_ADMINISTRATIVOS:
+        logger.warning(
+            "Aprovação de requisição recusada — requisicao_id=%s, "
+            "responsavel_id=%s, tipo=%s",
+            requisicao_id,
+            quem_envia["id"],
+            quem_envia.get("tipo_utilizador"),
+        )
+        raise ValueError(
+            "Só um Master ou Admin pode aprovar e enviar uma requisição."
+        )
+
+    return _executar_envio(
+        requisicao_id,
+        enviado_por_id,
+        data_envio,
+        quantidades_enviadas=quantidades_enviadas,
+    )
+
+
+def _executar_envio(
+    requisicao_id,
+    enviado_por_id,
+    data_envio,
+    quantidades_enviadas=None,
+):
+    """Faz o envio propriamente dito — SEM verificar o perfil de quem
+    envia.
+
+    Função interna (o `_` no nome é de propósito). Só tem dois
+    chamadores, e deve continuar assim:
+
+      - `enviar_requisicao`, DEPOIS de confirmar que é Master/Admin;
+      - `gerar_rol_lavanderia_automatico`, que é uma ação automática
+        do sistema (decisão do aluno, 16/09/2026: com stock, o Rol sai
+        logo enviado, seja quem for que registe a reserva — pode ser
+        um Staff).
+
+    Porquê uma função interna e não um parâmetro `automatico=True` na
+    pública: um parâmetro pode ser passado por qualquer ecrã, e a
+    barreira de perfil voltava a ser contornável.
+
+    O resto das regras (estado pendente, responsável ativo, saldo,
+    envio parcial, movimentos, logs) é o que está documentado em
+    `enviar_requisicao`.
     """
     requisicao = procurar_requisicao(requisicao_id)
 
@@ -1045,6 +1103,9 @@ def rejeitar_requisicao(requisicao_id, responsavel_id, motivo):
     (clientes.anonimizar): sem guardar quem rejeitou, não há como
     responder depois "quem recusou este pedido".
 
+    REGRA MOVIDA DA GUI (23/09/2026): só Master ou Admin rejeitam —
+    mesma regra e mesma razão do `enviar_requisicao`.
+
     Grava de imediato via repositório — mesma convenção dos outros
     módulos de negócio, agora todos em MySQL.
     """
@@ -1060,6 +1121,16 @@ def rejeitar_requisicao(requisicao_id, responsavel_id, motivo):
         )
 
     responsavel = responsaveis.validar_autoria(responsavel_id)
+
+    if responsavel.get("tipo_utilizador") not in _TIPOS_ADMINISTRATIVOS:
+        logger.warning(
+            "Rejeição de requisição recusada — requisicao_id=%s, "
+            "responsavel_id=%s, tipo=%s",
+            requisicao_id,
+            responsavel["id"],
+            responsavel.get("tipo_utilizador"),
+        )
+        raise ValueError("Só um Master ou Admin pode rejeitar uma requisição.")
 
     motivo = motivo.strip()
 
@@ -1555,7 +1626,13 @@ def fechar_devolucao(
 
     'aceite_por_id' é quem aceita a devolução no armazém — como em
     `enviar_requisicao`, não tem de ser o mesmo responsável que
-    pediu ou que devolveu, só precisa de estar ativo.
+    pediu ou que devolveu. Tem de estar ativo E ser Master ou Admin.
+
+    REGRA MOVIDA DA GUI (23/09/2026, checklist 11.6 da Fase 4):
+    "Aceitar Devolução" só por Master ou Admin. Até aqui a regra
+    vivia só no ecrã — um Staff que chamasse esta função fechava a
+    devolução e mexia no stock. A barreira real vive no módulo
+    (regra 11.2); o ecrã esconder o botão é só conforto visual.
 
     Grava de imediato via repositório — mesma convenção dos outros
     módulos de negócio, agora todos em MySQL.
@@ -1572,6 +1649,16 @@ def fechar_devolucao(
         )
 
     aceite = responsaveis.validar_autoria(aceite_por_id)
+
+    if aceite.get("tipo_utilizador") not in _TIPOS_ADMINISTRATIVOS:
+        logger.warning(
+            "Aceitação de devolução recusada — devolucao_id=%s, "
+            "responsavel_id=%s, tipo=%s",
+            devolucao_id,
+            aceite["id"],
+            aceite.get("tipo_utilizador"),
+        )
+        raise ValueError("Só um Master ou Admin pode aceitar uma devolução.")
 
     if data_fecho is None:
         raise ValueError("A data de fecho é obrigatória.")
@@ -2039,7 +2126,12 @@ def gerar_rol_lavanderia_automatico(ocupacao, responsavel_id):
     )
 
     if stock_suficiente:
-        requisicao = enviar_requisicao(
+        # `_executar_envio` e não `enviar_requisicao`: o Rol é uma ação
+        # automática do sistema, e quem regista a reserva pode ser um
+        # Staff — a barreira de perfil (Master/Admin) é para a
+        # aprovação manual, não para esta. Ver docstring do
+        # `_executar_envio`.
+        requisicao = _executar_envio(
             requisicao["id"],
             responsavel_id,
             date.today(),

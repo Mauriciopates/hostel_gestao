@@ -62,12 +62,15 @@ Cada `definir` cria um registo em `configuracoes_historico` com:
 O `motivo` é opcional em todas as chaves (decisão de 19/09/2026).
 """
 
+import logging
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import cast
 
 import config
 import repositorio
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -328,7 +331,11 @@ def obter(chave, default=None):
         # Cai no default do mapa (que já veio do config.py).
         return definicao["default"]
 
-    return _do_texto(registo["valor"], definicao["tipo"])
+    try:
+        return _do_texto(registo["valor"], definicao["tipo"])
+    except ValueError:
+        logger.error("Valor inválido na base de dados — chave=%s", chave)
+        raise
 
 
 def obter_int(chave):
@@ -390,7 +397,21 @@ def definir(chave, valor, autor, motivo=""):
 
     Devolve o valor novo, já convertido para o tipo certo.
     """
-    _validar_permissao(chave, autor)
+    # O log da recusa fica AQUI e não dentro do `_validar_permissao`:
+    # esse também é chamado pelo `pode_alterar`, que a GUI usa só
+    # para decidir o que mostrar — registar lá dava uma "recusa" por
+    # cada chave desenhada no ecrã.
+    try:
+        _validar_permissao(chave, autor)
+    except ValueError:
+        logger.warning(
+            "Alteração de configuração recusada — chave=%s, autor_id=%s, "
+            "tipo=%s",
+            chave,
+            autor.get("id") if autor else None,
+            autor.get("tipo_utilizador") if autor else None,
+        )
+        raise
 
     definicao = _CHAVES[chave]
     texto_novo = _para_texto(valor)
@@ -419,6 +440,9 @@ def definir(chave, valor, autor, motivo=""):
         }
     )
 
+    logger.info(
+        "Configuração alterada — chave=%s, autor_id=%s", chave, autor["id"]
+    )
     return _do_texto(texto_novo, definicao["tipo"])
 
 
@@ -459,6 +483,9 @@ def garantir_seed():
             descricao=definicao["descricao"],
         )
         criadas += 1
+
+    if criadas:
+        logger.info("Seed de configurações — %d chaves criadas", criadas)
 
     return criadas
 

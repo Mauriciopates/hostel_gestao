@@ -1,0 +1,1360 @@
+test_apaga_dados_pessoais (teste_clientes.TesteAnonimizar.test_apaga_dados_pessoais) ... ok
+test_conserva_nacionalidade_e_tipo_documento (teste_clientes.TesteAnonimizar.test_conserva_nacionalidade_e_tipo_documento) ... ok
+test_marca_anonimizado_e_regista_autoria (teste_clientes.TesteAnonimizar.test_marca_anonimizado_e_regista_autoria) ... ok
+test_recusa_anonimizar_duas_vezes (teste_clientes.TesteAnonimizar.test_recusa_anonimizar_duas_vezes) ... ok
+test_recusa_anonimizar_inexistente (teste_clientes.TesteAnonimizar.test_recusa_anonimizar_inexistente) ... ok
+test_recusa_sem_data (teste_clientes.TesteAnonimizar.test_recusa_sem_data) ... ok
+test_recusa_sem_responsavel (teste_clientes.TesteAnonimizar.test_recusa_sem_responsavel) ... ok
+test_substitui_o_nome (teste_clientes.TesteAnonimizar.test_substitui_o_nome) ... ok
+test_altera_data_nascimento (teste_clientes.TesteAtualizar.test_altera_data_nascimento) ... ok
+test_altera_email (teste_clientes.TesteAtualizar.test_altera_email) ... ok
+test_altera_estado_civil (teste_clientes.TesteAtualizar.test_altera_estado_civil) ... ok
+test_atualizar_mantendo_o_proprio_nif_nao_e_recusado (teste_clientes.TesteAtualizar.test_atualizar_mantendo_o_proprio_nif_nao_e_recusado) ... ok
+test_com_regime_mensal_nif_novo_valido_passa (teste_clientes.TesteAtualizar.test_com_regime_mensal_nif_novo_valido_passa)
+Um cliente que foi criado no regime Airbnb pode passar a ... ok
+test_com_regime_mensal_nif_vazio_e_recusado (teste_clientes.TesteAtualizar.test_com_regime_mensal_nif_vazio_e_recusado) ... ok
+test_limpa_campo_opcional_com_vazio (teste_clientes.TesteAtualizar.test_limpa_campo_opcional_com_vazio) ... ok
+test_none_nao_altera (teste_clientes.TesteAtualizar.test_none_nao_altera) ... ok
+test_permite_atualizar_nif_para_valor_de_cliente_inativo (teste_clientes.TesteAtualizar.test_permite_atualizar_nif_para_valor_de_cliente_inativo) ... ok
+test_recusa_apagar_morada_no_regime_mensal (teste_clientes.TesteAtualizar.test_recusa_apagar_morada_no_regime_mensal)
+Tentar limpar a morada com regime='mensal' é recusado ... ok
+test_recusa_apagar_nacionalidade_no_regime_airbnb (teste_clientes.TesteAtualizar.test_recusa_apagar_nacionalidade_no_regime_airbnb)
+Tentar limpar a nacionalidade com regime='airbnb' é ... ok
+test_recusa_apagar_nome (teste_clientes.TesteAtualizar.test_recusa_apagar_nome) ... ok
+test_recusa_apagar_numero_documento (teste_clientes.TesteAtualizar.test_recusa_apagar_numero_documento) ... ok
+test_recusa_atualizar_cliente_anonimizado (teste_clientes.TesteAtualizar.test_recusa_atualizar_cliente_anonimizado) ... ok
+test_recusa_atualizar_nif_para_valor_de_outro_cliente_ativo (teste_clientes.TesteAtualizar.test_recusa_atualizar_nif_para_valor_de_outro_cliente_ativo)
+Decisão de 26/08, item 5. ... ok
+test_recusa_id_inexistente (teste_clientes.TesteAtualizar.test_recusa_id_inexistente) ... ok
+test_recusa_tipo_documento_fora_da_lista (teste_clientes.TesteAtualizar.test_recusa_tipo_documento_fora_da_lista) ... ok
+test_sem_regime_nif_invalido_e_recusado (teste_clientes.TesteAtualizar.test_sem_regime_nif_invalido_e_recusado) ... ok
+test_sem_regime_nif_nao_e_obrigatorio (teste_clientes.TesteAtualizar.test_sem_regime_nif_nao_e_obrigatorio)
+Sem regime explícito, o `atualizar` assume 'airbnb' — e o ... ok
+test_completo_fica_marcado_como_nao_incompleto (teste_clientes.TesteCriar.test_completo_fica_marcado_como_nao_incompleto)
+Um cliente novo (não anonimizado) nasce sempre com ... ok
+test_cria_cliente_airbnb_sem_nif (teste_clientes.TesteCriar.test_cria_cliente_airbnb_sem_nif) ... ok
+test_cria_cliente_mensal_valido (teste_clientes.TesteCriar.test_cria_cliente_mensal_valido) ... ok
+test_guarda_datas_como_vieram (teste_clientes.TesteCriar.test_guarda_datas_como_vieram) ... ok
+test_id_com_prefixo_cli (teste_clientes.TesteCriar.test_id_com_prefixo_cli) ... ok
+test_limpa_espacos_dos_campos_de_texto (teste_clientes.TesteCriar.test_limpa_espacos_dos_campos_de_texto) ... ok
+test_permite_nif_repetido_de_cliente_inativo (teste_clientes.TesteCriar.test_permite_nif_repetido_de_cliente_inativo)
+Um cliente inativo não bloqueia a reutilização do NIF. ... ok
+test_permite_nif_vazio_repetido (teste_clientes.TesteCriar.test_permite_nif_vazio_repetido)
+Dois clientes Airbnb sem NIF nunca colidem entre si — o ... ok
+test_recusa_data_nascimento_em_falta (teste_clientes.TesteCriar.test_recusa_data_nascimento_em_falta)
+Obrigatória nos dois regimes (decisão de 26/08, ponto 2). ... ok
+test_recusa_estado_civil_em_falta_no_mensal (teste_clientes.TesteCriar.test_recusa_estado_civil_em_falta_no_mensal)
+Obrigatório só no mensal (decisão de 26/08, ponto 2). ... ok
+test_recusa_morada_em_falta_no_mensal (teste_clientes.TesteCriar.test_recusa_morada_em_falta_no_mensal)
+Obrigatória só no mensal (decisão de 26/08, ponto 2). ... ok
+test_recusa_nacionalidade_em_falta_no_airbnb (teste_clientes.TesteCriar.test_recusa_nacionalidade_em_falta_no_airbnb)
+Obrigatória no Airbnb (decisão de 26/08, ponto 2). ... ok
+test_recusa_nif_duplicado_de_cliente_ativo (teste_clientes.TesteCriar.test_recusa_nif_duplicado_de_cliente_ativo)
+Decisão de 26/08, item 5: o mesmo NIF não pode pertencer ... ok
+test_recusa_nif_invalido_no_mensal (teste_clientes.TesteCriar.test_recusa_nif_invalido_no_mensal) ... ok
+test_recusa_nif_vazio_no_mensal (teste_clientes.TesteCriar.test_recusa_nif_vazio_no_mensal) ... ok
+test_recusa_nome_vazio (teste_clientes.TesteCriar.test_recusa_nome_vazio) ... ok
+test_recusa_numero_documento_vazio (teste_clientes.TesteCriar.test_recusa_numero_documento_vazio) ... ok
+test_recusa_pais_emissor_em_falta_no_airbnb (teste_clientes.TesteCriar.test_recusa_pais_emissor_em_falta_no_airbnb)
+Campo novo (16/09/2026) — boletim de alojamento exige. ... ok
+test_recusa_pais_residencia_em_falta_no_airbnb (teste_clientes.TesteCriar.test_recusa_pais_residencia_em_falta_no_airbnb)
+Campo novo (16/09/2026) — boletim de alojamento exige. ... ok
+test_recusa_telefone_em_falta_no_mensal (teste_clientes.TesteCriar.test_recusa_telefone_em_falta_no_mensal)
+Novo (16/09/2026): o telefone passou a obrigatório no ... ok
+test_recusa_tipo_documento_fora_da_lista (teste_clientes.TesteCriar.test_recusa_tipo_documento_fora_da_lista) ... ok
+test_recusa_tipo_documento_vazio (teste_clientes.TesteCriar.test_recusa_tipo_documento_vazio) ... ok
+test_recusa_validade_documento_em_falta (teste_clientes.TesteCriar.test_recusa_validade_documento_em_falta)
+Obrigatória nos dois regimes (decisão de 26/08, ponto 2). ... ok
+test_regime_nao_fica_guardado (teste_clientes.TesteCriar.test_regime_nao_fica_guardado) ... ok
+test_desativa_cliente_ativo (teste_clientes.TesteDesativarReativar.test_desativa_cliente_ativo) ... ok
+test_permite_reativar_quando_nif_esta_livre (teste_clientes.TesteDesativarReativar.test_permite_reativar_quando_nif_esta_livre)
+A verificação nova não bloqueia o caso normal: NIF que ... ok
+test_reativa_cliente_inativo (teste_clientes.TesteDesativarReativar.test_reativa_cliente_inativo) ... ok
+test_recusa_desativar_duas_vezes (teste_clientes.TesteDesativarReativar.test_recusa_desativar_duas_vezes) ... ok
+test_recusa_desativar_inexistente (teste_clientes.TesteDesativarReativar.test_recusa_desativar_inexistente) ... ok
+test_recusa_reativar_cliente_anonimizado (teste_clientes.TesteDesativarReativar.test_recusa_reativar_cliente_anonimizado) ... ok
+test_recusa_reativar_inexistente (teste_clientes.TesteDesativarReativar.test_recusa_reativar_inexistente) ... ok
+test_recusa_reativar_ja_ativo (teste_clientes.TesteDesativarReativar.test_recusa_reativar_ja_ativo) ... ok
+test_recusa_reativar_quando_nif_pertence_a_outro_ativo (teste_clientes.TesteDesativarReativar.test_recusa_reativar_quando_nif_pertence_a_outro_ativo)
+Decisão de 26/08, item 6: fecha o 'gap' que deixava dois ... ok
+test_devolve_lista_nova (teste_clientes.TesteListar.test_devolve_lista_nova) ... ok
+test_filtra_por_incompleto_false (teste_clientes.TesteListar.test_filtra_por_incompleto_false)
+O contrário do teste anterior: só devolve clientes ... ok
+test_filtra_por_incompleto_true (teste_clientes.TesteListar.test_filtra_por_incompleto_true)
+O filtro 'incompleto' devolve, hoje, só clientes ... ok
+test_lista_incluir_inativos (teste_clientes.TesteListar.test_lista_incluir_inativos) ... ok
+test_lista_so_ativos_por_omissao (teste_clientes.TesteListar.test_lista_so_ativos_por_omissao) ... ok
+test_lista_vazia_sem_clientes (teste_clientes.TesteListar.test_lista_vazia_sem_clientes) ... ok
+test_devolve_none_para_id_inexistente (teste_clientes.TesteProcurar.test_devolve_none_para_id_inexistente) ... ok
+test_encontra_cliente_existente (teste_clientes.TesteProcurar.test_encontra_cliente_existente) ... ok
+test_encontra_cliente_inativo (teste_clientes.TesteProcurar.test_encontra_cliente_inativo) ... ok
+test_ao_mudar_e_chamado_quando_a_caixa_muda (teste_componentes.TesteBlocoTermo.test_ao_mudar_e_chamado_quando_a_caixa_muda) ... ok
+test_ao_mudar_none_nao_rebenta (teste_componentes.TesteBlocoTermo.test_ao_mudar_none_nao_rebenta)
+Se o chamador não passar `ao_mudar`, `_mudou` não rebenta. ... ok
+test_aviso_cria_faixa_amarela (teste_componentes.TesteBlocoTermo.test_aviso_cria_faixa_amarela)
+Com `aviso` preenchido, o bloco constrói sem erro. ... ok
+test_aviso_none_nao_cria_faixa (teste_componentes.TesteBlocoTermo.test_aviso_none_nao_cria_faixa)
+Sem `aviso`, a faixa amarela do topo não aparece — não ... ok
+test_bloco_comeca_nao_aceite (teste_componentes.TesteBlocoTermo.test_bloco_comeca_nao_aceite) ... ok
+test_bloco_guarda_a_versao (teste_componentes.TesteBlocoTermo.test_bloco_guarda_a_versao) ... ok
+test_esta_aceite_apos_desmarcar (teste_componentes.TesteBlocoTermo.test_esta_aceite_apos_desmarcar) ... ok
+test_esta_aceite_apos_marcar (teste_componentes.TesteBlocoTermo.test_esta_aceite_apos_marcar) ... ok
+test_rodape_com_data_anterior_ausente (teste_componentes.TesteBlocoTermo.test_rodape_com_data_anterior_ausente)
+Versão anterior registada mas sem data — o formato mostra ... ok
+test_rodape_com_versao_anterior (teste_componentes.TesteBlocoTermo.test_rodape_com_versao_anterior)
+Quem já aceitou vê as duas versões e a data. ... ok
+test_rodape_sem_versao_anterior (teste_componentes.TesteBlocoTermo.test_rodape_sem_versao_anterior)
+Quem nunca aceitou vê só a versão em vigor. ... ok
+test_formatar_valor_com_milhar (teste_componentes.TesteHelpersPuros.test_formatar_valor_com_milhar) ... ok
+test_formatar_valor_com_uma_casa_mostra_duas (teste_componentes.TesteHelpersPuros.test_formatar_valor_com_uma_casa_mostra_duas)
+Decimal("45.5") apresenta "45,50 €" — sempre duas casas. ... ok
+test_formatar_valor_decimal_simples (teste_componentes.TesteHelpersPuros.test_formatar_valor_decimal_simples) ... ok
+test_formatar_valor_negativo (teste_componentes.TesteHelpersPuros.test_formatar_valor_negativo) ... ok
+test_formatar_valor_none_devolve_traco (teste_componentes.TesteHelpersPuros.test_formatar_valor_none_devolve_traco) ... ok
+test_formatar_valor_zero (teste_componentes.TesteHelpersPuros.test_formatar_valor_zero) ... ok
+invalid command name "2263427578880update"
+    while executing
+"2263427578880update"
+    ("after" script)
+invalid command name "2261338070272_check_if_scrollbars_needed"
+    while executing
+"2261338070272_check_if_scrollbars_needed"
+    ("after" script)
+invalid command name "2261338228288_check_if_scrollbars_needed"
+    while executing
+"2261338228288_check_if_scrollbars_needed"
+    ("after" script)
+invalid command name "2261338077632check_dpi_scaling"
+    while executing
+"2261338077632check_dpi_scaling"
+    ("after" script)
+invalid command name "2261338283904_check_if_scrollbars_needed"
+    while executing
+"2261338283904_check_if_scrollbars_needed"
+    ("after" script)
+invalid command name "2261338336512_check_if_scrollbars_needed"
+    while executing
+"2261338336512_check_if_scrollbars_needed"
+    ("after" script)
+invalid command name "2261338370368_check_if_scrollbars_needed"
+    while executing
+"2261338370368_check_if_scrollbars_needed"
+    ("after" script)
+invalid command name "2261338404352_check_if_scrollbars_needed"
+    while executing
+"2261338404352_check_if_scrollbars_needed"
+    ("after" script)
+invalid command name "2261338487296_check_if_scrollbars_needed"
+    while executing
+"2261338487296_check_if_scrollbars_needed"
+    ("after" script)
+invalid command name "2261338521024_check_if_scrollbars_needed"
+    while executing
+"2261338521024_check_if_scrollbars_needed"
+    ("after" script)
+invalid command name "2262931030848_windows_set_titlebar_icon"
+    while executing
+"2262931030848_windows_set_titlebar_icon"
+    ("after" script)
+test_destroy_fecha_painel_se_aberto (teste_componentes.TesteSeletor.test_destroy_fecha_painel_se_aberto) ... ok
+test_escolher_fecha_o_painel (teste_componentes.TesteSeletor.test_escolher_fecha_o_painel) ... ok
+test_escolher_valor_no_painel_atualiza_o_get (teste_componentes.TesteSeletor.test_escolher_valor_no_painel_atualiza_o_get) ... ok
+test_lista_curta_usa_menu_nativo (teste_componentes.TesteSeletor.test_lista_curta_usa_menu_nativo)
+Com poucos valores, `_open_dropdown_menu` chama o menu ... ok
+test_lista_grande_abre_painel_proprio (teste_componentes.TesteSeletor.test_lista_grande_abre_painel_proprio)
+Com valores acima do limite, `_open_dropdown_menu` cria um ... ok
+test_lista_no_limite_usa_menu_nativo (teste_componentes.TesteSeletor.test_lista_no_limite_usa_menu_nativo)
+O limite é "menor ou igual" → menu nativo. ... ok
+test_lista_um_acima_do_limite_abre_painel (teste_componentes.TesteSeletor.test_lista_um_acima_do_limite_abre_painel) ... ok
+test_segundo_clique_fecha_o_painel (teste_componentes.TesteSeletor.test_segundo_clique_fecha_o_painel)
+`_alternar_painel` abre na primeira chamada, fecha na ... ok
+test_seletor_com_lista_vazia_nao_rebenta (teste_componentes.TesteSeletor.test_seletor_com_lista_vazia_nao_rebenta) ... ok
+test_seletor_comeca_com_primeiro_valor (teste_componentes.TesteSeletor.test_seletor_comeca_com_primeiro_valor) ... ok
+test_values_original_nao_e_alterada_apos_filtrar (teste_componentes.TesteSeletor.test_values_original_nao_e_alterada_apos_filtrar)
+A pesquisa filtra só o que se desenha — `_values` continua ... ok
+bgerror failed to handle background error.
+    Original error: invalid command name "2261338900416_revert_withdraw_after_windows_set_titlebar_color"
+    Error in bgerror: can't invoke "tk" command: application has been destroyed
+bgerror failed to handle background error.
+    Original error: invalid command name "2261338276928_windows_set_titlebar_icon"
+    Error in bgerror: can't invoke "tk" command: application has been destroyed
+bgerror failed to handle background error.
+    Original error: invalid command name "2261339024128_capturar"
+    Error in bgerror: can't invoke "tk" command: application has been destroyed
+test_adicionar_botao_a_celula_acoes (teste_componentes.TesteTabela.test_adicionar_botao_a_celula_acoes) ... ok
+test_celula_acoes_devolve_celula_com_adicionar (teste_componentes.TesteTabela.test_celula_acoes_devolve_celula_com_adicionar) ... ok
+test_colocar_cria_widget_na_grelha (teste_componentes.TesteTabela.test_colocar_cria_widget_na_grelha) ... ok
+test_limpar_apaga_linhas_e_reinicia_contagem (teste_componentes.TesteTabela.test_limpar_apaga_linhas_e_reinicia_contagem) ... ok
+test_limpar_pode_ser_chamado_em_tabela_vazia (teste_componentes.TesteTabela.test_limpar_pode_ser_chamado_em_tabela_vazia) ... ok
+test_mostrar_vazio_nao_conta_como_linha (teste_componentes.TesteTabela.test_mostrar_vazio_nao_conta_como_linha)
+A mensagem de "sem registos" não é uma linha de dados — ... ok
+test_nova_linha_devolve_grelha_do_corpo (teste_componentes.TesteTabela.test_nova_linha_devolve_grelha_do_corpo) ... ok
+test_nova_linha_incrementa_contagem (teste_componentes.TesteTabela.test_nova_linha_incrementa_contagem) ... ok
+test_sem_tom_alternado_fica_sempre_no_fundo (teste_componentes.TesteTabela.test_sem_tom_alternado_fica_sempre_no_fundo) ... ok
+test_tabela_com_cabecalho_mas_sem_linhas_continua_vazia (teste_componentes.TesteTabela.test_tabela_com_cabecalho_mas_sem_linhas_continua_vazia)
+O cabeçalho NÃO conta como linha — a `vazia` olha só para ... ok
+test_tabela_nasce_vazia (teste_componentes.TesteTabela.test_tabela_nasce_vazia) ... ok
+test_terceira_linha_volta_ao_fundo (teste_componentes.TesteTabela.test_terceira_linha_volta_ao_fundo)
+Com tom alternado, a 3ª linha volta ao fundo (0 = fundo, ... ok
+test_tom_alternado_muda_a_cor_da_fila (teste_componentes.TesteTabela.test_tom_alternado_muda_a_cor_da_fila)
+Duas linhas seguidas com `tom_alternado=True` têm cores ... ok
+test_vazia_e_true_apos_limpar (teste_componentes.TesteTabela.test_vazia_e_true_apos_limpar) ... ok
+test_do_texto_bool_false (teste_configuracoes.TesteConversaoTipos.test_do_texto_bool_false) ... ok
+test_do_texto_bool_invalido_falha (teste_configuracoes.TesteConversaoTipos.test_do_texto_bool_invalido_falha) ... ok
+test_do_texto_bool_true (teste_configuracoes.TesteConversaoTipos.test_do_texto_bool_true) ... ok
+test_do_texto_decimal (teste_configuracoes.TesteConversaoTipos.test_do_texto_decimal) ... ok
+test_do_texto_decimal_invalido_falha (teste_configuracoes.TesteConversaoTipos.test_do_texto_decimal_invalido_falha) ... ok
+test_do_texto_int (teste_configuracoes.TesteConversaoTipos.test_do_texto_int) ... ok
+test_do_texto_int_invalido_falha (teste_configuracoes.TesteConversaoTipos.test_do_texto_int_invalido_falha) ... ok
+test_do_texto_none_falha (teste_configuracoes.TesteConversaoTipos.test_do_texto_none_falha) ... ok
+test_do_texto_texto_simples (teste_configuracoes.TesteConversaoTipos.test_do_texto_texto_simples) ... ok
+test_do_texto_tupla (teste_configuracoes.TesteConversaoTipos.test_do_texto_tupla) ... ok
+test_do_texto_tupla_com_dia_invalido_falha (teste_configuracoes.TesteConversaoTipos.test_do_texto_tupla_com_dia_invalido_falha) ... ok
+test_do_texto_tupla_com_formato_errado_falha (teste_configuracoes.TesteConversaoTipos.test_do_texto_tupla_com_formato_errado_falha) ... ok
+test_do_texto_tupla_com_mes_invalido_falha (teste_configuracoes.TesteConversaoTipos.test_do_texto_tupla_com_mes_invalido_falha) ... ok
+test_para_texto_bool_false (teste_configuracoes.TesteConversaoTipos.test_para_texto_bool_false) ... ok
+test_para_texto_bool_true (teste_configuracoes.TesteConversaoTipos.test_para_texto_bool_true) ... ok
+test_para_texto_decimal (teste_configuracoes.TesteConversaoTipos.test_para_texto_decimal) ... ok
+test_para_texto_int (teste_configuracoes.TesteConversaoTipos.test_para_texto_int) ... ok
+test_para_texto_texto (teste_configuracoes.TesteConversaoTipos.test_para_texto_texto) ... ok
+test_para_texto_tupla_mes_dia (teste_configuracoes.TesteConversaoTipos.test_para_texto_tupla_mes_dia) ... ok
+test_definir_altera_valor_e_le_de_volta (teste_configuracoes.TesteDefinir.test_definir_altera_valor_e_le_de_volta) ... ok
+test_definir_autor_none_falha (teste_configuracoes.TesteDefinir.test_definir_autor_none_falha) ... ok
+test_definir_bool_true (teste_configuracoes.TesteDefinir.test_definir_bool_true) ... ok
+test_definir_chave_desconhecida_falha (teste_configuracoes.TesteDefinir.test_definir_chave_desconhecida_falha) ... ok
+test_definir_decimal (teste_configuracoes.TesteDefinir.test_definir_decimal) ... ok
+test_definir_duas_vezes_gera_dois_registos_historico (teste_configuracoes.TesteDefinir.test_definir_duas_vezes_gera_dois_registos_historico) ... ok
+test_definir_guarda_historico_com_motivo_vazio (teste_configuracoes.TesteDefinir.test_definir_guarda_historico_com_motivo_vazio)
+Um motivo em branco fica gravado como string vazia na ... ok
+test_definir_guarda_no_historico (teste_configuracoes.TesteDefinir.test_definir_guarda_no_historico) ... ok
+test_definir_texto (teste_configuracoes.TesteDefinir.test_definir_texto) ... ok
+test_definir_tupla (teste_configuracoes.TesteDefinir.test_definir_tupla) ... ok
+test_seed_cria_todas_as_chaves (teste_configuracoes.TesteGarantirSeed.test_seed_cria_todas_as_chaves) ... ok
+test_seed_idempotente (teste_configuracoes.TesteGarantirSeed.test_seed_idempotente) ... ok
+test_seed_nao_sobrescreve_valores_alterados (teste_configuracoes.TesteGarantirSeed.test_seed_nao_sobrescreve_valores_alterados) ... ok
+test_listar_definicoes_filtra_por_prefixo (teste_configuracoes.TesteListar.test_listar_definicoes_filtra_por_prefixo) ... ok
+test_listar_definicoes_tem_os_campos_esperados (teste_configuracoes.TesteListar.test_listar_definicoes_tem_os_campos_esperados) ... ok
+test_listar_definicoes_traz_todas (teste_configuracoes.TesteListar.test_listar_definicoes_traz_todas) ... ok
+test_listar_historico_filtra_por_chave (teste_configuracoes.TesteListar.test_listar_historico_filtra_por_chave) ... ok
+test_listar_historico_ordena_mais_recente_primeiro (teste_configuracoes.TesteListar.test_listar_historico_ordena_mais_recente_primeiro) ... ok
+test_listar_historico_sem_registos (teste_configuracoes.TesteListar.test_listar_historico_sem_registos) ... ok
+test_listar_por_prefixo_com_valor_alterado (teste_configuracoes.TesteListar.test_listar_por_prefixo_com_valor_alterado) ... ok
+test_listar_por_prefixo_devolve_defaults_sem_seed (teste_configuracoes.TesteListar.test_listar_por_prefixo_devolve_defaults_sem_seed)
+Sem seed, o `listar_por_prefixo` cai nos defaults do ... ok
+test_listar_por_prefixo_operacao (teste_configuracoes.TesteListar.test_listar_por_prefixo_operacao) ... ok
+test_listar_por_prefixo_sem_resultados (teste_configuracoes.TesteListar.test_listar_por_prefixo_sem_resultados) ... ok
+test_alteracao_regista_chave_e_autor (teste_configuracoes.TesteLogsConfiguracoes.test_alteracao_regista_chave_e_autor) ... ok
+test_pode_alterar_nao_regista_recusa (teste_configuracoes.TesteLogsConfiguracoes.test_pode_alterar_nao_regista_recusa)
+O `pode_alterar` é o que a GUI usa para decidir o que mostrar. ... ok
+test_recusa_de_staff_fica_registada (teste_configuracoes.TesteLogsConfiguracoes.test_recusa_de_staff_fica_registada) ... ok
+test_valor_corrompido_na_bd_fica_registado (teste_configuracoes.TesteLogsConfiguracoes.test_valor_corrompido_na_bd_fica_registado)
+Um valor que não se consegue converter é sinal de base de ... ok
+test_obter_aceita_default_explicito (teste_configuracoes.TesteObter.test_obter_aceita_default_explicito)
+Quando o chamador passa `default`, ele é usado se a chave ... ok
+test_obter_apos_seed_devolve_o_mesmo_default (teste_configuracoes.TesteObter.test_obter_apos_seed_devolve_o_mesmo_default) ... ok
+test_obter_bool_devolve_bool (teste_configuracoes.TesteObter.test_obter_bool_devolve_bool) ... ok
+test_obter_chave_desconhecida_falha (teste_configuracoes.TesteObter.test_obter_chave_desconhecida_falha)
+Uma chave fora do mapa é recusada — evita devolver None ... ok
+test_obter_decimal_devolve_decimal (teste_configuracoes.TesteObter.test_obter_decimal_devolve_decimal) ... ok
+test_obter_devolve_default_quando_nao_esta_na_bd (teste_configuracoes.TesteObter.test_obter_devolve_default_quando_nao_esta_na_bd)
+Sem seed, o `obter` cai no default do mapa `_CHAVES` (que ... ok
+test_obter_int_devolve_int (teste_configuracoes.TesteObter.test_obter_int_devolve_int) ... ok
+test_obter_tupla_devolve_tupla (teste_configuracoes.TesteObter.test_obter_tupla_devolve_tupla) ... ok
+test_admin_altera_chave_epoca_alta (teste_configuracoes.TestePermissoes.test_admin_altera_chave_epoca_alta) ... ok
+test_admin_altera_chave_operacao (teste_configuracoes.TestePermissoes.test_admin_altera_chave_operacao) ... ok
+test_admin_altera_pasta_relatorios (teste_configuracoes.TestePermissoes.test_admin_altera_pasta_relatorios) ... ok
+test_admin_nao_altera_chave_multiplicador_caucao (teste_configuracoes.TestePermissoes.test_admin_nao_altera_chave_multiplicador_caucao) ... ok
+test_admin_nao_altera_chave_multiplicador_maximo_caucao (teste_configuracoes.TestePermissoes.test_admin_nao_altera_chave_multiplicador_maximo_caucao) ... ok
+test_admin_nao_altera_chave_stock (teste_configuracoes.TestePermissoes.test_admin_nao_altera_chave_stock) ... ok
+test_master_altera_chave_multiplicador_caucao (teste_configuracoes.TestePermissoes.test_master_altera_chave_multiplicador_caucao) ... ok
+test_master_altera_chave_operacao (teste_configuracoes.TestePermissoes.test_master_altera_chave_operacao) ... ok
+test_master_altera_chave_stock (teste_configuracoes.TestePermissoes.test_master_altera_chave_stock) ... ok
+test_pode_alterar_admin_chave_master_false (teste_configuracoes.TestePermissoes.test_pode_alterar_admin_chave_master_false) ... ok
+test_pode_alterar_admin_chave_operacao_true (teste_configuracoes.TestePermissoes.test_pode_alterar_admin_chave_operacao_true) ... ok
+test_pode_alterar_autor_none_false (teste_configuracoes.TestePermissoes.test_pode_alterar_autor_none_false) ... ok
+test_pode_alterar_chave_desconhecida_false (teste_configuracoes.TestePermissoes.test_pode_alterar_chave_desconhecida_false) ... ok
+test_pode_alterar_master_true (teste_configuracoes.TestePermissoes.test_pode_alterar_master_true) ... ok
+test_pode_alterar_staff_false (teste_configuracoes.TestePermissoes.test_pode_alterar_staff_false) ... ok
+test_staff_nao_altera_chave_operacao (teste_configuracoes.TestePermissoes.test_staff_nao_altera_chave_operacao) ... ok
+test_staff_nao_altera_chave_stock (teste_configuracoes.TestePermissoes.test_staff_nao_altera_chave_stock) ... ok
+test_altera_preco_praticado (teste_contratos.TesteAtualizarAirbnb.test_altera_preco_praticado) ... ok
+test_multa_negativa_gera_erro (teste_contratos.TesteAtualizarAirbnb.test_multa_negativa_gera_erro) ... ok
+test_multa_sem_check_in_tardio_gera_erro (teste_contratos.TesteAtualizarAirbnb.test_multa_sem_check_in_tardio_gera_erro) ... ok
+test_multa_zero_admitida_como_perdao (teste_contratos.TesteAtualizarAirbnb.test_multa_zero_admitida_como_perdao) ... ok
+test_reserva_cancelada_nao_pode_ser_alterada (teste_contratos.TesteAtualizarAirbnb.test_reserva_cancelada_nao_pode_ser_alterada) ... ok
+test_altera_renda_praticada (teste_contratos.TesteAtualizarMensal.test_altera_renda_praticada) ... ok
+test_caucao_exige_confirmacao_atualizado_ao_mudar_caucao (teste_contratos.TesteAtualizarMensal.test_caucao_exige_confirmacao_atualizado_ao_mudar_caucao) ... ok
+test_contrato_encerrado_nao_pode_ser_alterado (teste_contratos.TesteAtualizarMensal.test_contrato_encerrado_nao_pode_ser_alterado) ... ok
+test_dia_vencimento_invalido_gera_erro (teste_contratos.TesteAtualizarMensal.test_dia_vencimento_invalido_gera_erro) ... ok
+test_dia_vencimento_valido_grava (teste_contratos.TesteAtualizarMensal.test_dia_vencimento_valido_grava) ... ok
+test_ocupacao_inexistente_gera_erro (teste_contratos.TesteAtualizarMensal.test_ocupacao_inexistente_gera_erro) ... ok
+test_renda_abaixo_da_calculada_com_responsavel_valido_atualiza (teste_contratos.TesteAtualizarMensal.test_renda_abaixo_da_calculada_com_responsavel_valido_atualiza) ... ok
+test_renda_abaixo_da_calculada_sem_responsavel_e_recusada (teste_contratos.TesteAtualizarMensal.test_renda_abaixo_da_calculada_sem_responsavel_e_recusada) ... ok
+test_renda_de_volta_ao_valor_calculado_limpa_responsavel (teste_contratos.TesteAtualizarMensal.test_renda_de_volta_ao_valor_calculado_limpa_responsavel) ... ok
+test_revalida_caucao_quando_so_a_renda_muda (teste_contratos.TesteAtualizarMensal.test_revalida_caucao_quando_so_a_renda_muda) ... ok
+test_sem_alterar_renda_nao_mexe_no_responsavel (teste_contratos.TesteAtualizarMensal.test_sem_alterar_renda_nao_mexe_no_responsavel) ... ok
+test_aviso_previo_cumprido_nao_levanta_aviso (teste_contratos.TesteAvisosEncerramento.test_aviso_previo_cumprido_nao_levanta_aviso) ... ok
+test_devolve_so_as_duas_chaves (teste_contratos.TesteAvisosEncerramento.test_devolve_so_as_duas_chaves) ... ok
+test_duracao_abaixo_do_minimo_levanta_aviso (teste_contratos.TesteAvisosEncerramento.test_duracao_abaixo_do_minimo_levanta_aviso) ... ok
+test_duracao_acima_do_minimo_nao_levanta_aviso (teste_contratos.TesteAvisosEncerramento.test_duracao_acima_do_minimo_nao_levanta_aviso) ... ok
+test_duracao_conta_meses_de_calendario_nao_dias (teste_contratos.TesteAvisosEncerramento.test_duracao_conta_meses_de_calendario_nao_dias) ... ok
+test_encerrar_hoje_e_aviso_previo_insuficiente (teste_contratos.TesteAvisosEncerramento.test_encerrar_hoje_e_aviso_previo_insuficiente) ... ok
+test_limite_exato_do_aviso_previo_e_suficiente (teste_contratos.TesteAvisosEncerramento.test_limite_exato_do_aviso_previo_e_suficiente) ... ok
+test_cancela_com_sucesso (teste_contratos.TesteCancelarAirbnb.test_cancela_com_sucesso) ... ok
+test_contrato_mensal_recusado (teste_contratos.TesteCancelarAirbnb.test_contrato_mensal_recusado) ... ok
+test_ja_cancelada_gera_erro (teste_contratos.TesteCancelarAirbnb.test_ja_cancelada_gera_erro) ... ok
+test_liberta_as_datas_para_nova_reserva (teste_contratos.TesteCancelarAirbnb.test_liberta_as_datas_para_nova_reserva) ... ok
+test_bloqueia_ao_atingir_capacidade (teste_contratos.TesteCriarMensal.test_bloqueia_ao_atingir_capacidade) ... ok
+test_caucao_acima_da_renda_exige_confirmacao (teste_contratos.TesteCriarMensal.test_caucao_acima_da_renda_exige_confirmacao) ... ok
+test_caucao_acima_do_teto_gera_erro (teste_contratos.TesteCriarMensal.test_caucao_acima_do_teto_gera_erro) ... ok
+test_caucao_igual_a_renda_nao_exige_confirmacao (teste_contratos.TesteCriarMensal.test_caucao_igual_a_renda_nao_exige_confirmacao) ... ok
+test_cliente_inativo_recusado (teste_contratos.TesteCriarMensal.test_cliente_inativo_recusado) ... ok
+test_cliente_inexistente_gera_erro (teste_contratos.TesteCriarMensal.test_cliente_inexistente_gera_erro) ... ok
+test_cria_contrato_com_sucesso (teste_contratos.TesteCriarMensal.test_cria_contrato_com_sucesso) ... ok
+test_dia_vencimento_fora_do_intervalo_gera_erro (teste_contratos.TesteCriarMensal.test_dia_vencimento_fora_do_intervalo_gera_erro) ... ok
+test_dia_vencimento_nao_inteiro_gera_erro (teste_contratos.TesteCriarMensal.test_dia_vencimento_nao_inteiro_gera_erro) ... ok
+test_dia_vencimento_omisso_usa_valor_por_omissao (teste_contratos.TesteCriarMensal.test_dia_vencimento_omisso_usa_valor_por_omissao) ... ok
+test_dia_vencimento_personalizado_e_aceite (teste_contratos.TesteCriarMensal.test_dia_vencimento_personalizado_e_aceite) ... ok
+test_documento_ja_caducado_marca_aviso (teste_contratos.TesteCriarMensal.test_documento_ja_caducado_marca_aviso) ... ok
+test_documento_valido_nao_marca_aviso (teste_contratos.TesteCriarMensal.test_documento_valido_nao_marca_aviso) ... ok
+test_id_gerado_com_prefixo_cnt (teste_contratos.TesteCriarMensal.test_id_gerado_com_prefixo_cnt) ... ok
+test_lugar_de_casal_admite_dois_contratos (teste_contratos.TesteCriarMensal.test_lugar_de_casal_admite_dois_contratos) ... ok
+test_lugar_de_outra_unidade_recusado (teste_contratos.TesteCriarMensal.test_lugar_de_outra_unidade_recusado) ... ok
+test_lugar_esgotado_recusa_terceiro_contrato (teste_contratos.TesteCriarMensal.test_lugar_esgotado_recusa_terceiro_contrato) ... ok
+test_lugar_inexistente_gera_erro (teste_contratos.TesteCriarMensal.test_lugar_inexistente_gera_erro) ... ok
+test_permite_novo_contrato_apos_encerrar_o_anterior (teste_contratos.TesteCriarMensal.test_permite_novo_contrato_apos_encerrar_o_anterior) ... ok
+test_recusa_cliente_sem_nif_para_contrato_mensal (teste_contratos.TesteCriarMensal.test_recusa_cliente_sem_nif_para_contrato_mensal) ... ok
+test_recusa_segundo_contrato_mensal_ativo_mesmo_cliente (teste_contratos.TesteCriarMensal.test_recusa_segundo_contrato_mensal_ativo_mesmo_cliente) ... ok
+test_recusa_segundo_contrato_mensal_por_nif_entre_clientes_diferentes (teste_contratos.TesteCriarMensal.test_recusa_segundo_contrato_mensal_por_nif_entre_clientes_diferentes) ... ok
+test_renda_abaixo_da_calculada_com_responsavel_valido_grava (teste_contratos.TesteCriarMensal.test_renda_abaixo_da_calculada_com_responsavel_valido_grava) ... ok
+test_renda_abaixo_da_calculada_sem_responsavel_e_recusada (teste_contratos.TesteCriarMensal.test_renda_abaixo_da_calculada_sem_responsavel_e_recusada) ... ok
+test_renda_acima_da_calculada_ignora_responsavel_passado (teste_contratos.TesteCriarMensal.test_renda_acima_da_calculada_ignora_responsavel_passado) ... ok
+test_renda_igual_a_calculada_nao_exige_responsavel (teste_contratos.TesteCriarMensal.test_renda_igual_a_calculada_nao_exige_responsavel) ... ok
+test_renda_invalida_gera_erro (teste_contratos.TesteCriarMensal.test_renda_invalida_gera_erro) ... ok
+test_unidade_airbnb_recusada (teste_contratos.TesteCriarMensal.test_unidade_airbnb_recusada) ... ok
+test_unidade_inativa_recusada (teste_contratos.TesteCriarMensal.test_unidade_inativa_recusada) ... ok
+test_unidade_inexistente_gera_erro (teste_contratos.TesteCriarMensal.test_unidade_inexistente_gera_erro) ... ok
+test_data_fim_antes_do_inicio_gera_erro (teste_contratos.TesteEncerrarMensal.test_data_fim_antes_do_inicio_gera_erro) ... ok
+test_data_fim_obrigatoria (teste_contratos.TesteEncerrarMensal.test_data_fim_obrigatoria) ... ok
+test_duracao_abaixo_minima_fica_sinalizada_nao_bloqueia (teste_contratos.TesteEncerrarMensal.test_duracao_abaixo_minima_fica_sinalizada_nao_bloqueia) ... ok
+test_duracao_normal_nao_fica_sinalizada (teste_contratos.TesteEncerrarMensal.test_duracao_normal_nao_fica_sinalizada) ... ok
+test_encerra_com_sucesso (teste_contratos.TesteEncerrarMensal.test_encerra_com_sucesso) ... ok
+test_ja_encerrado_gera_erro (teste_contratos.TesteEncerrarMensal.test_ja_encerrado_gera_erro) ... ok
+test_reserva_airbnb_recusada (teste_contratos.TesteEncerrarMensal.test_reserva_airbnb_recusada) ... ok
+test_listar_devolve_lista_nova (teste_contratos.TesteProcurarListar.test_listar_devolve_lista_nova) ... ok
+test_listar_filtra_por_aviso_documento (teste_contratos.TesteProcurarListar.test_listar_filtra_por_aviso_documento) ... ok
+test_listar_filtra_por_tipo (teste_contratos.TesteProcurarListar.test_listar_filtra_por_tipo) ... ok
+test_listar_filtra_por_unidade (teste_contratos.TesteProcurarListar.test_listar_filtra_por_unidade) ... ok
+test_listar_inclui_inativas_quando_pedido (teste_contratos.TesteProcurarListar.test_listar_inclui_inativas_quando_pedido) ... ok
+test_listar_nao_inclui_inativas_por_omissao (teste_contratos.TesteProcurarListar.test_listar_nao_inclui_inativas_por_omissao) ... ok
+test_listar_sem_filtro_devolve_todas_ativas (teste_contratos.TesteProcurarListar.test_listar_sem_filtro_devolve_todas_ativas) ... ok
+test_procurar_encontra_por_id (teste_contratos.TesteProcurarListar.test_procurar_encontra_por_id) ... ok
+test_procurar_inexistente_devolve_none (teste_contratos.TesteProcurarListar.test_procurar_inexistente_devolve_none) ... ok
+test_procurar_nao_filtra_inativos (teste_contratos.TesteProcurarListar.test_procurar_nao_filtra_inativos) ... ok
+test_inexistente_gera_erro (teste_contratos.TesteReativar.test_inexistente_gera_erro) ... ok
+test_ja_ativa_gera_erro (teste_contratos.TesteReativar.test_ja_ativa_gera_erro) ... ok
+test_reativa_contrato_mensal_repoe_data_fim_nula (teste_contratos.TesteReativar.test_reativa_contrato_mensal_repoe_data_fim_nula) ... ok
+test_reativa_reserva_airbnb_mantem_data_fim (teste_contratos.TesteReativar.test_reativa_reserva_airbnb_mantem_data_fim) ... ok
+test_check_in_tardio_multa_praticada_editavel (teste_contratos.TesteRegistarAirbnb.test_check_in_tardio_multa_praticada_editavel) ... ok
+test_check_in_tardio_sem_hora_gera_erro (teste_contratos.TesteRegistarAirbnb.test_check_in_tardio_sem_hora_gera_erro) ... ok
+test_check_in_tardio_usa_multa_da_unidade (teste_contratos.TesteRegistarAirbnb.test_check_in_tardio_usa_multa_da_unidade) ... ok
+test_epoca_alta_ignorada_se_indicador_desligado (teste_contratos.TesteRegistarAirbnb.test_epoca_alta_ignorada_se_indicador_desligado) ... ok
+test_estadia_acima_do_maximo_gera_erro (teste_contratos.TesteRegistarAirbnb.test_estadia_acima_do_maximo_gera_erro) ... ok
+test_estadia_de_uma_noite_aceite (teste_contratos.TesteRegistarAirbnb.test_estadia_de_uma_noite_aceite) ... ok
+test_id_gerado_com_prefixo_rsv (teste_contratos.TesteRegistarAirbnb.test_id_gerado_com_prefixo_rsv) ... ok
+test_preco_calculado_soma_epoca_alta_por_noite (teste_contratos.TesteRegistarAirbnb.test_preco_calculado_soma_epoca_alta_por_noite) ... ok
+test_preco_invalido_gera_erro (teste_contratos.TesteRegistarAirbnb.test_preco_invalido_gera_erro) ... ok
+test_regista_com_sucesso (teste_contratos.TesteRegistarAirbnb.test_regista_com_sucesso) ... ok
+test_reservas_consecutivas_nao_sobrepoem (teste_contratos.TesteRegistarAirbnb.test_reservas_consecutivas_nao_sobrepoem) ... ok
+test_sem_check_in_tardio_multa_fica_zero (teste_contratos.TesteRegistarAirbnb.test_sem_check_in_tardio_multa_fica_zero) ... ok
+test_sobreposicao_recusada (teste_contratos.TesteRegistarAirbnb.test_sobreposicao_recusada) ... ok
+test_unidade_inativa_recusada (teste_contratos.TesteRegistarAirbnb.test_unidade_inativa_recusada) ... ok
+test_unidade_mensal_recusada (teste_contratos.TesteRegistarAirbnb.test_unidade_mensal_recusada) ... ok
+test_sem_sobreposicao_quando_intervalos_totalmente_separados (teste_contratos.TesteSobreposicao.test_sem_sobreposicao_quando_intervalos_totalmente_separados) ... ok
+test_sem_sobreposicao_quando_saida_coincide_com_entrada (teste_contratos.TesteSobreposicao.test_sem_sobreposicao_quando_saida_coincide_com_entrada) ... ok
+test_sobreposicao_quando_intervalos_se_cruzam (teste_contratos.TesteSobreposicao.test_sobreposicao_quando_intervalos_se_cruzam) ... ok
+test_sobreposicao_quando_um_intervalo_contem_o_outro (teste_contratos.TesteSobreposicao.test_sobreposicao_quando_um_intervalo_contem_o_outro) ... ok
+test_admin_nao_pode_criar_categoria (teste_despesas.TesteCategorias.test_admin_nao_pode_criar_categoria) ... ok
+test_atualizar_categoria_para_nome_duplicado_falha (teste_despesas.TesteCategorias.test_atualizar_categoria_para_nome_duplicado_falha) ... ok
+test_atualizar_categoria_valida (teste_despesas.TesteCategorias.test_atualizar_categoria_valida) ... ok
+test_criar_categoria_duplicado_maiusculas_falha (teste_despesas.TesteCategorias.test_criar_categoria_duplicado_maiusculas_falha) ... ok
+test_criar_categoria_nome_duplicado_falha (teste_despesas.TesteCategorias.test_criar_categoria_nome_duplicado_falha) ... ok
+test_criar_categoria_nome_vazio_falha (teste_despesas.TesteCategorias.test_criar_categoria_nome_vazio_falha) ... ok
+test_criar_categoria_valida (teste_despesas.TesteCategorias.test_criar_categoria_valida) ... ok
+test_desativar_categoria_ja_inativa_falha (teste_despesas.TesteCategorias.test_desativar_categoria_ja_inativa_falha) ... ok
+test_desativar_e_reativar_categoria (teste_despesas.TesteCategorias.test_desativar_e_reativar_categoria) ... ok
+test_listar_categorias_ativas_por_omissao (teste_despesas.TesteCategorias.test_listar_categorias_ativas_por_omissao) ... ok
+test_listar_categorias_incluindo_inativas (teste_despesas.TesteCategorias.test_listar_categorias_incluindo_inativas) ... ok
+test_staff_nao_pode_criar_categoria (teste_despesas.TesteCategorias.test_staff_nao_pode_criar_categoria) ... ok
+test_dividir_por_tres_unidades (teste_despesas.TesteDivisaoPorPropriedade.test_dividir_por_tres_unidades) ... ok
+test_dividir_propriedade_inexistente_falha (teste_despesas.TesteDivisaoPorPropriedade.test_dividir_propriedade_inexistente_falha) ... ok
+test_dividir_sem_unidades_ativas_falha (teste_despesas.TesteDivisaoPorPropriedade.test_dividir_sem_unidades_ativas_falha) ... ok
+test_dividir_unidade_desativada_nao_conta (teste_despesas.TesteDivisaoPorPropriedade.test_dividir_unidade_desativada_nao_conta) ... ok
+test_dividir_valor_nao_divisivel_arredonda_simples (teste_despesas.TesteDivisaoPorPropriedade.test_dividir_valor_nao_divisivel_arredonda_simples) ... ok
+test_cancelada_nunca_e_vencida (teste_despesas.TesteEstaVencida.test_cancelada_nunca_e_vencida) ... ok
+test_paga_com_vencimento_no_passado_nao_e_vencida (teste_despesas.TesteEstaVencida.test_paga_com_vencimento_no_passado_nao_e_vencida) ... ok
+test_pendente_com_vencimento_no_futuro_nao_e_vencida (teste_despesas.TesteEstaVencida.test_pendente_com_vencimento_no_futuro_nao_e_vencida) ... ok
+test_pendente_com_vencimento_no_passado_e_vencida (teste_despesas.TesteEstaVencida.test_pendente_com_vencimento_no_passado_e_vencida) ... ok
+test_pendente_sem_vencimento_nao_e_vencida (teste_despesas.TesteEstaVencida.test_pendente_sem_vencimento_nao_e_vencida) ... ok
+test_admin_pode_criar_fornecedor (teste_despesas.TesteFornecedores.test_admin_pode_criar_fornecedor) ... ok
+test_atualizar_fornecedor_nome_para_vazio_falha (teste_despesas.TesteFornecedores.test_atualizar_fornecedor_nome_para_vazio_falha) ... ok
+test_atualizar_fornecedor_parcial (teste_despesas.TesteFornecedores.test_atualizar_fornecedor_parcial) ... ok
+test_criar_fornecedor_nome_vazio_falha (teste_despesas.TesteFornecedores.test_criar_fornecedor_nome_vazio_falha) ... ok
+test_criar_fornecedor_valido (teste_despesas.TesteFornecedores.test_criar_fornecedor_valido) ... ok
+test_desativar_e_reativar_fornecedor (teste_despesas.TesteFornecedores.test_desativar_e_reativar_fornecedor) ... ok
+test_staff_nao_pode_criar_fornecedor (teste_despesas.TesteFornecedores.test_staff_nao_pode_criar_fornecedor) ... ok
+test_listar_despesas_filtro_estado (teste_despesas.TesteLeituras.test_listar_despesas_filtro_estado) ... ok
+test_listar_despesas_filtro_vencidas (teste_despesas.TesteLeituras.test_listar_despesas_filtro_vencidas) ... ok
+test_listar_despesas_sem_filtro (teste_despesas.TesteLeituras.test_listar_despesas_sem_filtro) ... ok
+test_listar_itens_despesa_vazia_devolve_lista_vazia (teste_despesas.TesteLeituras.test_listar_itens_despesa_vazia_devolve_lista_vazia) ... ok
+test_procurar_despesa_inexistente_devolve_none (teste_despesas.TesteLeituras.test_procurar_despesa_inexistente_devolve_none) ... ok
+test_gerar_duas_vezes_nao_duplica (teste_despesas.TesteRecorrencias.test_gerar_duas_vezes_nao_duplica) ... ok
+test_recorrente_do_mes_atual_nao_duplica (teste_despesas.TesteRecorrencias.test_recorrente_do_mes_atual_nao_duplica) ... ok
+test_recorrente_do_mes_passado_gera_nova (teste_despesas.TesteRecorrencias.test_recorrente_do_mes_passado_gera_nova) ... ok
+test_recorrente_nao_espera_pagamento (teste_despesas.TesteRecorrencias.test_recorrente_nao_espera_pagamento)
+Uma recorrente pendente (não paga) do mês passado também ... ok
+test_sem_recorrentes_nao_gera_nada (teste_despesas.TesteRecorrencias.test_sem_recorrentes_nao_gera_nada) ... ok
+test_staff_nao_pode_gerar_recorrencias (teste_despesas.TesteRecorrencias.test_staff_nao_pode_gerar_recorrencias) ... ok
+test_cancelar_despesa_com_motivo (teste_despesas.TesteVia1.test_cancelar_despesa_com_motivo) ... ok
+test_cancelar_despesa_sem_motivo_falha (teste_despesas.TesteVia1.test_cancelar_despesa_sem_motivo_falha) ... ok
+test_criar_despesa_manual_categoria_inativa_falha (teste_despesas.TesteVia1.test_criar_despesa_manual_categoria_inativa_falha) ... ok
+test_criar_despesa_manual_categoria_inexistente_falha (teste_despesas.TesteVia1.test_criar_despesa_manual_categoria_inexistente_falha) ... ok
+test_criar_despesa_manual_minima (teste_despesas.TesteVia1.test_criar_despesa_manual_minima) ... ok
+test_criar_despesa_manual_valor_negativo_falha (teste_despesas.TesteVia1.test_criar_despesa_manual_valor_negativo_falha) ... ok
+test_criar_despesa_manual_vencimento_antes_lancamento_falha (teste_despesas.TesteVia1.test_criar_despesa_manual_vencimento_antes_lancamento_falha) ... ok
+test_editar_valor_despesa_paga_falha (teste_despesas.TesteVia1.test_editar_valor_despesa_paga_falha) ... ok
+test_editar_valor_despesa_pendente (teste_despesas.TesteVia1.test_editar_valor_despesa_pendente) ... ok
+test_marcar_paga_despesa_ja_paga_falha (teste_despesas.TesteVia1.test_marcar_paga_despesa_ja_paga_falha) ... ok
+test_marcar_paga_despesa_pendente (teste_despesas.TesteVia1.test_marcar_paga_despesa_pendente) ... ok
+test_staff_nao_pode_criar_despesa (teste_despesas.TesteVia1.test_staff_nao_pode_criar_despesa) ... ok
+test_confirmar_duas_vezes_falha (teste_despesas.TesteVia2.test_confirmar_duas_vezes_falha) ... ok
+test_confirmar_itens_gera_movimentos_e_marca (teste_despesas.TesteVia2.test_confirmar_itens_gera_movimentos_e_marca) ... ok
+test_criar_despesa_stock_categoria_compra_stock_inexistente_falha (teste_despesas.TesteVia2.test_criar_despesa_stock_categoria_compra_stock_inexistente_falha) ... ok
+test_criar_despesa_stock_com_produto_existente (teste_despesas.TesteVia2.test_criar_despesa_stock_com_produto_existente) ... ok
+test_criar_despesa_stock_com_produto_novo (teste_despesas.TesteVia2.test_criar_despesa_stock_com_produto_novo) ... ok
+test_criar_despesa_stock_produto_inexistente_falha (teste_despesas.TesteVia2.test_criar_despesa_stock_produto_inexistente_falha) ... ok
+test_criar_despesa_stock_quantidade_zero_falha (teste_despesas.TesteVia2.test_criar_despesa_stock_quantidade_zero_falha) ... ok
+test_criar_despesa_stock_sem_itens_falha (teste_despesas.TesteVia2.test_criar_despesa_stock_sem_itens_falha) ... ok
+test_movimento_tem_motivo_rastreavel (teste_despesas.TesteVia2.test_movimento_tem_motivo_rastreavel) ... ok
+test_altera_nome (teste_estoque.TestAtualizarProduto.test_altera_nome) ... ok
+test_altera_stock_minimo (teste_estoque.TestAtualizarProduto.test_altera_stock_minimo) ... ok
+test_altera_unidade_medida (teste_estoque.TestAtualizarProduto.test_altera_unidade_medida) ... ok
+test_nome_vazio_e_erro (teste_estoque.TestAtualizarProduto.test_nome_vazio_e_erro) ... ok
+test_none_nao_altera (teste_estoque.TestAtualizarProduto.test_none_nao_altera) ... ok
+test_produto_inexistente_e_erro (teste_estoque.TestAtualizarProduto.test_produto_inexistente_e_erro) ... ok
+test_stock_minimo_nao_inteiro_e_erro (teste_estoque.TestAtualizarProduto.test_stock_minimo_nao_inteiro_e_erro) ... ok
+test_stock_minimo_negativo_e_erro (teste_estoque.TestAtualizarProduto.test_stock_minimo_negativo_e_erro) ... ok
+test_unidade_medida_vazia_e_erro (teste_estoque.TestAtualizarProduto.test_unidade_medida_vazia_e_erro) ... ok
+test_confirma_rececao_fecha_a_requisicao (teste_estoque.TestConfirmarRececaoRequisicao.test_confirma_rececao_fecha_a_requisicao) ... ok
+test_data_rececao_none_e_erro (teste_estoque.TestConfirmarRececaoRequisicao.test_data_rececao_none_e_erro) ... ok
+test_requisicao_nao_enviada_e_erro (teste_estoque.TestConfirmarRececaoRequisicao.test_requisicao_nao_enviada_e_erro) ... ok
+test_responsavel_diferente_do_que_pediu_e_erro (teste_estoque.TestConfirmarRececaoRequisicao.test_responsavel_diferente_do_que_pediu_e_erro) ... ok
+test_responsavel_inexistente_e_erro (teste_estoque.TestConfirmarRececaoRequisicao.test_responsavel_inexistente_e_erro) ... ok
+test_cria_produto_valido (teste_estoque.TestCriarProduto.test_cria_produto_valido)
+Comparação por ID — `criar_produto` e `procurar_produto` ... ok
+test_nome_vazio_e_erro (teste_estoque.TestCriarProduto.test_nome_vazio_e_erro) ... ok
+test_remove_espacos_do_nome_e_unidade (teste_estoque.TestCriarProduto.test_remove_espacos_do_nome_e_unidade) ... ok
+test_stock_minimo_booleano_e_erro (teste_estoque.TestCriarProduto.test_stock_minimo_booleano_e_erro) ... ok
+test_stock_minimo_nao_inteiro_e_erro (teste_estoque.TestCriarProduto.test_stock_minimo_nao_inteiro_e_erro) ... ok
+test_stock_minimo_negativo_e_erro (teste_estoque.TestCriarProduto.test_stock_minimo_negativo_e_erro) ... ok
+test_stock_minimo_omisso_fica_zero (teste_estoque.TestCriarProduto.test_stock_minimo_omisso_fica_zero) ... ok
+test_unidade_medida_vazia_e_erro (teste_estoque.TestCriarProduto.test_unidade_medida_vazia_e_erro) ... ok
+test_cria_requisicao_com_varios_itens (teste_estoque.TestCriarRequisicao.test_cria_requisicao_com_varios_itens) ... ok
+test_cria_requisicao_pendente (teste_estoque.TestCriarRequisicao.test_cria_requisicao_pendente) ... ok
+test_data_pedido_none_e_erro (teste_estoque.TestCriarRequisicao.test_data_pedido_none_e_erro) ... ok
+test_itens_vazios_e_erro (teste_estoque.TestCriarRequisicao.test_itens_vazios_e_erro) ... ok
+test_pode_pedir_mais_do_que_o_saldo (teste_estoque.TestCriarRequisicao.test_pode_pedir_mais_do_que_o_saldo) ... ok
+test_produto_inativo_e_erro (teste_estoque.TestCriarRequisicao.test_produto_inativo_e_erro) ... ok
+test_produto_inexistente_e_erro (teste_estoque.TestCriarRequisicao.test_produto_inexistente_e_erro) ... ok
+test_produto_repetido_e_erro (teste_estoque.TestCriarRequisicao.test_produto_repetido_e_erro) ... ok
+test_quantidade_pedida_nao_inteira_e_erro (teste_estoque.TestCriarRequisicao.test_quantidade_pedida_nao_inteira_e_erro) ... ok
+test_quantidade_pedida_none_e_erro (teste_estoque.TestCriarRequisicao.test_quantidade_pedida_none_e_erro) ... ok
+test_quantidade_pedida_zero_e_erro (teste_estoque.TestCriarRequisicao.test_quantidade_pedida_zero_e_erro) ... ok
+test_responsavel_inativo_e_erro (teste_estoque.TestCriarRequisicao.test_responsavel_inativo_e_erro) ... ok
+test_responsavel_inexistente_e_erro (teste_estoque.TestCriarRequisicao.test_responsavel_inexistente_e_erro) ... ok
+test_desativa_produto_ativo (teste_estoque.TestDesativarReativarProduto.test_desativa_produto_ativo) ... ok
+test_desativar_inexistente_e_erro (teste_estoque.TestDesativarReativarProduto.test_desativar_inexistente_e_erro) ... ok
+test_desativar_ja_inativo_e_erro (teste_estoque.TestDesativarReativarProduto.test_desativar_ja_inativo_e_erro) ... ok
+test_reativa_produto_inativo (teste_estoque.TestDesativarReativarProduto.test_reativa_produto_inativo) ... ok
+test_reativar_inexistente_e_erro (teste_estoque.TestDesativarReativarProduto.test_reativar_inexistente_e_erro) ... ok
+test_reativar_ja_ativo_e_erro (teste_estoque.TestDesativarReativarProduto.test_reativar_ja_ativo_e_erro) ... ok
+test_data_envio_none_e_erro (teste_estoque.TestEnviarRequisicao.test_data_envio_none_e_erro) ... ok
+test_envia_quantidade_pedida_por_omissao (teste_estoque.TestEnviarRequisicao.test_envia_quantidade_pedida_por_omissao) ... ok
+test_enviado_por_inexistente_e_erro (teste_estoque.TestEnviarRequisicao.test_enviado_por_inexistente_e_erro) ... ok
+test_envio_parcial_de_um_item (teste_estoque.TestEnviarRequisicao.test_envio_parcial_de_um_item) ... ok
+test_gera_um_movimento_de_saida_por_item (teste_estoque.TestEnviarRequisicao.test_gera_um_movimento_de_saida_por_item) ... ok
+test_produto_fora_da_requisicao_e_erro (teste_estoque.TestEnviarRequisicao.test_produto_fora_da_requisicao_e_erro) ... ok
+test_quantidade_enviada_excede_pedida_e_erro (teste_estoque.TestEnviarRequisicao.test_quantidade_enviada_excede_pedida_e_erro) ... ok
+test_quantidade_enviada_nao_positiva_e_erro (teste_estoque.TestEnviarRequisicao.test_quantidade_enviada_nao_positiva_e_erro) ... ok
+test_requisicao_inexistente_e_erro (teste_estoque.TestEnviarRequisicao.test_requisicao_inexistente_e_erro) ... ok
+test_requisicao_nao_pendente_e_erro (teste_estoque.TestEnviarRequisicao.test_requisicao_nao_pendente_e_erro) ... ok
+test_saldo_insuficiente_e_erro (teste_estoque.TestEnviarRequisicao.test_saldo_insuficiente_e_erro) ... ok
+test_saldo_insuficiente_num_item_nao_envia_nenhum (teste_estoque.TestEnviarRequisicao.test_saldo_insuficiente_num_item_nao_envia_nenhum) ... ok
+test_aceite_por_inexistente_e_erro (teste_estoque.TestFecharDevolucao.test_aceite_por_inexistente_e_erro) ... ok
+test_data_fecho_none_e_erro (teste_estoque.TestFecharDevolucao.test_data_fecho_none_e_erro) ... ok
+test_devolucao_inexistente_e_erro (teste_estoque.TestFecharDevolucao.test_devolucao_inexistente_e_erro) ... ok
+test_devolucao_nao_pendente_e_erro (teste_estoque.TestFecharDevolucao.test_devolucao_nao_pendente_e_erro) ... ok
+test_fecha_gera_movimento_de_entrada_por_item (teste_estoque.TestFecharDevolucao.test_fecha_gera_movimento_de_entrada_por_item) ... ok
+test_filtra_por_produto (teste_estoque.TestListarItensDevolucao.test_filtra_por_produto) ... ok
+test_lista_todos_os_itens_da_devolucao (teste_estoque.TestListarItensDevolucao.test_lista_todos_os_itens_da_devolucao) ... ok
+test_listar_devolve_lista_nova (teste_estoque.TestListarItensDevolucao.test_listar_devolve_lista_nova) ... ok
+test_procurar_devolve_none_para_inexistente (teste_estoque.TestListarItensDevolucao.test_procurar_devolve_none_para_inexistente) ... ok
+test_procurar_encontra_item_existente (teste_estoque.TestListarItensDevolucao.test_procurar_encontra_item_existente) ... ok
+test_filtra_por_produto (teste_estoque.TestListarItensRequisicao.test_filtra_por_produto) ... ok
+test_lista_todos_os_itens_da_requisicao (teste_estoque.TestListarItensRequisicao.test_lista_todos_os_itens_da_requisicao) ... ok
+test_listar_devolve_lista_nova (teste_estoque.TestListarItensRequisicao.test_listar_devolve_lista_nova) ... ok
+test_procurar_devolve_none_para_inexistente (teste_estoque.TestListarItensRequisicao.test_procurar_devolve_none_para_inexistente) ... ok
+test_procurar_encontra_item_existente (teste_estoque.TestListarItensRequisicao.test_procurar_encontra_item_existente) ... ok
+test_devolve_lista_nova (teste_estoque.TestListarProdutos.test_devolve_lista_nova) ... ok
+test_lista_so_ativos_por_omissao (teste_estoque.TestListarProdutos.test_lista_so_ativos_por_omissao)
+Comparação por ID — `criar_produto` e `listar_produtos` ... ok
+test_lista_todos_com_incluir_inativos (teste_estoque.TestListarProdutos.test_lista_todos_com_incluir_inativos) ... ok
+test_listar_devolve_lista_nova (teste_estoque.TestProcurarListarDevolucao.test_listar_devolve_lista_nova) ... ok
+test_listar_filtra_por_estado (teste_estoque.TestProcurarListarDevolucao.test_listar_filtra_por_estado) ... ok
+test_listar_filtra_por_requisicao (teste_estoque.TestProcurarListarDevolucao.test_listar_filtra_por_requisicao) ... ok
+test_listar_filtra_por_responsavel (teste_estoque.TestProcurarListarDevolucao.test_listar_filtra_por_responsavel) ... ok
+test_listar_sem_filtro_devolve_todas (teste_estoque.TestProcurarListarDevolucao.test_listar_sem_filtro_devolve_todas) ... ok
+test_procurar_devolve_none_para_inexistente (teste_estoque.TestProcurarListarDevolucao.test_procurar_devolve_none_para_inexistente) ... ok
+test_procurar_encontra_devolucao_existente (teste_estoque.TestProcurarListarDevolucao.test_procurar_encontra_devolucao_existente) ... ok
+test_listar_devolve_lista_nova (teste_estoque.TestProcurarListarRequisicao.test_listar_devolve_lista_nova) ... ok
+test_listar_filtra_por_estado (teste_estoque.TestProcurarListarRequisicao.test_listar_filtra_por_estado) ... ok
+test_listar_filtra_por_produto (teste_estoque.TestProcurarListarRequisicao.test_listar_filtra_por_produto) ... ok
+test_listar_filtra_por_responsavel (teste_estoque.TestProcurarListarRequisicao.test_listar_filtra_por_responsavel) ... ok
+test_listar_sem_filtro_devolve_todas (teste_estoque.TestProcurarListarRequisicao.test_listar_sem_filtro_devolve_todas) ... ok
+test_procurar_devolve_none_para_inexistente (teste_estoque.TestProcurarListarRequisicao.test_procurar_devolve_none_para_inexistente) ... ok
+test_procurar_encontra_requisicao_existente (teste_estoque.TestProcurarListarRequisicao.test_procurar_encontra_requisicao_existente) ... ok
+test_devolve_none_para_id_inexistente (teste_estoque.TestProcurarProduto.test_devolve_none_para_id_inexistente) ... ok
+test_encontra_produto_existente (teste_estoque.TestProcurarProduto.test_encontra_produto_existente)
+Comparação por ID — ver a nota no topo do ficheiro ... ok
+test_ajuste_sem_motivo_e_erro (teste_estoque.TestRegistarMovimento.test_ajuste_sem_motivo_e_erro) ... ok
+test_data_none_e_erro (teste_estoque.TestRegistarMovimento.test_data_none_e_erro) ... ok
+test_produto_inexistente_e_erro (teste_estoque.TestRegistarMovimento.test_produto_inexistente_e_erro) ... ok
+test_quantidade_nao_inteira_e_erro (teste_estoque.TestRegistarMovimento.test_quantidade_nao_inteira_e_erro) ... ok
+test_quantidade_negativa_em_entrada_e_erro (teste_estoque.TestRegistarMovimento.test_quantidade_negativa_em_entrada_e_erro) ... ok
+test_quantidade_negativa_em_saida_e_erro (teste_estoque.TestRegistarMovimento.test_quantidade_negativa_em_saida_e_erro) ... ok
+test_quantidade_none_e_erro (teste_estoque.TestRegistarMovimento.test_quantidade_none_e_erro) ... ok
+test_quantidade_zero_e_erro (teste_estoque.TestRegistarMovimento.test_quantidade_zero_e_erro) ... ok
+test_regista_ajuste_com_motivo (teste_estoque.TestRegistarMovimento.test_regista_ajuste_com_motivo) ... ok
+test_regista_entrada (teste_estoque.TestRegistarMovimento.test_regista_entrada) ... ok
+test_regista_saida (teste_estoque.TestRegistarMovimento.test_regista_saida) ... ok
+test_responsavel_id_inativo_e_erro (teste_estoque.TestRegistarMovimento.test_responsavel_id_inativo_e_erro) ... ok
+test_responsavel_id_inexistente_e_erro (teste_estoque.TestRegistarMovimento.test_responsavel_id_inexistente_e_erro) ... ok
+test_responsavel_id_valido_fica_gravado (teste_estoque.TestRegistarMovimento.test_responsavel_id_valido_fica_gravado) ... ok
+test_responsavel_id_vazio_e_aceite (teste_estoque.TestRegistarMovimento.test_responsavel_id_vazio_e_aceite) ... ok
+test_tipo_desconhecido_e_erro (teste_estoque.TestRegistarMovimento.test_tipo_desconhecido_e_erro) ... ok
+test_motivo_vazio_e_erro (teste_estoque.TestRejeitarRequisicao.test_motivo_vazio_e_erro) ... ok
+test_nao_gera_movimento (teste_estoque.TestRejeitarRequisicao.test_nao_gera_movimento) ... ok
+test_rejeita_requisicao_pendente (teste_estoque.TestRejeitarRequisicao.test_rejeita_requisicao_pendente) ... ok
+test_requisicao_nao_pendente_e_erro (teste_estoque.TestRejeitarRequisicao.test_requisicao_nao_pendente_e_erro) ... ok
+test_responsavel_inexistente_e_erro (teste_estoque.TestRejeitarRequisicao.test_responsavel_inexistente_e_erro) ... ok
+test_data_reportada_none_e_erro (teste_estoque.TestReportarDevolucao.test_data_reportada_none_e_erro) ... ok
+test_itens_vazios_e_erro (teste_estoque.TestReportarDevolucao.test_itens_vazios_e_erro) ... ok
+test_nao_gera_movimento (teste_estoque.TestReportarDevolucao.test_nao_gera_movimento) ... ok
+test_produto_fora_da_requisicao_e_erro (teste_estoque.TestReportarDevolucao.test_produto_fora_da_requisicao_e_erro) ... ok
+test_produto_repetido_e_erro (teste_estoque.TestReportarDevolucao.test_produto_repetido_e_erro) ... ok
+test_quantidade_excede_enviada_e_erro (teste_estoque.TestReportarDevolucao.test_quantidade_excede_enviada_e_erro) ... ok
+test_quantidade_nao_inteira_e_erro (teste_estoque.TestReportarDevolucao.test_quantidade_nao_inteira_e_erro) ... ok
+test_quantidade_negativa_e_erro (teste_estoque.TestReportarDevolucao.test_quantidade_negativa_e_erro) ... ok
+test_quantidade_zero_e_erro (teste_estoque.TestReportarDevolucao.test_quantidade_zero_e_erro) ... ok
+test_reporta_sobra (teste_estoque.TestReportarDevolucao.test_reporta_sobra) ... ok
+test_reporta_sobra_varios_itens (teste_estoque.TestReportarDevolucao.test_reporta_sobra_varios_itens) ... ok
+test_requisicao_nao_fechada_e_erro (teste_estoque.TestReportarDevolucao.test_requisicao_nao_fechada_e_erro) ... ok
+test_responsavel_diferente_do_que_pediu_e_erro (teste_estoque.TestReportarDevolucao.test_responsavel_diferente_do_que_pediu_e_erro) ... ok
+test_soma_de_devolucoes_excede_enviada_e_erro (teste_estoque.TestReportarDevolucao.test_soma_de_devolucoes_excede_enviada_e_erro) ... ok
+test_produto_inexistente_e_erro (teste_estoque.TestSaldoProduto.test_produto_inexistente_e_erro) ... ok
+test_saldo_com_ajuste_positivo_e_negativo (teste_estoque.TestSaldoProduto.test_saldo_com_ajuste_positivo_e_negativo) ... ok
+test_saldo_ignora_movimentos_de_outro_produto (teste_estoque.TestSaldoProduto.test_saldo_ignora_movimentos_de_outro_produto) ... ok
+test_saldo_soma_entradas_e_subtrai_saidas (teste_estoque.TestSaldoProduto.test_saldo_soma_entradas_e_subtrai_saidas) ... ok
+test_saldo_zero_sem_movimentos (teste_estoque.TestSaldoProduto.test_saldo_zero_sem_movimentos) ... ok
+test_abaixo_do_minimo_deteta (teste_estoque.TesteAlertasStock.test_abaixo_do_minimo_deteta) ... ok
+test_acima_do_minimo_nao_alerta (teste_estoque.TesteAlertasStock.test_acima_do_minimo_nao_alerta) ... ok
+test_listagem_calcula_em_falta (teste_estoque.TesteAlertasStock.test_listagem_calcula_em_falta) ... ok
+test_listagem_ignora_inativos (teste_estoque.TesteAlertasStock.test_listagem_ignora_inativos)
+PRD-004 equivalente tem 1 para um mínimo de 20, mas está ... ok
+test_listagem_ordena_pelo_que_falta_mais (teste_estoque.TesteAlertasStock.test_listagem_ordena_pelo_que_falta_mais) ... ok
+test_listagem_so_traz_os_que_faltam (teste_estoque.TesteAlertasStock.test_listagem_so_traz_os_que_faltam) ... ok
+test_minimo_zero_com_saldo_positivo_nao_alerta (teste_estoque.TesteAlertasStock.test_minimo_zero_com_saldo_positivo_nao_alerta) ... ok
+test_produto_inexistente_recusa (teste_estoque.TesteAlertasStock.test_produto_inexistente_recusa) ... ok
+test_saldo_igual_ao_minimo_nao_alerta (teste_estoque.TesteAlertasStock.test_saldo_igual_ao_minimo_nao_alerta)
+A comparação é estrita: igual ao mínimo ainda chega. ... ok
+test_saldo_negativo_alerta_mesmo_sem_minimo (teste_estoque.TesteAlertasStock.test_saldo_negativo_alerta_mesmo_sem_minimo) ... ok
+test_sem_alertas_devolve_lista_vazia (teste_estoque.TesteAlertasStock.test_sem_alertas_devolve_lista_vazia) ... ok
+test_admin_pode_aceitar_devolucao (teste_estoque.TestePerfisOperacoesArmazem.test_admin_pode_aceitar_devolucao) ... ok
+test_admin_pode_enviar (teste_estoque.TestePerfisOperacoesArmazem.test_admin_pode_enviar) ... ok
+test_master_pode_enviar (teste_estoque.TestePerfisOperacoesArmazem.test_master_pode_enviar) ... ok
+test_master_pode_rejeitar (teste_estoque.TestePerfisOperacoesArmazem.test_master_pode_rejeitar) ... ok
+test_recusa_de_envio_fica_registada_no_log (teste_estoque.TestePerfisOperacoesArmazem.test_recusa_de_envio_fica_registada_no_log) ... ok
+test_staff_nao_pode_aceitar_devolucao (teste_estoque.TestePerfisOperacoesArmazem.test_staff_nao_pode_aceitar_devolucao) ... ok
+test_staff_nao_pode_enviar (teste_estoque.TestePerfisOperacoesArmazem.test_staff_nao_pode_enviar) ... ok
+test_staff_nao_pode_rejeitar (teste_estoque.TestePerfisOperacoesArmazem.test_staff_nao_pode_rejeitar) ... ok
+test_staff_recusado_deixa_requisicao_e_stock_como_estavam (teste_estoque.TestePerfisOperacoesArmazem.test_staff_recusado_deixa_requisicao_e_stock_como_estavam) ... ok
+test_rol_registado_por_staff_sai_enviado (teste_estoque.TesteRolAutomaticoRegistadoPorStaff.test_rol_registado_por_staff_sai_enviado) ... ok
+test_rol_registado_por_staff_tira_do_stock (teste_estoque.TesteRolAutomaticoRegistadoPorStaff.test_rol_registado_por_staff_tira_do_stock) ... ok
+test_cogs_abate_entrada_de_devolucao (teste_financeiro.TesteDespesasCogs.test_cogs_abate_entrada_de_devolucao)
+Uma entrada com requisicao_id (devolução) abate o COGS ... ok
+test_cogs_filtra_por_data_do_movimento (teste_financeiro.TesteDespesasCogs.test_cogs_filtra_por_data_do_movimento) ... ok
+test_cogs_ignora_ajustes (teste_financeiro.TesteDespesasCogs.test_cogs_ignora_ajustes)
+Ajustes não entram no COGS — não são consumo de operação. ... ok
+test_cogs_ignora_entradas_de_compra (teste_financeiro.TesteDespesasCogs.test_cogs_ignora_entradas_de_compra)
+Uma entrada normal (sem requisicao_id) é compra — não ... ok
+test_cogs_produto_totalmente_devolvido_nao_aparece (teste_financeiro.TesteDespesasCogs.test_cogs_produto_totalmente_devolvido_nao_aparece)
+Saída 5, entrada de devolução 5 → COGS líquido 0, não ... ok
+test_cogs_sem_movimentos_e_lista_vazia (teste_financeiro.TesteDespesasCogs.test_cogs_sem_movimentos_e_lista_vazia) ... ok
+test_cogs_soma_saidas (teste_financeiro.TesteDespesasCogs.test_cogs_soma_saidas) ... ok
+test_cogs_traz_o_nome_do_produto (teste_financeiro.TesteDespesasCogs.test_cogs_traz_o_nome_do_produto) ... ok
+test_despesas_por_categoria_agrega_por_categoria (teste_financeiro.TesteDespesasCogs.test_despesas_por_categoria_agrega_por_categoria) ... ok
+test_despesas_por_categoria_ignora_canceladas (teste_financeiro.TesteDespesasCogs.test_despesas_por_categoria_ignora_canceladas) ... ok
+test_despesas_por_categoria_ignora_pendentes (teste_financeiro.TesteDespesasCogs.test_despesas_por_categoria_ignora_pendentes)
+Só as pagas contam — o lado da despesa é fluxo de caixa. ... ok
+test_despesas_por_categoria_sem_despesas_e_lista_vazia (teste_financeiro.TesteDespesasCogs.test_despesas_por_categoria_sem_despesas_e_lista_vazia) ... ok
+test_despesas_por_categoria_traz_o_nome (teste_financeiro.TesteDespesasCogs.test_despesas_por_categoria_traz_o_nome) ... ok
+test_despesas_por_categoria_usa_data_pagamento (teste_financeiro.TesteDespesasCogs.test_despesas_por_categoria_usa_data_pagamento)
+Uma despesa lançada em dezembro mas paga em janeiro ... ok
+test_mes_de (teste_financeiro.TesteHelpersPuros.test_mes_de) ... ok
+test_mes_tocado_ocupacao_antes_do_periodo (teste_financeiro.TesteHelpersPuros.test_mes_tocado_ocupacao_antes_do_periodo) ... ok
+test_mes_tocado_ocupacao_comeca_a_meio_do_mes (teste_financeiro.TesteHelpersPuros.test_mes_tocado_ocupacao_comeca_a_meio_do_mes)
+Um contrato que começa a 20 de junho toca junho todo. ... ok
+test_mes_tocado_ocupacao_comeca_depois_do_mes (teste_financeiro.TesteHelpersPuros.test_mes_tocado_ocupacao_comeca_depois_do_mes) ... ok
+test_mes_tocado_ocupacao_em_vigor (teste_financeiro.TesteHelpersPuros.test_mes_tocado_ocupacao_em_vigor)
+data_fim=None → toca todos os meses desde o início. ... ok
+test_mes_tocado_ocupacao_encerrada_antes_do_mes (teste_financeiro.TesteHelpersPuros.test_mes_tocado_ocupacao_encerrada_antes_do_mes)
+data_fim <= primeiro dia do mês → NÃO toca esse mês. ... ok
+test_mes_tocado_ocupacao_encerrada_no_mesmo_mes (teste_financeiro.TesteHelpersPuros.test_mes_tocado_ocupacao_encerrada_no_mesmo_mes)
+Um contrato que acaba a 15 de junho toca junho todo. ... ok
+test_meses_de_vigencia_conta_todos_os_meses_tocados (teste_financeiro.TesteHelpersPuros.test_meses_de_vigencia_conta_todos_os_meses_tocados) ... ok
+test_meses_de_vigencia_ocupacao_em_vigor_conta_todos (teste_financeiro.TesteHelpersPuros.test_meses_de_vigencia_ocupacao_em_vigor_conta_todos) ... ok
+test_meses_de_vigencia_sem_sobreposicao_e_zero (teste_financeiro.TesteHelpersPuros.test_meses_de_vigencia_sem_sobreposicao_e_zero) ... ok
+test_meses_do_periodo_atravessa_ano (teste_financeiro.TesteHelpersPuros.test_meses_do_periodo_atravessa_ano)
+O `data_fim` (2026-02-01) é exclusivo — como calha no ... ok
+test_meses_do_periodo_fim_a_meio_do_mes_inclui_esse_mes (teste_financeiro.TesteHelpersPuros.test_meses_do_periodo_fim_a_meio_do_mes_inclui_esse_mes)
+O complemento do teste anterior: se o `data_fim` não ... ok
+test_meses_do_periodo_mes_unico (teste_financeiro.TesteHelpersPuros.test_meses_do_periodo_mes_unico) ... ok
+test_meses_do_periodo_um_dia (teste_financeiro.TesteHelpersPuros.test_meses_do_periodo_um_dia)
+Um período de um dia (início + 1 dia) devolve um só mês. ... ok
+test_meses_do_periodo_varios_meses_no_mesmo_ano (teste_financeiro.TesteHelpersPuros.test_meses_do_periodo_varios_meses_no_mesmo_ano) ... ok
+test_noites_no_periodo_ocupacao_contem_periodo (teste_financeiro.TesteHelpersPuros.test_noites_no_periodo_ocupacao_contem_periodo) ... ok
+test_noites_no_periodo_parcial_fim (teste_financeiro.TesteHelpersPuros.test_noites_no_periodo_parcial_fim)
+O período acaba a meio da ocupação. ... ok
+test_noites_no_periodo_parcial_inicio (teste_financeiro.TesteHelpersPuros.test_noites_no_periodo_parcial_inicio)
+O período começa a meio da ocupação. ... ok
+test_noites_no_periodo_sem_data_fim_e_zero (teste_financeiro.TesteHelpersPuros.test_noites_no_periodo_sem_data_fim_e_zero) ... ok
+test_noites_no_periodo_sem_intersecao_e_zero (teste_financeiro.TesteHelpersPuros.test_noites_no_periodo_sem_intersecao_e_zero) ... ok
+test_noites_no_periodo_total_dentro (teste_financeiro.TesteHelpersPuros.test_noites_no_periodo_total_dentro) ... ok
+test_noites_totais_intervalo_de_uma_noite (teste_financeiro.TesteHelpersPuros.test_noites_totais_intervalo_de_uma_noite) ... ok
+test_noites_totais_intervalo_longo (teste_financeiro.TesteHelpersPuros.test_noites_totais_intervalo_longo) ... ok
+test_noites_totais_sem_data_fim_e_zero (teste_financeiro.TesteHelpersPuros.test_noites_totais_sem_data_fim_e_zero) ... ok
+test_primeiro_dia_do_mes (teste_financeiro.TesteHelpersPuros.test_primeiro_dia_do_mes) ... ok
+test_ratear_arredonda_duas_casas (teste_financeiro.TesteHelpersPuros.test_ratear_arredonda_duas_casas)
+100 / 3 = 33.333... → 33.33, arredondamento normal. ... ok
+test_ratear_total_do_periodo (teste_financeiro.TesteHelpersPuros.test_ratear_total_do_periodo) ... ok
+test_ratear_total_zero_devolve_zero (teste_financeiro.TesteHelpersPuros.test_ratear_total_zero_devolve_zero)
+Proteção contra divisão por zero — devolve o neutro da soma. ... ok
+test_ratear_valor_proporcional_exato (teste_financeiro.TesteHelpersPuros.test_ratear_valor_proporcional_exato) ... ok
+test_ratear_valor_zero_devolve_zero (teste_financeiro.TesteHelpersPuros.test_ratear_valor_zero_devolve_zero) ... ok
+test_ultimo_dia_do_mes_30_dias (teste_financeiro.TesteHelpersPuros.test_ultimo_dia_do_mes_30_dias) ... ok
+test_ultimo_dia_do_mes_31_dias (teste_financeiro.TesteHelpersPuros.test_ultimo_dia_do_mes_31_dias) ... ok
+test_ultimo_dia_do_mes_fevereiro_ano_bissexto (teste_financeiro.TesteHelpersPuros.test_ultimo_dia_do_mes_fevereiro_ano_bissexto) ... ok
+test_ultimo_dia_do_mes_fevereiro_ano_normal (teste_financeiro.TesteHelpersPuros.test_ultimo_dia_do_mes_fevereiro_ano_normal) ... ok
+test_validar_periodo_aceita_intervalo_coerente (teste_financeiro.TesteHelpersPuros.test_validar_periodo_aceita_intervalo_coerente) ... ok
+test_validar_periodo_recusa_fim_antes_do_inicio (teste_financeiro.TesteHelpersPuros.test_validar_periodo_recusa_fim_antes_do_inicio) ... ok
+test_validar_periodo_recusa_fim_igual_ao_inicio (teste_financeiro.TesteHelpersPuros.test_validar_periodo_recusa_fim_igual_ao_inicio)
+O fim é exclusivo: mesmo dia não contém nenhum período. ... ok
+test_validar_periodo_recusa_fim_none (teste_financeiro.TesteHelpersPuros.test_validar_periodo_recusa_fim_none) ... ok
+test_validar_periodo_recusa_inicio_none (teste_financeiro.TesteHelpersPuros.test_validar_periodo_recusa_inicio_none) ... ok
+test_validar_periodo_recusa_tipo_invalido (teste_financeiro.TesteHelpersPuros.test_validar_periodo_recusa_tipo_invalido) ... ok
+test_receita_airbnb_epoca_alta (teste_financeiro.TesteReceita.test_receita_airbnb_epoca_alta)
+Reserva que atravessa a época alta calcula o preço por ... ok
+test_receita_airbnb_rateada_no_periodo (teste_financeiro.TesteReceita.test_receita_airbnb_rateada_no_periodo)
+Reserva de 10 noites, período cobre 4 delas: receita rateada. ... ok
+test_receita_airbnb_reserva_encerrada_conta_na_mesma (teste_financeiro.TesteReceita.test_receita_airbnb_reserva_encerrada_conta_na_mesma)
+Reserva cancelada — o `incluir_inativas=True` do motor ... ok
+test_receita_airbnb_total_dentro_do_periodo (teste_financeiro.TesteReceita.test_receita_airbnb_total_dentro_do_periodo)
+Reserva de 4 noites, período maior: receita = preço total. ... ok
+test_receita_mensal_desconto_rateado_por_mes (teste_financeiro.TesteReceita.test_receita_mensal_desconto_rateado_por_mes)
+O desconto é (renda_calculada − renda_praticada) × meses. ... ok
+test_receita_mensal_em_vigor_conta_todos_os_meses_do_periodo (teste_financeiro.TesteReceita.test_receita_mensal_em_vigor_conta_todos_os_meses_do_periodo)
+Contrato sem data_fim → toca todos os meses do período. ... ok
+test_receita_mensal_periodo_parcial_conta_mes_inteiro (teste_financeiro.TesteReceita.test_receita_mensal_periodo_parcial_conta_mes_inteiro)
+Um contrato que só tocou junho (começou a 20) conta junho ... ok
+test_receita_mensal_tres_meses (teste_financeiro.TesteReceita.test_receita_mensal_tres_meses)
+Um contrato que cobre três meses conta três vezes. ... ok
+test_receita_mensal_um_mes_inteiro (teste_financeiro.TesteReceita.test_receita_mensal_um_mes_inteiro)
+Um contrato a cobrir todo o mês de janeiro conta uma vez. ... ok
+test_receita_por_propriedade_agrega_unidades (teste_financeiro.TesteReceita.test_receita_por_propriedade_agrega_unidades) ... ok
+test_receita_por_propriedade_duas_propriedades (teste_financeiro.TesteReceita.test_receita_por_propriedade_duas_propriedades) ... ok
+test_receita_por_propriedade_sem_dados_e_lista_vazia (teste_financeiro.TesteReceita.test_receita_por_propriedade_sem_dados_e_lista_vazia) ... ok
+test_receita_por_propriedade_traz_o_nome (teste_financeiro.TesteReceita.test_receita_por_propriedade_traz_o_nome) ... ok
+test_receita_por_unidade_agrega_mensal_e_airbnb (teste_financeiro.TesteReceita.test_receita_por_unidade_agrega_mensal_e_airbnb)
+Uma unidade mensal e uma Airbnb, cada uma com a sua ... ok
+test_receita_por_unidade_ignora_sem_receita (teste_financeiro.TesteReceita.test_receita_por_unidade_ignora_sem_receita)
+Unidades sem ocupações no período não aparecem. ... ok
+test_receita_por_unidade_ordena_por_id (teste_financeiro.TesteReceita.test_receita_por_unidade_ordena_por_id)
+Verifica que o sort é estável por unidade_id. ... ok
+test_receita_por_unidade_sem_ocupacoes_e_lista_vazia (teste_financeiro.TesteReceita.test_receita_por_unidade_sem_ocupacoes_e_lista_vazia) ... ok
+test_resultado_cogs_nao_entra_no_liquido (teste_financeiro.TesteResultado.test_resultado_cogs_nao_entra_no_liquido)
+COGS é quantidade, não dinheiro — não entra no resultado ... ok
+test_resultado_cogs_quantidade_soma_saidas (teste_financeiro.TesteResultado.test_resultado_cogs_quantidade_soma_saidas) ... ok
+test_resultado_com_desconto (teste_financeiro.TesteResultado.test_resultado_com_desconto)
+O desconto entra na conta final: receita − descontos. ... ok
+test_resultado_despesas_operacionais (teste_financeiro.TesteResultado.test_resultado_despesas_operacionais) ... ok
+test_resultado_estrutura_tem_cinco_chaves (teste_financeiro.TesteResultado.test_resultado_estrutura_tem_cinco_chaves) ... ok
+test_resultado_negativo_quando_despesas_superam_receita (teste_financeiro.TesteResultado.test_resultado_negativo_quando_despesas_superam_receita)
+Caso com desconto E despesa alta, para confirmar que a ... ok
+test_resultado_receita_so (teste_financeiro.TesteResultado.test_resultado_receita_so)
+Sem despesas, o resultado líquido = receita − descontos. ... ok
+test_resultado_sem_dados (teste_financeiro.TesteResultado.test_resultado_sem_dados)
+Numa BD vazia, todos os números são zero. ... ok
+test_abrir_no_sistema_nao_rebenta_com_caminho_inexistente (teste_impressao.TesteBase.test_abrir_no_sistema_nao_rebenta_com_caminho_inexistente)
+Erros de abertura são silenciosos — quem chama já tem o ... ok
+test_abrir_no_sistema_windows_chama_os_startfile (teste_impressao.TesteBase.test_abrir_no_sistema_windows_chama_os_startfile) ... ok
+test_formatar_data_iso (teste_impressao.TesteBase.test_formatar_data_iso) ... ok
+test_formatar_data_iso_none_devolve_string_vazia (teste_impressao.TesteBase.test_formatar_data_iso_none_devolve_string_vazia) ... ok
+test_formatar_data_pt (teste_impressao.TesteBase.test_formatar_data_pt) ... ok
+test_formatar_data_pt_none_devolve_hifen (teste_impressao.TesteBase.test_formatar_data_pt_none_devolve_hifen) ... ok
+test_formatar_valor_csv_decimal (teste_impressao.TesteBase.test_formatar_valor_csv_decimal)
+Valor puro — ponto decimal, sem símbolo, sem milhar. ... ok
+test_formatar_valor_csv_forca_duas_casas (teste_impressao.TesteBase.test_formatar_valor_csv_forca_duas_casas)
+Um Decimal com uma casa ganha a segunda — 45,5 → 45.50. ... ok
+test_formatar_valor_csv_int (teste_impressao.TesteBase.test_formatar_valor_csv_int) ... ok
+test_formatar_valor_csv_none_devolve_string_vazia (teste_impressao.TesteBase.test_formatar_valor_csv_none_devolve_string_vazia) ... ok
+test_formatar_valor_pt_com_milhar (teste_impressao.TesteBase.test_formatar_valor_pt_com_milhar) ... ok
+test_formatar_valor_pt_decimal_simples (teste_impressao.TesteBase.test_formatar_valor_pt_decimal_simples) ... ok
+test_formatar_valor_pt_negativo (teste_impressao.TesteBase.test_formatar_valor_pt_negativo) ... ok
+test_formatar_valor_pt_none_devolve_hifen (teste_impressao.TesteBase.test_formatar_valor_pt_none_devolve_hifen)
+Hífen simples, ASCII — NÃO o travessão do tema. ... ok
+test_nome_base_relatorio_duas_chamadas_tem_hora (teste_impressao.TesteBase.test_nome_base_relatorio_duas_chamadas_tem_hora)
+Duas chamadas seguidas devem dar o mesmo nome se a hora ... ok
+test_nome_base_relatorio_formato (teste_impressao.TesteBase.test_nome_base_relatorio_formato)
+Verifica o prefixo — a hora exata varia, por isso ... ok
+test_pasta_relatorios_devolve_path (teste_impressao.TesteBase.test_pasta_relatorios_devolve_path) ... ok
+test_sanitizar_aspas_curvas (teste_impressao.TesteBase.test_sanitizar_aspas_curvas) ... ok
+test_sanitizar_aspas_simples_curvas (teste_impressao.TesteBase.test_sanitizar_aspas_simples_curvas) ... ok
+test_sanitizar_en_dash (teste_impressao.TesteBase.test_sanitizar_en_dash) ... ok
+test_sanitizar_nao_altera_acentos (teste_impressao.TesteBase.test_sanitizar_nao_altera_acentos)
+Os acentos do Português são Latin-1 válidos — não são ... ok
+test_sanitizar_none_devolve_string_vazia (teste_impressao.TesteBase.test_sanitizar_none_devolve_string_vazia) ... ok
+test_sanitizar_reticencias (teste_impressao.TesteBase.test_sanitizar_reticencias) ... ok
+test_sanitizar_simbolo_euro (teste_impressao.TesteBase.test_sanitizar_simbolo_euro)
+O `€` é o bug de 19/09/2026 — o fpdf não o aceita com ... ok
+test_sanitizar_texto_normal_fica_igual (teste_impressao.TesteBase.test_sanitizar_texto_normal_fica_igual) ... ok
+test_sanitizar_travessao_longo (teste_impressao.TesteBase.test_sanitizar_travessao_longo) ... ok
+test_csv_com_bom_utf8 (teste_impressao.TesteCSV.test_csv_com_bom_utf8)
+O ficheiro é escrito em `utf-8-sig` — o BOM ajuda o Excel ... ok
+test_csv_com_separador_ponto_e_virgula (teste_impressao.TesteCSV.test_csv_com_separador_ponto_e_virgula) ... ok
+test_csv_com_separador_virgula (teste_impressao.TesteCSV.test_csv_com_separador_virgula) ... ok
+test_csv_guarda_datas_em_iso (teste_impressao.TesteCSV.test_csv_guarda_datas_em_iso) ... ok
+test_csv_guarda_valores_puros (teste_impressao.TesteCSV.test_csv_guarda_valores_puros)
+O `Decimal("1234.56")` sai como `1234.56` no ficheiro — ... ok
+test_csv_none_vira_string_vazia (teste_impressao.TesteCSV.test_csv_none_vira_string_vazia) ... ok
+test_csv_separador_invalido_falha (teste_impressao.TesteCSV.test_csv_separador_invalido_falha) ... ok
+test_csv_simples_cria_ficheiro (teste_impressao.TesteCSV.test_csv_simples_cria_ficheiro) ... ok
+test_excel_cabecalho_tem_celulas_em_bold (teste_impressao.TesteExcel.test_excel_cabecalho_tem_celulas_em_bold) ... ok
+test_excel_cabecalho_tem_fundo_solido (teste_impressao.TesteExcel.test_excel_cabecalho_tem_fundo_solido) ... ok
+test_excel_cria_ficheiro (teste_impressao.TesteExcel.test_excel_cria_ficheiro) ... ok
+test_excel_guarda_data_como_datetime (teste_impressao.TesteExcel.test_excel_guarda_data_como_datetime)
+Uma `date` é gravada como `datetime` no Excel — para o ... ok
+test_excel_guarda_decimal_como_numero (teste_impressao.TesteExcel.test_excel_guarda_decimal_como_numero)
+A diferença face ao CSV: no Excel, um Decimal é gravado ... ok
+test_excel_negativos_a_vermelho (teste_impressao.TesteExcel.test_excel_negativos_a_vermelho)
+Um valor negativo recebe cor de texto vermelha. ... ok
+test_excel_none_vira_celula_em_branco (teste_impressao.TesteExcel.test_excel_none_vira_celula_em_branco)
+Um `None` na lista de dados não vira a string "None" no ... ok
+test_nome_do_contrato_leva_id_e_data (teste_impressao.TestePDF.test_nome_do_contrato_leva_id_e_data)
+O nome do ficheiro começa pelo ID da ocupação, para o ... C:\Users\mauri\hostel_gestao\src\impressao\pdf.py:264: DeprecationWarning: The parameter "ln" is deprecated since v2.5.2. Instead of ln=1 use new_x=XPos.LMARGIN, new_y=YPos.NEXT.
+  pdf.cell(largura_util, 6, "Clausula 1 - Prazo", ln=1)
+C:\Users\mauri\hostel_gestao\src\impressao\pdf.py:280: DeprecationWarning: The parameter "ln" is deprecated since v2.5.2. Instead of ln=1 use new_x=XPos.LMARGIN, new_y=YPos.NEXT.
+  pdf.cell(largura_util, 6, "Clausula 2 - Renovacao", ln=1)
+C:\Users\mauri\hostel_gestao\src\impressao\pdf.py:352: DeprecationWarning: The parameter "ln" is deprecated since v2.5.2. Instead of ln=1 use new_x=XPos.LMARGIN, new_y=YPos.NEXT.
+  pdf.cell(largura_util, 6, "Clausula 3 - Valor da renda", ln=1)
+C:\Users\mauri\hostel_gestao\src\impressao\pdf.py:403: DeprecationWarning: The parameter "ln" is deprecated since v2.5.2. Instead of ln=1 use new_x=XPos.LMARGIN, new_y=YPos.NEXT.
+  pdf.cell(largura_util, 6, "Clausula 4 - Denuncia", ln=1)
+C:\Users\mauri\hostel_gestao\src\impressao\pdf.py:476: DeprecationWarning: The parameter "ln" is deprecated since v2.5.2. Instead of ln=1 use new_x=XPos.LMARGIN, new_y=YPos.NEXT.
+  pdf.cell(largura_util, 6, "Clausula 5 - Fim", ln=1)
+C:\Users\mauri\hostel_gestao\src\impressao\pdf.py:496: DeprecationWarning: The parameter "ln" is deprecated since v2.5.2. Instead of ln=1 use new_x=XPos.LMARGIN, new_y=YPos.NEXT.
+  pdf.cell(largura_util, 6, "Clausula 6 - Manutencao", ln=1)
+C:\Users\mauri\hostel_gestao\src\impressao\pdf.py:548: DeprecationWarning: The parameter "ln" is deprecated since v2.5.2. Instead of ln=1 use new_x=XPos.LMARGIN, new_y=YPos.NEXT.
+  pdf.cell(largura_util, 6, "Clausula 7 - Obras", ln=1)
+C:\Users\mauri\hostel_gestao\src\impressao\pdf.py:566: DeprecationWarning: The parameter "ln" is deprecated since v2.5.2. Instead of ln=1 use new_x=XPos.LMARGIN, new_y=YPos.NEXT.
+  pdf.cell(largura_util, 6, "Clausula 8 - Despesas", ln=1)
+C:\Users\mauri\hostel_gestao\src\impressao\pdf.py:584: DeprecationWarning: The parameter "ln" is deprecated since v2.5.2. Instead of ln=1 use new_x=XPos.LMARGIN, new_y=YPos.NEXT.
+  pdf.cell(largura_util, 6, "Clausula 9 - Estado do locado", ln=1)
+C:\Users\mauri\hostel_gestao\src\impressao\pdf.py:646: DeprecationWarning: The parameter "ln" is deprecated since v2.5.2. Instead of ln=1 use new_x=XPos.LMARGIN, new_y=YPos.NEXT.
+  pdf.cell(largura_util - largura_coluna, 6, "_" * 40, align="C", ln=1)
+C:\Users\mauri\hostel_gestao\src\impressao\pdf.py:651: DeprecationWarning: The parameter "ln" is deprecated since v2.5.2. Instead of ln=1 use new_x=XPos.LMARGIN, new_y=YPos.NEXT.
+  pdf.cell(
+C:\Users\mauri\hostel_gestao\src\impressao\pdf.py:666: DeprecationWarning: The parameter "ln" is deprecated since v2.5.2. Instead of ln=1 use new_x=XPos.LMARGIN, new_y=YPos.NEXT.
+  pdf.cell(
+ok
+test_pdf_comeca_com_assinatura_pdf (teste_impressao.TestePDF.test_pdf_comeca_com_assinatura_pdf)
+Todo o PDF válido começa pelos bytes `%PDF-`. ... C:\Users\mauri\hostel_gestao\src\impressao\pdf.py:98: DeprecationWarning: The parameter "ln" is deprecated since v2.5.2. Instead of ln=1 use new_x=XPos.LMARGIN, new_y=YPos.NEXT.
+  pdf.cell(
+C:\Users\mauri\hostel_gestao\src\impressao\pdf.py:108: DeprecationWarning: The parameter "ln" is deprecated since v2.5.2. Instead of ln=1 use new_x=XPos.LMARGIN, new_y=YPos.NEXT.
+  pdf.cell(
+C:\Users\mauri\hostel_gestao\src\impressao\pdf.py:155: DeprecationWarning: The parameter "ln" is deprecated since v2.5.2. Instead of ln=1 use new_x=XPos.LMARGIN, new_y=YPos.NEXT.
+  pdf.cell(
+ok
+test_pdf_contrato_com_local_com_acentos (teste_impressao.TestePDF.test_pdf_contrato_com_local_com_acentos)
+O local pode ter acentos (ex.: "Foz do Douro — Matosinhos"). ... ok
+test_pdf_contrato_comeca_com_assinatura_pdf (teste_impressao.TestePDF.test_pdf_contrato_comeca_com_assinatura_pdf) ... ok
+test_pdf_contrato_cria_ficheiro (teste_impressao.TestePDF.test_pdf_contrato_cria_ficheiro) ... ok
+test_pdf_contrato_sem_iban_nao_rebenta (teste_impressao.TestePDF.test_pdf_contrato_sem_iban_nao_rebenta)
+O IBAN da propriedade é opcional — sem ele, o contrato ... ok
+test_pdf_lida_com_simbolo_euro (teste_impressao.TestePDF.test_pdf_lida_com_simbolo_euro)
+O bug de 19/09/2026: o `€` no valor rebentava o fpdf. ... ok
+test_pdf_lida_com_travessao_longo (teste_impressao.TestePDF.test_pdf_lida_com_travessao_longo)
+O travessão longo é outro caractere que o fpdf recusa. ... ok
+test_pdf_relatorio_simples_cria_ficheiro (teste_impressao.TestePDF.test_pdf_relatorio_simples_cria_ficheiro) ... ok
+test_pdf_sem_colunas_nao_rebenta (teste_impressao.TestePDF.test_pdf_sem_colunas_nao_rebenta)
+Caso de fronteira: sem colunas. Não devia acontecer na ... ok
+test_acentos_e_travessoes_gravam_em_utf8 (teste_logs.TesteConfigurar.test_acentos_e_travessoes_gravam_em_utf8) ... ok
+test_bibliotecas_de_terceiros_so_passam_avisos (teste_logs.TesteConfigurar.test_bibliotecas_de_terceiros_so_passam_avisos) ... ok
+test_chamar_duas_vezes_nao_duplica (teste_logs.TesteConfigurar.test_chamar_duas_vezes_nao_duplica)
+Sem a proteção, cada chamada acrescentava um handler e cada ... ok
+test_crash_fica_registado_com_traceback (teste_logs.TesteConfigurar.test_crash_fica_registado_com_traceback) ... ok
+test_cria_o_ficheiro_na_pasta_de_logs (teste_logs.TesteConfigurar.test_cria_o_ficheiro_na_pasta_de_logs) ... ok
+test_ctrl_c_nao_e_registado_como_crash (teste_logs.TesteConfigurar.test_ctrl_c_nao_e_registado_como_crash) ... ok
+test_regista_o_arranque_com_versao_e_interface (teste_logs.TesteConfigurar.test_regista_o_arranque_com_versao_e_interface) ... ok
+teste_atualizar_altera_a_morada (teste_propriedades.TesteAtualizar.teste_atualizar_altera_a_morada)
+A morada indicada substitui a anterior. ... ok
+teste_atualizar_altera_o_nome (teste_propriedades.TesteAtualizar.teste_atualizar_altera_o_nome)
+O nome indicado substitui o anterior. ... ok
+teste_atualizar_apaga_a_morada (teste_propriedades.TesteAtualizar.teste_atualizar_apaga_a_morada)
+Uma cadeia vazia apaga a morada, ao contrário de None. ... ok
+teste_atualizar_com_nome_vazio_e_recusado (teste_propriedades.TesteAtualizar.teste_atualizar_com_nome_vazio_e_recusado)
+O nome não pode ser apagado: a propriedade deixaria de se ... ok
+teste_atualizar_inexistente_e_recusado (teste_propriedades.TesteAtualizar.teste_atualizar_inexistente_e_recusado)
+Um identificador desconhecido produz erro. ... ok
+teste_atualizar_limpa_espacos (teste_propriedades.TesteAtualizar.teste_atualizar_limpa_espacos)
+Os espaços nas extremidades não são guardados. ... ok
+teste_atualizar_sem_parametros_nao_altera (teste_propriedades.TesteAtualizar.teste_atualizar_sem_parametros_nao_altera)
+Parâmetros a None significam não alterar. ... ok
+teste_criar_atribui_id_com_prefixo (teste_propriedades.TesteCriar.teste_criar_atribui_id_com_prefixo)
+O identificador segue o formato PRO-000 (decisão 2). ... ok
+teste_criar_devolve_a_propriedade_criada (teste_propriedades.TesteCriar.teste_criar_devolve_a_propriedade_criada)
+A propriedade criada é devolvida, com o nome indicado. ... ok
+teste_criar_limpa_espacos (teste_propriedades.TesteCriar.teste_criar_limpa_espacos)
+Os espaços nas extremidades não são guardados. ... ok
+teste_criar_nasce_ativa (teste_propriedades.TesteCriar.teste_criar_nasce_ativa)
+Uma propriedade nova está ativa por omissão. ... ok
+teste_criar_primeiro_id_e_pro_001 (teste_propriedades.TesteCriar.teste_criar_primeiro_id_e_pro_001)
+Numa base de dados de teste vazia, o primeiro id é ... ok
+teste_criar_sem_morada_e_aceite (teste_propriedades.TesteCriar.teste_criar_sem_morada_e_aceite)
+A morada é opcional e fica vazia. ... ok
+teste_criar_sem_nome_e_recusado (teste_propriedades.TesteCriar.teste_criar_sem_nome_e_recusado)
+O nome é obrigatório: vazio ou só espaços não passa. ... ok
+teste_desativar_com_forcar_ignora_unidades_ativas (teste_propriedades.TesteDesativarReativar.teste_desativar_com_forcar_ignora_unidades_ativas)
+Com forcar=True, desativa mesmo com unidades ativas ... ok
+teste_desativar_com_unidade_ativa_e_recusado_sem_forcar (teste_propriedades.TesteDesativarReativar.teste_desativar_com_unidade_ativa_e_recusado_sem_forcar)
+Novo (decisão de 27/08, item 9): sem forcar=True, recusa ... ok
+teste_desativar_duas_vezes_e_recusado (teste_propriedades.TesteDesativarReativar.teste_desativar_duas_vezes_e_recusado)
+Desativar uma propriedade já inativa produz erro. ... ok
+teste_desativar_ignora_unidade_ja_inativa (teste_propriedades.TesteDesativarReativar.teste_desativar_ignora_unidade_ja_inativa)
+Uma unidade já inativa não conta como dependência ativa — ... ok
+teste_desativar_inexistente_e_recusado (teste_propriedades.TesteDesativarReativar.teste_desativar_inexistente_e_recusado)
+Um identificador desconhecido produz erro. ... ok
+teste_desativar_marca_como_inativa (teste_propriedades.TesteDesativarReativar.teste_desativar_marca_como_inativa)
+A propriedade continua a existir, marcada como inativa. ... ok
+teste_reativar_inexistente_e_recusado (teste_propriedades.TesteDesativarReativar.teste_reativar_inexistente_e_recusado)
+Um identificador desconhecido produz erro. ... ok
+teste_reativar_repoe_como_ativa (teste_propriedades.TesteDesativarReativar.teste_reativar_repoe_como_ativa)
+Uma propriedade desativada por engano pode ser reposta. ... ok
+teste_reativar_uma_ativa_e_recusado (teste_propriedades.TesteDesativarReativar.teste_reativar_uma_ativa_e_recusado)
+Reativar uma propriedade que já está ativa produz erro. ... ok
+teste_listar_base_vazia (teste_propriedades.TesteListar.teste_listar_base_vazia)
+Sem propriedades registadas, a listagem é vazia. ... ok
+teste_listar_com_inativas_devolve_todas (teste_propriedades.TesteListar.teste_listar_com_inativas_devolve_todas)
+Com incluir_inativas, a listagem tem também as desativadas. ... ok
+teste_listar_devolve_lista_nova (teste_propriedades.TesteListar.teste_listar_devolve_lista_nova)
+Alterar a lista devolvida não altera a base de dados. ... ok
+teste_listar_devolve_todas_as_ativas (teste_propriedades.TesteListar.teste_listar_devolve_todas_as_ativas)
+Por omissão, a listagem tem todas as propriedades ativas. ... ok
+teste_listar_omite_as_inativas (teste_propriedades.TesteListar.teste_listar_omite_as_inativas)
+Uma propriedade desativada não aparece na listagem. ... ok
+teste_procurar_em_base_vazia (teste_propriedades.TesteProcurar.teste_procurar_em_base_vazia)
+Sem propriedades registadas, devolve None. ... ok
+teste_procurar_encontra (teste_propriedades.TesteProcurar.teste_procurar_encontra)
+Devolve o registo quando o identificador corresponde. ... ok
+teste_procurar_encontra_inativas (teste_propriedades.TesteProcurar.teste_procurar_encontra_inativas)
+A procura não filtra: devolve também as desativadas. ... ok
+teste_procurar_inexistente_devolve_none (teste_propriedades.TesteProcurar.teste_procurar_inexistente_devolve_none)
+Um identificador que não corresponde a nada devolve None. ... ok
+teste_backup_cria_ficheiro_com_data_de_hoje (teste_repositorio.TesteBackups.teste_backup_cria_ficheiro_com_data_de_hoje)
+A cópia é criada com a data no nome, em formato ISO. ... ok
+teste_backup_nao_sobrescreve_o_do_mesmo_dia (teste_repositorio.TesteBackups.teste_backup_nao_sobrescreve_o_do_mesmo_dia)
+Chamar duas vezes no mesmo dia não substitui a cópia da manhã. ... ok
+teste_backup_sem_mysqldump_devolve_none (teste_repositorio.TesteBackups.teste_backup_sem_mysqldump_devolve_none)
+Sem o binário mysqldump não há como fazer o dump. ... ok
+teste_limpeza_elimina_apenas_as_antigas (teste_repositorio.TesteBackups.teste_limpeza_elimina_apenas_as_antigas)
+Cópias além do prazo são eliminadas; as de dentro do prazo ficam. ... ok
+teste_limpeza_usa_o_prazo_da_configuracao (teste_repositorio.TesteBackups.teste_limpeza_usa_o_prazo_da_configuracao)
+Sem prazo indicado, a limpeza usa o valor configurado. ... ok
+teste_contador_nao_recua (teste_repositorio.TesteContadores.teste_contador_nao_recua)
+O contador é lido do ficheiro, nunca da contagem de registos. ... ok
+teste_formato_com_tres_digitos (teste_repositorio.TesteContadores.teste_formato_com_tres_digitos)
+O número é preenchido com zeros até três dígitos. ... ok
+teste_ids_consecutivos (teste_repositorio.TesteContadores.teste_ids_consecutivos)
+Cada chamada devolve o número seguinte. ... ok
+teste_prefixos_independentes (teste_repositorio.TesteContadores.teste_prefixos_independentes)
+Cada prefixo tem o seu próprio contador. ... ok
+teste_primeiro_id_de_um_prefixo (teste_repositorio.TesteContadores.teste_primeiro_id_de_um_prefixo)
+Sem contador gravado, o primeiro identificador é o 001. ... ok
+teste_altera_contacto (teste_responsaveis.TesteAtualizar.teste_altera_contacto) ... ok
+teste_altera_nome (teste_responsaveis.TesteAtualizar.teste_altera_nome) ... ok
+teste_limpa_contacto_com_vazio (teste_responsaveis.TesteAtualizar.teste_limpa_contacto_com_vazio) ... ok
+teste_limpa_espacos (teste_responsaveis.TesteAtualizar.teste_limpa_espacos) ... ok
+teste_nao_altera_ativo (teste_responsaveis.TesteAtualizar.teste_nao_altera_ativo)
+atualizar() não mexe em 'ativo' — só desativar/reativar. ... ok
+teste_none_nao_altera (teste_responsaveis.TesteAtualizar.teste_none_nao_altera) ... ok
+teste_recusa_apagar_nome (teste_responsaveis.TesteAtualizar.teste_recusa_apagar_nome) ... ok
+teste_recusa_id_inexistente (teste_responsaveis.TesteAtualizar.teste_recusa_id_inexistente) ... ok
+teste_contacto_omisso_fica_vazio (teste_responsaveis.TesteCriar.teste_contacto_omisso_fica_vazio) ... ok
+teste_cria_responsavel_valido (teste_responsaveis.TesteCriar.teste_cria_responsavel_valido) ... ok
+teste_fica_registado_na_base_de_dados (teste_responsaveis.TesteCriar.teste_fica_registado_na_base_de_dados) ... ok
+teste_id_com_prefixo_res (teste_responsaveis.TesteCriar.teste_id_com_prefixo_res) ... ok
+teste_limpa_espacos_do_nome_e_contacto (teste_responsaveis.TesteCriar.teste_limpa_espacos_do_nome_e_contacto) ... ok
+teste_recusa_nome_vazio (teste_responsaveis.TesteCriar.teste_recusa_nome_vazio) ... ok
+teste_desativa_responsavel_ativo (teste_responsaveis.TesteDesativar.teste_desativa_responsavel_ativo)
+O autor é outro Master — `utilizadores.desativar` recusa ... ok
+teste_recusa_desativar_duas_vezes (teste_responsaveis.TesteDesativar.teste_recusa_desativar_duas_vezes) ... ok
+teste_recusa_desativar_inexistente (teste_responsaveis.TesteDesativar.teste_recusa_desativar_inexistente) ... ok
+teste_devolve_lista_nova (teste_responsaveis.TesteListar.teste_devolve_lista_nova) ... ok
+teste_lista_incluir_inativos (teste_responsaveis.TesteListar.teste_lista_incluir_inativos) ... ok
+teste_lista_so_ativos_por_omissao (teste_responsaveis.TesteListar.teste_lista_so_ativos_por_omissao)
+O Master usado como autor fica ativo e aparece na ... ok
+teste_lista_vazia_sem_responsaveis (teste_responsaveis.TesteListar.teste_lista_vazia_sem_responsaveis) ... ok
+teste_devolve_none_para_id_inexistente (teste_responsaveis.TesteProcurar.teste_devolve_none_para_id_inexistente) ... ok
+teste_encontra_responsavel_existente (teste_responsaveis.TesteProcurar.teste_encontra_responsavel_existente)
+Comparação por ID — `criar()` devolve só as chaves que ... ok
+teste_encontra_responsavel_inativo (teste_responsaveis.TesteProcurar.teste_encontra_responsavel_inativo) ... ok
+teste_reativa_responsavel_inativo (teste_responsaveis.TesteReativar.teste_reativa_responsavel_inativo) ... ok
+teste_recusa_reativar_inexistente (teste_responsaveis.TesteReativar.teste_recusa_reativar_inexistente) ... ok
+teste_recusa_reativar_ja_ativo (teste_responsaveis.TesteReativar.teste_recusa_reativar_ja_ativo) ... ok
+teste_aceita_id_com_espacos_a_volta (teste_responsaveis.TesteValidarAutoria.teste_aceita_id_com_espacos_a_volta) ... ok
+teste_aceita_responsavel_ativo (teste_responsaveis.TesteValidarAutoria.teste_aceita_responsavel_ativo) ... ok
+teste_recusa_inativo (teste_responsaveis.TesteValidarAutoria.teste_recusa_inativo) ... ok
+teste_recusa_inexistente (teste_responsaveis.TesteValidarAutoria.teste_recusa_inexistente) ... ok
+teste_recusa_none (teste_responsaveis.TesteValidarAutoria.teste_recusa_none) ... ok
+teste_recusa_vazio_ou_so_espacos (teste_responsaveis.TesteValidarAutoria.teste_recusa_vazio_ou_so_espacos) ... ok
+test_autor_admin_falha (teste_sistema.TesteAutor.test_autor_admin_falha) ... ok
+test_autor_master_passa (teste_sistema.TesteAutor.test_autor_master_passa)
+Um Master válido não é travado na validação — o ... ok
+test_autor_none_falha (teste_sistema.TesteAutor.test_autor_none_falha) ... ok
+test_autor_sem_id_falha (teste_sistema.TesteAutor.test_autor_sem_id_falha) ... ok
+test_autor_staff_falha (teste_sistema.TesteAutor.test_autor_staff_falha) ... ok
+test_validacao_do_autor_corre_antes_do_backup (teste_sistema.TesteAutor.test_validacao_do_autor_corre_antes_do_backup)
+Um autor inválido é recusado ANTES de haver backup. ... ok
+test_backup_com_prefixo_pre_reset_e_criado (teste_sistema.TesteBackup.test_backup_com_prefixo_pre_reset_e_criado) ... ok
+test_backup_criado_antes_de_apagar (teste_sistema.TesteBackup.test_backup_criado_antes_de_apagar)
+O backup é criado DEPOIS de validar o autor, mas ANTES ... ok
+test_backup_vai_para_a_pasta_correta (teste_sistema.TesteBackup.test_backup_vai_para_a_pasta_correta)
+O ficheiro fica em `config.DIR_BACKUPS`, não noutro sítio. ... ok
+test_produto_e_prd_001_depois_do_reset (teste_sistema.TesteContadores.test_produto_e_prd_001_depois_do_reset) ... ok
+test_proxima_propriedade_e_pro_001 (teste_sistema.TesteContadores.test_proxima_propriedade_e_pro_001) ... ok
+test_proximo_responsavel_e_res_001 (teste_sistema.TesteContadores.test_proximo_responsavel_e_res_001)
+Depois do reset, o Master padrão já ocupou RES-001 — o ... ok
+test_autenticar_com_credenciais_padrao (teste_sistema.TesteCredencialInicial.test_autenticar_com_credenciais_padrao) ... ok
+test_password_padrao_errada_devolve_erro (teste_sistema.TesteCredencialInicial.test_password_padrao_errada_devolve_erro) ... ok
+test_username_padrao_mas_sem_password_hash_daria_sem_credencial (teste_sistema.TesteCredencialInicial.test_username_padrao_mas_sem_password_hash_daria_sem_credencial)
+Controlo negativo: ANTES do reset, se alguém criar um ... ok
+test_clientes_apagados (teste_sistema.TesteDadosApagados.test_clientes_apagados) ... ok
+test_configuracoes_apagadas (teste_sistema.TesteDadosApagados.test_configuracoes_apagadas)
+As chaves de configuração desaparecem — a seed tem de ... ok
+test_historico_de_configuracoes_apagado (teste_sistema.TesteDadosApagados.test_historico_de_configuracoes_apagado)
+O `configuracoes_historico` também é esvaziado — não se ... ok
+test_produtos_apagados (teste_sistema.TesteDadosApagados.test_produtos_apagados) ... ok
+test_propriedades_apagadas (teste_sistema.TesteDadosApagados.test_propriedades_apagadas) ... ok
+test_todos_os_dados_desaparecem_em_conjunto (teste_sistema.TesteDadosApagados.test_todos_os_dados_desaparecem_em_conjunto)
+Confirmação em bloco — uma só chamada ao reset apaga ... ok
+test_unidades_apagadas (teste_sistema.TesteDadosApagados.test_unidades_apagadas) ... ok
+test_master_criado_tem_username_do_config (teste_sistema.TesteEstadoFinal.test_master_criado_tem_username_do_config) ... ok
+test_nome_do_master_padrao_vem_do_config (teste_sistema.TesteEstadoFinal.test_nome_do_master_padrao_vem_do_config) ... ok
+test_o_master_do_reset_fica_ativo (teste_sistema.TesteEstadoFinal.test_o_master_do_reset_fica_ativo) ... ok
+test_o_unico_responsavel_e_master (teste_sistema.TesteEstadoFinal.test_o_unico_responsavel_e_master) ... ok
+test_so_fica_um_responsavel (teste_sistema.TesteEstadoFinal.test_so_fica_um_responsavel) ... ok
+test_bd_fica_intacta_quando_backup_falha (teste_sistema.TesteFalhaDoBackup.test_bd_fica_intacta_quando_backup_falha)
+Os dados criados antes do reset continuam lá depois de o ... ok
+test_falha_do_mysqldump_levanta_valueerror (teste_sistema.TesteFalhaDoBackup.test_falha_do_mysqldump_levanta_valueerror) ... ok
+test_master_nao_e_criado_quando_backup_falha (teste_sistema.TesteFalhaDoBackup.test_master_nao_e_criado_quando_backup_falha)
+O reset não chegou à fase de criar o Master padrão — o ... ok
+test_nenhum_pre_reset_pendurado_quando_backup_falha (teste_sistema.TesteFalhaDoBackup.test_nenhum_pre_reset_pendurado_quando_backup_falha)
+O `criar_backup_com_nome` já apaga o ficheiro a meio se o ... ok
+test_master_sem_credencial_e_recusado (teste_sistema.TestePasswordDoAutor.test_master_sem_credencial_e_recusado)
+Um Master sem password definida não consegue confirmar. ... ok
+test_password_de_outro_master_nao_serve (teste_sistema.TestePasswordDoAutor.test_password_de_outro_master_nao_serve)
+A password tem de ser a do PRÓPRIO autor. ... ok
+test_password_errada_e_recusada (teste_sistema.TestePasswordDoAutor.test_password_errada_e_recusada) ... ok
+test_password_errada_fica_registada_no_log (teste_sistema.TestePasswordDoAutor.test_password_errada_fica_registada_no_log) ... ok
+test_password_errada_nao_faz_backup_nem_apaga (teste_sistema.TestePasswordDoAutor.test_password_errada_nao_faz_backup_nem_apaga)
+Recusa ANTES do backup e do apagar: nenhum `pre_reset_*.sql` ... ok
+test_password_vazia_e_recusada (teste_sistema.TestePasswordDoAutor.test_password_vazia_e_recusada) ... ok
+test_reset_bem_sucedido_regista_pedido_e_conclusao (teste_sistema.TestePasswordDoAutor.test_reset_bem_sucedido_regista_pedido_e_conclusao) ... ok
+test_confidencialidade_bloqueia (teste_termos.TesteBloqueia.test_confidencialidade_bloqueia) ... ok
+test_privacidades_nao_bloqueiam (teste_termos.TesteBloqueia.test_privacidades_nao_bloqueiam) ... ok
+test_update_em_versao_com_aviso_falha (teste_termos.TesteFkComposta.test_update_em_versao_com_aviso_falha)
+Publica 1.0, regista um aviso nela, e tenta mudar a versão ... ok
+test_versao_sem_avisos_pode_ser_alterada (teste_termos.TesteFkComposta.test_versao_sem_avisos_pode_ser_alterada)
+Controlo negativo: uma versão SEM avisos associados não é ... ok
+test_estado_documentos_conta_aceitacoes (teste_termos.TesteHistoricoEEstado.test_estado_documentos_conta_aceitacoes)
+Registar uma aceitação no Master faz `aceitacoes` subir ... ok
+test_estado_documentos_privacidades_nao_bloqueiam (teste_termos.TesteHistoricoEEstado.test_estado_documentos_privacidades_nao_bloqueiam) ... ok
+test_estado_documentos_traz_os_tres (teste_termos.TesteHistoricoEEstado.test_estado_documentos_traz_os_tres) ... ok
+test_historico_do_titular_vazio_sem_registos (teste_termos.TesteHistoricoEEstado.test_historico_do_titular_vazio_sem_registos) ... ok
+test_historico_documento_desconhecido_levanta (teste_termos.TesteHistoricoEEstado.test_historico_documento_desconhecido_levanta) ... ok
+test_historico_documento_mostra_todas_as_versoes (teste_termos.TesteHistoricoEEstado.test_historico_documento_mostra_todas_as_versoes) ... ok
+test_historico_mais_recente_primeiro (teste_termos.TesteHistoricoEEstado.test_historico_mais_recente_primeiro)
+Registar 1.0 e depois 2.0 — o histórico vem com 2.0 ... ok
+test_historico_titular_desconhecido_levanta (teste_termos.TesteHistoricoEEstado.test_historico_titular_desconhecido_levanta) ... ok
+test_historico_titular_vazio_levanta (teste_termos.TesteHistoricoEEstado.test_historico_titular_vazio_levanta) ... ok
+test_admin_nao_publica (teste_termos.TestePublicar.test_admin_nao_publica)
+A regra é só Master, não Master+Admin — testa-se o ... ok
+test_autor_none_levanta (teste_termos.TestePublicar.test_autor_none_levanta) ... ok
+test_documento_desconhecido_levanta (teste_termos.TestePublicar.test_documento_desconhecido_levanta) ... ok
+test_master_publica_versao_nova (teste_termos.TestePublicar.test_master_publica_versao_nova) ... ok
+test_publicar_tira_a_versao_anterior_de_vigor (teste_termos.TestePublicar.test_publicar_tira_a_versao_anterior_de_vigor)
+Publicar uma versão nova põe a anterior a `em_vigor=False` ... ok
+test_staff_nao_publica (teste_termos.TestePublicar.test_staff_nao_publica)
+Regra 3: só Master publica. ... ok
+test_texto_vazio_levanta (teste_termos.TestePublicar.test_texto_vazio_levanta) ... ok
+test_versao_demasiado_longa_levanta (teste_termos.TestePublicar.test_versao_demasiado_longa_levanta) ... ok
+test_versao_duplicada_levanta (teste_termos.TestePublicar.test_versao_duplicada_levanta)
+A tabela tem UNIQUE (tipo, versao) — mas a validação de ... ok
+test_versao_vazia_levanta (teste_termos.TestePublicar.test_versao_vazia_levanta) ... ok
+test_data_vem_do_servidor_mysql (teste_termos.TesteRegistar.test_data_vem_do_servidor_mysql)
+Regra 2: a data de entrega é gerada por `NOW()` no MySQL, ... ok
+test_registado_por_none_e_aceite (teste_termos.TesteRegistar.test_registado_por_none_e_aceite)
+Registo via web: não há ninguém a assinar pelo sistema. ... ok
+test_registar_devolve_a_versao_em_vigor (teste_termos.TesteRegistar.test_registar_devolve_a_versao_em_vigor)
+Regra 1: `registar` não recebe versão como parâmetro. ... ok
+test_registar_guarda_versao_em_vigor_no_momento (teste_termos.TesteRegistar.test_registar_guarda_versao_em_vigor_no_momento)
+Regra 1, o ponto mais importante: se o ecrã estiver aberto ... ok
+test_registar_nao_duplica_mesma_versao (teste_termos.TesteRegistar.test_registar_nao_duplica_mesma_versao)
+Registar três vezes a mesma versão cria UMA linha. ... ok
+test_suporte_invalido_levanta (teste_termos.TesteRegistar.test_suporte_invalido_levanta) ... ok
+test_devolve_versao_em_vigor_dos_tres_documentos (teste_termos.TesteTextoEmVigor.test_devolve_versao_em_vigor_dos_tres_documentos)
+A `BaseTermosTest` publica uma versão "1.0" de cada ... ok
+test_documento_desconhecido_levanta (teste_termos.TesteTextoEmVigor.test_documento_desconhecido_levanta) ... ok
+test_sem_versao_em_vigor_levanta (teste_termos.TesteTextoEmVigor.test_sem_versao_em_vigor_levanta)
+Apagar todas as versões de um tipo deixa `texto_em_vigor` ... ok
+test_depois_de_registar_deixa_de_precisar (teste_termos.TesteVerificar.test_depois_de_registar_deixa_de_precisar) ... ok
+test_documento_desconhecido_levanta (teste_termos.TesteVerificar.test_documento_desconhecido_levanta) ... ok
+test_informacao_ao_colaborador_nunca_precisa_aceitar (teste_termos.TesteVerificar.test_informacao_ao_colaborador_nunca_precisa_aceitar) ... ok
+test_informacao_ao_hospede_nunca_precisa_aceitar (teste_termos.TesteVerificar.test_informacao_ao_hospede_nunca_precisa_aceitar)
+A informação ao hóspede não bloqueia — sem aviso prévio, ... ok
+test_quem_nunca_aceitou_precisa_aceitar_confidencialidade (teste_termos.TesteVerificar.test_quem_nunca_aceitou_precisa_aceitar_confidencialidade)
+Regra 5: `None != "1.0"`. Sem aviso prévio, um documento ... ok
+test_titular_desconhecido_levanta (teste_termos.TesteVerificar.test_titular_desconhecido_levanta) ... ok
+test_titular_vazio_levanta (teste_termos.TesteVerificar.test_titular_vazio_levanta) ... ok
+test_altera_epoca_alta_ativa (teste_unidades.TesteAtualizar.test_altera_epoca_alta_ativa) ... ok
+test_altera_preco_base (teste_unidades.TesteAtualizar.test_altera_preco_base) ... ok
+test_none_nao_altera (teste_unidades.TesteAtualizar.test_none_nao_altera) ... ok
+test_recusa_id_inexistente (teste_unidades.TesteAtualizar.test_recusa_id_inexistente) ... ok
+test_recusa_preco_nao_decimal (teste_unidades.TesteAtualizar.test_recusa_preco_nao_decimal) ... ok
+test_recusa_preco_negativo (teste_unidades.TesteAtualizar.test_recusa_preco_negativo) ... ok
+test_altera_capacidade (teste_unidades.TesteAtualizarLugar.test_altera_capacidade) ... ok
+test_altera_nome (teste_unidades.TesteAtualizarLugar.test_altera_nome) ... ok
+test_altera_tipo_cama (teste_unidades.TesteAtualizarLugar.test_altera_tipo_cama) ... ok
+test_none_nao_altera (teste_unidades.TesteAtualizarLugar.test_none_nao_altera) ... ok
+test_recusa_capacidade_invalida (teste_unidades.TesteAtualizarLugar.test_recusa_capacidade_invalida) ... ok
+test_recusa_id_inexistente (teste_unidades.TesteAtualizarLugar.test_recusa_id_inexistente) ... ok
+test_recusa_nome_vazio (teste_unidades.TesteAtualizarLugar.test_recusa_nome_vazio) ... ok
+test_recusa_tipo_cama_desconhecido (teste_unidades.TesteAtualizarLugar.test_recusa_tipo_cama_desconhecido) ... ok
+test_altera_nome (teste_unidades.TesteAtualizarQuarto.test_altera_nome) ... ok
+test_altera_privativo_e_limpeza_independentes (teste_unidades.TesteAtualizarQuarto.test_altera_privativo_e_limpeza_independentes) ... ok
+test_none_nao_altera (teste_unidades.TesteAtualizarQuarto.test_none_nao_altera) ... ok
+test_recusa_id_inexistente (teste_unidades.TesteAtualizarQuarto.test_recusa_id_inexistente) ... ok
+test_recusa_nome_vazio (teste_unidades.TesteAtualizarQuarto.test_recusa_nome_vazio) ... ok
+test_cria_unidade_airbnb_valida (teste_unidades.TesteCriar.test_cria_unidade_airbnb_valida) ... ok
+test_cria_unidade_mensal_valida (teste_unidades.TesteCriar.test_cria_unidade_mensal_valida) ... ok
+test_epoca_alta_ativa_aceita_true (teste_unidades.TesteCriar.test_epoca_alta_ativa_aceita_true) ... ok
+test_recusa_preco_em_falta (teste_unidades.TesteCriar.test_recusa_preco_em_falta) ... ok
+test_recusa_preco_nao_decimal (teste_unidades.TesteCriar.test_recusa_preco_nao_decimal) ... ok
+test_recusa_preco_negativo (teste_unidades.TesteCriar.test_recusa_preco_negativo) ... ok
+test_recusa_propriedade_inexistente (teste_unidades.TesteCriar.test_recusa_propriedade_inexistente) ... ok
+test_recusa_tipo_desconhecido (teste_unidades.TesteCriar.test_recusa_tipo_desconhecido) ... ok
+test_cria_beliche_cria_par_ligado (teste_unidades.TesteCriarLugar.test_cria_beliche_cria_par_ligado)
+`criar_beliche` cria duas linhas com `tipo_cama='beliche'`, ... ok
+test_cria_lugar_capacidade_dois (teste_unidades.TesteCriarLugar.test_cria_lugar_capacidade_dois) ... ok
+test_cria_lugar_valido (teste_unidades.TesteCriarLugar.test_cria_lugar_valido) ... ok
+test_criar_lugar_com_beliche_recusa (teste_unidades.TesteCriarLugar.test_criar_lugar_com_beliche_recusa)
+`criar_lugar` já não aceita 'beliche' — só `criar_beliche` ... ok
+test_recusa_capacidade_invalida (teste_unidades.TesteCriarLugar.test_recusa_capacidade_invalida) ... ok
+test_recusa_capacidade_none (teste_unidades.TesteCriarLugar.test_recusa_capacidade_none) ... ok
+test_recusa_nome_vazio (teste_unidades.TesteCriarLugar.test_recusa_nome_vazio) ... ok
+test_recusa_quarto_inexistente (teste_unidades.TesteCriarLugar.test_recusa_quarto_inexistente) ... ok
+test_recusa_tipo_cama_desconhecido (teste_unidades.TesteCriarLugar.test_recusa_tipo_cama_desconhecido) ... ok
+test_recusa_tipo_cama_vazio (teste_unidades.TesteCriarLugar.test_recusa_tipo_cama_vazio) ... ok
+test_cria_quarto_privativo_com_limpeza (teste_unidades.TesteCriarQuarto.test_cria_quarto_privativo_com_limpeza) ... ok
+test_cria_quarto_valido (teste_unidades.TesteCriarQuarto.test_cria_quarto_valido) ... ok
+test_recusa_nome_vazio (teste_unidades.TesteCriarQuarto.test_recusa_nome_vazio) ... ok
+test_recusa_unidade_inexistente (teste_unidades.TesteCriarQuarto.test_recusa_unidade_inexistente) ... ok
+test_remove_espacos_do_nome (teste_unidades.TesteCriarQuarto.test_remove_espacos_do_nome) ... ok
+test_desativa_unidade_ativa (teste_unidades.TesteDesativarReativar.test_desativa_unidade_ativa) ... ok
+test_desativar_com_forcar_ignora_ocupacoes_ativas (teste_unidades.TesteDesativarReativar.test_desativar_com_forcar_ignora_ocupacoes_ativas)
+Com forcar=True, desativa mesmo com ocupações ativas ... ok
+test_desativar_ignora_ocupacao_ja_inativa (teste_unidades.TesteDesativarReativar.test_desativar_ignora_ocupacao_ja_inativa)
+Uma ocupação já inativa não conta como dependência ativa ... ok
+test_reativa_unidade_inativa (teste_unidades.TesteDesativarReativar.test_reativa_unidade_inativa) ... ok
+test_recusa_desativar_com_ocupacao_ativa_sem_forcar (teste_unidades.TesteDesativarReativar.test_recusa_desativar_com_ocupacao_ativa_sem_forcar)
+Sem forcar=True, recusa desativar se existir alguma ... ok
+test_recusa_desativar_duas_vezes (teste_unidades.TesteDesativarReativar.test_recusa_desativar_duas_vezes) ... ok
+test_recusa_desativar_inexistente (teste_unidades.TesteDesativarReativar.test_recusa_desativar_inexistente) ... ok
+test_recusa_reativar_inexistente (teste_unidades.TesteDesativarReativar.test_recusa_reativar_inexistente) ... ok
+test_recusa_reativar_ja_ativa (teste_unidades.TesteDesativarReativar.test_recusa_reativar_ja_ativa) ... ok
+test_desativa_e_reativa (teste_unidades.TesteDesativarReativarLugar.test_desativa_e_reativa) ... ok
+test_recusa_desativar_duas_vezes (teste_unidades.TesteDesativarReativarLugar.test_recusa_desativar_duas_vezes) ... ok
+test_recusa_id_inexistente (teste_unidades.TesteDesativarReativarLugar.test_recusa_id_inexistente) ... ok
+test_recusa_reativar_ja_ativo (teste_unidades.TesteDesativarReativarLugar.test_recusa_reativar_ja_ativo) ... ok
+test_desativa_e_reativa (teste_unidades.TesteDesativarReativarQuarto.test_desativa_e_reativa) ... ok
+test_recusa_desativar_duas_vezes (teste_unidades.TesteDesativarReativarQuarto.test_recusa_desativar_duas_vezes) ... ok
+test_recusa_id_inexistente (teste_unidades.TesteDesativarReativarQuarto.test_recusa_id_inexistente) ... ok
+test_recusa_reativar_ja_ativo (teste_unidades.TesteDesativarReativarQuarto.test_recusa_reativar_ja_ativo) ... ok
+test_airbnb_entrada_e_saida_no_mesmo_dia_nao_e_conflito (teste_unidades.TesteEstado.test_airbnb_entrada_e_saida_no_mesmo_dia_nao_e_conflito) ... ok
+test_airbnb_livre_no_dia_de_saida (teste_unidades.TesteEstado.test_airbnb_livre_no_dia_de_saida) ... ok
+test_airbnb_livre_sem_ocupacoes (teste_unidades.TesteEstado.test_airbnb_livre_sem_ocupacoes) ... ok
+test_airbnb_ocupado_a_meio_da_estadia (teste_unidades.TesteEstado.test_airbnb_ocupado_a_meio_da_estadia) ... ok
+test_airbnb_ocupado_na_noite_de_entrada (teste_unidades.TesteEstado.test_airbnb_ocupado_na_noite_de_entrada) ... ok
+test_airbnb_ocupado_na_ultima_noite (teste_unidades.TesteEstado.test_airbnb_ocupado_na_ultima_noite) ... ok
+test_airbnb_reserva_cancelada_nao_conta (teste_unidades.TesteEstado.test_airbnb_reserva_cancelada_nao_conta) ... ok
+test_airbnb_reservado_ocupacao_futura (teste_unidades.TesteEstado.test_airbnb_reservado_ocupacao_futura) ... ok
+test_manutencao_sobrepoe_se_com_ocupacao_ativa (teste_unidades.TesteEstado.test_manutencao_sobrepoe_se_com_ocupacao_ativa) ... ok
+test_manutencao_sobrepoe_se_no_mensal (teste_unidades.TesteEstado.test_manutencao_sobrepoe_se_no_mensal) ... ok
+test_manutencao_sobrepoe_se_sem_ocupacoes (teste_unidades.TesteEstado.test_manutencao_sobrepoe_se_sem_ocupacoes) ... ok
+test_mensal_nao_conta_ocupacoes_de_outra_unidade (teste_unidades.TesteEstado.test_mensal_nao_conta_ocupacoes_de_outra_unidade) ... ok
+test_mensal_ocupacao_ativa_ate_ao_dia_anterior_ao_encerramento (teste_unidades.TesteEstado.test_mensal_ocupacao_ativa_ate_ao_dia_anterior_ao_encerramento) ... ok
+test_mensal_ocupacao_encerrada_nao_conta (teste_unidades.TesteEstado.test_mensal_ocupacao_encerrada_nao_conta) ... ok
+test_mensal_ocupacao_futura_nao_conta (teste_unidades.TesteEstado.test_mensal_ocupacao_futura_nao_conta) ... ok
+test_mensal_ocupacao_inativa_nao_conta (teste_unidades.TesteEstado.test_mensal_ocupacao_inativa_nao_conta) ... ok
+test_mensal_proporcao_com_ocupacao_ativa (teste_unidades.TesteEstado.test_mensal_proporcao_com_ocupacao_ativa) ... ok
+test_mensal_sem_ocupacoes_e_zero_sobre_capacidade (teste_unidades.TesteEstado.test_mensal_sem_ocupacoes_e_zero_sobre_capacidade) ... ok
+test_recusa_id_inexistente (teste_unidades.TesteEstado.test_recusa_id_inexistente) ... ok
+test_devolve_lista_nova (teste_unidades.TesteListar.test_devolve_lista_nova) ... ok
+test_filtra_por_propriedade (teste_unidades.TesteListar.test_filtra_por_propriedade)
+Comparação por ID — os dicionários das duas origens têm ... ok
+test_filtra_por_tipo (teste_unidades.TesteListar.test_filtra_por_tipo)
+Comparação por ID — mesma razão. ... ok
+test_lista_incluir_inativas (teste_unidades.TesteListar.test_lista_incluir_inativas) ... ok
+test_lista_so_ativas_por_omissao (teste_unidades.TesteListar.test_lista_so_ativas_por_omissao)
+Comparação por ID — `criar()` e `listar()` devolvem ... ok
+test_lista_vazia_sem_unidades (teste_unidades.TesteListar.test_lista_vazia_sem_unidades) ... ok
+test_filtra_por_quarto (teste_unidades.TesteListarLugares.test_filtra_por_quarto)
+Comparação por ID — mesma razão. ... ok
+test_lista_so_ativos_por_omissao (teste_unidades.TesteListarLugares.test_lista_so_ativos_por_omissao)
+Comparação por ID — mesma razão. ... ok
+test_filtra_por_unidade (teste_unidades.TesteListarQuartos.test_filtra_por_unidade) ... ok
+test_lista_so_ativos_por_omissao (teste_unidades.TesteListarQuartos.test_lista_so_ativos_por_omissao) ... ok
+test_desmarca_manutencao (teste_unidades.TesteManutencao.test_desmarca_manutencao) ... ok
+test_marca_manutencao (teste_unidades.TesteManutencao.test_marca_manutencao) ... ok
+test_recusa_desmarcar_sem_estar_em_manutencao (teste_unidades.TesteManutencao.test_recusa_desmarcar_sem_estar_em_manutencao) ... ok
+test_recusa_id_inexistente (teste_unidades.TesteManutencao.test_recusa_id_inexistente) ... ok
+test_recusa_marcar_duas_vezes (teste_unidades.TesteManutencao.test_recusa_marcar_duas_vezes) ... ok
+test_devolve_none_para_id_inexistente (teste_unidades.TesteProcurar.test_devolve_none_para_id_inexistente) ... ok
+test_encontra_unidade_existente (teste_unidades.TesteProcurar.test_encontra_unidade_existente)
+Comparação por ID — `criar()` e `procurar()` devolvem ... ok
+test_encontra_unidade_inativa (teste_unidades.TesteProcurar.test_encontra_unidade_inativa) ... ok
+test_devolve_none_para_id_inexistente (teste_unidades.TesteProcurarLugar.test_devolve_none_para_id_inexistente) ... ok
+test_encontra_lugar_existente (teste_unidades.TesteProcurarLugar.test_encontra_lugar_existente)
+Comparação por ID — ver nota no topo do ficheiro sobre ... ok
+test_devolve_none_para_id_inexistente (teste_unidades.TesteProcurarQuarto.test_devolve_none_para_id_inexistente) ... ok
+test_encontra_quarto_existente (teste_unidades.TesteProcurarQuarto.test_encontra_quarto_existente) ... ok
+test_lugar_inativo_do_quarto_conta_na_verificacao (teste_unidades.TesteQuartoPrivativoOcupado.test_lugar_inativo_do_quarto_conta_na_verificacao)
+Desativar o lugar não apaga a ocupação que lá está. ... ok
+test_lugar_inexistente_devolve_falso (teste_unidades.TesteQuartoPrivativoOcupado.test_lugar_inexistente_devolve_falso)
+Não é erro: quem valida a existência é contratos.py. ... ok
+test_mesmo_lugar_ja_ocupado_alerta (teste_unidades.TesteQuartoPrivativoOcupado.test_mesmo_lugar_ja_ocupado_alerta) ... ok
+test_ocupacao_airbnb_nao_alerta (teste_unidades.TesteQuartoPrivativoOcupado.test_ocupacao_airbnb_nao_alerta)
+A regra é dos contratos mensais, por pessoa. ... ok
+test_ocupacao_inativa_nao_alerta (teste_unidades.TesteQuartoPrivativoOcupado.test_ocupacao_inativa_nao_alerta)
+Um contrato encerrado liberta o quarto. ... ok
+test_ocupacao_sem_lugar_nao_alerta (teste_unidades.TesteQuartoPrivativoOcupado.test_ocupacao_sem_lugar_nao_alerta)
+Contrato de apartamento inteiro, sem lugar atribuído. ... ok
+test_outro_lugar_do_mesmo_quarto_alerta (teste_unidades.TesteQuartoPrivativoOcupado.test_outro_lugar_do_mesmo_quarto_alerta)
+O privativo é regra do quarto, não do lugar isolado. ... ok
+test_quarto_partilhado_nunca_alerta (teste_unidades.TesteQuartoPrivativoOcupado.test_quarto_partilhado_nunca_alerta) ... ok
+test_quarto_privativo_vazio_nao_alerta (teste_unidades.TesteQuartoPrivativoOcupado.test_quarto_privativo_vazio_nao_alerta) ... ok
+test_admin_nao_alterar_de_outro (teste_utilizadores.TesteAlterarPassword.test_admin_nao_alterar_de_outro) ... ok
+test_alvo_inexistente_falha (teste_utilizadores.TesteAlterarPassword.test_alvo_inexistente_falha) ... ok
+test_alvo_sem_credencial_falha (teste_utilizadores.TesteAlterarPassword.test_alvo_sem_credencial_falha) ... ok
+test_autor_none_falha (teste_utilizadores.TesteAlterarPassword.test_autor_none_falha) ... ok
+test_master_alterar_de_outro_sem_password_atual (teste_utilizadores.TesteAlterarPassword.test_master_alterar_de_outro_sem_password_atual) ... ok
+test_password_nova_curta_falha (teste_utilizadores.TesteAlterarPassword.test_password_nova_curta_falha) ... ok
+test_proprio_alterar_com_password_atual_correta (teste_utilizadores.TesteAlterarPassword.test_proprio_alterar_com_password_atual_correta) ... ok
+test_proprio_alterar_com_password_atual_errada_falha (teste_utilizadores.TesteAlterarPassword.test_proprio_alterar_com_password_atual_errada_falha) ... ok
+test_autentica_com_credenciais_validas (teste_utilizadores.TesteAutenticar.test_autentica_com_credenciais_validas) ... ok
+test_login_bem_sucedido_atualiza_ultimo_login (teste_utilizadores.TesteAutenticar.test_login_bem_sucedido_atualiza_ultimo_login) ... ok
+test_password_errada_devolve_password_errada (teste_utilizadores.TesteAutenticar.test_password_errada_devolve_password_errada) ... ok
+test_password_vazia_devolve_nao_encontrado (teste_utilizadores.TesteAutenticar.test_password_vazia_devolve_nao_encontrado) ... ok
+test_sem_credencial_devolve_sem_credencial (teste_utilizadores.TesteAutenticar.test_sem_credencial_devolve_sem_credencial)
+O caminho real: um responsável com `username` preenchido ... ok
+test_username_com_espacos_a_volta_e_aceite (teste_utilizadores.TesteAutenticar.test_username_com_espacos_a_volta_e_aceite)
+`autenticar` faz `strip()` do username antes de procurar ... ok
+test_username_vazio_devolve_nao_encontrado (teste_utilizadores.TesteAutenticar.test_username_vazio_devolve_nao_encontrado) ... ok
+test_utilizador_inativo_devolve_inativo (teste_utilizadores.TesteAutenticar.test_utilizador_inativo_devolve_inativo) ... ok
+test_utilizador_inexistente_devolve_nao_encontrado (teste_utilizadores.TesteAutenticar.test_utilizador_inexistente_devolve_nao_encontrado) ... ok
+test_admin_define_credencial_a_staff (teste_utilizadores.TesteDefinirCredencial.test_admin_define_credencial_a_staff) ... ok
+test_admin_nao_define_credencial_a_admin (teste_utilizadores.TesteDefinirCredencial.test_admin_nao_define_credencial_a_admin) ... ok
+test_admin_nao_define_credencial_a_master (teste_utilizadores.TesteDefinirCredencial.test_admin_nao_define_credencial_a_master) ... ok
+test_alvo_inexistente_falha (teste_utilizadores.TesteDefinirCredencial.test_alvo_inexistente_falha) ... ok
+test_alvo_ja_com_credencial_falha (teste_utilizadores.TesteDefinirCredencial.test_alvo_ja_com_credencial_falha) ... ok
+test_autor_none_falha (teste_utilizadores.TesteDefinirCredencial.test_autor_none_falha) ... ok
+test_master_define_credencial_a_staff (teste_utilizadores.TesteDefinirCredencial.test_master_define_credencial_a_staff) ... ok
+test_password_curta_falha (teste_utilizadores.TesteDefinirCredencial.test_password_curta_falha) ... ok
+test_password_vazia_falha (teste_utilizadores.TesteDefinirCredencial.test_password_vazia_falha) ... ok
+test_staff_nao_define_credencial (teste_utilizadores.TesteDefinirCredencial.test_staff_nao_define_credencial)
+BUG do PASSO 9 (22/09/2026): antes da correção, o ... ok
+test_username_duplicado_falha (teste_utilizadores.TesteDefinirCredencial.test_username_duplicado_falha) ... ok
+test_username_fica_limpo_de_espacos (teste_utilizadores.TesteDefinirCredencial.test_username_fica_limpo_de_espacos) ... ok
+test_username_vazio_falha (teste_utilizadores.TesteDefinirCredencial.test_username_vazio_falha) ... ok
+test_admin_nao_desativa (teste_utilizadores.TesteDesativar.test_admin_nao_desativa) ... ok
+test_alvo_inexistente_falha (teste_utilizadores.TesteDesativar.test_alvo_inexistente_falha) ... ok
+test_alvo_ja_inativo_falha (teste_utilizadores.TesteDesativar.test_alvo_ja_inativo_falha) ... ok
+test_autor_none_falha (teste_utilizadores.TesteDesativar.test_autor_none_falha) ... ok
+test_master_desativa_admin (teste_utilizadores.TesteDesativar.test_master_desativa_admin) ... ok
+test_master_desativa_staff (teste_utilizadores.TesteDesativar.test_master_desativa_staff) ... ok
+test_master_nao_se_desativa_a_si_mesmo (teste_utilizadores.TesteDesativar.test_master_nao_se_desativa_a_si_mesmo) ... ok
+test_staff_nao_desativa (teste_utilizadores.TesteDesativar.test_staff_nao_desativa) ... ok
+test_lista_incluir_inativos (teste_utilizadores.TesteListarComEstado.test_lista_incluir_inativos) ... ok
+test_lista_reflete_credencial_definida (teste_utilizadores.TesteListarComEstado.test_lista_reflete_credencial_definida) ... ok
+test_lista_so_ativos_por_omissao (teste_utilizadores.TesteListarComEstado.test_lista_so_ativos_por_omissao) ... ok
+test_lista_traz_campos_de_credencial_como_strings (teste_utilizadores.TesteListarComEstado.test_lista_traz_campos_de_credencial_como_strings)
+Nunca devolve `None` nos campos de texto — mesma ... ok
+test_falha_regista_motivo_sem_o_username_tentado (teste_utilizadores.TesteLogsAutenticacao.test_falha_regista_motivo_sem_o_username_tentado)
+O username tentado NUNCA vai para o log — pode ser uma ... ok
+test_password_errada_nao_vai_para_o_log (teste_utilizadores.TesteLogsAutenticacao.test_password_errada_nao_vai_para_o_log) ... ok
+test_recusa_de_permissao_fica_registada (teste_utilizadores.TesteLogsAutenticacao.test_recusa_de_permissao_fica_registada) ... ok
+test_admin_nao_reativa_admin (teste_utilizadores.TesteReativar.test_admin_nao_reativa_admin) ... ok
+test_admin_nao_reativa_master (teste_utilizadores.TesteReativar.test_admin_nao_reativa_master) ... ok
+test_admin_reativa_staff (teste_utilizadores.TesteReativar.test_admin_reativa_staff) ... ok
+test_alvo_inexistente_falha (teste_utilizadores.TesteReativar.test_alvo_inexistente_falha) ... ok
+test_alvo_ja_ativo_falha (teste_utilizadores.TesteReativar.test_alvo_ja_ativo_falha) ... ok
+test_autor_none_falha (teste_utilizadores.TesteReativar.test_autor_none_falha) ... ok
+test_master_reativa_admin (teste_utilizadores.TesteReativar.test_master_reativa_admin) ... ok
+test_master_reativa_staff (teste_utilizadores.TesteReativar.test_master_reativa_staff) ... ok
+test_reativar_limpa_campos_de_desativacao (teste_utilizadores.TesteReativar.test_reativar_limpa_campos_de_desativacao)
+BUG do PASSO 3 (v1.5.0 → corrigido a 22/09/2026): ... ok
+test_staff_nao_reativa (teste_utilizadores.TesteReativar.test_staff_nao_reativa) ... ok
+test_nao_atualiza_ultimo_login (teste_utilizadores.TesteVerificarPassword.test_nao_atualiza_ultimo_login) ... ok
+test_nao_regista_nada_no_log (teste_utilizadores.TesteVerificarPassword.test_nao_regista_nada_no_log)
+Nem sucesso nem falha: quem chama é que sabe o contexto e ... ok
+test_password_certa_devolve_true (teste_utilizadores.TesteVerificarPassword.test_password_certa_devolve_true) ... ok
+test_password_errada_devolve_false (teste_utilizadores.TesteVerificarPassword.test_password_errada_devolve_false) ... ok
+test_password_vazia_devolve_false (teste_utilizadores.TesteVerificarPassword.test_password_vazia_devolve_false) ... ok
+test_responsavel_inexistente_devolve_false (teste_utilizadores.TesteVerificarPassword.test_responsavel_inexistente_devolve_false) ... ok
+test_responsavel_sem_credencial_devolve_false (teste_utilizadores.TesteVerificarPassword.test_responsavel_sem_credencial_devolve_false) ... ok
+test_admin_passa_em_perfis_de_master_admin (teste_utilizadores.TesteVerificarPermissao.test_admin_passa_em_perfis_de_master_admin) ... ok
+test_admin_recusado_em_perfis_de_master (teste_utilizadores.TesteVerificarPermissao.test_admin_recusado_em_perfis_de_master) ... ok
+test_admin_sobre_admin_falha (teste_utilizadores.TesteVerificarPermissao.test_admin_sobre_admin_falha) ... ok
+test_admin_sobre_master_falha (teste_utilizadores.TesteVerificarPermissao.test_admin_sobre_master_falha) ... ok
+test_admin_sobre_staff_passa (teste_utilizadores.TesteVerificarPermissao.test_admin_sobre_staff_passa) ... ok
+test_autor_none_falha (teste_utilizadores.TesteVerificarPermissao.test_autor_none_falha) ... ok
+test_master_passa_em_perfis_de_master (teste_utilizadores.TesteVerificarPermissao.test_master_passa_em_perfis_de_master) ... ok
+test_master_passa_em_perfis_de_master_admin (teste_utilizadores.TesteVerificarPermissao.test_master_passa_em_perfis_de_master_admin) ... ok
+test_master_sobre_qualquer_perfil_passa (teste_utilizadores.TesteVerificarPermissao.test_master_sobre_qualquer_perfil_passa) ... ok
+test_staff_recusado_em_perfis_de_master (teste_utilizadores.TesteVerificarPermissao.test_staff_recusado_em_perfis_de_master) ... ok
+test_staff_recusado_em_perfis_de_master_admin (teste_utilizadores.TesteVerificarPermissao.test_staff_recusado_em_perfis_de_master_admin) ... ok
+teste_capacidade_acima_de_dois_exige_confirmacao (teste_validacoes.TesteCapacidadeLugar.teste_capacidade_acima_de_dois_exige_confirmacao)
+Três ou mais é possível mas invulgar: apanha erros de digitação. ... ok
+teste_capacidade_de_um_e_dois_sao_aceites (teste_validacoes.TesteCapacidadeLugar.teste_capacidade_de_um_e_dois_sao_aceites)
+Solteiro e casal passam sem sinalização. ... ok
+teste_capacidade_invalida_e_recusada (teste_validacoes.TesteCapacidadeLugar.teste_capacidade_invalida_e_recusada)
+Zero, negativos, nulo e valores não inteiros são recusados. ... ok
+teste_caucao_acima_do_sugerido_exige_confirmacao (teste_validacoes.TesteCaucao.teste_caucao_acima_do_sugerido_exige_confirmacao)
+Entre uma e duas rendas é aceite, mas sinalizado. ... ok
+teste_caucao_acima_do_teto_e_recusada (teste_validacoes.TesteCaucao.teste_caucao_acima_do_teto_e_recusada)
+Acima de duas rendas a gravação é recusada. ... ok
+teste_caucao_de_uma_renda_nao_exige_confirmacao (teste_validacoes.TesteCaucao.teste_caucao_de_uma_renda_nao_exige_confirmacao)
+O valor sugerido é aceite sem sinalização. ... ok
+teste_caucao_exatamente_no_teto_e_aceite (teste_validacoes.TesteCaucao.teste_caucao_exatamente_no_teto_e_aceite)
+O teto está incluído: duas rendas exatas passam. ... ok
+teste_caucao_nula_exige_confirmacao (teste_validacoes.TesteCaucao.teste_caucao_nula_exige_confirmacao)
+Uma caução de zero é legítima mas excecional. ... ok
+teste_caucao_omitida_e_recusada (teste_validacoes.TesteCaucao.teste_caucao_omitida_e_recusada)
+Um valor nulo não é o mesmo que caução de zero. ... ok
+teste_data_fora_do_periodo_com_indicador_ativo (teste_validacoes.TesteEpocaAlta.teste_data_fora_do_periodo_com_indicador_ativo)
+Com o indicador ligado mas fora do período, é preço base. ... ok
+teste_data_no_periodo_com_indicador_ativo (teste_validacoes.TesteEpocaAlta.teste_data_no_periodo_com_indicador_ativo)
+As duas condições reunidas dão época alta. ... ok
+teste_data_no_periodo_sem_indicador (teste_validacoes.TesteEpocaAlta.teste_data_no_periodo_sem_indicador)
+Sem o indicador manual não há época alta, mesmo em agosto. ... ok
+teste_limites_do_periodo_estao_incluidos (teste_validacoes.TesteEpocaAlta.teste_limites_do_periodo_estao_incluidos)
+O primeiro e o último dia do período contam como época alta. ... ok
+teste_contrato_sem_termo_e_aceite (teste_validacoes.TesteIntervalo.teste_contrato_sem_termo_e_aceite)
+Um contrato mensal em vigor não tem fim para validar. ... ok
+teste_estadia_abaixo_do_minimo_e_recusada (teste_validacoes.TesteIntervalo.teste_estadia_abaixo_do_minimo_e_recusada)
+Uma noite é inferior ao mínimo de duas do regime Airbnb. ... ok
+teste_estadia_acima_do_maximo_e_recusada (teste_validacoes.TesteIntervalo.teste_estadia_acima_do_maximo_e_recusada)
+Trinta noites excedem o máximo de vinte e oito. ... ok
+teste_fim_anterior_ao_inicio_e_recusado (teste_validacoes.TesteIntervalo.teste_fim_anterior_ao_inicio_e_recusado)
+Uma saída antes da entrada é impossível. ... ok
+teste_fim_igual_ao_inicio_e_recusado (teste_validacoes.TesteIntervalo.teste_fim_igual_ao_inicio_e_recusado)
+Entrada e saída no mesmo dia não contém nenhuma noite. ... ok
+teste_intervalo_valido_nao_produz_erro (teste_validacoes.TesteIntervalo.teste_intervalo_valido_nao_produz_erro)
+Um intervalo coerente dentro dos limites passa em silêncio. ... ok
+teste_nif_com_comprimento_errado_e_recusado (teste_validacoes.TesteNIF.teste_nif_com_comprimento_errado_e_recusado)
+Um NIF com menos ou mais de nove dígitos é recusado. ... ok
+teste_nif_com_digito_de_controlo_errado (teste_validacoes.TesteNIF.teste_nif_com_digito_de_controlo_errado)
+Alterar o último dígito invalida o NIF. ... ok
+teste_nif_com_letras_e_recusado (teste_validacoes.TesteNIF.teste_nif_com_letras_e_recusado)
+Um valor com caracteres não numéricos é recusado. ... ok
+teste_nif_valido (teste_validacoes.TesteNIF.teste_nif_valido)
+Um NIF com dígito de controlo correto é aceite. ... ok
+teste_nif_vazio_ou_nulo_e_recusado (teste_validacoes.TesteNIF.teste_nif_vazio_ou_nulo_e_recusado)
+Ausência de valor é recusada sem produzir erro. ... ok
+teste_tipo_desconhecido_e_recusado (teste_validacoes.TesteTipoUnidade.teste_tipo_desconhecido_e_recusado)
+Um valor fora dos dois tipos previstos é recusado. ... ok
+teste_tipos_coincidentes_sao_aceites (teste_validacoes.TesteTipoUnidade.teste_tipos_coincidentes_sao_aceites)
+Mensal com mensal e Airbnb com Airbnb passam. ... ok
+teste_tipos_diferentes_sao_recusados (teste_validacoes.TesteTipoUnidade.teste_tipos_diferentes_sao_recusados)
+Uma unidade mensal não aceita reserva Airbnb, nem o inverso. ... ok
+teste_contrato_sem_termo_compara_apenas_com_o_inicio (teste_validacoes.TesteValidadeDocumento.teste_contrato_sem_termo_compara_apenas_com_o_inicio)
+Num contrato mensal em vigor não há fim para delimitar. ... ok
+teste_documento_caduca_a_meio_da_estadia (teste_validacoes.TesteValidadeDocumento.teste_documento_caduca_a_meio_da_estadia)
+Um documento que expira entre a entrada e a saída é assinalado. ... ok
+teste_documento_caduca_no_dia_da_entrada (teste_validacoes.TesteValidadeDocumento.teste_documento_caduca_no_dia_da_entrada)
+A validade no dia da entrada é assinalada. ... ok
+teste_documento_caduca_no_dia_da_saida (teste_validacoes.TesteValidadeDocumento.teste_documento_caduca_no_dia_da_saida)
+A validade no dia da saída não é assinalada. ... ok
+teste_documento_valido_durante_toda_a_estadia (teste_validacoes.TesteValidadeDocumento.teste_documento_valido_durante_toda_a_estadia)
+Um documento que caduca depois da saída não é assinalado. ... ok
+teste_validade_nula_nao_e_assinalada (teste_validacoes.TesteValidadeDocumento.teste_validade_nula_nao_e_assinalada)
+Sem validade registada não há nada a avaliar. ... ok
+teste_campos_opcionais_nao_bloqueiam_no_airbnb (teste_validacoes.TesteValidarCliente.teste_campos_opcionais_nao_bloqueiam_no_airbnb)
+No Airbnb, email/telefone/morada em falta não bloqueiam — ... ok
+teste_campos_opcionais_nao_bloqueiam_no_mensal (teste_validacoes.TesteValidarCliente.teste_campos_opcionais_nao_bloqueiam_no_mensal)
+No mensal, email em falta NÃO bloqueia — o que é obrigatório ... ok
+teste_cliente_completo_nao_bloqueia (teste_validacoes.TesteValidarCliente.teste_cliente_completo_nao_bloqueia)
+Com tudo preenchido, `validar_cliente` não levanta nada, ... ok
+teste_data_nascimento_em_falta_bloqueia (teste_validacoes.TesteValidarCliente.teste_data_nascimento_em_falta_bloqueia)
+A data de nascimento é obrigatória nos dois regimes — ... ok
+teste_documento_em_falta_bloqueia (teste_validacoes.TesteValidarCliente.teste_documento_em_falta_bloqueia)
+O tipo e o número do documento bloqueiam nos dois regimes. ... ok
+teste_estado_civil_fora_da_lista_bloqueia_no_mensal (teste_validacoes.TesteValidarCliente.teste_estado_civil_fora_da_lista_bloqueia_no_mensal)
+Só são aceites os valores de TIPOS_ESTADO_CIVIL. ... ok
+teste_estado_civil_obrigatorio_apenas_no_regime_mensal (teste_validacoes.TesteValidarCliente.teste_estado_civil_obrigatorio_apenas_no_regime_mensal)
+Campo novo (decisão de 26/08, ponto 2): bloqueia só no ... ok
+teste_morada_obrigatoria_apenas_no_regime_mensal (teste_validacoes.TesteValidarCliente.teste_morada_obrigatoria_apenas_no_regime_mensal)
+A morada de residência bloqueia no mensal (decisão de ... ok
+teste_nacionalidade_obrigatoria_nos_dois_regimes (teste_validacoes.TesteValidarCliente.teste_nacionalidade_obrigatoria_nos_dois_regimes)
+A nacionalidade é obrigatória nos DOIS regimes — o boletim ... ok
+teste_nif_invalido_bloqueia_no_regime_mensal (teste_validacoes.TesteValidarCliente.teste_nif_invalido_bloqueia_no_regime_mensal)
+Um NIF preenchido mas com dígito de controlo errado é recusado. ... ok
+teste_nif_obrigatorio_apenas_no_regime_mensal (teste_validacoes.TesteValidarCliente.teste_nif_obrigatorio_apenas_no_regime_mensal)
+O NIF bloqueia no mensal e é dispensável no Airbnb. ... ok
+teste_nome_em_falta_bloqueia (teste_validacoes.TesteValidarCliente.teste_nome_em_falta_bloqueia)
+Sem nome, a gravação é recusada nos dois regimes. ... ok
+teste_pais_emissor_obrigatorio_apenas_no_airbnb (teste_validacoes.TesteValidarCliente.teste_pais_emissor_obrigatorio_apenas_no_airbnb)
+Campo novo (16/09/2026): bloqueia só no Airbnb — no mensal ... ok
+teste_pais_residencia_obrigatorio_apenas_no_airbnb (teste_validacoes.TesteValidarCliente.teste_pais_residencia_obrigatorio_apenas_no_airbnb)
+Campo novo (16/09/2026): bloqueia só no Airbnb — no mensal ... ok
+teste_regime_desconhecido_bloqueia (teste_validacoes.TesteValidarCliente.teste_regime_desconhecido_bloqueia)
+Um regime fora de TIPOS_UNIDADE é recusado. ... ok
+teste_telefone_obrigatorio_apenas_no_regime_mensal (teste_validacoes.TesteValidarCliente.teste_telefone_obrigatorio_apenas_no_regime_mensal)
+O telefone é obrigatório no mensal (decisão 16/09/2026, ... ok
+teste_tipo_de_documento_fora_da_lista_bloqueia (teste_validacoes.TesteValidarCliente.teste_tipo_de_documento_fora_da_lista_bloqueia)
+Só são aceites os quatro tipos de documento previstos. ... ok
+teste_validade_documento_obrigatoria_apenas_no_mensal (teste_validacoes.TesteValidarCliente.teste_validade_documento_obrigatoria_apenas_no_mensal)
+A validade do documento é obrigatória só no regime mensal ... ok
+
+----------------------------------------------------------------------
+Ran 1011 tests in 1455.932s
+
+OK

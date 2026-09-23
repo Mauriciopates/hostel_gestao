@@ -6,7 +6,7 @@ testes correm contra a base de dados de teste dedicada (ver
 `apoio_BD.py`) — NUNCA contra a base de dados real. Cada teste começa
 com as tabelas vazias e os contadores reiniciados.
 
-ÂMBITO: só a função pública `sistema.comecar_do_zero(autor)`. As três
+ÂMBITO: só a função pública `sistema.comecar_do_zero(autor, password, PASSWORD_TESTE)`. As três
 funções privadas (`_validar_autor_master`, `_reiniciar_contadores`,
 `_definir_credencial_inicial`) NÃO são testadas isoladamente — os seus
 efeitos são observáveis pela própria `comecar_do_zero`:
@@ -65,14 +65,37 @@ import utilizadores
 # ---------------------------------------------------------------------
 
 
+# Password dos Masters que servem de autor ao reset. Desde 23/09/2026
+# o `comecar_do_zero` exige a password do próprio autor (a regra saiu
+# da GUI para o módulo) — um Master sem credencial já não serve.
+PASSWORD_TESTE = "password123"
+
+
+def _dar_password(responsavel):
+    """Grava a PASSWORD_TESTE no responsável, por escrita direta.
+
+    Mesma técnica do `sistema._definir_credencial_inicial`: hash +
+    `atualizar_responsavel`, sem passar pelo `definir_credencial`
+    (que exigia um autor e um username único por Master criado).
+    """
+    repositorio.atualizar_responsavel(
+        responsavel["id"],
+        {"password_hash": utilizadores._hash_password(PASSWORD_TESTE)},
+    )
+    return responsavel
+
+
 def _criar_master(nome="Master Existente"):
-    """Master ativo, pronto a servir de autor para `comecar_do_zero`.
+    """Master ativo, com password, pronto a servir de autor para
+    `comecar_do_zero`.
 
     Cria-se SEMPRE um Master novo dentro de cada teste, nunca em
     `setUp` partilhado — cada teste é auto-suficiente, mesma
     convenção já consolidada no PASSO 9.
     """
-    return responsaveis.criar(nome, tipo_utilizador="Master")
+    return _dar_password(
+        responsaveis.criar(nome, tipo_utilizador="Master")
+    )
 
 
 def _criar_admin(nome="Admin de Teste"):
@@ -119,21 +142,21 @@ class TesteAutor(BaseMySQLTest):
 
     def test_autor_none_falha(self):
         with self.assertRaises(ValueError):
-            sistema.comecar_do_zero(None)
+            sistema.comecar_do_zero(None, PASSWORD_TESTE)
 
     def test_autor_sem_id_falha(self):
         with self.assertRaises(ValueError):
-            sistema.comecar_do_zero({"nome": "sem id"})
+            sistema.comecar_do_zero({"nome": "sem id"}, PASSWORD_TESTE)
 
     def test_autor_admin_falha(self):
         admin = _criar_admin()
         with self.assertRaises(ValueError):
-            sistema.comecar_do_zero(admin)
+            sistema.comecar_do_zero(admin, PASSWORD_TESTE)
 
     def test_autor_staff_falha(self):
         staff = _criar_staff()
         with self.assertRaises(ValueError):
-            sistema.comecar_do_zero(staff)
+            sistema.comecar_do_zero(staff, PASSWORD_TESTE)
 
     def test_autor_master_passa(self):
         """Um Master válido não é travado na validação — o
@@ -143,7 +166,7 @@ class TesteAutor(BaseMySQLTest):
         demasiado restritiva."""
         master = _criar_master()
 
-        resultado = sistema.comecar_do_zero(master)
+        resultado = sistema.comecar_do_zero(master, PASSWORD_TESTE)
 
         self.assertIsNotNone(resultado)
         self.assertEqual(resultado["tipo_utilizador"], "Master")
@@ -158,7 +181,7 @@ class TesteAutor(BaseMySQLTest):
         admin = _criar_admin()
 
         with self.assertRaises(ValueError):
-            sistema.comecar_do_zero(admin)
+            sistema.comecar_do_zero(admin, PASSWORD_TESTE)
 
         # Nenhum ficheiro `pre_reset_*.sql` foi criado.
         ficheiros = list(config.DIR_BACKUPS.glob("pre_reset_*.sql"))
@@ -177,7 +200,7 @@ class TesteBackup(BaseMySQLTest):
     def test_backup_com_prefixo_pre_reset_e_criado(self):
         master = _criar_master()
 
-        sistema.comecar_do_zero(master)
+        sistema.comecar_do_zero(master, PASSWORD_TESTE)
 
         ficheiros = list(config.DIR_BACKUPS.glob("pre_reset_*.sql"))
         self.assertEqual(len(ficheiros), 1)
@@ -186,7 +209,7 @@ class TesteBackup(BaseMySQLTest):
         """O ficheiro fica em `config.DIR_BACKUPS`, não noutro sítio."""
         master = _criar_master()
 
-        sistema.comecar_do_zero(master)
+        sistema.comecar_do_zero(master, PASSWORD_TESTE)
 
         for ficheiro in config.DIR_BACKUPS.glob("pre_reset_*.sql"):
             self.assertEqual(ficheiro.parent, config.DIR_BACKUPS)
@@ -206,7 +229,7 @@ class TesteBackup(BaseMySQLTest):
         _criar_propriedade("Vai desaparecer")
         master = _criar_master()
 
-        sistema.comecar_do_zero(master)
+        sistema.comecar_do_zero(master, PASSWORD_TESTE)
 
         # O backup existe; a propriedade desapareceu.
         self.assertTrue(
@@ -233,7 +256,7 @@ class TesteFalhaDoBackup(BaseMySQLTest):
             side_effect=FileNotFoundError,
         ):
             with self.assertRaises(ValueError):
-                sistema.comecar_do_zero(master)
+                sistema.comecar_do_zero(master, PASSWORD_TESTE)
 
     def test_bd_fica_intacta_quando_backup_falha(self):
         """Os dados criados antes do reset continuam lá depois de o
@@ -248,7 +271,7 @@ class TesteFalhaDoBackup(BaseMySQLTest):
             side_effect=FileNotFoundError,
         ):
             with self.assertRaises(ValueError):
-                sistema.comecar_do_zero(master)
+                sistema.comecar_do_zero(master, PASSWORD_TESTE)
 
         # Tudo continua na base de dados.
         self.assertIsNotNone(propriedades.procurar(propriedade["id"]))
@@ -266,7 +289,7 @@ class TesteFalhaDoBackup(BaseMySQLTest):
             side_effect=FileNotFoundError,
         ):
             with self.assertRaises(ValueError):
-                sistema.comecar_do_zero(master)
+                sistema.comecar_do_zero(master, PASSWORD_TESTE)
 
         ficheiros = list(config.DIR_BACKUPS.glob("pre_reset_*.sql"))
         self.assertEqual(ficheiros, [])
@@ -281,7 +304,7 @@ class TesteFalhaDoBackup(BaseMySQLTest):
             side_effect=FileNotFoundError,
         ):
             with self.assertRaises(ValueError):
-                sistema.comecar_do_zero(master_original)
+                sistema.comecar_do_zero(master_original, PASSWORD_TESTE)
 
         lista = responsaveis.listar(incluir_inativos=True)
         ids = [r["id"] for r in lista]
@@ -304,7 +327,7 @@ class TesteEstadoFinal(BaseMySQLTest):
         _criar_staff("Vai desaparecer 2")
         master_autor = _criar_master("Autor do reset")
 
-        sistema.comecar_do_zero(master_autor)
+        sistema.comecar_do_zero(master_autor, PASSWORD_TESTE)
 
         lista = responsaveis.listar(incluir_inativos=True)
         self.assertEqual(len(lista), 1)
@@ -312,7 +335,7 @@ class TesteEstadoFinal(BaseMySQLTest):
     def test_o_unico_responsavel_e_master(self):
         master_autor = _criar_master("Autor do reset")
 
-        sistema.comecar_do_zero(master_autor)
+        sistema.comecar_do_zero(master_autor, PASSWORD_TESTE)
 
         lista = responsaveis.listar(incluir_inativos=True)
         self.assertEqual(lista[0]["tipo_utilizador"], "Master")
@@ -320,14 +343,14 @@ class TesteEstadoFinal(BaseMySQLTest):
     def test_nome_do_master_padrao_vem_do_config(self):
         master_autor = _criar_master("Autor do reset")
 
-        criado = sistema.comecar_do_zero(master_autor)
+        criado = sistema.comecar_do_zero(master_autor, PASSWORD_TESTE)
 
         self.assertEqual(criado["nome"], config.NOME_MASTER_PADRAO)
 
     def test_master_criado_tem_username_do_config(self):
         master_autor = _criar_master("Autor do reset")
 
-        sistema.comecar_do_zero(master_autor)
+        sistema.comecar_do_zero(master_autor, PASSWORD_TESTE)
 
         # Reler via repositório para apanhar a normalização.
         lista = utilizadores.listar_com_estado(incluir_inativos=True)
@@ -337,7 +360,7 @@ class TesteEstadoFinal(BaseMySQLTest):
     def test_o_master_do_reset_fica_ativo(self):
         master_autor = _criar_master("Autor do reset")
 
-        criado = sistema.comecar_do_zero(master_autor)
+        criado = sistema.comecar_do_zero(master_autor, PASSWORD_TESTE)
 
         self.assertTrue(criado["ativo"])
 
@@ -353,7 +376,7 @@ class TesteCredencialInicial(BaseMySQLTest):
 
     def test_autenticar_com_credenciais_padrao(self):
         master_autor = _criar_master("Autor do reset")
-        sistema.comecar_do_zero(master_autor)
+        sistema.comecar_do_zero(master_autor, PASSWORD_TESTE)
 
         registo, motivo = utilizadores.autenticar(
             config.UTILIZADOR_PADRAO, config.PASSWORD_PADRAO
@@ -366,7 +389,7 @@ class TesteCredencialInicial(BaseMySQLTest):
 
     def test_password_padrao_errada_devolve_erro(self):
         master_autor = _criar_master("Autor do reset")
-        sistema.comecar_do_zero(master_autor)
+        sistema.comecar_do_zero(master_autor, PASSWORD_TESTE)
 
         registo, motivo = utilizadores.autenticar(
             config.UTILIZADOR_PADRAO, "password_errada"
@@ -400,10 +423,10 @@ class TesteCredencialInicial(BaseMySQLTest):
         self.assertEqual(motivo, utilizadores.MOTIVO_SEM_CREDENCIAL)
 
         # Reset (o autor tem de ser Master, e o anterior está lá).
-        master_autor = responsaveis.criar(
-            "Master Autor", tipo_utilizador="Master"
+        master_autor = _dar_password(
+            responsaveis.criar("Master Autor", tipo_utilizador="Master")
         )
-        sistema.comecar_do_zero(master_autor)
+        sistema.comecar_do_zero(master_autor, PASSWORD_TESTE)
 
         # Estado "depois": credencial funcional.
         registo, motivo = utilizadores.autenticar(
@@ -426,7 +449,7 @@ class TesteContadores(BaseMySQLTest):
         _criar_propriedade("Antes do reset")
 
         master_autor = _criar_master()
-        sistema.comecar_do_zero(master_autor)
+        sistema.comecar_do_zero(master_autor, PASSWORD_TESTE)
 
         nova = _criar_propriedade("Depois do reset")
 
@@ -442,7 +465,7 @@ class TesteContadores(BaseMySQLTest):
         _criar_staff("Antes 2")
 
         master_autor = _criar_master("Autor do reset")
-        sistema.comecar_do_zero(master_autor)
+        sistema.comecar_do_zero(master_autor, PASSWORD_TESTE)
 
         # O Master padrão do reset é RES-001.
         lista = responsaveis.listar(incluir_inativos=True)
@@ -456,7 +479,7 @@ class TesteContadores(BaseMySQLTest):
         _criar_produto("Antes do reset")
 
         master_autor = _criar_master()
-        sistema.comecar_do_zero(master_autor)
+        sistema.comecar_do_zero(master_autor, PASSWORD_TESTE)
 
         novo = _criar_produto("Depois do reset")
 
@@ -500,28 +523,28 @@ class TesteDadosApagados(BaseMySQLTest):
         self.master_autor = _criar_master("Autor do reset")
 
     def test_clientes_apagados(self):
-        sistema.comecar_do_zero(self.master_autor)
+        sistema.comecar_do_zero(self.master_autor, PASSWORD_TESTE)
 
         self.assertEqual(
             clientes.listar(incluir_inativos=True), []
         )
 
     def test_propriedades_apagadas(self):
-        sistema.comecar_do_zero(self.master_autor)
+        sistema.comecar_do_zero(self.master_autor, PASSWORD_TESTE)
 
         self.assertEqual(
             propriedades.listar(incluir_inativas=True), []
         )
 
     def test_unidades_apagadas(self):
-        sistema.comecar_do_zero(self.master_autor)
+        sistema.comecar_do_zero(self.master_autor, PASSWORD_TESTE)
 
         self.assertEqual(
             unidades.listar(incluir_inativas=True), []
         )
 
     def test_produtos_apagados(self):
-        sistema.comecar_do_zero(self.master_autor)
+        sistema.comecar_do_zero(self.master_autor, PASSWORD_TESTE)
 
         self.assertEqual(
             estoque.listar_produtos(incluir_inativos=True), []
@@ -530,7 +553,7 @@ class TesteDadosApagados(BaseMySQLTest):
     def test_configuracoes_apagadas(self):
         """As chaves de configuração desaparecem — a seed tem de
         correr outra vez depois do reset para as recriar."""
-        sistema.comecar_do_zero(self.master_autor)
+        sistema.comecar_do_zero(self.master_autor, PASSWORD_TESTE)
 
         # Nenhuma chave da seed sobreviveu.
         for chave in configuracoes._CHAVES:
@@ -544,14 +567,14 @@ class TesteDadosApagados(BaseMySQLTest):
         """O `configuracoes_historico` também é esvaziado — não se
         guarda o histórico de uma alteração a uma chave que já não
         existe."""
-        sistema.comecar_do_zero(self.master_autor)
+        sistema.comecar_do_zero(self.master_autor, PASSWORD_TESTE)
 
         self.assertEqual(configuracoes.listar_historico(), [])
 
     def test_todos_os_dados_desaparecem_em_conjunto(self):
         """Confirmação em bloco — uma só chamada ao reset apaga
         tudo de uma vez."""
-        sistema.comecar_do_zero(self.master_autor)
+        sistema.comecar_do_zero(self.master_autor, PASSWORD_TESTE)
 
         self.assertEqual(clientes.listar(incluir_inativos=True), [])
         self.assertEqual(propriedades.listar(incluir_inativas=True), [])
@@ -565,6 +588,74 @@ class TesteDadosApagados(BaseMySQLTest):
         lista = responsaveis.listar(incluir_inativos=True)
         self.assertEqual(len(lista), 1)
         self.assertEqual(lista[0]["tipo_utilizador"], "Master")
+
+
+# =====================================================================
+# Password do autor (regra movida da GUI para o módulo, 23/09/2026)
+# =====================================================================
+
+
+class TestePasswordDoAutor(BaseMySQLTest):
+    """`comecar_do_zero` confirma a password do autor antes de fazer
+    seja o que for. Até 23/09/2026 esta confirmação vivia só no modal
+    da GUI — qualquer outro caminho apagava tudo só com um Master na
+    sessão.
+    """
+
+    def test_password_errada_e_recusada(self):
+        master = _criar_master()
+        with self.assertRaises(ValueError):
+            sistema.comecar_do_zero(master, "password_errada")
+
+    def test_password_vazia_e_recusada(self):
+        master = _criar_master()
+        with self.assertRaises(ValueError):
+            sistema.comecar_do_zero(master, "")
+
+    def test_master_sem_credencial_e_recusado(self):
+        """Um Master sem password definida não consegue confirmar."""
+        master = responsaveis.criar("Sem password", tipo_utilizador="Master")
+        with self.assertRaises(ValueError):
+            sistema.comecar_do_zero(master, PASSWORD_TESTE)
+
+    def test_password_de_outro_master_nao_serve(self):
+        """A password tem de ser a do PRÓPRIO autor."""
+        master_autor = responsaveis.criar(
+            "Autor sem password", tipo_utilizador="Master"
+        )
+        _criar_master("Outro Master com password")
+        with self.assertRaises(ValueError):
+            sistema.comecar_do_zero(master_autor, PASSWORD_TESTE)
+
+    def test_password_errada_nao_faz_backup_nem_apaga(self):
+        """Recusa ANTES do backup e do apagar: nenhum `pre_reset_*.sql`
+        em disco e os dados continuam lá."""
+        propriedade = _criar_propriedade("Continua cá")
+        master = _criar_master()
+
+        with self.assertRaises(ValueError):
+            sistema.comecar_do_zero(master, "password_errada")
+
+        self.assertEqual(
+            list(config.DIR_BACKUPS.glob("pre_reset_*.sql")), []
+        )
+        self.assertIsNotNone(propriedades.procurar(propriedade["id"]))
+
+    def test_password_errada_fica_registada_no_log(self):
+        master = _criar_master()
+        with self.assertLogs("sistema", level="WARNING") as registo:
+            with self.assertRaises(ValueError):
+                sistema.comecar_do_zero(master, "password_errada")
+        self.assertIn("password errada", registo.output[0])
+        self.assertIn(master["id"], registo.output[0])
+
+    def test_reset_bem_sucedido_regista_pedido_e_conclusao(self):
+        master = _criar_master()
+        with self.assertLogs("sistema", level="WARNING") as registo:
+            sistema.comecar_do_zero(master, PASSWORD_TESTE)
+        texto = "\n".join(registo.output)
+        self.assertIn("Reset do sistema pedido", texto)
+        self.assertIn("Reset concluído", texto)
 
 
 if __name__ == "__main__":

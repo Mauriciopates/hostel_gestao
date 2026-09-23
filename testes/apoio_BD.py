@@ -51,6 +51,7 @@ define o seu próprio `setUp` tem de chamar `super().setUp()` primeiro
 (mesma convenção já usada em teste_contratos.py com `BaseContratosTest`).
 """
 
+import logging
 import os
 import shutil
 import sys
@@ -64,6 +65,54 @@ import mysql.connector
 
 import config
 import repositorio
+
+# Logs durante os testes (v1.6.0, 23/09/2026).
+#
+# Os testes não passam pelo `main`/`main_gui`, por isso o
+# `registo_logs.configurar()` nunca corre — e os logs dos módulos
+# NUNCA vão para o `hostel.log` verdadeiro. Vão para um ficheiro
+# próprio, só dos testes:
+#
+#     testes/teste_logs/testes.log
+#
+# - A pasta é criada se não existir.
+# - O ficheiro é REESCRITO a cada execução da suite (mode="w"): mostra
+#   só a última corrida. Se acumulasse, crescia depressa — os testes
+#   provocam de propósito centenas de recusas e erros.
+# - Serve para investigar um teste que falhou: o que os módulos
+#   registaram até ao erro. NÃO é para ler como o log da operação —
+#   está cheio de WARNING/CRITICAL provocados de propósito.
+# - Nada vai para o ecrã: sem isto, o Python imprimia todos os
+#   WARNING/ERROR na saída dos testes.
+# - O `self.assertLogs(...)` continua a funcionar (por isso não se usa
+#   `logging.disable`). As linhas apanhadas por um `assertLogs` ficam
+#   presas nesse teste e não chegam a este ficheiro — é o normal.
+# - `testes/teste_logs/` está no `.gitignore`: é resultado local.
+#
+# Só se configura se a raiz não tiver já um destino — para não
+# interferir com uma configuração feita de propósito.
+PASTA_LOGS_TESTE = Path(__file__).resolve().parent / "teste_logs"
+
+if not logging.getLogger().handlers:
+    PASTA_LOGS_TESTE.mkdir(exist_ok=True)
+
+    _handler_testes = logging.FileHandler(
+        PASTA_LOGS_TESTE / "testes.log", mode="w", encoding="utf-8"
+    )
+    _handler_testes.setFormatter(
+        logging.Formatter(
+            "%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+            "%Y-%m-%d %H:%M:%S",
+        )
+    )
+    logging.getLogger().addHandler(_handler_testes)
+    logging.getLogger().setLevel(logging.INFO)
+
+    # Mesmas bibliotecas silenciadas no `registo_logs.py`.
+    for _nome in ("mysql.connector", "matplotlib", "PIL"):
+        logging.getLogger(_nome).setLevel(logging.WARNING)
+
+_logger_testes = logging.getLogger("testes")
 
 # Nome da base de dados de teste — nunca a real. Pode ser trocado com
 # a variável de ambiente DB_NAME_TESTE (por exemplo, para isolar
@@ -574,6 +623,10 @@ class BaseMySQLTest(unittest.TestCase):
         _garantir_base_de_teste()
 
     def setUp(self):
+        # 0. Marcador no `testes/teste_logs/testes.log`: sem ele não se
+        # sabia que teste gerou cada linha.
+        _logger_testes.info("=== %s ===", self.id())
+
         # 1. Base de dados: aponta para a de teste, nunca para a real.
         # repositorio.py faz "import config" e lê config.DB_NAME em
         # cada obter_conexao() — como é o mesmo objeto módulo (Python

@@ -34,6 +34,8 @@ ALTERAÇÃO 20/09/2026 — secção "Caução" temporariamente bloqueada:
   `_SECOES_BLOQUEADAS` e apagar o método `_aviso_em_desenvolvimento`.
 """
 
+import logging
+
 import customtkinter as ctk
 
 import configuracoes
@@ -45,6 +47,8 @@ from . import sessao
 from . import tema
 from .gui_configuracoes_modal import confirmar_alteracao
 from .gui_documentos_legais import publicar_documento, ver_texto
+
+logger = logging.getLogger(__name__)
 
 # =====================================================================
 # MAPA DAS SECÇÕES
@@ -842,7 +846,7 @@ class Configuracoes(ctk.CTkFrame):
             command=self._comecar_do_zero,
         ).pack(side="right", padx=(20, 0))
 
-# -- documentos legais (v1.6.0) ------------------------------------
+    # -- documentos legais (v1.6.0) ------------------------------------
 
     def _linha_documentos_legais(self, master):
         """Uma linha por documento legal, dentro do cartão da secção.
@@ -861,9 +865,9 @@ class Configuracoes(ctk.CTkFrame):
 
         for indice, documento in enumerate(documentos):
             if indice > 0:
-                ctk.CTkFrame(
-                    master, height=1, fg_color=tema.COR_BORDA
-                ).pack(fill="x")
+                ctk.CTkFrame(master, height=1, fg_color=tema.COR_BORDA).pack(
+                    fill="x"
+                )
 
             self._linha_documento(master, documento, total)
 
@@ -941,24 +945,16 @@ class Configuracoes(ctk.CTkFrame):
         ctk.CTkButton(
             acoes,
             text=(
-                "Publicar versão nova"
-                if publicado
-                else "Publicar 1.ª versão"
+                "Publicar versão nova" if publicado else "Publicar 1.ª versão"
             ),
             width=150,
             height=30,
             corner_radius=tema.RAIO_BOTAO,
-            fg_color=(
-                "transparent" if publicado else tema.AZUL_PRINCIPAL
-            ),
+            fg_color=("transparent" if publicado else tema.AZUL_PRINCIPAL),
             border_width=1,
             border_color=tema.AZUL_PRINCIPAL,
-            text_color=(
-                tema.AZUL_PRINCIPAL if publicado else "#FFFFFF"
-            ),
-            hover_color=(
-                tema.ID_CHIP_FUNDO if publicado else tema.AZUL_CLARO
-            ),
+            text_color=(tema.AZUL_PRINCIPAL if publicado else "#FFFFFF"),
+            hover_color=(tema.ID_CHIP_FUNDO if publicado else tema.AZUL_CLARO),
             font=ctk.CTkFont(size=11),
             command=lambda: self._publicar_documento(documento),
         ).pack(side="left", padx=(8, 0))
@@ -1123,6 +1119,12 @@ class Configuracoes(ctk.CTkFrame):
         """Executa o backup fora do arranque normal."""
         import repositorio
 
+        autor = sessao.obter_responsavel_ativo()
+        logger.info(
+            "Backup manual pedido — autor_id=%s",
+            autor["id"] if autor else None,
+        )
+
         try:
             caminho = repositorio.criar_backup_com_nome("manual")
         except AttributeError:
@@ -1144,9 +1146,14 @@ class Configuracoes(ctk.CTkFrame):
         o reset do sistema."""
         from .gui_configuracoes_modal import confirmar_reset_sistema
 
-        confirmado = confirmar_reset_sistema(self)
+        password = confirmar_reset_sistema(self)
 
-        if not confirmado:
+        if password is None:
+            autor = sessao.obter_responsavel_ativo()
+            logger.info(
+                "Reset do sistema cancelado na confirmação — autor_id=%s",
+                autor["id"] if autor else None,
+            )
             return
 
         autor = sessao.obter_responsavel_ativo()
@@ -1158,7 +1165,7 @@ class Configuracoes(ctk.CTkFrame):
             return
 
         try:
-            sistema.comecar_do_zero(autor)
+            sistema.comecar_do_zero(autor, password)
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
             return

@@ -23,6 +23,7 @@ import logging
 import config
 import configuracoes
 import registo_logs
+import repositorio
 from gui.app import Aplicacao
 
 logger = logging.getLogger(__name__)
@@ -39,9 +40,26 @@ def main():
     `config.garantir_diretorios()` corre uma só vez, antes do
     primeiro arranque. Não faz sentido repetir em cada reabertura
     (a árvore já existe), mas também não faz mal se acontecer.
+
+    BACKUP DIÁRIO (23/09/2026): até esta data só o `main.py` (CLI)
+    fazia o backup diário e a limpeza dos antigos — e a aplicação
+    usada na operação é esta. Na prática, não havia backup diário
+    nenhum. Mesma ordem do `main.py`: a cópia de hoje ANTES da
+    limpeza, para um erro na limpeza nunca deixar um arranque sem
+    cópia do dia; e antes do seed, para a cópia apanhar a base tal
+    como estava.
+
+    O `criar_backup()` decide sozinho se a cópia de hoje já existe —
+    só o primeiro arranque do dia a faz (e só esse espera pelo
+    `mysqldump`). Uma falha do `mysqldump` não impede o arranque:
+    devolve None e fica registada no log pelo `repositorio`.
     """
     config.garantir_diretorios()
     registo_logs.configurar("gui")
+
+    repositorio.criar_backup()
+    repositorio.limpar_backups_antigos()
+
     configuracoes.garantir_seed()
 
     while True:
