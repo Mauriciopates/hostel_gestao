@@ -849,7 +849,15 @@ class ResumoAprovacaoModal(ctk.CTkToplevel):
             nome = produto["nome"] if produto else produto_id
             unidade = produto["unidade_medida"] if produto else ""
 
-            texto = self.campos_por_produto[produto_id].get().strip()
+            # Só há campo "A enviar" quando a requisição está pendente.
+            # Numa já enviada/fechada a coluna é só leitura e não há
+            # nada a avisar — sem isto, o "Gerir" dava KeyError.
+            campo = self.campos_por_produto.get(produto_id)
+
+            if campo is None:
+                continue
+
+            texto = campo.get().strip()
 
             if not texto.isdigit():
                 continue
