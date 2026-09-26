@@ -179,7 +179,9 @@ import re
 import customtkinter as ctk
 
 import clientes
+import contratos
 import responsaveis
+import unidades
 import validacoes
 from . import componentes
 from . import sessao
@@ -412,21 +414,15 @@ class ListaClientes(ctk.CTkFrame):
         cor_id = (
             tema.TEXTO_INDISPONIVEL if anonimizado else tema.AZUL_PRINCIPAL
         )
-        self.tabela.colocar(
+        # Clicar no ID abre os contratos e reservas do cliente.
+        chip_id = componentes.ChipId(
             linha,
-            0,
-            ctk.CTkLabel(
-                linha,
-                text=cliente["id"],
-                text_color=cor_id,
-                fg_color=tema.ID_CHIP_FUNDO,
-                corner_radius=6,
-                font=ctk.CTkFont(size=11, weight="bold"),
-                width=_LARGURA_ID,
-                anchor="w",
-            ),
-            esticar="w",
+            cliente["id"],
+            ao_clicar=lambda: abrir_contratos_do_cliente(self, cliente),
+            largura=_LARGURA_ID,
         )
+        chip_id.configure(text_color=cor_id)
+        self.tabela.colocar(linha, 0, chip_id, esticar="w")
 
         # ---- NOME DO CLIENTE (nome + subtítulo com documento/NIF) ----
         cor_nome = (
@@ -540,6 +536,46 @@ class ListaClientes(ctk.CTkFrame):
 
         componentes.mostrar_sucesso(f"Cliente {cliente['nome']} reativado.")
         self._recarregar()
+
+
+def abrir_contratos_do_cliente(master, cliente):
+    """Abre a lista (só leitura) dos contratos mensais e reservas
+    Airbnb de um cliente — ativos e encerrados/cancelados.
+    """
+    linhas = []
+    for ocupacao in contratos.listar(
+        incluir_inativas=True, cliente_id=cliente["id"]
+    ):
+        unidade = unidades.procurar(ocupacao["unidade_id"])
+        nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
+        periodo = (
+            f"{componentes.formatar_data(ocupacao['data_inicio'])} → "
+            f"{componentes.formatar_data(ocupacao['data_fim'])}"
+        )
+        linhas.append(
+            (
+                ocupacao["id"],
+                "Mensal" if ocupacao["tipo"] == "mensal" else "Airbnb",
+                f"{nome_unidade} ({ocupacao['unidade_id']})",
+                periodo,
+                "Ativo" if ocupacao["ativo"] else "Inativo",
+            )
+        )
+
+    componentes.ListaVinculadaModal(
+        master,
+        titulo=f"{cliente['nome']} ({cliente['id']})",
+        subtitulo="Contratos e reservas do cliente",
+        colunas=(
+            componentes.Coluna("ID", minimo=110, espaco=8),
+            componentes.Coluna("TIPO", minimo=70),
+            componentes.Coluna("UNIDADE", peso=3, minimo=180),
+            componentes.Coluna("PERÍODO", peso=2, minimo=170),
+            componentes.Coluna("ESTADO", minimo=70),
+        ),
+        linhas=linhas,
+        mensagem_vazia="Este cliente ainda não tem contratos nem reservas.",
+    )
 
 
 class _AcoesClienteModal(ctk.CTkToplevel):

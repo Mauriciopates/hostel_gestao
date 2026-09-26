@@ -7,6 +7,8 @@ aqui; cada ficheiro `gui_desp_*` cria o alias privado no topo
 import datetime
 from decimal import Decimal, InvalidOperation
 
+import despesas
+from .. import componentes
 from .. import sessao
 
 
@@ -77,3 +79,37 @@ def rotulo_unidade(unidade):
 def rotulo_categoria(categoria):
     """Rótulo de dropdown de categoria: "NOME"."""
     return categoria["nome"]
+
+
+def abrir_despesas_ligadas(master, registo, subtitulo, **filtro):
+    """Lista (só leitura) das despesas de uma categoria ou de um
+    fornecedor — aberta ao clicar no ID dessas tabelas.
+
+    'filtro' vai direto para `despesas.listar_despesas`
+    (categoria_id=... ou fornecedor_id=...).
+    """
+    linhas = [
+        (
+            d["id"],
+            formatar_data(d["data_lancamento"]),
+            d["descricao"] or "(sem descrição)",
+            componentes.formatar_valor(d["valor"]),
+            d["estado"].capitalize(),
+        )
+        for d in despesas.listar_despesas(**filtro)
+    ]
+
+    componentes.ListaVinculadaModal(
+        master,
+        titulo=f"{registo['nome']} ({registo['id']})",
+        subtitulo=subtitulo,
+        colunas=(
+            componentes.Coluna("ID", minimo=100, espaco=8),
+            componentes.Coluna("DATA", minimo=90),
+            componentes.Coluna("DESCRIÇÃO", peso=3, minimo=200),
+            componentes.Coluna("VALOR", minimo=90, alinhamento="e", espaco=8),
+            componentes.Coluna("ESTADO", minimo=80),
+        ),
+        linhas=linhas,
+        mensagem_vazia="Sem despesas ligadas.",
+    )

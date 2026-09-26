@@ -416,18 +416,15 @@ class ListaContratosMensais(ctk.CTkFrame):
 
         linha = self.tabela.nova_linha()
 
+        # Clicar no ID abre a ficha (só leitura) do contrato.
         self.tabela.colocar(
             linha,
             0,
-            ctk.CTkLabel(
+            componentes.ChipId(
                 linha,
-                text=ocupacao["id"],
-                text_color=tema.AZUL_PRINCIPAL,
-                fg_color=tema.ID_CHIP_FUNDO,
-                corner_radius=6,
-                font=ctk.CTkFont(size=11, weight="bold"),
-                width=110,
-                anchor="w",
+                ocupacao["id"],
+                ao_clicar=lambda: self._abrir_ficha(ocupacao),
+                largura=110,
             ),
             esticar="w",
         )
@@ -553,6 +550,54 @@ class ListaContratosMensais(ctk.CTkFrame):
         )
 
     # -- ações -------------------------------------------------------
+
+    def _abrir_ficha(self, ocupacao):
+        """Ficha do contrato: o que o "Gerir" não mostra (valores,
+        caução, vencimento, motivo de encerramento)."""
+        unidade = unidades.procurar(ocupacao["unidade_id"])
+        cliente = clientes.procurar(ocupacao["cliente_id"])
+        mensal = contratos.detalhes_mensal(ocupacao["id"]) or {}
+
+        def texto(chave):
+            return str(mensal.get(chave) or "—")
+
+        pares = [
+            (
+                "Unidade",
+                f"{unidade['nome'] if unidade else '—'} "
+                f"({ocupacao['unidade_id']})",
+            ),
+            (
+                "Cliente",
+                f"{cliente['nome'] if cliente else '—'} "
+                f"({ocupacao['cliente_id']})",
+            ),
+            ("Lugar", ocupacao["lugar_id"] or "—"),
+            ("Início", componentes.formatar_data(ocupacao["data_inicio"])),
+            ("Fim", componentes.formatar_data(ocupacao["data_fim"])),
+            (
+                "Renda calculada",
+                componentes.formatar_valor(mensal.get("renda_calculada")),
+            ),
+            (
+                "Renda praticada",
+                componentes.formatar_valor(mensal.get("renda_praticada")),
+            ),
+            ("Caução", componentes.formatar_valor(mensal.get("caucao"))),
+            ("Dia de vencimento", texto("dia_vencimento")),
+            ("Estado", "Ativo" if ocupacao["ativo"] else "Encerrado"),
+        ]
+        if not ocupacao["ativo"]:
+            pares.append(
+                ("Motivo de encerramento", texto("motivo_encerramento"))
+            )
+
+        componentes.FichaModal(
+            self,
+            titulo=f"Contrato {ocupacao['id']}",
+            subtitulo="Contrato mensal",
+            pares=pares,
+        )
 
     def _reativar(self, ocupacao):
         pergunta = f"Reativar o contrato {ocupacao['id']}?"

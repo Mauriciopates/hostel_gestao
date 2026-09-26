@@ -1931,3 +1931,188 @@ def cancelar_agendamentos(janela):
             pass
 
     return len(pendentes)
+
+
+# =====================================================================
+# VÍNCULOS POR ID (27/09/2026, v1.6.0)
+#
+# Padrão nascido em Propriedades (clicar no ID da propriedade abre as
+# unidades dela) e alargado ao resto do sistema: o crachá de ID de
+# uma linha é um atalho para o que está ligado a esse registo.
+# `ChipId` é o crachá; `ListaVinculadaModal` e `FichaModal` são as
+# duas formas de mostrar o que está do outro lado (uma lista de
+# registos ligados, ou os campos de um registo só) — só leitura.
+# =====================================================================
+
+
+def formatar_data(valor):
+    """Data em dd/mm/aaaa, ou "—" quando não há data."""
+    return valor.strftime("%d/%m/%Y") if valor else "—"
+
+
+class ChipId(ctk.CTkLabel):
+    """Crachá de ID de uma linha de tabela, opcionalmente clicável.
+
+    Com `ao_clicar` (função sem argumentos) fica com cursor de mão e
+    reage ao clique simples; sem ele é só o crachá, com o aspeto de
+    sempre. `inativo` só muda a cor do texto — quem não quer o
+    clique num registo inativo passa `ao_clicar=None`.
+
+    `cor_fundo` só existe para as unidades inativas, que usam o
+    fundo cinzento em vez do azul-claro.
+    """
+
+    def __init__(
+        self,
+        master,
+        texto,
+        ao_clicar=None,
+        inativo=False,
+        largura=70,
+        tamanho_fonte=11,
+        cor_fundo=None,
+    ):
+        clicavel = ao_clicar is not None
+        super().__init__(
+            master,
+            text=texto,
+            text_color=(
+                tema.TEXTO_INDISPONIVEL if inativo else tema.AZUL_PRINCIPAL
+            ),
+            fg_color=cor_fundo if cor_fundo else tema.ID_CHIP_FUNDO,
+            corner_radius=6,
+            font=ctk.CTkFont(size=tamanho_fonte, weight="bold"),
+            width=largura,
+            anchor="w",
+            cursor="hand2" if clicavel else "",
+        )
+        self.clicavel = clicavel
+        if ao_clicar is not None:
+            self.bind("<Button-1>", lambda evento, f=ao_clicar: f())
+
+
+class _ModalVinculo(ctk.CTkToplevel):
+    """Base das duas janelas de vínculo: título, subtítulo, corpo e
+    botão "Fechar". As subclasses só enchem `self.corpo`.
+    """
+
+    def __init__(self, master, titulo, subtitulo, largura, altura):
+        super().__init__(master)
+        self.title(titulo)
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(master.winfo_toplevel())
+
+        ctk.CTkLabel(
+            self,
+            text=subtitulo.upper(),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11, weight="bold"),
+        ).pack(anchor="w", padx=20, pady=(18, 0))
+        ctk.CTkLabel(
+            self,
+            text=titulo,
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=16, weight="bold"),
+        ).pack(anchor="w", padx=20, pady=(0, 10))
+
+        ctk.CTkButton(
+            self,
+            text="Fechar",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="bottom", anchor="e", padx=20, pady=(8, 16))
+
+        self.corpo = ctk.CTkFrame(self, fg_color="transparent")
+        self.corpo.pack(fill="both", expand=True, padx=20)
+
+        centrar_sobre(self, master.winfo_toplevel(), largura, altura)
+        colocar_no_topo(self)
+
+
+class ListaVinculadaModal(_ModalVinculo):
+    """Lista (só leitura) dos registos ligados a um ID — ex.: os
+    contratos de um cliente, os movimentos de um produto.
+
+    'colunas': tuplo de `Coluna`, a primeira é sempre o ID.
+    'linhas': lista de tuplos de texto, um valor por coluna. O
+    primeiro valor é desenhado como `ChipId`, os outros como texto.
+    """
+
+    def __init__(
+        self,
+        master,
+        titulo,
+        subtitulo,
+        colunas,
+        linhas,
+        mensagem_vazia="Sem registos ligados.",
+        largura=760,
+        altura=480,
+    ):
+        super().__init__(master, titulo, subtitulo, largura, altura)
+
+        self.tabela = Tabela(
+            self.corpo,
+            colunas=colunas,
+            altura_linha=40,
+            mensagem_vazia=mensagem_vazia,
+            tom_alternado=True,
+        )
+        self.tabela.pack(fill="both", expand=True)
+
+        for valores in linhas:
+            linha = self.tabela.nova_linha()
+            self.tabela.colocar(
+                linha,
+                0,
+                ChipId(linha, valores[0], largura=colunas[0].minimo - 16),
+                esticar="w",
+            )
+            for indice, valor in enumerate(valores[1:], start=1):
+                self.tabela.colocar(
+                    linha,
+                    indice,
+                    ctk.CTkLabel(
+                        linha,
+                        text=valor,
+                        text_color=tema.COR_TEXTO,
+                        font=ctk.CTkFont(size=12),
+                        anchor="w",
+                    ),
+                )
+
+        if self.tabela.vazia:
+            self.tabela.mostrar_vazio()
+
+
+class FichaModal(_ModalVinculo):
+    """Ficha (só leitura) de UM registo: pares rótulo → valor."""
+
+    def __init__(self, master, titulo, subtitulo, pares, largura=440):
+        altura = 180 + 36 * len(pares)
+        super().__init__(master, titulo, subtitulo, largura, altura)
+
+        self.corpo.grid_columnconfigure(1, weight=1)
+        for fila, (rotulo, valor) in enumerate(pares):
+            ctk.CTkLabel(
+                self.corpo,
+                text=rotulo,
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=12),
+                anchor="w",
+            ).grid(row=fila, column=0, sticky="w", pady=3, padx=(0, 16))
+            ctk.CTkLabel(
+                self.corpo,
+                text=valor,
+                text_color=tema.COR_TEXTO,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                anchor="w",
+                wraplength=largura - 200,
+                justify="left",
+            ).grid(row=fila, column=1, sticky="w", pady=3)

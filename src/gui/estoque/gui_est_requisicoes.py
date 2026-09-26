@@ -104,6 +104,7 @@ import estoque
 import responsaveis
 from .. import componentes
 from . import gui_est_comum
+from .gui_est_devolucoes import _ResumoRequisicaoModal
 from .. import sessao
 from .. import tema
 
@@ -337,13 +338,20 @@ class ListaRequisicoes(ctk.CTkFrame):
 
         # ---- Requisição (id + data) ----
         coluna_id = ctk.CTkFrame(linha, fg_color="transparent")
-        ctk.CTkLabel(
+        # Clicar no ID abre o resumo (só leitura) da requisição — o
+        # mesmo que a lista de devoluções já abria no "de REQ-...".
+        rotulo_id = ctk.CTkLabel(
             coluna_id,
             text=requisicao["id"],
-            text_color=tema.COR_TEXTO,
+            text_color=tema.AZUL_PRINCIPAL,
             font=ctk.CTkFont(size=12, weight="bold"),
             anchor="w",
-        ).pack(fill="x")
+        )
+        rotulo_id.pack(fill="x")
+        componentes.tornar_cliclavel(
+            rotulo_id,
+            lambda: _ResumoRequisicaoModal(self, requisicao["id"]),
+        )
         data = requisicao["data_pedido"]
         ctk.CTkLabel(
             coluna_id,

@@ -109,22 +109,21 @@ class Fornecedores(ctk.CTkFrame):
         ativo = f["ativo"]
         linha = self.tabela.nova_linha()
 
+        # Clicar no ID abre as despesas ligadas a este registo.
         self.tabela.colocar(
             linha,
             0,
-            ctk.CTkLabel(
+            componentes.ChipId(
                 linha,
-                text=f["id"],
-                text_color=(
-                    tema.TEXTO_INDISPONIVEL
-                    if not ativo
-                    else tema.AZUL_PRINCIPAL
+                f["id"],
+                ao_clicar=lambda: gui_desp_comum.abrir_despesas_ligadas(
+                    self,
+                    f,
+                    "Despesas do fornecedor",
+                    fornecedor_id=f["id"],
                 ),
-                fg_color=tema.ID_CHIP_FUNDO,
-                corner_radius=6,
-                font=ctk.CTkFont(size=11, weight="bold"),
-                width=90,
-                anchor="w",
+                inativo=not ativo,
+                largura=90,
             ),
             esticar="w",
         )

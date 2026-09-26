@@ -111,22 +111,21 @@ class Categorias(ctk.CTkFrame):
         ativa = c["ativo"]
         linha = self.tabela.nova_linha()
 
+        # Clicar no ID abre as despesas ligadas a este registo.
         self.tabela.colocar(
             linha,
             0,
-            ctk.CTkLabel(
+            componentes.ChipId(
                 linha,
-                text=c["id"],
-                text_color=(
-                    tema.TEXTO_INDISPONIVEL
-                    if not ativa
-                    else tema.AZUL_PRINCIPAL
+                c["id"],
+                ao_clicar=lambda: gui_desp_comum.abrir_despesas_ligadas(
+                    self,
+                    c,
+                    "Despesas da categoria",
+                    categoria_id=c["id"],
                 ),
-                fg_color=tema.ID_CHIP_FUNDO,
-                corner_radius=6,
-                font=ctk.CTkFont(size=11, weight="bold"),
-                width=90,
-                anchor="w",
+                inativo=not ativa,
+                largura=90,
             ),
             esticar="w",
         )

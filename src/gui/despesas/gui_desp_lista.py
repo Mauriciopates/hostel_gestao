@@ -257,19 +257,15 @@ class ListaDespesas(ctk.CTkFrame):
         """Desenha uma linha da tabela com uma despesa."""
         linha = self.tabela.nova_linha()
 
-        # ID
+        # ID — clicar abre o detalhe (só leitura) da despesa.
         self.tabela.colocar(
             linha,
             0,
-            ctk.CTkLabel(
+            componentes.ChipId(
                 linha,
-                text=d["id"],
-                text_color=tema.AZUL_PRINCIPAL,
-                fg_color=tema.ID_CHIP_FUNDO,
-                corner_radius=6,
-                font=ctk.CTkFont(size=11, weight="bold"),
-                width=_LARGURA_ID,
-                anchor="w",
+                d["id"],
+                ao_clicar=lambda: _DetalheDespesaModal(self, d),
+                largura=_LARGURA_ID,
             ),
             esticar="w",
         )

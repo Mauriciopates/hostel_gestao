@@ -239,18 +239,16 @@ class ListaReservasAirbnb(ctk.CTkFrame):
 
         linha = self.tabela.nova_linha()
 
+        # Clicar no ID abre o detalhe da reserva (o mesmo do "Gerir",
+        # que já mostra a ficha completa).
         self.tabela.colocar(
             linha,
             0,
-            ctk.CTkLabel(
+            componentes.ChipId(
                 linha,
-                text=ocupacao["id"],
-                text_color=tema.AZUL_PRINCIPAL,
-                fg_color=tema.ID_CHIP_FUNDO,
-                corner_radius=6,
-                font=ctk.CTkFont(size=11, weight="bold"),
-                width=_LARGURA_ID_RESERVA,
-                anchor="w",
+                ocupacao["id"],
+                ao_clicar=lambda: _AcoesReservaAirbnbModal(self, ocupacao),
+                largura=_LARGURA_ID_RESERVA,
             ),
             esticar="w",
         )
