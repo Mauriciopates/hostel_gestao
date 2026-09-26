@@ -17,7 +17,7 @@ tabelas, helpers de clique) vive em `componentes.py`.
 import customtkinter as ctk
 
 import estoque
-from . import tema
+from .. import tema
 
 
 # =====================================================================

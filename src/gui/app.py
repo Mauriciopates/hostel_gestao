@@ -70,13 +70,14 @@ from . import componentes
 from . import sessao
 from .gui_dashboard import Dashboard
 from .gui_clientes import ListaClientes
-from .gui_contratos import ListaContratosMensais, ListaReservasAirbnb
+from .contratos.gui_cnt_mensal_lista import ListaContratosMensais
+from .contratos.gui_cnt_airbnb_lista import ListaReservasAirbnb
 from .gui_calendario import Calendario
-from .gui_est_hub import EcraStock
-from .gui_despesas import EcraDespesas
+from .estoque.gui_est_hub import EcraStock
+from .despesas.gui_desp_hub import EcraDespesas
 from .gui_responsaveis import ListaResponsaveis
 from .gui_propriedades import ListaPropriedades
-from .gui_relatorios import Relatorios
+from .relatorios.gui_relat_hub import Relatorios
 from .gui_configuracoes import Configuracoes
 from .sessao import tipo_utilizador_ativo  # <<< NOVO >>> — filtro de itens
 

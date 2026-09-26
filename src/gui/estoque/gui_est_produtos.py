@@ -64,8 +64,8 @@ import customtkinter as ctk
 
 import estoque
 import responsaveis
-from . import componentes
-from . import tema
+from .. import componentes
+from .. import tema
 
 # =====================================================================
 # Lista de unidades de medida comuns — dropdown do formulário

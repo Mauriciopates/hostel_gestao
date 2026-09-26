@@ -1512,7 +1512,7 @@ class DetalheDiaModal(ctk.CTkToplevel):
         ANTES de abrir o popup das unidades. Deixar a pilha de
         popups aberta punha o novo popup por baixo dos antigos.
         """
-        from gui.gui_contratos import ListaReservasAirbnb
+        from gui.contratos.gui_cnt_airbnb_lista import ListaReservasAirbnb
         from gui.gui_propriedades import (
             ListaPropriedades,
             UnidadesDaPropriedadeModal,

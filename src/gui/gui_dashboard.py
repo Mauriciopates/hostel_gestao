@@ -57,7 +57,7 @@ import responsaveis
 import unidades
 from . import componentes
 from . import componentes_graficos
-from . import gui_est_comum
+from .estoque import gui_est_comum
 from . import tema
 
 # Largura mínima dos cartões KPI. Com 4 cartões lado a lado a
@@ -674,17 +674,17 @@ class Dashboard(ctk.CTkFrame):
         mais vale não navegar do que rebentar num clique.
         """
         if nome == "ListaAprovacao":
-            from .gui_est_aprovacao import ListaAprovacao
+            from .estoque.gui_est_aprovacao import ListaAprovacao
 
             return ListaAprovacao
 
         if nome == "ListaProdutos":
-            from .gui_est_produtos import ListaProdutos
+            from .estoque.gui_est_produtos import ListaProdutos
 
             return ListaProdutos
 
         if nome == "ListaContratosMensais":
-            from .gui_contratos import ListaContratosMensais
+            from .contratos.gui_cnt_mensal_lista import ListaContratosMensais
 
             return ListaContratosMensais
 
@@ -757,13 +757,13 @@ class Dashboard(ctk.CTkFrame):
     def _nova_reserva(self):
         """Abre o modal de Nova Reserva Airbnb, importado tarde
         para evitar ciclo (ver `_resolver_ecra`)."""
-        from .gui_contratos import NovaReservaAirbnbModal
+        from .contratos.gui_cnt_airbnb_nova import NovaReservaAirbnbModal
 
         NovaReservaAirbnbModal(self)
 
     def _novo_contrato(self):
         """Abre o modal de Novo Contrato Mensal."""
-        from .gui_contratos import NovoContratoModal
+        from .contratos.gui_cnt_mensal_novo import NovoContratoModal
 
         NovoContratoModal(self)
 

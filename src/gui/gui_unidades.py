@@ -114,7 +114,7 @@ import contratos
 import unidades
 from . import componentes
 from . import tema
-from .gui_contratos import NovoContratoMensal
+from .contratos.gui_cnt_mensal_novo import NovoContratoMensal
 
 # Alias local para o helper que vivia neste ficheiro e passou a
 # viver em componentes.py. Mantém-se o nome antigo com "_" para o
@@ -2049,6 +2049,6 @@ class _DetalheLugarModal(ctk.CTkToplevel):
         self.destroy()
         self.tela_planta.controlador.mostrar_frame(
             __import__(
-                "gui.gui_contratos", fromlist=["ListaContratosMensais"]
+                "gui.contratos.gui_cnt_mensal_lista", fromlist=["ListaContratosMensais"]
             ).ListaContratosMensais
         )

@@ -1,0 +1,780 @@
+"""Relatórios da área Financeiro: resultado, receita por unidade e
+por propriedade, despesas por categoria e COGS por produto."""
+
+from decimal import Decimal
+
+import customtkinter as ctk
+
+import estoque
+import financeiro
+import unidades
+
+from .. import componentes
+from .. import tema
+from . import gui_relat_comum
+from .gui_relat_base import RelatorioBase
+
+# Helpers partilhados — alias local, mesmo padrão do
+# gui_est_aprovacao.py (nomes públicos em gui_relat_comum).
+_formatar_valor = gui_relat_comum.formatar_valor
+_mapa_por_id = gui_relat_comum.mapa_por_id
+_celula_entidade = gui_relat_comum.celula_entidade
+
+
+class RelatFinanceiro(RelatorioBase):
+    """Relatórios da área Financeiro: resultado, receita por unidade e
+    por propriedade, despesas por categoria e COGS por produto.
+
+    Só desenhadores `_desenhar_<id>` e os seus auxiliares. A base
+    chama-os por `getattr` em `_recarregar_conteudo`; a classe
+    final `RelatorioModal` (gui_relat_hub.py) junta as três áreas.
+    """
+
+    # -- 1. RESULTADO -------------------------------------------------
+
+    def _desenhar_resultado(self, master):
+        """Relatório "Resultado" — 4 KPIs + COGS em linha à parte +
+        tabela com os cinco números.
+
+        O `financeiro.resultado` devolve cinco valores; quatro são
+        monetários (Receita, Descontos, Despesas operacionais,
+        Resultado líquido) e um é quantidade (COGS). Os quatro
+        monetários vão para os cartões de KPI; o COGS fica numa
+        linha separada, com nota — não é dinheiro.
+        """
+        dados = financeiro.resultado(self.data_inicio, self.data_fim)
+
+        self._titulo_relatorio(master, "Resultado")
+
+        # ---- 4 KPIs -------------------------------------------------
+        kpis = ctk.CTkFrame(master, fg_color="transparent")
+        kpis.pack(fill="x", pady=(0, 14))
+        for coluna in range(4):
+            kpis.grid_columnconfigure(coluna, weight=1, uniform="kpi")
+
+        receita = dados["receita"]
+        descontos = dados["descontos"]
+        despesas_op = dados["despesas_operacionais"]
+        resultado_liquido = dados["resultado_liquido"]
+
+        # Cor do resultado: verde se positivo, vermelho se negativo.
+        # Os outros três ficam em cor neutra — não é uma "boa" ou
+        # "má" notícia, é um número.
+        cor_resultado = (
+            tema.TEXTO_LIVRE if resultado_liquido >= 0 else tema.TEXTO_ERRO
+        )
+
+        cartoes = (
+            ("Receita", _formatar_valor(receita), tema.COR_TEXTO),
+            ("Descontos", f"-{_formatar_valor(descontos)}", tema.COR_TEXTO),
+            ("Despesas", f"-{_formatar_valor(despesas_op)}", tema.COR_TEXTO),
+            ("Resultado", _formatar_valor(resultado_liquido), cor_resultado),
+        )
+
+        for indice, (rotulo, valor, cor) in enumerate(cartoes):
+            self._kpi(kpis, indice, rotulo, valor, cor)
+
+        # ---- Tabela -------------------------------------------------
+        colunas = (
+            componentes.Coluna("Eixo", peso=3, minimo=220),
+            componentes.Coluna("Valor", peso=1, minimo=140, alinhamento="e"),
+        )
+
+        linhas = (
+            ("Receita mensal", self._receita_mensal_do_periodo()),
+            ("Receita Airbnb", self._receita_airbnb_do_periodo()),
+            ("Descontos", descontos),
+            ("Despesas operacionais", despesas_op),
+            ("Resultado líquido", resultado_liquido),
+        )
+
+        tabela = componentes.Tabela(
+            master,
+            colunas=colunas,
+            altura_linha=38,
+            tom_alternado=True,
+        )
+        tabela.pack(fill="x")
+
+        for rotulo, valor in linhas:
+            linha = tabela.nova_linha()
+            tabela.colocar(
+                linha,
+                0,
+                ctk.CTkLabel(
+                    linha,
+                    text=rotulo,
+                    text_color=(
+                        tema.COR_TEXTO
+                        if rotulo != "Resultado líquido"
+                        else tema.COR_TEXTO
+                    ),
+                    font=ctk.CTkFont(
+                        size=12,
+                        weight=(
+                            "bold"
+                            if rotulo == "Resultado líquido"
+                            else "normal"
+                        ),
+                    ),
+                    anchor="w",
+                ),
+            )
+            tabela.colocar(
+                linha,
+                1,
+                ctk.CTkLabel(
+                    linha,
+                    text=_formatar_valor(valor),
+                    text_color=(
+                        cor_resultado
+                        if rotulo == "Resultado líquido"
+                        else tema.COR_TEXTO
+                    ),
+                    font=ctk.CTkFont(
+                        size=12,
+                        weight=(
+                            "bold"
+                            if rotulo == "Resultado líquido"
+                            else "normal"
+                        ),
+                    ),
+                    anchor="e",
+                ),
+            )
+
+        # ---- COGS à parte ------------------------------------------
+        # O COGS é quantidade, não dinheiro — fica fora da tabela
+        # dos euros, com uma nota a explicar porquê.
+        aviso_cogs = ctk.CTkFrame(
+            master,
+            fg_color=tema.LINHA_ALTERNADA,
+            corner_radius=tema.RAIO_CAMPO,
+        )
+        aviso_cogs.pack(fill="x", pady=(14, 0))
+
+        ctk.CTkLabel(
+            aviso_cogs,
+            text=(
+                f"COGS (quantidade consumida): "
+                f"{dados['cogs_quantidade']} un"
+            ),
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            anchor="w",
+        ).pack(fill="x", padx=14, pady=(8, 2))
+
+        ctk.CTkLabel(
+            aviso_cogs,
+            text=(
+                "Quantidade de stock consumido no período — não "
+                "entra no Resultado líquido (a tabela de produtos "
+                "não tem preço unitário)."
+            ),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+            anchor="w",
+            justify="left",
+            wraplength=780,
+        ).pack(fill="x", padx=14, pady=(0, 8))
+
+        # ---- Exportação --------------------------------------------
+        self._rodape_export(
+            master,
+            "resultado",
+            colunas=("Eixo", "Valor"),
+            linhas=[[rotulo, valor] for rotulo, valor in linhas],
+        )
+
+    def _kpi(self, master, coluna, rotulo, valor, cor):
+        """Desenha um cartão de KPI. Mesmo formato do
+        `gui_dashboard.py`: borda tracejada, rótulo pequeno em cima,
+        valor grande em baixo.
+        """
+        cartao = ctk.CTkFrame(
+            master,
+            corner_radius=tema.RAIO_CARTAO,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            fg_color=tema.COR_FUNDO,
+        )
+        cartao.grid(row=0, column=coluna, sticky="nsew", padx=4)
+
+        ctk.CTkLabel(
+            cartao,
+            text=rotulo.upper(),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=9),
+            anchor="w",
+        ).pack(fill="x", padx=12, pady=(10, 2))
+
+        ctk.CTkLabel(
+            cartao,
+            text=valor,
+            text_color=cor,
+            font=ctk.CTkFont(size=16, weight="bold"),
+            anchor="w",
+        ).pack(fill="x", padx=12, pady=(0, 10))
+
+    def _receita_mensal_do_periodo(self):
+        """Soma a receita das ocupações do tipo mensal no período.
+
+        Não há no `financeiro.py` uma função que devolva só a
+        receita mensal — a `receita_por_unidade` já devolve o total
+        misturado (mensal + airbnb). Para o relatório "Resultado"
+        precisamos da separação; é feita aqui, em cima das
+        ocupações do período.
+        """
+        # Reaproveita o mesmo mecanismo do `financeiro.py`: lê as
+        # ocupações que tocaram o período, e soma mês a mês.
+        import contratos as _contratos
+
+        meses = financeiro._meses_do_periodo(self.data_inicio, self.data_fim)
+        ocupacoes = financeiro._listar_ocupacoes_do_periodo(
+            self.data_inicio, self.data_fim, tipo="mensal"
+        )
+
+        total = Decimal("0.00")
+        for ocupacao in ocupacoes:
+            mensal = _contratos.detalhes_mensal(ocupacao["id"])
+            if mensal is None:
+                continue
+            meses_vigorados = financeiro._meses_de_vigencia_no_periodo(
+                ocupacao, meses
+            )
+            total += mensal["renda_praticada"] * meses_vigorados
+
+        return total.quantize(Decimal("0.01"))
+
+    def _receita_airbnb_do_periodo(self):
+        """Soma a receita das ocupações do tipo airbnb no período,
+        com rateio por noites — mesma lógica do `financeiro.py`.
+        """
+        import contratos as _contratos
+
+        ocupacoes = financeiro._listar_ocupacoes_do_periodo(
+            self.data_inicio, self.data_fim, tipo="airbnb"
+        )
+
+        total = Decimal("0.00")
+        for ocupacao in ocupacoes:
+            airbnb = _contratos.detalhes_airbnb(ocupacao["id"])
+            if airbnb is None:
+                continue
+
+            noites_totais = financeiro._noites_totais(ocupacao)
+            noites_periodo = financeiro._noites_no_periodo(
+                ocupacao, self.data_inicio, self.data_fim
+            )
+
+            if noites_totais == 0 or noites_periodo == 0:
+                continue
+
+            total += financeiro._ratear(
+                airbnb["preco_praticado"],
+                noites_periodo,
+                noites_totais,
+            )
+
+        return total.quantize(Decimal("0.01"))
+
+    # -- 2. RECEITA POR UNIDADE ---------------------------------------
+
+    def _desenhar_receita_unidade(self, master):
+        """Relatório "Receita por unidade" — só tabela, sem total.
+
+        A coluna "Unidade" mostra o nome em cima e o ID por baixo
+        (regra fechada em 19/09/2026).
+        """
+        linhas = financeiro.receita_por_unidade(
+            self.data_inicio, self.data_fim
+        )
+
+        # Mapa de unidades — uma leitura só, em memória.
+        mapa_unidades = _mapa_por_id(unidades.listar(incluir_inativas=True))
+
+        self._titulo_relatorio(master, "Receita por unidade")
+
+        colunas = (
+            componentes.Coluna("Unidade", peso=3, minimo=260),
+            componentes.Coluna("Receita", peso=1, minimo=120, alinhamento="e"),
+            componentes.Coluna(
+                "Desconto", peso=1, minimo=120, alinhamento="e"
+            ),
+        )
+
+        tabela = componentes.Tabela(
+            master,
+            colunas=colunas,
+            altura_linha=44,
+            mensagem_vazia="Sem receita de unidades no período.",
+            tom_alternado=True,
+        )
+        tabela.pack(fill="x")
+
+        if not linhas:
+            tabela.mostrar_vazio()
+            self._rodape_export(
+                master,
+                "receita_unidade",
+                colunas=("Unidade", "Receita", "Desconto"),
+                linhas=[],
+            )
+            return
+
+        linhas_export = []
+        for item in linhas:
+            unidade = mapa_unidades.get(item["unidade_id"])
+            nome = unidade["nome"] if unidade else item["unidade_id"]
+
+            linha = tabela.nova_linha()
+            tabela.colocar(
+                linha,
+                0,
+                ctk.CTkLabel(
+                    linha,
+                    text=_celula_entidade(nome, item["unidade_id"]),
+                    text_color=tema.COR_TEXTO,
+                    font=ctk.CTkFont(size=12),
+                    anchor="w",
+                    justify="left",
+                ),
+            )
+            tabela.colocar(
+                linha,
+                1,
+                ctk.CTkLabel(
+                    linha,
+                    text=_formatar_valor(item["receita"]),
+                    text_color=tema.COR_TEXTO,
+                    font=ctk.CTkFont(size=12),
+                    anchor="e",
+                ),
+            )
+            tabela.colocar(
+                linha,
+                2,
+                ctk.CTkLabel(
+                    linha,
+                    text=(
+                        f"-{_formatar_valor(item['desconto'])}"
+                        if item["desconto"] > 0
+                        else _formatar_valor(Decimal("0.00"))
+                    ),
+                    text_color=(
+                        tema.TEXTO_ERRO
+                        if item["desconto"] > 0
+                        else tema.COR_TEXTO
+                    ),
+                    font=ctk.CTkFont(size=12),
+                    anchor="e",
+                ),
+            )
+
+            linhas_export.append(
+                [
+                    f"{nome} ({item['unidade_id']})",
+                    item["receita"],
+                    item["desconto"],
+                ]
+            )
+
+        self._rodape_export(
+            master,
+            "receita_unidade",
+            colunas=("Unidade", "Receita", "Desconto"),
+            linhas=linhas_export,
+        )
+
+    # -- 3. RECEITA POR PROPRIEDADE -----------------------------------
+
+    def _desenhar_receita_propriedade(self, master):
+        """Relatório "Receita por propriedade" — com linha de total.
+
+        O nome da propriedade já vem do `financeiro.py` — não é
+        preciso mapa nenhum.
+        """
+        linhas = financeiro.receita_por_propriedade(
+            self.data_inicio, self.data_fim
+        )
+
+        self._titulo_relatorio(master, "Receita por propriedade")
+
+        colunas = (
+            componentes.Coluna("Propriedade", peso=3, minimo=260),
+            componentes.Coluna("Receita", peso=1, minimo=120, alinhamento="e"),
+            componentes.Coluna(
+                "Desconto", peso=1, minimo=120, alinhamento="e"
+            ),
+        )
+
+        tabela = componentes.Tabela(
+            master,
+            colunas=colunas,
+            altura_linha=44,
+            mensagem_vazia="Sem receita de propriedades no período.",
+            tom_alternado=True,
+        )
+        tabela.pack(fill="x")
+
+        if not linhas:
+            tabela.mostrar_vazio()
+            self._rodape_export(
+                master,
+                "receita_propriedade",
+                colunas=("Propriedade", "Receita", "Desconto"),
+                linhas=[],
+            )
+            return
+
+        total_receita = Decimal("0.00")
+        total_desconto = Decimal("0.00")
+        linhas_export = []
+
+        for item in linhas:
+            total_receita += item["receita"]
+            total_desconto += item["desconto"]
+
+            linha = tabela.nova_linha()
+            tabela.colocar(
+                linha,
+                0,
+                ctk.CTkLabel(
+                    linha,
+                    text=_celula_entidade(
+                        item["propriedade_nome"],
+                        item["propriedade_id"],
+                    ),
+                    text_color=tema.COR_TEXTO,
+                    font=ctk.CTkFont(size=12),
+                    anchor="w",
+                    justify="left",
+                ),
+            )
+            tabela.colocar(
+                linha,
+                1,
+                ctk.CTkLabel(
+                    linha,
+                    text=_formatar_valor(item["receita"]),
+                    text_color=tema.COR_TEXTO,
+                    font=ctk.CTkFont(size=12),
+                    anchor="e",
+                ),
+            )
+            tabela.colocar(
+                linha,
+                2,
+                ctk.CTkLabel(
+                    linha,
+                    text=(
+                        f"-{_formatar_valor(item['desconto'])}"
+                        if item["desconto"] > 0
+                        else _formatar_valor(Decimal("0.00"))
+                    ),
+                    text_color=(
+                        tema.TEXTO_ERRO
+                        if item["desconto"] > 0
+                        else tema.COR_TEXTO
+                    ),
+                    font=ctk.CTkFont(size=12),
+                    anchor="e",
+                ),
+            )
+
+            linhas_export.append(
+                [
+                    f"{item['propriedade_nome']} ({item['propriedade_id']})",
+                    item["receita"],
+                    item["desconto"],
+                ]
+            )
+
+        # Linha de total — fundo destacado, negrito, borda azul.
+        linha_total = tabela.nova_linha()
+        tabela.colocar(
+            linha_total,
+            0,
+            ctk.CTkLabel(
+                linha_total,
+                text=f"TOTAL ({len(linhas)} propriedades)",
+                text_color=tema.COR_TEXTO,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                anchor="w",
+            ),
+        )
+        tabela.colocar(
+            linha_total,
+            1,
+            ctk.CTkLabel(
+                linha_total,
+                text=_formatar_valor(total_receita),
+                text_color=tema.AZUL_PRINCIPAL,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                anchor="e",
+            ),
+        )
+        tabela.colocar(
+            linha_total,
+            2,
+            ctk.CTkLabel(
+                linha_total,
+                text=(
+                    f"-{_formatar_valor(total_desconto)}"
+                    if total_desconto > 0
+                    else _formatar_valor(Decimal("0.00"))
+                ),
+                text_color=(
+                    tema.TEXTO_ERRO
+                    if total_desconto > 0
+                    else tema.AZUL_PRINCIPAL
+                ),
+                font=ctk.CTkFont(size=12, weight="bold"),
+                anchor="e",
+            ),
+        )
+
+        linhas_export.append(
+            [
+                f"TOTAL ({len(linhas)} propriedades)",
+                total_receita,
+                total_desconto,
+            ]
+        )
+
+        self._rodape_export(
+            master,
+            "receita_propriedade",
+            colunas=("Propriedade", "Receita", "Desconto"),
+            linhas=linhas_export,
+        )
+
+    # -- 4. DESPESAS POR CATEGORIA ------------------------------------
+
+    def _desenhar_despesas_categoria(self, master):
+        """Relatório "Despesas por categoria" — com linha de total.
+
+        Duas colunas: Categoria (ID + nome) e Total.
+        """
+        linhas = financeiro.despesas_por_categoria(
+            self.data_inicio, self.data_fim
+        )
+
+        self._titulo_relatorio(master, "Despesas por categoria")
+
+        colunas = (
+            componentes.Coluna("Categoria", peso=3, minimo=300),
+            componentes.Coluna("Total", peso=1, minimo=160, alinhamento="e"),
+        )
+
+        tabela = componentes.Tabela(
+            master,
+            colunas=colunas,
+            altura_linha=44,
+            mensagem_vazia="Sem despesas pagas no período.",
+            tom_alternado=True,
+        )
+        tabela.pack(fill="x")
+
+        if not linhas:
+            tabela.mostrar_vazio()
+            self._rodape_export(
+                master,
+                "despesas_categoria",
+                colunas=("Categoria", "Total"),
+                linhas=[],
+            )
+            return
+
+        total = Decimal("0.00")
+        linhas_export = []
+
+        for item in linhas:
+            total += item["total"]
+
+            linha = tabela.nova_linha()
+            tabela.colocar(
+                linha,
+                0,
+                ctk.CTkLabel(
+                    linha,
+                    text=_celula_entidade(
+                        item["categoria_nome"],
+                        item["categoria_id"],
+                    ),
+                    text_color=tema.COR_TEXTO,
+                    font=ctk.CTkFont(size=12),
+                    anchor="w",
+                    justify="left",
+                ),
+            )
+            tabela.colocar(
+                linha,
+                1,
+                ctk.CTkLabel(
+                    linha,
+                    text=_formatar_valor(item["total"]),
+                    text_color=tema.COR_TEXTO,
+                    font=ctk.CTkFont(size=12),
+                    anchor="e",
+                ),
+            )
+
+            linhas_export.append(
+                [
+                    f"{item['categoria_nome']} ({item['categoria_id']})",
+                    item["total"],
+                ]
+            )
+        # Linha de total
+        linha_total = tabela.nova_linha()
+        tabela.colocar(
+            linha_total,
+            0,
+            ctk.CTkLabel(
+                linha_total,
+                text=f"TOTAL ({len(linhas)} categorias)",
+                text_color=tema.COR_TEXTO,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                anchor="w",
+            ),
+        )
+        tabela.colocar(
+            linha_total,
+            1,
+            ctk.CTkLabel(
+                linha_total,
+                text=_formatar_valor(total),
+                text_color=tema.AZUL_PRINCIPAL,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                anchor="e",
+            ),
+        )
+
+        linhas_export.append([f"TOTAL ({len(linhas)} categorias)", total])
+
+        self._rodape_export(
+            master,
+            "despesas_categoria",
+            colunas=("Categoria", "Total"),
+            linhas=linhas_export,
+        )
+
+    # -- 5. COGS POR PRODUTO ------------------------------------------
+
+    def _desenhar_cogs_produto(self, master):
+        """Relatório "COGS por produto" — com coluna de unidade de
+        medida, sem total (as unidades não se somam entre produtos
+        diferentes).
+        """
+        linhas = financeiro.cogs_por_produto(self.data_inicio, self.data_fim)
+
+        # Mapa de produtos — para ir buscar a unidade de medida de
+        # cada um.
+        mapa_produtos = _mapa_por_id(
+            estoque.listar_produtos(incluir_inativos=True)
+        )
+
+        self._titulo_relatorio(master, "COGS por produto")
+
+        colunas = (
+            componentes.Coluna("Produto", peso=3, minimo=260),
+            componentes.Coluna(
+                "Quantidade", peso=1, minimo=110, alinhamento="e"
+            ),
+            componentes.Coluna(
+                "Unidade", peso=1, minimo=90, alinhamento="centro"
+            ),
+        )
+
+        tabela = componentes.Tabela(
+            master,
+            colunas=colunas,
+            altura_linha=44,
+            mensagem_vazia="Sem consumo de stock no período.",
+            tom_alternado=True,
+        )
+        tabela.pack(fill="x")
+
+        if not linhas:
+            tabela.mostrar_vazio()
+            self._rodape_export(
+                master,
+                "cogs_produto",
+                colunas=("Produto", "Quantidade", "Unidade"),
+                linhas=[],
+            )
+            return
+
+        linhas_export = []
+        for item in linhas:
+            produto = mapa_produtos.get(item["produto_id"])
+            unidade_medida = produto["unidade_medida"] if produto else "—"
+
+            linha = tabela.nova_linha()
+            tabela.colocar(
+                linha,
+                0,
+                ctk.CTkLabel(
+                    linha,
+                    text=_celula_entidade(
+                        item["produto_nome"], item["produto_id"]
+                    ),
+                    text_color=tema.COR_TEXTO,
+                    font=ctk.CTkFont(size=12),
+                    anchor="w",
+                    justify="left",
+                ),
+            )
+            tabela.colocar(
+                linha,
+                1,
+                ctk.CTkLabel(
+                    linha,
+                    text=str(item["quantidade"]),
+                    text_color=tema.COR_TEXTO,
+                    font=ctk.CTkFont(size=12, weight="bold"),
+                    anchor="e",
+                ),
+            )
+            tabela.colocar(
+                linha,
+                2,
+                ctk.CTkLabel(
+                    linha,
+                    text=unidade_medida,
+                    text_color=tema.COR_TEXTO_SECUNDARIO,
+                    font=ctk.CTkFont(size=11),
+                    anchor="center",
+                ),
+            )
+
+            linhas_export.append(
+                [
+                    f"{item['produto_nome']} ({item['produto_id']})",
+                    item["quantidade"],
+                    unidade_medida,
+                ]
+            )
+
+        # Nota explicativa — sem total, porque unidades não se somam.
+        ctk.CTkLabel(
+            master,
+            text=(
+                "Sem linha de total — as unidades de medida não se "
+                "somam entre produtos diferentes (12 L + 4 un não "
+                "é 16)."
+            ),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+            anchor="w",
+            justify="left",
+            wraplength=780,
+        ).pack(fill="x", pady=(10, 0))
+
+        self._rodape_export(
+            master,
+            "cogs_produto",
+            colunas=("Produto", "Quantidade", "Unidade"),
+            linhas=linhas_export,
+        )

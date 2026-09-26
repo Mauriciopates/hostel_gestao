@@ -47,9 +47,9 @@ import customtkinter as ctk
 
 import estoque
 import responsaveis
-from . import componentes
+from .. import componentes
 from . import gui_est_comum
-from . import tema
+from .. import tema
 
 
 # =====================================================================
@@ -124,7 +124,7 @@ class ListaMovimentos(ctk.CTkFrame):
             hover_color=tema.COR_BORDA,
             command=lambda: controlador.mostrar_frame(
                 __import__(
-                    "gui.gui_est_hub", fromlist=["EcraStock"]
+                    "gui.estoque.gui_est_hub", fromlist=["EcraStock"]
                 ).EcraStock
             ),
         ).pack(side="left", padx=(10, 0))
