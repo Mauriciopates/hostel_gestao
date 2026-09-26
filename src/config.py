@@ -8,21 +8,39 @@ Montantes em Decimal (decisão 4). Datas de época alta guardadas como
 (mes, dia) para serem independentes do ano.
 """
 
-import os
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
 from decimal import Decimal
 
-load_dotenv()  # lê o .env na raiz do projeto, se existir
+# --- Servidor da base de dados (26/09/2026) ----------------------------------
+# O servidor (Local, VM, ...) escolhe-se em Configurações → Sistema →
+# "Servidor da base de dados". A lista fica em %APPDATA%\HostelGestao e as
+# passwords no Gestor de Credenciais do Windows — nunca aqui nem num .env.
+# Ver src/servidores.py.
+import servidores  # noqa: E402
+
+SERVIDOR_ID, SERVIDOR = servidores.servidor_ativo()
+RAIZ_PROJETO = servidores.RAIZ_PROJETO
 
 # --- Ligação à base de dados MySQL -----------------------------------------
-DB_HOST = os.environ.get("DB_HOST", "localhost")
-DB_PORT = int(os.environ.get("DB_PORT", "3306"))
-DB_USER = os.environ.get("DB_USER", "root")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
-DB_NAME = os.environ.get("DB_NAME", "hostel_gestao")
+if SERVIDOR is not None:
+    SERVIDOR_NOME = SERVIDOR["nome"]
+    _credenciais = servidores.credenciais(
+        SERVIDOR, servidores.obter_password(SERVIDOR_ID)
+    )
+else:
+    # Primeira instalação, ainda sem servidor: o main_gui mostra o
+    # formulário antes de qualquer acesso à base.
+    SERVIDOR_NOME = "Sem servidor"
+    _credenciais = {"host": "localhost", "port": 3306, "user": "root",
+                    "password": "", "database": "hostel_gestao"}
+
+DB_HOST = _credenciais["host"]
+DB_PORT = int(_credenciais["port"])
+DB_USER = _credenciais["user"]
+DB_PASSWORD = _credenciais["password"]
+DB_NAME = _credenciais["database"]
 
 # --- Preços ---------------------------------------------------------------
 PRECO_BASE_MENSAL = Decimal("250.00")  # por pessoa, por mês

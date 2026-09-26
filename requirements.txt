@@ -6,6 +6,7 @@
 customtkinter>=5.2.0
 mysql-connector-python>=8.0.0
 python-dotenv>=1.0.0
+keyring>=24.0.0  # passwords dos servidores no Gestor de Credenciais do Windows
 fpdf2>=2.7.0
 openpyxl>=3.1.0
 tkcalendar>=1.6.0

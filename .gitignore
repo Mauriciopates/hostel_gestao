@@ -21,3 +21,5 @@ testes/teste_logs/
 .idea/
 .DS_Store
 Thumbs.db
+# Lista de servidores de base de dados (local de cada PC)
+servidores.json

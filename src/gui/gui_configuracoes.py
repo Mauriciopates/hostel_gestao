@@ -47,6 +47,7 @@ from . import sessao
 from . import tema
 from .gui_configuracoes_modal import confirmar_alteracao
 from .gui_documentos_legais import publicar_documento, ver_texto
+from . import gui_servidores
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +114,10 @@ _TABS = (
                     "stock.rol_automatico_airbnb",
                     "stock.permitir_envio_parcial",
                 ),
+            },
+            {
+                "titulo": "Servidor da base de dados",
+                "chaves": ("_acao_servidores",),
             },
             {
                 "titulo": "Documentos legais",
@@ -757,6 +762,8 @@ class Configuracoes(ctk.CTkFrame):
             self._linha_comecar_do_zero(master)
         elif chave_acao == "_acao_documentos_legais":
             self._linha_documentos_legais(master)
+        elif chave_acao == "_acao_servidores":
+            gui_servidores.desenhar_seletor(master)
 
     def _linha_forcar_backup(self, master):
         linha = ctk.CTkFrame(master, fg_color="transparent")

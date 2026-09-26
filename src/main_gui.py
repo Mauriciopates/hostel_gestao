@@ -24,6 +24,7 @@ import config
 import configuracoes
 import registo_logs
 import repositorio
+from gui import gui_servidores
 from gui.app import Aplicacao
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,13 @@ def main():
     """
     config.garantir_diretorios()
     registo_logs.configurar("gui")
+
+    # SERVIDOR (26/09/2026): antes de tudo o resto, abre o túnel SSH da
+    # VM (se o servidor ativo o usar) e confirma que o MySQL responde.
+    # Se falhar, mostra o plano B (tentar de novo / outro servidor /
+    # sair). Tem de ser antes do backup e do seed, que já usam a base.
+    if not gui_servidores.garantir_ligacao():
+        return
 
     repositorio.criar_backup()
     repositorio.limpar_backups_antigos()

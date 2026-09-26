@@ -222,6 +222,15 @@ class BarraLateral(ctk.CTkFrame):
             font=ctk.CTkFont(size=9),
         ).pack(side="bottom", pady=10)
 
+        # Servidor em uso (26/09/2026): com Local e VM a terem bases
+        # independentes, tem de estar sempre à vista onde se está a gravar.
+        ctk.CTkLabel(
+            self,
+            text=f"● {config.SERVIDOR_NOME}",
+            text_color=tema.COR_TEXTO_SIDEBAR,
+            font=ctk.CTkFont(size=10, weight="bold"),
+        ).pack(side="bottom", pady=(6, 0))
+
         # Botão cinza, colado acima da versão (empacotado DEPOIS
         # dela — em pack(side="bottom") cada widget novo fica por
         # cima do anterior, não por baixo). Cinzento reaproveita
