@@ -166,55 +166,12 @@ class BarraLateral(ctk.CTkFrame):
         ).pack(padx=6, pady=6)
 
         # =============================================================
-        # ITENS da navegação
-        #
-        # Cada botão de item é guardado em `self._botoes_por_ecra`
-        # com a classe do ecrã como chave — é assim que o
-        # `marcar_ativo` consegue encontrar e pintar o botão certo
-        # quando `Aplicacao.mostrar_frame` lhe diz "estou neste
-        # ecrã".
-        # =============================================================
-        for item in itens:
-            if item["tipo"] == "secao":
-                # O `.upper()` existe para não obrigar quem escreve
-                # o `ITENS_MENU` (em app.py) a lembrar-se de escrever
-                # as secções em maiúsculas. Mesma convenção dos
-                # títulos das tabelas ("ID", "NOME", "AÇÕES").
-                #
-                # O `padx=14` alinha o texto da secção com o texto
-                # dos itens da navegação (que têm `padx=6` no `pack`
-                # do botão + 12 interno do CTkButton, somando 18
-                # visíveis — os 14 aqui ficam ligeiramente à
-                # esquerda, o que lê melhor do que alinhado ao
-                # pixel).
-                ctk.CTkLabel(
-                    self,
-                    text=item["texto"].upper(),
-                    text_color=tema.COR_TEXTO_SIDEBAR_SECAO,
-                    font=ctk.CTkFont(size=10, weight="bold"),
-                    anchor="w",
-                ).pack(fill="x", padx=14, pady=(12, 4))
-            else:
-                botao = ctk.CTkButton(
-                    self,
-                    text=item["texto"],
-                    fg_color="transparent",
-                    text_color=tema.COR_TEXTO_SIDEBAR,
-                    hover_color=tema.AZUL_PRINCIPAL,
-                    corner_radius=tema.RAIO_BOTAO,
-                    font=ctk.CTkFont(size=12),
-                    anchor="w",
-                    command=lambda ecra=item["ecra"]: (
-                        controlador.mostrar_frame(ecra)
-                    ),
-                )
-                botao.pack(fill="x", padx=6, pady=1)
-
-                self._botoes_por_ecra[item["ecra"]] = botao
-
-        # =============================================================
         # RODAPÉ: versão + botão de trocar utilizador
         # =============================================================
+        # 26/09/2026 — o rodapé é empacotado ANTES dos itens: no
+        # pack, quem entra primeiro tem prioridade no espaço. Com o
+        # rodapé depois, o Master (com todos os itens) espremia o
+        # botão "Trocar utilizador".
         ctk.CTkLabel(
             self,
             text=f"v{config.VERSAO}",
@@ -246,6 +203,53 @@ class BarraLateral(ctk.CTkFrame):
             height=30,
             command=controlador.trocar_utilizador,
         ).pack(side="bottom", fill="x", padx=10, pady=(4, 0))
+
+        # =============================================================
+        # ITENS da navegação
+        #
+        # Cada botão de item é guardado em `self._botoes_por_ecra`
+        # com a classe do ecrã como chave — é assim que o
+        # `marcar_ativo` consegue encontrar e pintar o botão certo
+        # quando `Aplicacao.mostrar_frame` lhe diz "estou neste
+        # ecrã".
+        # =============================================================
+        for item in itens:
+            if item["tipo"] == "secao":
+                # O `.upper()` existe para não obrigar quem escreve
+                # o `ITENS_MENU` (em app.py) a lembrar-se de escrever
+                # as secções em maiúsculas. Mesma convenção dos
+                # títulos das tabelas ("ID", "NOME", "AÇÕES").
+                #
+                # O `padx=14` alinha o texto da secção com o texto
+                # dos itens da navegação (que têm `padx=6` no `pack`
+                # do botão + 12 interno do CTkButton, somando 18
+                # visíveis — os 14 aqui ficam ligeiramente à
+                # esquerda, o que lê melhor do que alinhado ao
+                # pixel).
+                ctk.CTkLabel(
+                    self,
+                    text=item["texto"].upper(),
+                    text_color=tema.COR_TEXTO_SIDEBAR_SECAO,
+                    font=ctk.CTkFont(size=10, weight="bold"),
+                    anchor="w",
+                ).pack(fill="x", padx=14, pady=(8, 2))
+            else:
+                botao = ctk.CTkButton(
+                    self,
+                    text=item["texto"],
+                    fg_color="transparent",
+                    text_color=tema.COR_TEXTO_SIDEBAR,
+                    hover_color=tema.AZUL_PRINCIPAL,
+                    corner_radius=tema.RAIO_BOTAO,
+                    font=ctk.CTkFont(size=12),
+                    anchor="w",
+                    command=lambda ecra=item["ecra"]: (
+                        controlador.mostrar_frame(ecra)
+                    ),
+                )
+                botao.pack(fill="x", padx=6, pady=1)
+
+                self._botoes_por_ecra[item["ecra"]] = botao
 
     def marcar_ativo(self, classe_ecra):
         """Pinta de azul o botão do ecrã indicado, e limpa os

@@ -26,10 +26,10 @@ Decisões anteriores que continuam em vigor (09/09/2026):
      unidades geridas aparece ao passar o rato sobre o crachá.
   2. A ligação responsável-unidade vive em `responsavel_unidade`
      (MySQL), gerida pelas funções de `unidades.py`.
-  3. "Definir como responsável ativo" está nas ações.
-  4. Definir o responsável ativo reconstrói o ecrã, para o
-     `componentes.Cabecalho` refletir a mudança.
-  5. Não há anonimização aqui — o responsável não é hóspede.
+  3. (Retirado a 26/09/2026) "Definir como responsável ativo" —
+     com login obrigatório, trocar de pessoa faz-se pelo logoff
+     ("Trocar utilizador"); o botão trocava a sessão sem password.
+  4. Não há anonimização aqui — o responsável não é hóspede.
 """
 
 import customtkinter as ctk
@@ -206,16 +206,24 @@ class ListaResponsaveis(ctk.CTkFrame):
             fill="x"
         )
 
-        barra_criar = ctk.CTkFrame(self, fg_color="transparent")
-        barra_criar.pack(fill="x", padx=20, pady=(4, 8))
-        ctk.CTkButton(
-            barra_criar,
-            text="+ Novo Responsável",
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color=tema.VERDE,
-            hover_color=tema.VERDE,
-            command=lambda: NovoResponsavelModal(self),
-        ).pack(side="left")
+        # 26/09/2026 — o Staff não cria ninguém nem vê inativos.
+        e_gestao = sessao.tipo_utilizador_ativo() in ("Master", "Admin")
+
+        # A barra só é criada para quem tem o botão: um CTkFrame vazio
+        # fica com 200px de altura por omissão e abria um buraco
+        # entre o cabeçalho e a busca (ecrã do Staff).
+        if e_gestao:
+            barra_criar = ctk.CTkFrame(self, fg_color="transparent")
+            barra_criar.pack(fill="x", padx=20, pady=(4, 8))
+
+            ctk.CTkButton(
+                barra_criar,
+                text="+ Novo Responsável",
+                corner_radius=tema.RAIO_BOTAO,
+                fg_color=tema.VERDE,
+                hover_color=tema.VERDE,
+                command=lambda: NovoResponsavelModal(self),
+            ).pack(side="left")
 
         barra = ctk.CTkFrame(self, fg_color="transparent")
         barra.pack(fill="x", padx=20, pady=(0, 4))
@@ -230,14 +238,16 @@ class ListaResponsaveis(ctk.CTkFrame):
         self.campo_busca.bind("<Return>", lambda evento: self._recarregar())
 
         self.mostrar_inativos = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(
-            barra,
-            text="Mostrar inativos",
-            variable=self.mostrar_inativos,
-            command=self._recarregar,
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=11),
-        ).pack(side="right")
+
+        if e_gestao:
+            ctk.CTkCheckBox(
+                barra,
+                text="Mostrar inativos",
+                variable=self.mostrar_inativos,
+                command=self._recarregar,
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=11),
+            ).pack(side="right")
 
         self.tabela = componentes.Tabela(
             self,
@@ -282,6 +292,9 @@ class ListaResponsaveis(ctk.CTkFrame):
         lista = utilizadores.listar_com_estado(
             incluir_inativos=incluir_inativos
         )
+
+        # 26/09/2026 — cada perfil só vê quem pode gerir.
+        lista = utilizadores.responsaveis_visiveis(lista, self._autor())
 
         if texto_busca:
             lista = [
@@ -400,18 +413,6 @@ class ListaResponsaveis(ctk.CTkFrame):
 
     # -- ações ----------------------------------------------------------
 
-    def _definir_ativo(self, registo):
-        try:
-            sessao.definir_responsavel_ativo(registo["id"])
-        except ValueError as erro:
-            componentes.mostrar_erro(str(erro))
-            return
-
-        componentes.mostrar_sucesso(
-            f"{registo['nome']} passou a ser o responsável ativo."
-        )
-        self.controlador.mostrar_frame(ListaResponsaveis)
-
     def _desativar(self, registo):
         if not componentes.confirmar(
             f"Desativar o responsável {registo['nome']}?\n\n"
@@ -470,6 +471,11 @@ class _AcoesResponsavelModal(ctk.CTkToplevel):
         self.tela_lista = tela_lista
         self.registo = registo
 
+        # 26/09/2026 — o que aparece depende de quem está em sessão.
+        autor = tela_lista._autor()
+        self.tipo_autor = autor["tipo_utilizador"] if autor else None
+        self.e_o_proprio = autor is not None and autor["id"] == registo["id"]
+
         self.title(f"Ações — {registo['id']}")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
@@ -495,14 +501,10 @@ class _AcoesResponsavelModal(ctk.CTkToplevel):
         self._construir_bloco_credencial()
 
         # ---- AÇÕES HABITUAIS ---------------------------------------
-        if registo["ativo"]:
-            self._botao(
-                "Definir como responsável ativo",
-                text_color=tema.AZUL_PRINCIPAL,
-                hover_color=tema.ID_CHIP_FUNDO,
-                acao=lambda: self.tela_lista._definir_ativo(registo),
-                ativo=not tela_lista._e_o_ativo(registo),
-            )
+        # O Staff só tem o bloco de credencial (alterar a password).
+        e_gestao = self.tipo_autor in ("Master", "Admin")
+
+        if e_gestao and registo["ativo"]:
             self._botao(
                 "Gerir Unidades",
                 text_color=tema.AZUL_PRINCIPAL,
@@ -517,14 +519,17 @@ class _AcoesResponsavelModal(ctk.CTkToplevel):
                 hover_color=tema.COR_BORDA,
                 acao=lambda: EditarResponsavelModal(self.tela_lista, registo),
             )
-            self._separador()
-            self._botao(
-                "Desativar",
-                text_color=tema.TEXTO_ERRO,
-                hover_color=tema.VERMELHO_ERRO,
-                acao=lambda: self.tela_lista._desativar(registo),
-            )
-        else:
+
+            # Desativar é só do Master, e nunca sobre si próprio.
+            if self.tipo_autor == "Master" and not self.e_o_proprio:
+                self._separador()
+                self._botao(
+                    "Desativar",
+                    text_color=tema.TEXTO_ERRO,
+                    hover_color=tema.VERMELHO_ERRO,
+                    acao=lambda: self.tela_lista._desativar(registo),
+                )
+        elif e_gestao:
             self._botao(
                 "Reativar",
                 text_color=tema.TEXTO_LIVRE,
@@ -604,6 +609,9 @@ class _AcoesResponsavelModal(ctk.CTkToplevel):
                 wraplength=280,
             ).pack(fill="x", padx=12, pady=(2, 8))
 
+            if self.tipo_autor not in ("Master", "Admin"):
+                return
+
             ctk.CTkButton(
                 bloco,
                 text="Definir credencial",
@@ -642,20 +650,44 @@ class _AcoesResponsavelModal(ctk.CTkToplevel):
                 anchor="w",
             ).pack(fill="x", padx=12, pady=(2, 8))
 
-            ctk.CTkButton(
-                bloco,
-                text="Alterar password",
-                height=30,
-                corner_radius=tema.RAIO_BOTAO,
-                fg_color="transparent",
-                border_width=1,
-                border_color=tema.AZUL_PRINCIPAL,
-                text_color=tema.AZUL_PRINCIPAL,
-                hover_color=tema.ID_CHIP_FUNDO,
-                command=lambda: AlterarPasswordModal(
-                    self.tela_lista, self.registo
-                ).focus(),
-            ).pack(fill="x", padx=12, pady=(0, 12))
+            e_master = self.tipo_autor == "Master"
+
+            # Só o próprio ou um Master alteram a password.
+            if self.e_o_proprio or e_master:
+                ctk.CTkButton(
+                    bloco,
+                    text="Alterar password",
+                    height=30,
+                    corner_radius=tema.RAIO_BOTAO,
+                    fg_color="transparent",
+                    border_width=1,
+                    border_color=tema.AZUL_PRINCIPAL,
+                    text_color=tema.AZUL_PRINCIPAL,
+                    hover_color=tema.ID_CHIP_FUNDO,
+                    command=lambda: AlterarPasswordModal(
+                        self.tela_lista, self.registo
+                    ).focus(),
+                ).pack(fill="x", padx=12, pady=(0, 6))
+
+            # 26/09/2026 — só o Master troca o nome de utilizador.
+            if e_master:
+                ctk.CTkButton(
+                    bloco,
+                    text="Alterar utilizador",
+                    height=30,
+                    corner_radius=tema.RAIO_BOTAO,
+                    fg_color="transparent",
+                    border_width=1,
+                    border_color=tema.AZUL_PRINCIPAL,
+                    text_color=tema.AZUL_PRINCIPAL,
+                    hover_color=tema.ID_CHIP_FUNDO,
+                    command=lambda: AlterarUtilizadorModal(
+                        self.tela_lista, self.registo
+                    ).focus(),
+                ).pack(fill="x", padx=12, pady=(0, 6))
+
+            # Espaço no fundo do bloco (antes vinha do último botão).
+            ctk.CTkFrame(bloco, height=6, fg_color="transparent").pack()
 
     def _centrar_sobre_com(self, janela, largura, altura):
         janela.update_idletasks()
@@ -1058,6 +1090,111 @@ class AlterarPasswordModal(ctk.CTkToplevel):
         self.tela_lista._recarregar()
 
 
+class AlterarUtilizadorModal(ctk.CTkToplevel):
+    """Modal para trocar o nome de utilizador (login). Só Master.
+
+    26/09/2026 — a barreira real está em
+    `utilizadores.alterar_username`; este modal só abre a partir do
+    botão que o `_AcoesResponsavelModal` mostra ao Master.
+    """
+
+    def __init__(self, tela_lista, registo):
+        super().__init__(tela_lista)
+        self.tela_lista = tela_lista
+        self.registo = registo
+
+        self.title(f"Alterar utilizador — {registo['id']}")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_lista)
+        _colocar_no_topo(self)
+
+        ctk.CTkLabel(
+            self,
+            text="Alterar utilizador",
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=16, weight="bold"),
+        ).pack(anchor="w", padx=24, pady=(24, 2))
+
+        ctk.CTkLabel(
+            self,
+            text=f"{registo['nome']} — {registo['id']}",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24, pady=(0, 18))
+
+        ctk.CTkLabel(
+            self,
+            text=f"Utilizador atual: {registo['username']}",
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=12),
+        ).pack(anchor="w", padx=24, pady=(0, 12))
+
+        ctk.CTkLabel(
+            self,
+            text="Utilizador novo",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24)
+
+        self.campo_username = ctk.CTkEntry(
+            self,
+            corner_radius=tema.RAIO_CAMPO,
+            width=380,
+        )
+        self.campo_username.pack(padx=24, pady=(2, 6))
+
+        ctk.CTkLabel(
+            self,
+            text="A password mantém-se. Avise a pessoa do novo login.",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+        ).pack(anchor="w", padx=24, pady=(0, 18))
+
+        rodape = ctk.CTkFrame(self, fg_color="transparent")
+        rodape.pack(fill="x", padx=24, pady=(0, 20))
+
+        ctk.CTkButton(
+            rodape,
+            text="Cancelar",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            rodape,
+            text="Guardar",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.AZUL_PRINCIPAL,
+            hover_color=tema.AZUL_CLARO,
+            command=self._gravar,
+        ).pack(side="right")
+
+        self.campo_username.focus_set()
+
+    def _gravar(self):
+        try:
+            atualizado = utilizadores.alterar_username(
+                self.registo["id"],
+                self.campo_username.get(),
+                self.tela_lista._autor(),
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        componentes.mostrar_sucesso(
+            f"Utilizador alterado para '{atualizado['username']}'."
+        )
+        self.destroy()
+        self.tela_lista._recarregar()
+
+
 # =====================================================================
 # Unidades do responsável (inalterado desde a v1.4.0)
 # =====================================================================
@@ -1328,7 +1465,13 @@ class _FormularioResponsavel(ctk.CTkToplevel):
             opcoes = list(responsaveis.TIPOS_UTILIZADOR)
             combo_ativo = True
             ajuda = "Define o perfil de acesso do responsável."
-        else:  # Admin
+        elif tipo_utilizador == "Admin":
+            # 26/09/2026 — Admin a editar-se a si próprio: o perfil
+            # fica como está (só o Master o muda).
+            opcoes = ["Admin"]
+            combo_ativo = False
+            ajuda = "O seu perfil só pode ser alterado por um Master."
+        else:  # Admin sobre Staff
             opcoes = ["Staff"]
             combo_ativo = True
             ajuda = "Um Admin só pode criar ou editar Staff."
@@ -1462,7 +1605,10 @@ class EditarResponsavelModal(_FormularioResponsavel):
 
         try:
             responsaveis.atualizar(
-                self.registo["id"], nome=nome, contacto=contacto
+                self.registo["id"],
+                nome=nome,
+                contacto=contacto,
+                autor=self.tela_lista._autor(),
             )
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))

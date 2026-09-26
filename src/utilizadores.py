@@ -530,6 +530,65 @@ def alterar_password(responsavel_id, password_atual, password_nova, autor):
     return alvo
 
 
+def alterar_username(responsavel_id, username_novo, autor):
+    """Troca o nome de utilizador (login) de um responsável.
+
+    Só Master (decisão de 26/09/2026). Nem o próprio Admin ou Staff
+    muda o seu login — o username é a identidade de entrada no
+    sistema, e fica a cargo de quem administra os acessos.
+
+    Não mexe na password: quem já entrava com a password antiga
+    continua a entrar com ela, só que com o username novo.
+
+    Valida: perfil do autor, username não vazio, alvo existe e já
+    tem credencial, username diferente do atual e ainda livre.
+
+    Devolve o registo atualizado.
+    """
+    autor = _validar_autor(autor, responsavel_id)
+
+    verificar_permissao(autor, {"Master"})
+
+    username_novo = (username_novo or "").strip()
+
+    if not username_novo:
+        raise ValueError("O utilizador é obrigatório.")
+
+    alvo = repositorio.procurar_responsavel(responsavel_id)
+
+    if alvo is None:
+        raise ValueError(f"O responsável {responsavel_id} não existe.")
+
+    if not alvo["username"]:
+        raise ValueError(
+            f"O responsável {responsavel_id} ainda não tem credencial "
+            "definida. Use 'Definir credencial' primeiro."
+        )
+
+    if username_novo == alvo["username"]:
+        raise ValueError("O utilizador novo é igual ao atual.")
+
+    outro = repositorio.procurar_responsavel_por_username(username_novo)
+
+    if outro is not None and outro["id"] != responsavel_id:
+        raise ValueError(
+            f"O utilizador '{username_novo}' já está atribuído ao "
+            f"responsável {outro['id']}."
+        )
+
+    campos = {"username": username_novo}
+
+    repositorio.atualizar_responsavel(responsavel_id, campos)
+    alvo.update(campos)
+
+    logger.info(
+        "Utilizador alterado — alvo_id=%s, autor_id=%s",
+        responsavel_id,
+        autor["id"],
+    )
+    return alvo
+
+
 # ---------------------------------------------------------------------
 # Estado — desativar e reativar
 # ---------------------------------------------------------------------
@@ -664,6 +723,39 @@ def listar_com_estado(incluir_inativos=False):
     return repositorio.listar_responsaveis_com_credencial(
         incluir_inativos=incluir_inativos
     )
+
+
+def responsaveis_visiveis(lista, autor):
+    """Filtra uma lista de responsáveis pelo que o autor pode ver.
+
+    Regra de 26/09/2026:
+
+      - Master: vê todos.
+      - Admin: vê-se a si próprio e aos Staff (não vê o Master nem
+        outros Admin).
+      - Staff: vê-se só a si próprio.
+      - Sem autor: não vê ninguém.
+
+    Não vai à base de dados — recebe a lista já lida (por exemplo,
+    de `listar_com_estado`) e devolve uma lista nova.
+    """
+    if autor is None:
+        return []
+
+    tipo = autor.get("tipo_utilizador")
+
+    if tipo == "Master":
+        return list(lista)
+
+    if tipo == "Admin":
+        return [
+            registo
+            for registo in lista
+            if registo["id"] == autor["id"]
+            or registo["tipo_utilizador"] == "Staff"
+        ]
+
+    return [registo for registo in lista if registo["id"] == autor["id"]]
 
 
 # ---------------------------------------------------------------------

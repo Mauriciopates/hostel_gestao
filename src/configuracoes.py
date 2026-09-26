@@ -92,19 +92,19 @@ _CHAVES = {
     # --- Operação ------------------------------------------------------
     "operacao.dia_vencimento": {
         "tipo": "int",
-        "perfil": "master_admin",
+        "perfil": "master",
         "default": config.DIA_VENCIMENTO,
         "descricao": "Dia do mês sugerido para novas rendas mensais (1–28).",
     },
     "operacao.aviso_previo_dias": {
         "tipo": "int",
-        "perfil": "master_admin",
+        "perfil": "master",
         "default": config.AVISO_PREVIO_DIAS,
         "descricao": "Antecedência mínima para encerramento de um contrato mensal.",
     },
     "operacao.duracao_minima_meses": {
         "tipo": "int",
-        "perfil": "master_admin",
+        "perfil": "master",
         "default": config.DURACAO_MINIMA_MESES,
         "descricao": "Abaixo deste valor, o encerramento é sinalizado com aviso.",
     },
@@ -124,19 +124,19 @@ _CHAVES = {
     },
     "financeiro.epoca_alta_inicio": {
         "tipo": "tupla_mes_dia",
-        "perfil": "master_admin",
+        "perfil": "master",
         "default": config.EPOCA_ALTA_INICIO,
         "descricao": "Mês e dia de início da época alta (independente do ano).",
     },
     "financeiro.epoca_alta_fim": {
         "tipo": "tupla_mes_dia",
-        "perfil": "master_admin",
+        "perfil": "master",
         "default": config.EPOCA_ALTA_FIM,
         "descricao": "Mês e dia de fim da época alta (independente do ano).",
     },
     "empresa.pasta_relatorios": {
         "tipo": "texto",
-        "perfil": "master_admin",
+        "perfil": "master",
         "default": str(config.DIR_RELATORIOS),
         "descricao": "Pasta onde guardar PDFs, CSVs e Excels de relatórios.",
     },

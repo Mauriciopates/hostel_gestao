@@ -125,7 +125,7 @@ def listar(incluir_inativos=False):
     return repositorio.listar_responsaveis(incluir_inativos=incluir_inativos)
 
 
-def atualizar(responsavel_id, nome=None, contacto=None):
+def atualizar(responsavel_id, nome=None, contacto=None, autor=None):
     """Altera o nome ou o contacto de um responsável existente.
 
     Um parâmetro a None significa não alterar; "" significa
@@ -138,12 +138,37 @@ def atualizar(responsavel_id, nome=None, contacto=None):
     Não altera `tipo_utilizador` também — isso é a
     `alterar_tipo_utilizador`, com as suas próprias regras.
 
+    Permissões (26/09/2026), quando `autor` é passado:
+
+      - Master edita qualquer responsável.
+      - Admin edita-se a si próprio e aos Staff.
+      - Staff não edita ninguém (nem a si próprio — só muda a
+        password, pelo `utilizadores.alterar_password`).
+
+    `autor` None mantém o comportamento antigo (CLI e testes).
+
     Devolve o registo atualizado.
     """
     responsavel = procurar(responsavel_id)
 
     if responsavel is None:
         raise ValueError(f"O responsável {responsavel_id} não existe.")
+
+    if autor is not None:
+        import utilizadores
+
+        # Sobre si próprio, o perfil do alvo não conta — só se
+        # confirma que o autor é Master ou Admin.
+        if autor.get("id") == responsavel_id:
+            perfil_alvo = None
+        else:
+            perfil_alvo = responsavel["tipo_utilizador"]
+
+        utilizadores.verificar_permissao(
+            autor,
+            {"Master", "Admin"},
+            perfil_alvo=perfil_alvo,
+        )
 
     campos = {}
 

@@ -87,42 +87,81 @@ _PASTA_IMG = Path(__file__).resolve().parent.parent.parent / "img"
 _ICONE_JANELA = _PASTA_IMG / "ico_hostel.png"
 
 
+# Perfis que veem cada item da sidebar (26/09/2026). A barreira
+# real está nos módulos de negócio; isto é a camada visual.
+_TODOS = ("Master", "Admin", "Staff")
+_GESTAO = ("Master", "Admin")
+_SO_MASTER = ("Master",)
+
 ITENS_MENU = [
     # ---- PAINEL -----------------------------------------------------
     {"tipo": "secao", "texto": "Painel"},
-    {"tipo": "item", "texto": "Dashboard", "ecra": Dashboard},
+    {
+        "tipo": "item",
+        "texto": "Dashboard",
+        "ecra": Dashboard,
+        "perfis": _GESTAO,
+    },
     # ---- GESTÃO -----------------------------------------------------
     {"tipo": "secao", "texto": "Gestão"},
     {
         "tipo": "item",
         "texto": "Gestão de Propriedades",
         "ecra": ListaPropriedades,
+        "perfis": _GESTAO,
     },
-    {"tipo": "item", "texto": "Clientes", "ecra": ListaClientes},
+    {
+        "tipo": "item",
+        "texto": "Clientes",
+        "ecra": ListaClientes,
+        "perfis": _GESTAO,
+    },
     {
         "tipo": "item",
         "texto": "Contratos Mensais",
         "ecra": ListaContratosMensais,
+        "perfis": _GESTAO,
     },
     {
         "tipo": "item",
         "texto": "Reservas Airbnb",
         "ecra": ListaReservasAirbnb,
+        "perfis": _GESTAO,
     },
     # ---- OPERAÇÃO ---------------------------------------------------
     {"tipo": "secao", "texto": "Operação"},
-    {"tipo": "item", "texto": "Calendário", "ecra": Calendario},
-    {"tipo": "item", "texto": "Stock", "ecra": EcraStock},
-    {"tipo": "item", "texto": "Despesas", "ecra": EcraDespesas},
-    {"tipo": "item", "texto": "Responsáveis", "ecra": ListaResponsaveis},
+    {
+        "tipo": "item",
+        "texto": "Calendário",
+        "ecra": Calendario,
+        "perfis": _GESTAO,
+    },
+    {"tipo": "item", "texto": "Stock", "ecra": EcraStock, "perfis": _TODOS},
+    {
+        "tipo": "item",
+        "texto": "Despesas",
+        "ecra": EcraDespesas,
+        "perfis": _GESTAO,
+    },
+    {
+        "tipo": "item",
+        "texto": "Responsáveis",
+        "ecra": ListaResponsaveis,
+        "perfis": _TODOS,
+    },
     # ---- SISTEMA ----------------------------------------------------
     {"tipo": "secao", "texto": "Sistema"},
-    {"tipo": "item", "texto": "Relatórios", "ecra": Relatorios},
+    {
+        "tipo": "item",
+        "texto": "Relatórios",
+        "ecra": Relatorios,
+        "perfis": _GESTAO,
+    },
     {
         "tipo": "item",
         "texto": "Configurações",
         "ecra": Configuracoes,
-        "so_admin": True,  # <<< NOVO >>> — só Master/Admin veem
+        "perfis": _SO_MASTER,
     },
 ]
 
@@ -130,23 +169,32 @@ ITENS_MENU = [
 def _itens_visiveis():
     """Devolve a lista do ITENS_MENU filtrada pelo perfil ativo.
 
-    <<< NOVO >>> — função acrescentada em 19/09/2026.
-
-    Itens marcados com `so_admin=True` (como o "Configurações")
-    só aparecem a Master ou Admin. Tudo o resto é visível a
-    todos os perfis.
+    26/09/2026 — cada item tem a chave `perfis` com os perfis que o
+    veem. Uma secção só aparece se tiver pelo menos um item visível
+    (o Staff, por exemplo, só vê a secção "Operação").
 
     Chamada uma única vez, na construção da `BarraLateral` —
     quando já há sessão ativa (o LoginModal já correu).
     """
     tipo = tipo_utilizador_ativo()
-    e_administrativo = tipo in ("Admin", "Master")
+    visiveis = []
+    secao_pendente = None
 
-    return [
-        item
-        for item in ITENS_MENU
-        if not item.get("so_admin") or e_administrativo
-    ]
+    for item in ITENS_MENU:
+        if item["tipo"] == "secao":
+            secao_pendente = item
+            continue
+
+        if tipo not in item["perfis"]:
+            continue
+
+        if secao_pendente is not None:
+            visiveis.append(secao_pendente)
+            secao_pendente = None
+
+        visiveis.append(item)
+
+    return visiveis
 
 
 _MENSAGENS_ERRO = {
@@ -628,7 +676,7 @@ class Aplicacao(ctk.CTk):
         # A barra lateral e a área de conteúdo são construídas
         # DEPOIS do login — o `_itens_visiveis()` só funciona com
         # sessão ativa (antes disso, `tipo_utilizador_ativo()`
-        # devolve None e o filtro remove os itens `so_admin`).
+        # devolve None e o filtro não deixa passar nenhum item).
         self.frame_atual = None
 
         self.update_idletasks()
@@ -654,10 +702,11 @@ class Aplicacao(ctk.CTk):
             return
 
         # Agora sim — já há sessão ativa.
+        itens = _itens_visiveis()
         self.barra_lateral = componentes.BarraLateral(
             self,
             controlador=self,
-            itens=_itens_visiveis(),
+            itens=itens,
         )
         self.barra_lateral.configure(width=160)
         self.barra_lateral.grid(row=0, column=0, sticky="ns")
@@ -668,7 +717,12 @@ class Aplicacao(ctk.CTk):
         )
         self.area_conteudo.grid(row=0, column=1, sticky="nsew")
 
-        self.mostrar_frame(Dashboard)
+        # Primeiro ecrã = primeiro item visível do perfil (Master e
+        # Admin: Dashboard; Staff: Stock).
+        primeiro_ecra = next(
+            item["ecra"] for item in itens if item["tipo"] == "item"
+        )
+        self.mostrar_frame(primeiro_ecra)
 
     def _tratar_erro_interface(
         self,

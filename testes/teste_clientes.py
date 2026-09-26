@@ -140,6 +140,12 @@ def criar_cliente_airbnb(**overrides):
     return clientes.criar(**campos)
 
 
+def _criar_master():
+    """Responsável Master — desde 26/09/2026 só um Master autoriza a
+    anonimização (clientes.anonimizar)."""
+    return responsaveis.criar("Responsável de teste", tipo_utilizador="Master")
+
+
 class TesteCriar(BaseMySQLTest):
 
     def test_cria_cliente_mensal_valido(self):
@@ -328,7 +334,7 @@ class TesteListar(BaseMySQLTest):
         """
         criar_cliente_mensal()
         anonimizado = criar_cliente_airbnb()
-        resp = responsaveis.criar("Responsável de teste")
+        resp = _criar_master()
         clientes.anonimizar(anonimizado["id"], resp["id"], date.today())
 
         resultado = clientes.listar(
@@ -348,7 +354,7 @@ class TesteListar(BaseMySQLTest):
         """
         nao_anonimizado = criar_cliente_mensal()
         anonimizado = criar_cliente_airbnb()
-        resp = responsaveis.criar("Responsável de teste")
+        resp = _criar_master()
         clientes.anonimizar(anonimizado["id"], resp["id"], date.today())
 
         resultado = clientes.listar(
@@ -513,7 +519,7 @@ class TesteAtualizar(BaseMySQLTest):
         self.assertEqual(atualizado["data_nascimento"], date(1990, 5, 20))
 
     def test_recusa_atualizar_cliente_anonimizado(self):
-        resp = responsaveis.criar("Responsável de teste")
+        resp = _criar_master()
         cliente = criar_cliente_mensal()
         clientes.anonimizar(cliente["id"], resp["id"], date.today())
         with self.assertRaises(ValueError):
@@ -553,7 +559,7 @@ class TesteDesativarReativar(BaseMySQLTest):
             clientes.reativar("CLI-999")
 
     def test_recusa_reativar_cliente_anonimizado(self):
-        resp = responsaveis.criar("Responsável de teste")
+        resp = _criar_master()
         cliente = criar_cliente_mensal()
         clientes.anonimizar(cliente["id"], resp["id"], date.today())
         with self.assertRaises(ValueError):
@@ -580,7 +586,7 @@ class TesteDesativarReativar(BaseMySQLTest):
 class TesteAnonimizar(BaseMySQLTest):
 
     def test_substitui_o_nome(self):
-        resp = responsaveis.criar("Responsável de teste")
+        resp = _criar_master()
         cliente = criar_cliente_mensal()
         anonimizado = clientes.anonimizar(
             cliente["id"], resp["id"], date.today()
@@ -590,7 +596,7 @@ class TesteAnonimizar(BaseMySQLTest):
         )
 
     def test_apaga_dados_pessoais(self):
-        resp = responsaveis.criar("Responsável de teste")
+        resp = _criar_master()
         cliente = criar_cliente_mensal(
             email="ana@exemplo.pt",
             telefone="912345678",
@@ -612,7 +618,7 @@ class TesteAnonimizar(BaseMySQLTest):
         self.assertEqual(anonimizado["contacto_emergencia"], "")
 
     def test_conserva_nacionalidade_e_tipo_documento(self):
-        resp = responsaveis.criar("Responsável de teste")
+        resp = _criar_master()
         cliente = criar_cliente_mensal(nacionalidade="Portuguesa")
         anonimizado = clientes.anonimizar(
             cliente["id"], resp["id"], date.today()
@@ -622,7 +628,7 @@ class TesteAnonimizar(BaseMySQLTest):
         self.assertEqual(anonimizado["tipo_documento"], "Cartão de Cidadão")
 
     def test_marca_anonimizado_e_regista_autoria(self):
-        resp = responsaveis.criar("Responsável de teste")
+        resp = _criar_master()
         cliente = criar_cliente_mensal()
         hoje = date.today()
         anonimizado = clientes.anonimizar(cliente["id"], resp["id"], hoje)
@@ -634,14 +640,14 @@ class TesteAnonimizar(BaseMySQLTest):
         self.assertTrue(anonimizado["incompleto"])
 
     def test_recusa_anonimizar_duas_vezes(self):
-        resp = responsaveis.criar("Responsável de teste")
+        resp = _criar_master()
         cliente = criar_cliente_mensal()
         clientes.anonimizar(cliente["id"], resp["id"], date.today())
         with self.assertRaises(ValueError):
             clientes.anonimizar(cliente["id"], resp["id"], date.today())
 
     def test_recusa_anonimizar_inexistente(self):
-        resp = responsaveis.criar("Responsável de teste")
+        resp = _criar_master()
         with self.assertRaises(ValueError):
             clientes.anonimizar("CLI-999", resp["id"], date.today())
 
@@ -651,10 +657,26 @@ class TesteAnonimizar(BaseMySQLTest):
             clientes.anonimizar(cliente["id"], "  ", date.today())
 
     def test_recusa_sem_data(self):
-        resp = responsaveis.criar("Responsável de teste")
+        resp = _criar_master()
         cliente = criar_cliente_mensal()
         with self.assertRaises(ValueError):
             clientes.anonimizar(cliente["id"], resp["id"], None)
+
+    def test_admin_nao_anonimiza(self):
+        """26/09/2026 — só um Master autoriza a anonimização."""
+        admin = responsaveis.criar("Admin", tipo_utilizador="Admin")
+        cliente = criar_cliente_mensal()
+        with self.assertRaises(ValueError):
+            clientes.anonimizar(cliente["id"], admin["id"], date.today())
+
+        # Nada foi escrito: o cliente continua intacto.
+        self.assertFalse(clientes.procurar(cliente["id"])["anonimizado"])
+
+    def test_staff_nao_anonimiza(self):
+        staff = responsaveis.criar("Staff", tipo_utilizador="Staff")
+        cliente = criar_cliente_mensal()
+        with self.assertRaises(ValueError):
+            clientes.anonimizar(cliente["id"], staff["id"], date.today())
 
 
 if __name__ == "__main__":

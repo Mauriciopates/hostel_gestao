@@ -847,5 +847,107 @@ class TesteLogsAutenticacao(BaseMySQLTest):
         self.assertIn(staff["id"], registo.output[0])
 
 
+class TesteAlterarUsername(BaseMySQLTest):
+    """26/09/2026 — só o Master troca o nome de utilizador."""
+
+    def test_master_altera_username_e_password_mantem_se(self):
+        master = _criar_master()
+        alvo = _criar_staff("Diego")
+        _definir_credencial(alvo, "diego", autor=master)
+
+        utilizadores.alterar_username(alvo["id"], " diego.s ", master)
+
+        registo, motivo = utilizadores.autenticar("diego.s", "password123")
+        self.assertEqual(motivo, utilizadores.MOTIVO_OK)
+        self.assertEqual(registo["id"], alvo["id"])
+
+        _, motivo = utilizadores.autenticar("diego", "password123")
+        self.assertEqual(motivo, utilizadores.MOTIVO_NAO_ENCONTRADO)
+
+    def test_admin_nao_altera_username(self):
+        master = _criar_master()
+        admin = _criar_admin()
+        alvo = _criar_staff("Diego")
+        _definir_credencial(alvo, "diego", autor=master)
+
+        with self.assertRaises(ValueError):
+            utilizadores.alterar_username(alvo["id"], "outro", admin)
+
+    def test_staff_nao_altera_o_proprio_username(self):
+        master = _criar_master()
+        alvo = _criar_staff("Diego")
+        _definir_credencial(alvo, "diego", autor=master)
+
+        with self.assertRaises(ValueError):
+            utilizadores.alterar_username(alvo["id"], "outro", alvo)
+
+    def test_recusa_username_vazio(self):
+        master = _criar_master()
+        alvo = _criar_staff("Diego")
+        _definir_credencial(alvo, "diego", autor=master)
+
+        with self.assertRaises(ValueError):
+            utilizadores.alterar_username(alvo["id"], "   ", master)
+
+    def test_recusa_username_ja_usado(self):
+        master = _criar_master()
+        ana = _criar_staff("Ana")
+        diego = _criar_staff("Diego")
+        _definir_credencial(ana, "ana", autor=master)
+        _definir_credencial(diego, "diego", autor=master)
+
+        with self.assertRaises(ValueError):
+            utilizadores.alterar_username(diego["id"], "ana", master)
+
+    def test_recusa_igual_ao_atual(self):
+        master = _criar_master()
+        alvo = _criar_staff("Diego")
+        _definir_credencial(alvo, "diego", autor=master)
+
+        with self.assertRaises(ValueError):
+            utilizadores.alterar_username(alvo["id"], "diego", master)
+
+    def test_recusa_sem_credencial(self):
+        master = _criar_master()
+        alvo = _criar_staff("Diego")
+
+        with self.assertRaises(ValueError):
+            utilizadores.alterar_username(alvo["id"], "diego", master)
+
+
+class TesteResponsaveisVisiveis(BaseMySQLTest):
+    """26/09/2026 — quem vê quem na lista de Responsáveis."""
+
+    def setUp(self):
+        super().setUp()
+        self.master = _criar_master()
+        self.admin = _criar_admin("Admin A")
+        self.outro_admin = _criar_admin("Admin B")
+        self.staff = _criar_staff("Staff A")
+        self.outro_staff = _criar_staff("Staff B")
+        self.lista = utilizadores.listar_com_estado()
+
+    def _ids(self, autor):
+        return {
+            r["id"]
+            for r in utilizadores.responsaveis_visiveis(self.lista, autor)
+        }
+
+    def test_master_ve_todos(self):
+        self.assertEqual(len(self._ids(self.master)), 5)
+
+    def test_admin_ve_se_a_si_e_aos_staff(self):
+        self.assertEqual(
+            self._ids(self.admin),
+            {self.admin["id"], self.staff["id"], self.outro_staff["id"]},
+        )
+
+    def test_staff_ve_so_a_si(self):
+        self.assertEqual(self._ids(self.staff), {self.staff["id"]})
+
+    def test_sem_autor_nao_ve_ninguem(self):
+        self.assertEqual(self._ids(None), set())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

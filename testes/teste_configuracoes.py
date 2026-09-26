@@ -366,24 +366,27 @@ class TesteDefinir(BaseMySQLTest):
 class TestePermissoes(BaseMySQLTest):
     """Regras de perfil por prefixo de chave.
 
-    As chaves `stock.*`, `sistema.*` e `financeiro.multiplicador_*`
-    são só para Master. `operacao.*`, `empresa.*` e o resto de
-    `financeiro.*` são Master + Admin.
+    26/09/2026 — todas as chaves passaram a ser só do Master (as
+    configurações são decisões do negócio). O Admin e o Staff não
+    alteram nenhuma.
     """
 
     def setUp(self):
         super().setUp()
         configuracoes.garantir_seed()
 
-    # -- chaves Master+Admin ------------------------------------------
+    # -- chaves de operação ------------------------------------------
 
     def test_master_altera_chave_operacao(self):
         master = _criar_master()
         configuracoes.definir("operacao.dia_vencimento", 10, autor=master)
 
-    def test_admin_altera_chave_operacao(self):
+    def test_admin_nao_altera_chave_operacao(self):
         admin = _criar_admin()
-        configuracoes.definir("operacao.dia_vencimento", 10, autor=admin)
+        with self.assertRaises(ValueError):
+            configuracoes.definir(
+                "operacao.dia_vencimento", 10, autor=admin
+            )
 
     def test_staff_nao_altera_chave_operacao(self):
         staff = _criar_staff()
@@ -442,17 +445,19 @@ class TestePermissoes(BaseMySQLTest):
 
     # -- chaves operacao e financeiro restantes -----------------------
 
-    def test_admin_altera_chave_epoca_alta(self):
+    def test_admin_nao_altera_chave_epoca_alta(self):
         admin = _criar_admin()
-        configuracoes.definir(
-            "financeiro.epoca_alta_inicio", (6, 1), autor=admin
-        )
+        with self.assertRaises(ValueError):
+            configuracoes.definir(
+                "financeiro.epoca_alta_inicio", (6, 1), autor=admin
+            )
 
-    def test_admin_altera_pasta_relatorios(self):
+    def test_admin_nao_altera_pasta_relatorios(self):
         admin = _criar_admin()
-        configuracoes.definir(
-            "empresa.pasta_relatorios", "/tmp/x", autor=admin
-        )
+        with self.assertRaises(ValueError):
+            configuracoes.definir(
+                "empresa.pasta_relatorios", "/tmp/x", autor=admin
+            )
 
     # -- pode_alterar -------------------------------------------------
 
@@ -472,9 +477,9 @@ class TestePermissoes(BaseMySQLTest):
             )
         )
 
-    def test_pode_alterar_admin_chave_operacao_true(self):
+    def test_pode_alterar_admin_chave_operacao_false(self):
         admin = _criar_admin()
-        self.assertTrue(
+        self.assertFalse(
             configuracoes.pode_alterar("operacao.dia_vencimento", admin)
         )
 

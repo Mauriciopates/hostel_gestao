@@ -220,6 +220,63 @@ class TesteAtualizar(BaseMySQLTest):
         self.assertTrue(atualizado["ativo"])
 
 
+class TesteAtualizarPermissoes(BaseMySQLTest):
+    """26/09/2026 — quem pode editar quem (com `autor`)."""
+
+    def teste_master_edita_admin(self):
+        master = _criar_master()
+        admin = responsaveis.criar("Admin", tipo_utilizador="Admin")
+
+        atualizado = responsaveis.atualizar(
+            admin["id"], nome="Admin Novo", autor=master
+        )
+
+        self.assertEqual("Admin Novo", atualizado["nome"])
+
+    def teste_admin_edita_staff(self):
+        admin = responsaveis.criar("Admin", tipo_utilizador="Admin")
+        staff = responsaveis.criar("Staff", tipo_utilizador="Staff")
+
+        atualizado = responsaveis.atualizar(
+            staff["id"], nome="Staff Novo", autor=admin
+        )
+
+        self.assertEqual("Staff Novo", atualizado["nome"])
+
+    def teste_admin_edita_se_a_si_proprio(self):
+        admin = responsaveis.criar("Admin", tipo_utilizador="Admin")
+
+        atualizado = responsaveis.atualizar(
+            admin["id"], contacto="912345678", autor=admin
+        )
+
+        self.assertEqual("912345678", atualizado["contacto"])
+
+    def teste_admin_nao_edita_master(self):
+        master = _criar_master()
+        admin = responsaveis.criar("Admin", tipo_utilizador="Admin")
+
+        with self.assertRaises(ValueError):
+            responsaveis.atualizar(master["id"], nome="X", autor=admin)
+
+        self.assertEqual(
+            "Master de Teste", responsaveis.procurar(master["id"])["nome"]
+        )
+
+    def teste_admin_nao_edita_outro_admin(self):
+        admin = responsaveis.criar("Admin", tipo_utilizador="Admin")
+        outro = responsaveis.criar("Outro", tipo_utilizador="Admin")
+
+        with self.assertRaises(ValueError):
+            responsaveis.atualizar(outro["id"], nome="X", autor=admin)
+
+    def teste_staff_nao_se_edita(self):
+        staff = responsaveis.criar("Staff", tipo_utilizador="Staff")
+
+        with self.assertRaises(ValueError):
+            responsaveis.atualizar(staff["id"], nome="X", autor=staff)
+
+
 class TesteDesativar(BaseMySQLTest):
 
     def teste_desativa_responsavel_ativo(self):

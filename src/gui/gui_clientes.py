@@ -182,6 +182,7 @@ import clientes
 import responsaveis
 import validacoes
 from . import componentes
+from . import sessao
 from . import tema
 
 # Alias local para o helper que vivia neste ficheiro e passou a
@@ -618,6 +619,9 @@ class _AcoesClienteModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(pady=(0, 14))
 
+        # 26/09/2026 — só o Master vê "Anonimizar".
+        pode_anonimizar = sessao.tipo_utilizador_ativo() == "Master"
+
         # ---- Ações (variam com o estado) ----
         if anonimizado:
             # Sem ações — só o aviso. Mesma ideia do aviso de
@@ -644,12 +648,13 @@ class _AcoesClienteModal(ctk.CTkToplevel):
                 hover_color=tema.VERDE_LIVRE,
                 acao=lambda: self.tela_lista._reativar(cliente),
             )
-            self._botao(
-                "Anonimizar (irreversível)",
-                text_color=tema.TEXTO_ERRO,
-                hover_color=tema.VERMELHO_ERRO,
-                acao=lambda: _AnonimizarModal(self.tela_lista, cliente),
-            )
+            if pode_anonimizar:
+                self._botao(
+                    "Anonimizar (irreversível)",
+                    text_color=tema.TEXTO_ERRO,
+                    hover_color=tema.VERMELHO_ERRO,
+                    acao=lambda: _AnonimizarModal(self.tela_lista, cliente),
+                )
 
         else:
             # Cliente ativo: Editar + Anonimizar — separador —
@@ -662,12 +667,13 @@ class _AcoesClienteModal(ctk.CTkToplevel):
                 hover_color=tema.COR_BORDA,
                 acao=lambda: EditarClienteModal(tela_lista, cliente),
             )
-            self._botao(
-                "Anonimizar (irreversível)",
-                text_color=tema.TEXTO_ERRO,
-                hover_color=tema.VERMELHO_ERRO,
-                acao=lambda: _AnonimizarModal(self.tela_lista, cliente),
-            )
+            if pode_anonimizar:
+                self._botao(
+                    "Anonimizar (irreversível)",
+                    text_color=tema.TEXTO_ERRO,
+                    hover_color=tema.VERMELHO_ERRO,
+                    acao=lambda: _AnonimizarModal(self.tela_lista, cliente),
+                )
             self._separador()
             self._botao(
                 "Desativar",
@@ -1368,7 +1374,13 @@ class _AnonimizarModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=20)
 
-        self.responsaveis_disponiveis = responsaveis.listar()
+        # 26/09/2026 — só um Master autoriza (regra em
+        # clientes.anonimizar); o combo só mostra Masters.
+        self.responsaveis_disponiveis = [
+            r
+            for r in responsaveis.listar()
+            if r["tipo_utilizador"] == "Master"
+        ]
         nomes = ["— Nenhum —"] + [
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
