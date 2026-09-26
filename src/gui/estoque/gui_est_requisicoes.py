@@ -605,6 +605,11 @@ class _AcoesRequisicaoPendenteModal(ctk.CTkToplevel):
             componentes.mostrar_erro(str(erro))
             return
 
+        componentes.mostrar_sucesso(
+            f"Requisição {self.requisicao['id']} cancelada."
+        )
+        self.tela_lista._recarregar()
+
 
 class _AcoesRequisicaoRejeitadaModal(ctk.CTkToplevel):
     """Popup de "Gerir" de uma requisição rejeitada ou cancelada —
@@ -1014,6 +1019,12 @@ class _ConfirmarRececaoModal(ctk.CTkToplevel):
             componentes.mostrar_erro(str(erro))
             return
 
+        componentes.mostrar_sucesso(
+            f"Requisição {self.requisicao['id']} fechada."
+        )
+        self.destroy()
+        self.tela_lista._recarregar()
+
 
 class _RejeitarRequisicaoModal(ctk.CTkToplevel):
     """Motivo obrigatório antes de rejeitar — `rejeitar_requisicao`
@@ -1366,6 +1377,14 @@ class ReportarDevolucaoModal(ctk.CTkToplevel):
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
             return
+
+        componentes.mostrar_sucesso(
+            f"Devolução reportada: {devolucao['id']} — fica "
+            f"pendente até o armazém aceitar, em \"Aceitar Sobra "
+            f"(Devolução)\"."
+        )
+        self.destroy()
+        self.tela_lista._recarregar()
 
 
 # =====================================================================
