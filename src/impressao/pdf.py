@@ -28,9 +28,15 @@ from datetime import date, datetime
 from pathlib import Path
 
 from fpdf import FPDF
+from fpdf.enums import XPos, YPos
 
 import config
 from . import base
+
+# Mudança de linha depois de uma `cell` (27/09/2026). É o antigo
+# `ln=1`, obsoleto desde o fpdf2 2.5.2 (DeprecationWarning nos
+# testes): o cursor volta à margem esquerda e desce uma linha.
+_NOVA_LINHA = {"new_x": XPos.LMARGIN, "new_y": YPos.NEXT}
 
 # =====================================================================
 # CAMINHO DAS IMAGENS
@@ -99,7 +105,7 @@ def _desenhar_cabecalho(pdf, titulo, data_inicio, data_fim):
         largura_texto,
         8,
         base.sanitizar_texto_pdf(titulo),
-        ln=1,
+        **_NOVA_LINHA,
     )
 
     # ---- Meta (período + data) ----------------------------------
@@ -113,7 +119,7 @@ def _desenhar_cabecalho(pdf, titulo, data_inicio, data_fim):
             f"{data_fim.strftime('%d/%m/%Y')} "
             f"| Gerado em {date.today().strftime('%d/%m/%Y')}"
         ),
-        ln=1,
+        **_NOVA_LINHA,
     )
     pdf.set_text_color(0, 0, 0)
 
@@ -151,13 +157,13 @@ def _desenhar_rodape(pdf):
     )
 
     # Número de página à direita — a outra metade da largura, com
-    # `ln=1` para fechar a linha.
+    # `**_NOVA_LINHA` para fechar a linha.
     pdf.cell(
         largura_util / 2,
         5,
         base.sanitizar_texto_pdf(f"Página {pdf.page_no()}"),
         align="R",
-        ln=1,
+        **_NOVA_LINHA,
     )
 
     # Repõe a cor do texto para preto, para não afetar quem venha
@@ -261,7 +267,7 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 1 - Prazo -------------------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 1 - Prazo", ln=1)
+    pdf.cell(largura_util, 6, "Clausula 1 - Prazo", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
@@ -277,7 +283,7 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 2 - Renovação ---------------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 2 - Renovacao", ln=1)
+    pdf.cell(largura_util, 6, "Clausula 2 - Renovacao", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
@@ -349,7 +355,7 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 3 - Valor da renda ----------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 3 - Valor da renda", ln=1)
+    pdf.cell(largura_util, 6, "Clausula 3 - Valor da renda", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
@@ -400,7 +406,7 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 4 - Denúncia ----------------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 4 - Denuncia", ln=1)
+    pdf.cell(largura_util, 6, "Clausula 4 - Denuncia", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
@@ -473,7 +479,7 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 5 - Fim ---------------------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 5 - Fim", ln=1)
+    pdf.cell(largura_util, 6, "Clausula 5 - Fim", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
@@ -493,7 +499,7 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 6 - Manutenção --------------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 6 - Manutencao", ln=1)
+    pdf.cell(largura_util, 6, "Clausula 6 - Manutencao", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
@@ -545,7 +551,7 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 7 - Obras -------------------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 7 - Obras", ln=1)
+    pdf.cell(largura_util, 6, "Clausula 7 - Obras", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
@@ -563,7 +569,7 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 8 - Despesas ----------------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 8 - Despesas", ln=1)
+    pdf.cell(largura_util, 6, "Clausula 8 - Despesas", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
@@ -581,7 +587,7 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 9 - Estado do locado --------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 9 - Estado do locado", ln=1)
+    pdf.cell(largura_util, 6, "Clausula 9 - Estado do locado", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
@@ -643,7 +649,9 @@ def gerar_contrato_pdf(
     largura_coluna = largura_util / 2 - 5
 
     pdf.cell(largura_coluna, 6, "_" * 40, align="C")
-    pdf.cell(largura_util - largura_coluna, 6, "_" * 40, align="C", ln=1)
+    pdf.cell(
+        largura_util - largura_coluna, 6, "_" * 40, align="C", **_NOVA_LINHA
+    )
     pdf.ln(1)
 
     pdf.set_font("Times", "B", 11)
@@ -653,7 +661,7 @@ def gerar_contrato_pdf(
         6,
         "Segundo Contraente",
         align="C",
-        ln=1,
+        **_NOVA_LINHA,
     )
 
     pdf.set_font("Times", "", 11)
@@ -668,7 +676,7 @@ def gerar_contrato_pdf(
         6,
         base.sanitizar_texto_pdf(cliente["nome"]),
         align="C",
-        ln=1,
+        **_NOVA_LINHA,
     )
 
     pdf.output(str(caminho))
@@ -939,7 +947,7 @@ def _texto(pdf, largura, altura, texto, estilo="", tamanho=9, **kwargs):
 def _titulo_secao(pdf, texto):
     pdf.ln(2)
     pdf.set_text_color(*_CINZA_TEXTO)
-    _texto(pdf, 0, 6, texto.upper(), "B", 8, ln=1)
+    _texto(pdf, 0, 6, texto.upper(), "B", 8, **_NOVA_LINHA)
     pdf.set_text_color(0, 0, 0)
 
 
@@ -1013,7 +1021,7 @@ def _desenhar_bloco_guia(pdf, bloco):
     pdf.set_text_color(255, 255, 255)
     _texto(pdf, largura_util * 0.7, 9, f"  {titulo}", "B", 11, fill=True)
     _texto(pdf, largura_util * 0.3, 9, f"{lado}  ", "", 9, fill=True,
-           align="R", ln=1)
+           align="R", **_NOVA_LINHA)
     pdf.set_text_color(0, 0, 0)
 
     if bloco["unidades"]:
@@ -1102,7 +1110,7 @@ def gerar_guia_entrega_pdf(data_envio, blocos, gerado_por):
         pdf.add_page()
         _desenhar_cabecalho(pdf, "Guia de entrega", data_envio, data_envio)
         pdf.set_text_color(*_CINZA_TEXTO)
-        _texto(pdf, 0, 5, f"Gerado por {gerado_por}", "", 9, ln=1)
+        _texto(pdf, 0, 5, f"Gerado por {gerado_por}", "", 9, **_NOVA_LINHA)
         pdf.set_text_color(0, 0, 0)
         pdf.ln(6)
         _desenhar_bloco_guia(pdf, bloco)
@@ -1111,7 +1119,7 @@ def gerar_guia_entrega_pdf(data_envio, blocos, gerado_por):
         pdf.add_page()
         _desenhar_cabecalho(pdf, "Guia de entrega", data_envio, data_envio)
         pdf.ln(10)
-        _texto(pdf, 0, 8, "Sem envios nesta data.", "", 11, ln=1)
+        _texto(pdf, 0, 8, "Sem envios nesta data.", "", 11, **_NOVA_LINHA)
 
     pdf.output(str(caminho))
     return caminho
