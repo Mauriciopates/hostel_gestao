@@ -24,7 +24,7 @@ segurança — e resolve o bug do `€` que o aluno apanhou em
 porque o valor `50,00 €` tinha o símbolo de euro).
 """
 
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from fpdf import FPDF
@@ -894,3 +894,224 @@ def _celula_para_pdf(celula):
         return base.formatar_data_pt(celula)
 
     return str(celula)
+
+
+# =====================================================================
+# GUIA DE ENTREGA (27/09/2026, v1.6.0 — mockup aprovado pelo aluno)
+# =====================================================================
+
+_NAVY = (12, 47, 72)
+_AMBAR = (183, 134, 42)
+_CINZA_TEXTO = (90, 107, 122)
+_FUNDO_CLARO = (245, 247, 249)
+_CHIP = (232, 241, 248)
+_LINHA = (201, 211, 220)
+
+
+class _PdfGuia(FPDF):
+    """FPDF com o rodapé comum desenhado em TODAS as páginas — um
+    staff com muitos produtos pode passar de uma página, e o rodapé
+    manual dos relatórios só ficava na última."""
+
+    def footer(self):
+        _desenhar_rodape(self)
+
+
+def _caminho_guia(data_envio):
+    hora_minuto = datetime.now().strftime("%Hh%M")
+    nome = f"guia_entrega_{data_envio.isoformat()}_{hora_minuto}.pdf"
+    return base.pasta_relatorios() / nome
+
+
+def _texto(pdf, largura, altura, texto, estilo="", tamanho=9, **kwargs):
+    """`cell` com texto sanitizado e cortado com "..." se não couber
+    na largura (uma nota de Rol longa passava por cima da coluna da
+    quantidade). Largura 0 = até à margem, não se corta."""
+    pdf.set_font("Helvetica", estilo, tamanho)
+    texto = base.sanitizar_texto_pdf(texto)
+    if largura and pdf.get_string_width(texto) > largura - 2:
+        while texto and pdf.get_string_width(texto + "...") > largura - 2:
+            texto = texto[:-1]
+        texto += "..."
+    pdf.cell(largura, altura, texto, **kwargs)
+
+
+def _titulo_secao(pdf, texto):
+    pdf.ln(2)
+    pdf.set_text_color(*_CINZA_TEXTO)
+    _texto(pdf, 0, 6, texto.upper(), "B", 8, ln=1)
+    pdf.set_text_color(0, 0, 0)
+
+
+def _tabela_guia(pdf, larguras, cabecalho, linhas, destaque_ultima=False):
+    """Tabela simples: cabeçalho com linha por baixo, uma linha por
+    registo. A última coluna (quantidade) vai alinhada à direita."""
+    pdf.set_draw_color(*_LINHA)
+    pdf.set_text_color(*_CINZA_TEXTO)
+    for i, titulo in enumerate(cabecalho):
+        alinhar = "R" if i == len(cabecalho) - 1 else "L"
+        _texto(pdf, larguras[i], 6, titulo, "B", 8, align=alinhar)
+    pdf.ln()
+    y = pdf.get_y()
+    pdf.line(pdf.l_margin, y, pdf.l_margin + sum(larguras), y)
+    pdf.set_text_color(0, 0, 0)
+
+    for n, linha in enumerate(linhas):
+        forte = destaque_ultima and n == len(linhas) - 1
+        if forte:
+            pdf.set_fill_color(*_CHIP)
+        for i, valor in enumerate(linha):
+            alinhar = "R" if i == len(linha) - 1 else "L"
+            _texto(
+                pdf,
+                larguras[i],
+                6,
+                valor,
+                "B" if forte else "",
+                9,
+                align=alinhar,
+                fill=forte,
+            )
+        pdf.ln()
+
+
+def _linhas_entradas(entradas, com_nota):
+    """Uma linha por produto; o id da requisição só na primeira. No
+    Rol, a nota de origem (unidade/reserva) vai numa linha própria."""
+    linhas = []
+    for entrada in entradas:
+        if com_nota and entrada["observacoes"]:
+            linhas.append((entrada["id"], entrada["observacoes"], ""))
+            primeira = ""
+        else:
+            primeira = entrada["id"]
+        for item in entrada["itens"]:
+            linhas.append(
+                (
+                    primeira,
+                    item["nome"],
+                    f"{item['quantidade']} {item['unidade_medida']}".strip(),
+                )
+            )
+            primeira = ""
+    return linhas
+
+
+def _desenhar_bloco_guia(pdf, bloco):
+    largura_util = pdf.w - pdf.l_margin - pdf.r_margin
+
+    # ---- Faixa do staff ------------------------------------------
+    if bloco["por_atribuir"]:
+        titulo = "Por atribuir"
+        lado = "unidade sem staff, ou com mais de um"
+        pdf.set_fill_color(*_AMBAR)
+    else:
+        responsavel = bloco["responsavel"]
+        titulo = f"{responsavel['nome']} ({responsavel['id']})"
+        lado = responsavel.get("tipo_utilizador") or ""
+        pdf.set_fill_color(*_NAVY)
+    pdf.set_text_color(255, 255, 255)
+    _texto(pdf, largura_util * 0.7, 9, f"  {titulo}", "B", 11, fill=True)
+    _texto(pdf, largura_util * 0.3, 9, f"{lado}  ", "", 9, fill=True,
+           align="R", ln=1)
+    pdf.set_text_color(0, 0, 0)
+
+    if bloco["unidades"]:
+        nomes = " · ".join(
+            f"{u['nome']} ({u['id']})" for u in bloco["unidades"]
+        )
+        pdf.set_fill_color(*_FUNDO_CLARO)
+        pdf.set_text_color(*_CINZA_TEXTO)
+        pdf.set_font("Helvetica", "", 8)
+        pdf.multi_cell(
+            largura_util,
+            5,
+            base.sanitizar_texto_pdf(f"Unidades: {nomes}"),
+            fill=True,
+        )
+        pdf.set_text_color(0, 0, 0)
+
+    larguras = [28, largura_util - 28 - 32, 32]
+
+    if bloco["requisicoes"]:
+        _titulo_secao(pdf, "Requisições")
+        _tabela_guia(
+            pdf,
+            larguras,
+            ("Req.", "Produto", "Qtd."),
+            _linhas_entradas(bloco["requisicoes"], com_nota=False),
+        )
+
+    if bloco["rol"]:
+        _titulo_secao(pdf, "Rol de Lavandaria")
+        _tabela_guia(
+            pdf,
+            larguras,
+            ("Req.", "Produto", "Qtd."),
+            _linhas_entradas(bloco["rol"], com_nota=True),
+        )
+
+    _titulo_secao(pdf, "Total a entregar")
+    linhas_total = [
+        ("", t["nome"], f"{t['quantidade']} {t['unidade_medida']}".strip())
+        for t in bloco["totais"]
+    ]
+    linhas_total.append(("", "Total de itens", str(bloco["total_itens"])))
+    _tabela_guia(
+        pdf,
+        larguras,
+        ("", "Produto", "Qtd."),
+        linhas_total,
+        destaque_ultima=True,
+    )
+
+    # ---- Assinaturas ---------------------------------------------
+    pdf.ln(14)
+    terco = (largura_util - 20) / 3
+    recebido = (
+        "Recebido por"
+        if bloco["por_atribuir"]
+        else f"Recebido por ({bloco['responsavel']['nome']})"
+    )
+    y = pdf.get_y()
+    pdf.set_draw_color(154, 168, 180)
+    for i, rotulo in enumerate(("Entregue por", recebido, "Data / hora")):
+        x = pdf.l_margin + i * (terco + 10)
+        pdf.line(x, y, x + terco, y)
+        pdf.set_xy(x, y + 1)
+        pdf.set_text_color(*_CINZA_TEXTO)
+        _texto(pdf, terco, 5, rotulo, "", 8)
+    pdf.set_text_color(0, 0, 0)
+
+
+def gerar_guia_entrega_pdf(data_envio, blocos, gerado_por):
+    """Gera o PDF da Guia de entrega — UMA PÁGINA POR STAFF (decisão
+    do aluno, 27/09/2026: a folha entrega-se a cada um), com o bloco
+    "Por atribuir" na sua própria página, no fim.
+
+    'blocos' é o que `estoque.guia_entrega` devolve. 'gerado_por' é
+    o nome de quem gera (vai para o cabeçalho). Devolve o `Path`.
+    """
+    caminho = _caminho_guia(data_envio)
+
+    pdf = _PdfGuia(orientation="P", unit="mm", format="A4")
+    pdf.set_margins(left=15, top=15, right=15)
+    pdf.set_auto_page_break(auto=True, margin=22)
+
+    for bloco in blocos:
+        pdf.add_page()
+        _desenhar_cabecalho(pdf, "Guia de entrega", data_envio, data_envio)
+        pdf.set_text_color(*_CINZA_TEXTO)
+        _texto(pdf, 0, 5, f"Gerado por {gerado_por}", "", 9, ln=1)
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(6)
+        _desenhar_bloco_guia(pdf, bloco)
+
+    if not blocos:
+        pdf.add_page()
+        _desenhar_cabecalho(pdf, "Guia de entrega", data_envio, data_envio)
+        pdf.ln(10)
+        _texto(pdf, 0, 8, "Sem envios nesta data.", "", 11, ln=1)
+
+    pdf.output(str(caminho))
+    return caminho

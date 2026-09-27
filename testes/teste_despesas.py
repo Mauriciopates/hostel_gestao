@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest
 
 import despesas
 import responsaveis
@@ -266,7 +266,7 @@ class TesteVia1(BaseMySQLTest):
         self.assertTrue(d["itens_confirmados"])
         self.assertFalse(d["recorrente"])
         self.assertIsNone(d["data_pagamento"])
-        self.assertEqual(d["unidade_id"], "")
+        self.assertIsNone(d["unidade_id"])
 
     def test_criar_despesa_manual_valor_negativo_falha(self):
         with self.assertRaises(ValueError):
@@ -572,7 +572,7 @@ class TesteVia2(BaseMySQLTest):
         self.assertEqual(len(itens), 1)
         self.assertEqual(itens[0]["quantidade"], 5)
         self.assertEqual(itens[0]["produto_id"], produto["id"])
-        self.assertEqual(itens[0]["movimento_id"], "")
+        self.assertIsNone(itens[0]["movimento_id"])
 
     def test_criar_despesa_stock_com_produto_novo(self):
         despesa, itens = despesas.criar_despesa_stock(

@@ -18,6 +18,14 @@ Cada teste corre numa pasta temporária própria, criada antes e eliminada
 depois. As constantes de caminho do repositório são redirecionadas para
 essa pasta e repostas no fim, para os testes nunca tocarem nos dados
 reais de `dados/` e `backups/`.
+
+NOTA (Fase 1, v1.4.0 — pastas persistentes): o `repositorio.py` deixou
+de expor `PASTA_DADOS`/`PASTA_BACKUPS`/`FICHEIRO_CONTADORES` como
+constantes próprias — os caminhos vivem em `config.DIR_DADOS`,
+`config.DIR_BACKUPS` e `_ficheiro_contadores()` (calculado a cada
+chamada). Por isso o `setUp` deste ficheiro redireciona `config.DIR_*`,
+não `repositorio.PASTA_*` — mesma convenção já usada pelo
+`apoio_BD.BaseMySQLTest`.
 """
 
 import shutil
@@ -30,6 +38,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+import config
 import repositorio
 
 
@@ -41,23 +50,18 @@ class BaseRepositorio(unittest.TestCase):
         self.pasta = Path(tempfile.mkdtemp())
 
         self.originais = (
-            repositorio.PASTA_DADOS,
-            repositorio.PASTA_BACKUPS,
-            repositorio.FICHEIRO_CONTADORES,
+            config.DIR_DADOS,
+            config.DIR_BACKUPS,
         )
 
-        repositorio.PASTA_DADOS = self.pasta / "dados"
-        repositorio.PASTA_BACKUPS = self.pasta / "backups"
-        repositorio.FICHEIRO_CONTADORES = (
-            repositorio.PASTA_DADOS / "contadores.json"
-        )
+        config.DIR_DADOS = self.pasta / "dados"
+        config.DIR_BACKUPS = self.pasta / "backups"
 
     def tearDown(self):
         """Repõe os caminhos originais e elimina a pasta temporária."""
         (
-            repositorio.PASTA_DADOS,
-            repositorio.PASTA_BACKUPS,
-            repositorio.FICHEIRO_CONTADORES,
+            config.DIR_DADOS,
+            config.DIR_BACKUPS,
         ) = self.originais
 
         shutil.rmtree(self.pasta, ignore_errors=True)
@@ -133,7 +137,7 @@ class TesteBackups(BaseRepositorio):
         self.assertIsNone(resultado)
 
         destino = (
-            repositorio.PASTA_BACKUPS / f"dump_{date.today().isoformat()}.sql"
+            config.DIR_BACKUPS / f"dump_{date.today().isoformat()}.sql"
         )
         self.assertFalse(destino.exists())
 
@@ -165,13 +169,13 @@ class TesteBackups(BaseRepositorio):
         for dias in (5, 20, 31, 60):
             data_copia = hoje - timedelta(days=dias)
             ficheiro = (
-                repositorio.PASTA_BACKUPS
+                config.DIR_BACKUPS
                 / f"dump_{data_copia.isoformat()}.sql"
             )
             ficheiro.write_text("-- teste", encoding="utf-8")
 
         eliminadas = repositorio.limpar_backups_antigos(dias=30)
-        restantes = list(repositorio.PASTA_BACKUPS.glob("dump_*.sql"))
+        restantes = list(config.DIR_BACKUPS.glob("dump_*.sql"))
 
         self.assertEqual(2, eliminadas)
         self.assertEqual(2, len(restantes))
@@ -210,7 +214,7 @@ class TesteBackups(BaseRepositorio):
         for dias in (prazo - 1, prazo + 1):
             data_copia = hoje - timedelta(days=dias)
             ficheiro = (
-                repositorio.PASTA_BACKUPS
+                config.DIR_BACKUPS
                 / f"dump_{data_copia.isoformat()}.sql"
             )
             ficheiro.write_text("-- teste", encoding="utf-8")

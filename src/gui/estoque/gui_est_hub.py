@@ -45,9 +45,9 @@ ALTERAÇÕES 13/09/2026 (Aprovação de Requisições):
 import customtkinter as ctk
 
 import estoque
-from . import componentes
-from . import sessao
-from . import tema
+from .. import componentes
+from .. import sessao
+from .. import tema
 from .gui_est_aprovacao import ListaAprovacao
 from .gui_est_devolucoes import ListaDevolucoes
 from .gui_est_movimentos import ListaMovimentos

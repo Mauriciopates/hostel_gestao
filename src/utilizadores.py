@@ -33,10 +33,13 @@ responsável ativo) e validam antes de agir.
 """
 
 import hashlib
+import logging
 import os
 from datetime import date, datetime
 
 import repositorio
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------
 # Constantes
@@ -206,6 +209,12 @@ def verificar_permissao(autor, perfis_permitidos, perfil_alvo=None):
     tipo_autor = autor.get("tipo_utilizador")
 
     if tipo_autor not in perfis_permitidos:
+        logger.warning(
+            "Permissão recusada — autor_id=%s, tipo=%s, permitidos=%s",
+            autor.get("id"),
+            tipo_autor,
+            sorted(perfis_permitidos),
+        )
         raise ValueError("O seu perfil não tem permissão para esta operação.")
 
     # Regra adicional do Admin: só opera sobre Staff. Um Master passa
@@ -213,6 +222,12 @@ def verificar_permissao(autor, perfis_permitidos, perfil_alvo=None):
     # que usam perfil_alvo).
     if perfil_alvo is not None:
         if tipo_autor == "Admin" and perfil_alvo != "Staff":
+            logger.warning(
+                "Permissão recusada — Admin sobre não-Staff: autor_id=%s, "
+                "perfil_alvo=%s",
+                autor.get("id"),
+                perfil_alvo,
+            )
             raise ValueError("Um Admin só pode operar sobre Staff.")
 
 
@@ -249,21 +264,45 @@ def autenticar(username, password):
     username = (username or "").strip()
     password = password or ""
 
+    # Nunca se regista o username tentado nem a password — o que foi
+    # escrito no campo do utilizador pode ser uma password digitada
+    # no sítio errado.
     if not username or not password:
+        logger.warning(
+            "Falha de autenticação — motivo=%s", MOTIVO_NAO_ENCONTRADO
+        )
         return None, MOTIVO_NAO_ENCONTRADO
 
     responsavel = repositorio.procurar_responsavel_por_username(username)
 
     if responsavel is None:
+        logger.warning(
+            "Falha de autenticação — motivo=%s", MOTIVO_NAO_ENCONTRADO
+        )
         return None, MOTIVO_NAO_ENCONTRADO
 
     if not responsavel["password_hash"]:
+        logger.warning(
+            "Falha de autenticação — motivo=%s, responsavel_id=%s",
+            MOTIVO_SEM_CREDENCIAL,
+            responsavel["id"],
+        )
         return None, MOTIVO_SEM_CREDENCIAL
 
     if not responsavel["ativo"]:
+        logger.warning(
+            "Falha de autenticação — motivo=%s, responsavel_id=%s",
+            MOTIVO_INATIVO,
+            responsavel["id"],
+        )
         return None, MOTIVO_INATIVO
 
     if not _validar_password(password, responsavel["password_hash"]):
+        logger.warning(
+            "Falha de autenticação — motivo=%s, responsavel_id=%s",
+            MOTIVO_PASSWORD_ERRADA,
+            responsavel["id"],
+        )
         return None, MOTIVO_PASSWORD_ERRADA
 
     # Sucesso — regista o último acesso. `datetime.now()` porque a
@@ -275,7 +314,42 @@ def autenticar(username, password):
     )
     responsavel["ultimo_login"] = agora
 
+    logger.info(
+        "Autenticação bem-sucedida — responsavel_id=%s", responsavel["id"]
+    )
     return responsavel, MOTIVO_OK
+
+
+def verificar_password(responsavel_id, password):
+    """Confirma a password de um responsável, SEM fazer login.
+
+    Devolve True se a password bater com a guardada, False em todos
+    os outros casos (password vazia, responsável inexistente, sem
+    credencial).
+
+    Existe para as CONFIRMAÇÕES — por exemplo, a password pedida no
+    modal do "Começar do zero". Uma confirmação não é um login, e o
+    `autenticar` não serve para isto porque:
+
+      - atualiza o `ultimo_login` na base de dados;
+      - regista "Autenticação bem-sucedida" / "Falha de
+        autenticação" no log.
+
+    Usado para confirmar, o `autenticar` escrevia no histórico de
+    acessos logins que nunca aconteceram.
+
+    Não regista nada no log de propósito: quem chama sabe o contexto
+    (qual operação estava a ser confirmada) e é quem deve registar.
+    """
+    if not password:
+        return False
+
+    responsavel = repositorio.procurar_responsavel(responsavel_id)
+
+    if responsavel is None or not responsavel.get("password_hash"):
+        return False
+
+    return _validar_password(password, responsavel["password_hash"])
 
 
 # ---------------------------------------------------------------------
@@ -292,6 +366,15 @@ def definir_credencial(responsavel_id, username, password, autor):
 
     Valida: política de password, unicidade do username, perfil do
     autor face ao perfil do alvo.
+
+    CORREÇÃO 22/09/2026 (PASSO 9): a barreira de perfil passou a
+    estar no próprio módulo, via `verificar_permissao`. Antes, o
+    único `if` verificava que o autor não era um Admin a mexer num
+    não-Staff — deixava um Staff autenticado passar (bastava que o
+    alvo fosse Staff para o ramo do `if` não disparar). A barreira
+    real vive no módulo (regra 11.2 do plano de correções); a GUI
+    já escondia o botão a quem não é Master/Admin, mas a barreira
+    de negócio era a que estava a faltar.
 
     O username é `strip()`-ado e comparado com os já existentes.
     Se já estiver em uso por outro responsável, levanta ValueError
@@ -321,12 +404,25 @@ def definir_credencial(responsavel_id, username, password, autor):
             "em vez de 'Definir credencial'."
         )
 
-    # Regra 5.1: Admin só define credencial a Staff.
-    if (
-        autor["tipo_utilizador"] == "Admin"
-        and alvo["tipo_utilizador"] != "Staff"
-    ):
-        raise ValueError("Um Admin só pode definir credenciais a Staff.")
+    # Regra 5.1 — barreira de perfil no próprio módulo.
+    #
+    # `verificar_permissao` cobre as três combinações que
+    # interessam:
+    #   - Master sobre qualquer perfil  → passa
+    #   - Admin sobre Staff             → passa
+    #   - Admin sobre Admin/Master      → recusa ("Admin só sobre Staff")
+    #   - Staff como autor              → recusa (não está em
+    #                                     {"Master", "Admin"})
+    #
+    # A posição da chamada é intencional: vem DEPOIS das validações
+    # de dados (username, password, alvo existe, alvo já tem
+    # credencial) e ANTES do UPDATE. Se os dados do formulário
+    # estão mal, o erro diz isso — não "não tens permissão".
+    verificar_permissao(
+        autor,
+        {"Master", "Admin"},
+        perfil_alvo=alvo["tipo_utilizador"],
+    )
 
     # Unicidade do username — o UNIQUE da base também garante isto,
     # mas aqui damos uma mensagem específica em vez de erro do MySQL.
@@ -349,6 +445,11 @@ def definir_credencial(responsavel_id, username, password, autor):
     repositorio.atualizar_responsavel(responsavel_id, campos)
     alvo.update(campos)
 
+    logger.info(
+        "Credencial definida — alvo_id=%s, autor_id=%s",
+        responsavel_id,
+        autor["id"],
+    )
     return alvo
 
 
@@ -391,6 +492,11 @@ def alterar_password(responsavel_id, password_atual, password_nova, autor):
     e_master = autor["tipo_utilizador"] == "Master"
 
     if not e_o_proprio and not e_master:
+        logger.warning(
+            "Alteração de password recusada — alvo_id=%s, autor_id=%s",
+            responsavel_id,
+            autor["id"],
+        )
         raise ValueError(
             "Só o próprio ou um Master podem alterar esta password."
         )
@@ -398,6 +504,11 @@ def alterar_password(responsavel_id, password_atual, password_nova, autor):
     # O próprio tem de confirmar a password atual; o Master não.
     if e_o_proprio:
         if not _validar_password(password_atual, alvo["password_hash"]):
+            logger.warning(
+                "Alteração de password — password atual errada, "
+                "responsavel_id=%s",
+                responsavel_id,
+            )
             raise ValueError("A password atual não corresponde.")
 
     agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -410,6 +521,71 @@ def alterar_password(responsavel_id, password_atual, password_nova, autor):
     repositorio.atualizar_responsavel(responsavel_id, campos)
     alvo.update(campos)
 
+    logger.info(
+        "Password alterada — alvo_id=%s, autor_id=%s, modo=%s",
+        responsavel_id,
+        autor["id"],
+        "proprio" if e_o_proprio else "reposicao_master",
+    )
+    return alvo
+
+
+def alterar_username(responsavel_id, username_novo, autor):
+    """Troca o nome de utilizador (login) de um responsável.
+
+    Só Master (decisão de 26/09/2026). Nem o próprio Admin ou Staff
+    muda o seu login — o username é a identidade de entrada no
+    sistema, e fica a cargo de quem administra os acessos.
+
+    Não mexe na password: quem já entrava com a password antiga
+    continua a entrar com ela, só que com o username novo.
+
+    Valida: perfil do autor, username não vazio, alvo existe e já
+    tem credencial, username diferente do atual e ainda livre.
+
+    Devolve o registo atualizado.
+    """
+    autor = _validar_autor(autor, responsavel_id)
+
+    verificar_permissao(autor, {"Master"})
+
+    username_novo = (username_novo or "").strip()
+
+    if not username_novo:
+        raise ValueError("O utilizador é obrigatório.")
+
+    alvo = repositorio.procurar_responsavel(responsavel_id)
+
+    if alvo is None:
+        raise ValueError(f"O responsável {responsavel_id} não existe.")
+
+    if not alvo["username"]:
+        raise ValueError(
+            f"O responsável {responsavel_id} ainda não tem credencial "
+            "definida. Use 'Definir credencial' primeiro."
+        )
+
+    if username_novo == alvo["username"]:
+        raise ValueError("O utilizador novo é igual ao atual.")
+
+    outro = repositorio.procurar_responsavel_por_username(username_novo)
+
+    if outro is not None and outro["id"] != responsavel_id:
+        raise ValueError(
+            f"O utilizador '{username_novo}' já está atribuído ao "
+            f"responsável {outro['id']}."
+        )
+
+    campos = {"username": username_novo}
+
+    repositorio.atualizar_responsavel(responsavel_id, campos)
+    alvo.update(campos)
+
+    logger.info(
+        "Utilizador alterado — alvo_id=%s, autor_id=%s",
+        responsavel_id,
+        autor["id"],
+    )
     return alvo
 
 
@@ -463,6 +639,11 @@ def desativar(responsavel_id, autor):
     repositorio.atualizar_responsavel(responsavel_id, campos)
     alvo.update(campos)
 
+    logger.info(
+        "Responsável desativado — alvo_id=%s, autor_id=%s",
+        responsavel_id,
+        autor["id"],
+    )
     return alvo
 
 
@@ -495,19 +676,30 @@ def reativar(responsavel_id, autor):
         autor["tipo_utilizador"] == "Admin"
         and alvo["tipo_utilizador"] != "Staff"
     ):
+        logger.warning(
+            "Reativação recusada — Admin sobre não-Staff: alvo_id=%s, "
+            "autor_id=%s",
+            responsavel_id,
+            autor["id"],
+        )
         raise ValueError("Um Admin só pode reativar Staff.")
 
     verificar_permissao(autor, {"Master", "Admin"})
 
     campos = {
         "ativo": True,
-        "desativado_por_id": "",
-        "data_desativacao": "",
+        "desativado_por_id": None,
+        "data_desativacao": None,
     }
 
     repositorio.atualizar_responsavel(responsavel_id, campos)
     alvo.update(campos)
 
+    logger.info(
+        "Responsável reativado — alvo_id=%s, autor_id=%s",
+        responsavel_id,
+        autor["id"],
+    )
     return alvo
 
 
@@ -531,6 +723,39 @@ def listar_com_estado(incluir_inativos=False):
     return repositorio.listar_responsaveis_com_credencial(
         incluir_inativos=incluir_inativos
     )
+
+
+def responsaveis_visiveis(lista, autor):
+    """Filtra uma lista de responsáveis pelo que o autor pode ver.
+
+    Regra de 26/09/2026:
+
+      - Master: vê todos.
+      - Admin: vê-se a si próprio e aos Staff (não vê o Master nem
+        outros Admin).
+      - Staff: vê-se só a si próprio.
+      - Sem autor: não vê ninguém.
+
+    Não vai à base de dados — recebe a lista já lida (por exemplo,
+    de `listar_com_estado`) e devolve uma lista nova.
+    """
+    if autor is None:
+        return []
+
+    tipo = autor.get("tipo_utilizador")
+
+    if tipo == "Master":
+        return list(lista)
+
+    if tipo == "Admin":
+        return [
+            registo
+            for registo in lista
+            if registo["id"] == autor["id"]
+            or registo["tipo_utilizador"] == "Staff"
+        ]
+
+    return [registo for registo in lista if registo["id"] == autor["id"]]
 
 
 # ---------------------------------------------------------------------

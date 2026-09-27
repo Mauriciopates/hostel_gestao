@@ -179,9 +179,12 @@ import re
 import customtkinter as ctk
 
 import clientes
+import contratos
 import responsaveis
+import unidades
 import validacoes
 from . import componentes
+from . import sessao
 from . import tema
 
 # Alias local para o helper que vivia neste ficheiro e passou a
@@ -411,21 +414,15 @@ class ListaClientes(ctk.CTkFrame):
         cor_id = (
             tema.TEXTO_INDISPONIVEL if anonimizado else tema.AZUL_PRINCIPAL
         )
-        self.tabela.colocar(
+        # Clicar no ID abre os contratos e reservas do cliente.
+        chip_id = componentes.ChipId(
             linha,
-            0,
-            ctk.CTkLabel(
-                linha,
-                text=cliente["id"],
-                text_color=cor_id,
-                fg_color=tema.ID_CHIP_FUNDO,
-                corner_radius=6,
-                font=ctk.CTkFont(size=11, weight="bold"),
-                width=_LARGURA_ID,
-                anchor="w",
-            ),
-            esticar="w",
+            cliente["id"],
+            ao_clicar=lambda: abrir_contratos_do_cliente(self, cliente),
+            largura=_LARGURA_ID,
         )
+        chip_id.configure(text_color=cor_id)
+        self.tabela.colocar(linha, 0, chip_id, esticar="w")
 
         # ---- NOME DO CLIENTE (nome + subtítulo com documento/NIF) ----
         cor_nome = (
@@ -541,6 +538,46 @@ class ListaClientes(ctk.CTkFrame):
         self._recarregar()
 
 
+def abrir_contratos_do_cliente(master, cliente):
+    """Abre a lista (só leitura) dos contratos mensais e reservas
+    Airbnb de um cliente — ativos e encerrados/cancelados.
+    """
+    linhas = []
+    for ocupacao in contratos.listar(
+        incluir_inativas=True, cliente_id=cliente["id"]
+    ):
+        unidade = unidades.procurar(ocupacao["unidade_id"])
+        nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
+        periodo = (
+            f"{componentes.formatar_data(ocupacao['data_inicio'])} → "
+            f"{componentes.formatar_data(ocupacao['data_fim'])}"
+        )
+        linhas.append(
+            (
+                ocupacao["id"],
+                "Mensal" if ocupacao["tipo"] == "mensal" else "Airbnb",
+                f"{nome_unidade} ({ocupacao['unidade_id']})",
+                periodo,
+                "Ativo" if ocupacao["ativo"] else "Inativo",
+            )
+        )
+
+    componentes.ListaVinculadaModal(
+        master,
+        titulo=f"{cliente['nome']} ({cliente['id']})",
+        subtitulo="Contratos e reservas do cliente",
+        colunas=(
+            componentes.Coluna("ID", minimo=110, espaco=8),
+            componentes.Coluna("TIPO", minimo=70),
+            componentes.Coluna("UNIDADE", peso=3, minimo=180),
+            componentes.Coluna("PERÍODO", peso=2, minimo=170),
+            componentes.Coluna("ESTADO", minimo=70),
+        ),
+        linhas=linhas,
+        mensagem_vazia="Este cliente ainda não tem contratos nem reservas.",
+    )
+
+
 class _AcoesClienteModal(ctk.CTkToplevel):
     """Popup pequeno com as ações de um cliente — aberto pelo botão
     "Gerir" de cada linha em `ListaClientes` (13/09/2026, ver
@@ -618,6 +655,9 @@ class _AcoesClienteModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(pady=(0, 14))
 
+        # 26/09/2026 — só o Master vê "Anonimizar".
+        pode_anonimizar = sessao.tipo_utilizador_ativo() == "Master"
+
         # ---- Ações (variam com o estado) ----
         if anonimizado:
             # Sem ações — só o aviso. Mesma ideia do aviso de
@@ -644,12 +684,13 @@ class _AcoesClienteModal(ctk.CTkToplevel):
                 hover_color=tema.VERDE_LIVRE,
                 acao=lambda: self.tela_lista._reativar(cliente),
             )
-            self._botao(
-                "Anonimizar (irreversível)",
-                text_color=tema.TEXTO_ERRO,
-                hover_color=tema.VERMELHO_ERRO,
-                acao=lambda: _AnonimizarModal(self.tela_lista, cliente),
-            )
+            if pode_anonimizar:
+                self._botao(
+                    "Anonimizar (irreversível)",
+                    text_color=tema.TEXTO_ERRO,
+                    hover_color=tema.VERMELHO_ERRO,
+                    acao=lambda: _AnonimizarModal(self.tela_lista, cliente),
+                )
 
         else:
             # Cliente ativo: Editar + Anonimizar — separador —
@@ -662,12 +703,13 @@ class _AcoesClienteModal(ctk.CTkToplevel):
                 hover_color=tema.COR_BORDA,
                 acao=lambda: EditarClienteModal(tela_lista, cliente),
             )
-            self._botao(
-                "Anonimizar (irreversível)",
-                text_color=tema.TEXTO_ERRO,
-                hover_color=tema.VERMELHO_ERRO,
-                acao=lambda: _AnonimizarModal(self.tela_lista, cliente),
-            )
+            if pode_anonimizar:
+                self._botao(
+                    "Anonimizar (irreversível)",
+                    text_color=tema.TEXTO_ERRO,
+                    hover_color=tema.VERMELHO_ERRO,
+                    acao=lambda: _AnonimizarModal(self.tela_lista, cliente),
+                )
             self._separador()
             self._botao(
                 "Desativar",
@@ -927,7 +969,7 @@ class _FormularioCliente(ctk.CTkToplevel):
 
     def _campo_dropdown(self, rotulo, valores):
         linha = self._linha(rotulo)
-        combo = ctk.CTkOptionMenu(self.corpo, values=list(valores))
+        combo = componentes.Seletor(self.corpo, values=list(valores))
         combo.grid(row=linha, column=1, sticky="ew", pady=6)
         return combo
 
@@ -957,7 +999,7 @@ class _FormularioCliente(ctk.CTkToplevel):
         entrada.grid(row=1, column=0, sticky="ew", pady=(6, 0))
         entrada.grid_remove()  # escondida por omissão, só "Outra" mostra
 
-        combo = ctk.CTkOptionMenu(
+        combo = componentes.Seletor(
             bloco,
             values=(
                 [NACIONALIDADE_PLACEHOLDER]
@@ -1368,11 +1410,17 @@ class _AnonimizarModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=20)
 
-        self.responsaveis_disponiveis = responsaveis.listar()
+        # 26/09/2026 — só um Master autoriza (regra em
+        # clientes.anonimizar); o combo só mostra Masters.
+        self.responsaveis_disponiveis = [
+            r
+            for r in responsaveis.listar()
+            if r["tipo_utilizador"] == "Master"
+        ]
         nomes = ["— Nenhum —"] + [
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
-        self.combo_responsavel = ctk.CTkOptionMenu(self, values=nomes)
+        self.combo_responsavel = componentes.Seletor(self, values=nomes)
         self.combo_responsavel.set(nomes[0])
         self.combo_responsavel.pack(fill="x", padx=20, pady=(2, 10))
 

@@ -18,9 +18,16 @@ janela. Este ficheiro deteta isso num `while` e cria uma nova
 `while` termina e a aplicação fecha de vez.
 """
 
+import logging
+
 import config
 import configuracoes
+import registo_logs
+import repositorio
+from gui import gui_servidores
 from gui.app import Aplicacao
+
+logger = logging.getLogger(__name__)
 
 
 def main():
@@ -34,8 +41,33 @@ def main():
     `config.garantir_diretorios()` corre uma só vez, antes do
     primeiro arranque. Não faz sentido repetir em cada reabertura
     (a árvore já existe), mas também não faz mal se acontecer.
+
+    BACKUP DIÁRIO (23/09/2026): até esta data só o `main.py` (CLI)
+    fazia o backup diário e a limpeza dos antigos — e a aplicação
+    usada na operação é esta. Na prática, não havia backup diário
+    nenhum. Mesma ordem do `main.py`: a cópia de hoje ANTES da
+    limpeza, para um erro na limpeza nunca deixar um arranque sem
+    cópia do dia; e antes do seed, para a cópia apanhar a base tal
+    como estava.
+
+    O `criar_backup()` decide sozinho se a cópia de hoje já existe —
+    só o primeiro arranque do dia a faz (e só esse espera pelo
+    `mysqldump`). Uma falha do `mysqldump` não impede o arranque:
+    devolve None e fica registada no log pelo `repositorio`.
     """
     config.garantir_diretorios()
+    registo_logs.configurar("gui")
+
+    # SERVIDOR (26/09/2026): antes de tudo o resto, abre o túnel SSH da
+    # VM (se o servidor ativo o usar) e confirma que o MySQL responde.
+    # Se falhar, mostra o plano B (tentar de novo / outro servidor /
+    # sair). Tem de ser antes do backup e do seed, que já usam a base.
+    if not gui_servidores.garantir_ligacao():
+        return
+
+    repositorio.criar_backup()
+    repositorio.limpar_backups_antigos()
+
     configuracoes.garantir_seed()
 
     while True:
@@ -56,7 +88,10 @@ def main():
 
         # Se chegou aqui, foi pedido logoff — o `while` recomeça
         # e cria uma nova `Aplicacao`.
+        logger.info("Logoff — a reabrir a aplicação")
         del app
+
+    logger.info("Aplicação terminada")
 
 
 if __name__ == "__main__":

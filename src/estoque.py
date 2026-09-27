@@ -110,11 +110,14 @@ ALTERAÇÕES 20/09/2026 (Fase 3 — Configurações lidas da BD):
   recusada com `ValueError`.
 """
 
+import logging
 from datetime import date
 
 import configuracoes
 import repositorio
 import responsaveis
+
+logger = logging.getLogger(__name__)
 
 PREFIXO = "PRD"
 PREFIXO_MOVIMENTO = "MOV"
@@ -152,8 +155,9 @@ TIPOS_PRODUTO = ("consumivel", "roupa_cama", "roupa_banho", "outro")
 _TIPOS_ADMINISTRATIVOS = ("Admin", "Master")
 
 
-def criar_produto(nome, unidade_medida, stock_minimo=0,
-                   tipo_produto="consumivel"):
+def criar_produto(
+    nome, unidade_medida, stock_minimo=0, tipo_produto="consumivel"
+):
     """Cria um produto no catálogo e grava-o imediatamente na base de
     dados.
 
@@ -360,6 +364,16 @@ def desativar_produto(produto_id, forcar=False, responsavel_id=None):
 
     repositorio.atualizar_produto(produto_id, campos)
     produto.update(campos)
+
+    if total_dependencias:
+        logger.warning(
+            "Produto desativado à força — id=%s, dependencias=%d, "
+            "responsavel_id=%s",
+            produto_id,
+            total_dependencias,
+            campos["desativado_por_id"],
+        )
+
     return produto
 
 
@@ -502,6 +516,18 @@ def registar_movimento(
     }
 
     repositorio.inserir_movimento(movimento)
+
+    if tipo == "ajuste":
+        logger.info(
+            "Movimento de ajuste — id=%s, produto=%s, quantidade=%s, "
+            "responsavel_id=%s, motivo=%s",
+            movimento["id"],
+            produto_id,
+            quantidade,
+            responsavel_id,
+            motivo,
+        )
+
     return movimento
 
 
@@ -797,6 +823,13 @@ def criar_requisicao(
         }
         repositorio.inserir_item_requisicao(item_requisicao)
 
+    logger.info(
+        "Requisição criada — id=%s, responsavel_id=%s, origem=%s, itens=%d",
+        requisicao["id"],
+        requisicao["responsavel_id"],
+        origem,
+        len(itens),
+    )
     return requisicao
 
 
@@ -877,6 +910,64 @@ def enviar_requisicao(
 
     Grava de imediato via repositório — mesma convenção dos outros
     módulos de negócio, agora todos em MySQL.
+
+    REGRA MOVIDA DA GUI (23/09/2026): aprovar e enviar é só para
+    Master ou Admin. Até aqui a regra vivia só no hub de Stock, que
+    escondia o cartão "Rota de Envio" a quem é Staff — um Staff que
+    chamasse esta função aprovava pedidos e tirava stock do armazém.
+    A barreira real vive no módulo (regra 11.2).
+
+    O corpo do envio vive em `_executar_envio`. A única exceção à
+    regra de perfil é o Rol de Lavanderia automático, que chama o
+    `_executar_envio` diretamente — ver `gerar_rol_lavanderia_automatico`.
+    """
+    quem_envia = responsaveis.validar_autoria(enviado_por_id)
+
+    if quem_envia.get("tipo_utilizador") not in _TIPOS_ADMINISTRATIVOS:
+        logger.warning(
+            "Aprovação de requisição recusada — requisicao_id=%s, "
+            "responsavel_id=%s, tipo=%s",
+            requisicao_id,
+            quem_envia["id"],
+            quem_envia.get("tipo_utilizador"),
+        )
+        raise ValueError(
+            "Só um Master ou Admin pode aprovar e enviar uma requisição."
+        )
+
+    return _executar_envio(
+        requisicao_id,
+        enviado_por_id,
+        data_envio,
+        quantidades_enviadas=quantidades_enviadas,
+    )
+
+
+def _executar_envio(
+    requisicao_id,
+    enviado_por_id,
+    data_envio,
+    quantidades_enviadas=None,
+):
+    """Faz o envio propriamente dito — SEM verificar o perfil de quem
+    envia.
+
+    Função interna (o `_` no nome é de propósito). Só tem dois
+    chamadores, e deve continuar assim:
+
+      - `enviar_requisicao`, DEPOIS de confirmar que é Master/Admin;
+      - `gerar_rol_lavanderia_automatico`, que é uma ação automática
+        do sistema (decisão do aluno, 16/09/2026: com stock, o Rol sai
+        logo enviado, seja quem for que registe a reserva — pode ser
+        um Staff).
+
+    Porquê uma função interna e não um parâmetro `automatico=True` na
+    pública: um parâmetro pode ser passado por qualquer ecrã, e a
+    barreira de perfil voltava a ser contornável.
+
+    O resto das regras (estado pendente, responsável ativo, saldo,
+    envio parcial, movimentos, logs) é o que está documentado em
+    `enviar_requisicao`.
     """
     requisicao = procurar_requisicao(requisicao_id)
 
@@ -956,24 +1047,42 @@ def enviar_requisicao(
     if data_envio is None:
         raise ValueError("A data de envio é obrigatória.")
 
-    for item, quantidade in a_enviar:
-        registar_movimento(
-            produto_id=item["produto_id"],
-            tipo="saida",
-            quantidade=quantidade,
-            data=data_envio,
-            responsavel_id=quem_envia["id"],
-            requisicao_id=requisicao["id"],
-        )
-        repositorio.atualizar_item_requisicao(
-            item["id"], {"quantidade_enviada": quantidade}
-        )
-        item["quantidade_enviada"] = quantidade
+    # Os movimentos abaixo NÃO correm numa só transação: cada um
+    # grava sozinho. Se algum falhar a meio, os anteriores ficam
+    # gravados e a requisição continua pendente — fica registado
+    # para se poder corrigir à mão com um movimento de ajuste.
+    try:
+        for item, quantidade in a_enviar:
+            registar_movimento(
+                produto_id=item["produto_id"],
+                tipo="saida",
+                quantidade=quantidade,
+                data=data_envio,
+                responsavel_id=quem_envia["id"],
+                requisicao_id=requisicao["id"],
+            )
+            repositorio.atualizar_item_requisicao(
+                item["id"], {"quantidade_enviada": quantidade}
+            )
+            item["quantidade_enviada"] = quantidade
 
-    campos = {"data_envio": data_envio, "estado": "enviada"}
-    repositorio.atualizar_requisicao(requisicao_id, campos)
-    requisicao.update(campos)
+        campos = {"data_envio": data_envio, "estado": "enviada"}
+        repositorio.atualizar_requisicao(requisicao_id, campos)
+        requisicao.update(campos)
+    except Exception:
+        logger.exception(
+            "Envio da requisição %s interrompido a meio — podem já "
+            "existir movimentos de saída com a requisição ainda pendente",
+            requisicao_id,
+        )
+        raise
 
+    logger.info(
+        "Requisição enviada — id=%s, enviado_por=%s, parcial=%s",
+        requisicao_id,
+        quem_envia["id"],
+        any(q < i["quantidade_pedida"] for i, q in a_enviar),
+    )
     return requisicao
 
 
@@ -994,6 +1103,9 @@ def rejeitar_requisicao(requisicao_id, responsavel_id, motivo):
     (clientes.anonimizar): sem guardar quem rejeitou, não há como
     responder depois "quem recusou este pedido".
 
+    REGRA MOVIDA DA GUI (23/09/2026): só Master ou Admin rejeitam —
+    mesma regra e mesma razão do `enviar_requisicao`.
+
     Grava de imediato via repositório — mesma convenção dos outros
     módulos de negócio, agora todos em MySQL.
     """
@@ -1010,6 +1122,16 @@ def rejeitar_requisicao(requisicao_id, responsavel_id, motivo):
 
     responsavel = responsaveis.validar_autoria(responsavel_id)
 
+    if responsavel.get("tipo_utilizador") not in _TIPOS_ADMINISTRATIVOS:
+        logger.warning(
+            "Rejeição de requisição recusada — requisicao_id=%s, "
+            "responsavel_id=%s, tipo=%s",
+            requisicao_id,
+            responsavel["id"],
+            responsavel.get("tipo_utilizador"),
+        )
+        raise ValueError("Só um Master ou Admin pode rejeitar uma requisição.")
+
     motivo = motivo.strip()
 
     if not motivo:
@@ -1025,6 +1147,11 @@ def rejeitar_requisicao(requisicao_id, responsavel_id, motivo):
     repositorio.atualizar_requisicao(requisicao_id, campos)
     requisicao.update(campos)
 
+    logger.info(
+        "Requisição rejeitada — id=%s, por=%s",
+        requisicao_id,
+        responsavel["id"],
+    )
     return requisicao
 
 
@@ -1080,6 +1207,13 @@ def cancelar_requisicao(
     e_administrativo = tipo_utilizador_autor in _TIPOS_ADMINISTRATIVOS
 
     if not (e_o_autor or e_administrativo):
+        logger.warning(
+            "%s recusado — requisicao_id=%s, responsavel_id=%s, tipo=%s",
+            "Cancelamento",
+            requisicao_id,
+            responsavel["id"],
+            tipo_utilizador_autor,
+        )
         raise ValueError(
             f"Só o responsável que pediu "
             f"({requisicao['responsavel_id']}) ou um Admin/Master "
@@ -1090,6 +1224,11 @@ def cancelar_requisicao(
     repositorio.atualizar_requisicao(requisicao_id, campos)
     requisicao.update(campos)
 
+    logger.info(
+        "Requisição cancelada — id=%s, por=%s",
+        requisicao_id,
+        responsavel["id"],
+    )
     return requisicao
 
 
@@ -1154,6 +1293,13 @@ def confirmar_rececao_requisicao(
     e_administrativo = tipo_utilizador_autor in _TIPOS_ADMINISTRATIVOS
 
     if not (e_o_autor or e_administrativo):
+        logger.warning(
+            "%s recusado — requisicao_id=%s, responsavel_id=%s, tipo=%s",
+            "Confirmação de receção",
+            requisicao_id,
+            responsavel["id"],
+            tipo_utilizador_autor,
+        )
         raise ValueError(
             f"Só o responsável que pediu "
             f"({requisicao['responsavel_id']}) ou um Admin/Master "
@@ -1171,6 +1317,12 @@ def confirmar_rececao_requisicao(
     repositorio.atualizar_requisicao(requisicao_id, campos)
     requisicao.update(campos)
 
+    logger.info(
+        "Receção confirmada — id=%s, por=%s, com_observacao=%s",
+        requisicao_id,
+        responsavel["id"],
+        bool(campos["observacao_rececao"]),
+    )
     return requisicao
 
 
@@ -1239,6 +1391,13 @@ def reportar_devolucao(
     e_administrativo = tipo_utilizador_autor in _TIPOS_ADMINISTRATIVOS
 
     if not (e_o_autor or e_administrativo):
+        logger.warning(
+            "%s recusado — requisicao_id=%s, responsavel_id=%s, tipo=%s",
+            "Reporte de devolução",
+            requisicao_id,
+            responsavel["id"],
+            tipo_utilizador_autor,
+        )
         raise ValueError(
             f"Só o responsável que pediu "
             f"({requisicao['responsavel_id']}) ou um Admin/Master "
@@ -1325,6 +1484,12 @@ def reportar_devolucao(
         }
         repositorio.inserir_item_devolucao(item_devolucao)
 
+    logger.info(
+        "Devolução reportada — id=%s, requisicao_id=%s, por=%s",
+        devolucao["id"],
+        requisicao_id,
+        responsavel["id"],
+    )
     return devolucao
 
 
@@ -1461,7 +1626,13 @@ def fechar_devolucao(
 
     'aceite_por_id' é quem aceita a devolução no armazém — como em
     `enviar_requisicao`, não tem de ser o mesmo responsável que
-    pediu ou que devolveu, só precisa de estar ativo.
+    pediu ou que devolveu. Tem de estar ativo E ser Master ou Admin.
+
+    REGRA MOVIDA DA GUI (23/09/2026, checklist 11.6 da Fase 4):
+    "Aceitar Devolução" só por Master ou Admin. Até aqui a regra
+    vivia só no ecrã — um Staff que chamasse esta função fechava a
+    devolução e mexia no stock. A barreira real vive no módulo
+    (regra 11.2); o ecrã esconder o botão é só conforto visual.
 
     Grava de imediato via repositório — mesma convenção dos outros
     módulos de negócio, agora todos em MySQL.
@@ -1478,6 +1649,16 @@ def fechar_devolucao(
         )
 
     aceite = responsaveis.validar_autoria(aceite_por_id)
+
+    if aceite.get("tipo_utilizador") not in _TIPOS_ADMINISTRATIVOS:
+        logger.warning(
+            "Aceitação de devolução recusada — devolucao_id=%s, "
+            "responsavel_id=%s, tipo=%s",
+            devolucao_id,
+            aceite["id"],
+            aceite.get("tipo_utilizador"),
+        )
+        raise ValueError("Só um Master ou Admin pode aceitar uma devolução.")
 
     if data_fecho is None:
         raise ValueError("A data de fecho é obrigatória.")
@@ -1526,30 +1707,57 @@ def fechar_devolucao(
             "diferente da reportada."
         )
 
-    for item in itens:
-        registar_movimento(
-            produto_id=item["produto_id"],
-            tipo="entrada",
-            quantidade=item["quantidade"],
-            data=data_fecho,
-            responsavel_id=aceite["id"],
-            requisicao_id=devolucao["requisicao_id"],
-        )
+    # Mesma ressalva do `enviar_requisicao`: os movimentos não correm
+    # numa só transação. Uma falha a meio deixa entradas/ajustes
+    # gravados com a devolução ainda pendente — fica registado.
+    try:
+        for item in itens:
+            registar_movimento(
+                produto_id=item["produto_id"],
+                tipo="entrada",
+                quantidade=item["quantidade"],
+                data=data_fecho,
+                responsavel_id=aceite["id"],
+                requisicao_id=devolucao["requisicao_id"],
+            )
 
-    for produto_id, diferenca in ajustes:
-        registar_movimento(
-            produto_id=produto_id,
-            tipo="ajuste",
-            quantidade=diferenca,
-            data=data_fecho,
-            responsavel_id=aceite["id"],
-            requisicao_id=devolucao["requisicao_id"],
-            motivo=motivo_ajuste,
-        )
+        for produto_id, diferenca in ajustes:
+            registar_movimento(
+                produto_id=produto_id,
+                tipo="ajuste",
+                quantidade=diferenca,
+                data=data_fecho,
+                responsavel_id=aceite["id"],
+                requisicao_id=devolucao["requisicao_id"],
+                motivo=motivo_ajuste,
+            )
 
-    campos = {"estado": "fechada", "data_fecho": data_fecho}
-    repositorio.atualizar_devolucao(devolucao_id, campos)
-    devolucao.update(campos)
+        campos = {"estado": "fechada", "data_fecho": data_fecho}
+        repositorio.atualizar_devolucao(devolucao_id, campos)
+        devolucao.update(campos)
+    except Exception:
+        logger.exception(
+            "Fecho da devolução %s interrompido a meio — podem já existir "
+            "entradas/ajustes com a devolução ainda pendente",
+            devolucao_id,
+        )
+        raise
+
+    if ajustes:
+        logger.warning(
+            "Devolução fechada com ajuste — id=%s, aceite_por=%s, "
+            "diferencas=%s, motivo=%s",
+            devolucao_id,
+            aceite["id"],
+            dict(ajustes),
+            motivo_ajuste,
+        )
+    else:
+        logger.info(
+            "Devolução fechada — id=%s, aceite_por=%s",
+            devolucao_id,
+            aceite["id"],
+        )
 
     return devolucao
 
@@ -1692,6 +1900,74 @@ def _ler_regras_rol(tipo_cama):
     Devolve uma lista de dicionários {"produto_id": ..., "quantidade": ...}.
     """
     return repositorio.listar_regras_rol_lavanderia(tipo_cama=tipo_cama)
+
+
+# `requisicoes.observacoes` é VARCHAR(255) — a nota de origem do Rol
+# mais as observações automáticas podem passar disso.
+_MAX_OBSERVACOES = 255
+
+
+def _dono_do_rol(ocupacao, registado_por_id):
+    """Decide em nome de quem fica o Rol de uma reserva Airbnb.
+
+    Regra (decisão do aluno, 27/09/2026): o Rol é do STAFF da
+    unidade — a ligação vem de `responsavel_unidade`, só conta quem
+    está ativo e é do tipo "Staff". Com exatamente um, o Rol fica
+    em nome dele. Com nenhum ou com mais de um, fica em nome de
+    quem registou a reserva e a Guia de entrega mostra-o no bloco
+    "Por atribuir" (ver `montar_guia_entrega`).
+
+    Devolve (responsavel_id, nota) — a nota diz de que unidade e
+    reserva é o Rol e quem registou a reserva, porque a requisição
+    não guarda a unidade (a guia mostra esta nota).
+    """
+    import unidades as _unidades
+
+    unidade_id = ocupacao["unidade_id"]
+    unidade = _unidades.procurar(unidade_id)
+    nome_unidade = unidade["nome"] if unidade else unidade_id
+
+    registante = responsaveis.procurar(registado_por_id)
+    nome_registante = (
+        registante["nome"] if registante else registado_por_id
+    )
+
+    candidatos = []
+    for atribuicao in repositorio.listar_atribuicoes(unidade_id=unidade_id):
+        candidato = responsaveis.procurar(atribuicao["responsavel_id"])
+        if (
+            candidato is not None
+            and candidato["ativo"]
+            and candidato.get("tipo_utilizador") == "Staff"
+        ):
+            candidatos.append(candidato)
+
+    nota = (
+        f"Rol da unidade {nome_unidade} ({unidade_id}), reserva "
+        f"{ocupacao.get('id')}, registada por {nome_registante}"
+    )
+
+    if len(candidatos) == 1:
+        logger.info(
+            "Rol atribuído ao staff da unidade — ocupacao=%s, "
+            "unidade=%s, staff=%s",
+            ocupacao.get("id"),
+            unidade_id,
+            candidatos[0]["id"],
+        )
+        return candidatos[0]["id"], f"{nota}."
+
+    motivo = (
+        "sem staff atribuído" if not candidatos
+        else "mais de um staff atribuído"
+    )
+    logger.warning(
+        "Rol por atribuir — ocupacao=%s, unidade=%s, motivo=%s",
+        ocupacao.get("id"),
+        unidade_id,
+        motivo,
+    )
+    return registado_por_id, f"{nota} — {motivo}."
 
 
 def calcular_rol_lavanderia(unidade_id):
@@ -1841,6 +2117,11 @@ def gerar_rol_lavanderia_automatico(ocupacao, responsavel_id):
     # Quando está desligada, não gera nada. A reserva já foi
     # gravada por quem chamou — esta função só trata do Rol.
     if not configuracoes.obter_bool("stock.rol_automatico_airbnb"):
+        logger.info(
+            "Rol não gerado — ocupacao=%s, razao=%s",
+            ocupacao.get("id"),
+            "chave_desligada",
+        )
         return None
 
     unidade_id = ocupacao["unidade_id"]
@@ -1850,6 +2131,15 @@ def gerar_rol_lavanderia_automatico(ocupacao, responsavel_id):
     )
 
     if not produtos_a_enviar:
+        logger.info(
+            "Rol não gerado — ocupacao=%s, razao=%s",
+            ocupacao.get("id"),
+            (
+                "todos_produtos_desativados"
+                if produtos_desativados
+                else "sem_lugares_ou_regras"
+            ),
+        )
         return None
 
     itens = [
@@ -1886,10 +2176,22 @@ def gerar_rol_lavanderia_automatico(ocupacao, responsavel_id):
             f"Produtos das regras ignorados (desativados): {nomes}."
         )
 
-    observacoes = " ".join(partes_observacoes)
+    # 27/09/2026 — o Rol fica em nome do staff da unidade (é ele
+    # quem o recebe e entrega), não de quem registou a reserva. A
+    # nota de origem vai à frente das observações automáticas.
+    dono_id, nota_origem = _dono_do_rol(ocupacao, responsavel_id)
+    observacoes = " ".join([nota_origem] + partes_observacoes)
+    observacoes = observacoes[:_MAX_OBSERVACOES]
+
+    if not stock_suficiente:
+        logger.warning(
+            "Rol com stock insuficiente — ocupacao=%s, em_falta=%s",
+            ocupacao.get("id"),
+            ", ".join(em_falta),
+        )
 
     requisicao = criar_requisicao(
-        responsavel_id=responsavel_id,
+        responsavel_id=dono_id,
         itens=itens,
         data_pedido=date.today(),
         observacoes=observacoes,
@@ -1897,7 +2199,12 @@ def gerar_rol_lavanderia_automatico(ocupacao, responsavel_id):
     )
 
     if stock_suficiente:
-        requisicao = enviar_requisicao(
+        # `_executar_envio` e não `enviar_requisicao`: o Rol é uma ação
+        # automática do sistema, e quem regista a reserva pode ser um
+        # Staff — a barreira de perfil (Master/Admin) é para a
+        # aprovação manual, não para esta. Ver docstring do
+        # `_executar_envio`.
+        requisicao = _executar_envio(
             requisicao["id"],
             responsavel_id,
             date.today(),
@@ -1931,3 +2238,185 @@ def _contagem_com_extra(unidade):
             contagem[chave] = qtd
 
     return contagem
+
+
+
+# =====================================================================
+# GUIA DE ENTREGA (27/09/2026, v1.6.0 — mockup aprovado pelo aluno)
+#
+# O que saiu do armazém num dia (data de envio), agrupado pelo staff
+# que entrega. A requisição não guarda a unidade: o destino sai do
+# staff (`responsavel_unidade`). Cada bloco tem as requisições
+# normais, o Rol de Lavanderia e o total somado por produto.
+# =====================================================================
+
+# Estados que já saíram do armazém — "fechada" também entra: a guia
+# é o retrato do que foi enviado nesse dia, confirmado ou não.
+_ESTADOS_GUIA = ("enviada", "fechada")
+
+
+def _linhas_guia(itens, produtos_por_id):
+    """Itens de uma requisição → linhas da guia (quantidade enviada;
+    a pedida só se o envio não a registou). Itens a 0 saem fora."""
+    linhas = []
+    for item in itens:
+        quantidade = item.get("quantidade_enviada")
+        if quantidade is None:
+            quantidade = item["quantidade_pedida"]
+        if quantidade <= 0:
+            continue
+
+        produto = produtos_por_id.get(item["produto_id"]) or {}
+        linhas.append(
+            {
+                "produto_id": item["produto_id"],
+                "nome": produto.get("nome", item["produto_id"]),
+                "unidade_medida": produto.get("unidade_medida", ""),
+                "quantidade": quantidade,
+            }
+        )
+    return linhas
+
+
+def _novo_bloco(responsavel, unidades_do_staff, por_atribuir=False):
+    return {
+        "responsavel": responsavel,
+        "unidades": list(unidades_do_staff),
+        "requisicoes": [],
+        "rol": [],
+        "totais": [],
+        "total_itens": 0,
+        "por_atribuir": por_atribuir,
+    }
+
+
+def _fechar_totais(bloco):
+    """Soma as quantidades por produto de todas as entradas do bloco.
+    É a lista que se separa no armazém."""
+    somas = {}
+    for entrada in bloco["requisicoes"] + bloco["rol"]:
+        for linha in entrada["itens"]:
+            atual = somas.setdefault(
+                linha["produto_id"], dict(linha, quantidade=0)
+            )
+            atual["quantidade"] += linha["quantidade"]
+
+    bloco["totais"] = sorted(somas.values(), key=lambda t: t["nome"].lower())
+    bloco["total_itens"] = sum(t["quantidade"] for t in bloco["totais"])
+
+
+def montar_guia_entrega(
+    requisicoes,
+    itens_por_requisicao,
+    produtos_por_id,
+    responsaveis_por_id,
+    unidades_por_responsavel,
+):
+    """Agrupa as requisições enviadas num dia pelo staff que entrega.
+
+    Função PURA (não lê a base) — recebe tudo já lido, para poder
+    ser testada sem MySQL. Quem lê é `guia_entrega`.
+
+    Regras:
+    - Requisição normal → bloco do responsável dela.
+    - Rol → bloco do responsável se ele for Staff; senão (Rol de uma
+      unidade sem staff, com mais de um, ou antigo, gerado em nome de
+      quem registou a reserva) → bloco "Por atribuir".
+    - Requisição sem nenhuma linha com quantidade > 0 não entra.
+
+    Devolve a lista de blocos, ordenada pelo nome do staff, com o
+    "Por atribuir" em último (só se tiver alguma coisa). Cada bloco:
+    {responsavel (dict ou None), unidades, requisicoes, rol, totais,
+    total_itens, por_atribuir}; cada entrada de requisicoes/rol:
+    {id, estado, observacoes, itens: [{produto_id, nome,
+    unidade_medida, quantidade}]}.
+    """
+    blocos = {}
+    por_atribuir = _novo_bloco(None, [], por_atribuir=True)
+
+    for requisicao in sorted(requisicoes, key=lambda r: r["id"]):
+        linhas = _linhas_guia(
+            itens_por_requisicao.get(requisicao["id"], []), produtos_por_id
+        )
+        if not linhas:
+            continue
+
+        entrada = {
+            "id": requisicao["id"],
+            "estado": requisicao["estado"],
+            "observacoes": requisicao.get("observacoes") or "",
+            "itens": linhas,
+        }
+        dono_id = requisicao["responsavel_id"]
+        dono = responsaveis_por_id.get(dono_id)
+        e_rol = requisicao.get("origem") == "rol"
+
+        if e_rol and (dono is None or dono.get("tipo_utilizador") != "Staff"):
+            por_atribuir["rol"].append(entrada)
+            continue
+
+        if dono_id not in blocos:
+            blocos[dono_id] = _novo_bloco(
+                dono or {"id": dono_id, "nome": dono_id},
+                unidades_por_responsavel.get(dono_id, []),
+            )
+        blocos[dono_id]["rol" if e_rol else "requisicoes"].append(entrada)
+
+    resultado = sorted(
+        blocos.values(), key=lambda b: b["responsavel"]["nome"].lower()
+    )
+    if por_atribuir["rol"]:
+        resultado.append(por_atribuir)
+
+    for bloco in resultado:
+        _fechar_totais(bloco)
+
+    return resultado
+
+
+def guia_entrega(data_envio, tipo_utilizador_autor):
+    """Lê o que foi enviado em `data_envio` e devolve os blocos da
+    Guia de entrega (ver `montar_guia_entrega`).
+
+    Só Master ou Admin — são eles que enviam; validado aqui e não só
+    no ecrã (mesma disciplina de `enviar_requisicao`).
+    """
+    if tipo_utilizador_autor not in ("Master", "Admin"):
+        raise ValueError(
+            "Só um Master ou Admin pode gerar a guia de entrega."
+        )
+
+    import unidades as _unidades
+
+    requisicoes = [
+        r
+        for r in repositorio.listar_requisicoes()
+        if r["data_envio"] == data_envio and r["estado"] in _ESTADOS_GUIA
+    ]
+    itens_por_requisicao = {
+        r["id"]: listar_itens_requisicao(requisicao_id=r["id"])
+        for r in requisicoes
+    }
+    produtos_por_id = {
+        p["id"]: p for p in listar_produtos(incluir_inativos=True)
+    }
+    ids = {r["responsavel_id"] for r in requisicoes}
+    responsaveis_por_id = {i: responsaveis.procurar(i) for i in ids}
+    unidades_por_responsavel = {
+        i: _unidades.unidades_geridas_por(i) for i in ids
+    }
+
+    blocos = montar_guia_entrega(
+        requisicoes,
+        itens_por_requisicao,
+        produtos_por_id,
+        responsaveis_por_id,
+        unidades_por_responsavel,
+    )
+    logger.info(
+        "Guia de entrega lida — data=%s, requisicoes=%s, blocos=%s",
+        data_envio,
+        len(requisicoes),
+        len(blocos),
+    )
+    return blocos

@@ -3,6 +3,35 @@
 Ao contrário dos testes da persistência, não é precisa preparação: as
 funções não tocam em ficheiros nem guardam estado. Recebem valores e
 devolvem resultado ou lançam erro.
+
+NOTA (v1.6.0) — reestruturação de 16/09/2026 em `validar_cliente`:
+
+O conceito de "registo incompleto" (campos opcionais em falta que
+não bloqueavam a gravação, decisão 11 antiga) foi DESCARTADO. Cada
+regime passou a ter o seu próprio formulário, que só pede o que
+precisa; o que é obrigatório bloqueia com `ValueError`, e o resto
+nem chega a ser pedido.
+
+Consequências para estes testes:
+
+- `validar_cliente` deixou de devolver a lista de campos em falta.
+  Passa a devolver `None` (ou a nada, se o resultado não for usado)
+  quando tudo está bem, e a levantar `ValueError` quando falta um
+  campo obrigatório do regime.
+- Os testes que asseriam sobre a lista devolvida (`assertEqual([],
+  ...)` ou `assertEqual(["campo"], ...)`) passam a asserir sobre o
+  COMPORTAMENTO: chamar sem esperar exceção quando o cliente está
+  válido, e `assertRaises(ValueError)` quando falta um obrigatório.
+- Os testes cujo nome mencionava "marcam incompleto" foram
+  reescritos para verificar o que realmente acontece hoje: faltar um
+  campo OPCIONAL não levanta, desde que os OBRIGATÓRIOS do regime
+  estejam preenchidos.
+
+O `cliente_valido()` deste ficheiro foi atualizado para trazer
+também `pais_emissor_documento` e `pais_residencia` — os dois campos
+novos do regime Airbnb (boletim de alojamento). Sem eles, qualquer
+teste que chamasse `validar_cliente(..., "airbnb")` rebentava nesses
+dois campos antes de chegar ao campo que o teste queria examinar.
 """
 
 import sys
@@ -43,19 +72,23 @@ class TesteNIF(unittest.TestCase):
 
 
 class TesteValidarCliente(unittest.TestCase):
-    """Campos obrigatórios e campos que apenas marcam incompleto.
+    """Campos obrigatórios de cada regime.
 
-    Desde a decisão de 26/08 (ponto 2), o que é obrigatório passa a
-    depender do regime: 'cliente_valido()' devolve um dicionário
-    completo o suficiente para passar nos DOIS regimes ao mesmo
-    tempo — cada teste anula só o campo que quer examinar.
+    Desde a decisão de 26/08 (ponto 2) e a reestruturação de
+    16/09/2026, o que é obrigatório depende do regime e BLOQUEIA
+    com ValueError — já não há lista de "incompletos" devolvida.
+
+    O `cliente_valido()` deste teste reúne TODOS os campos que
+    qualquer um dos dois regimes exige — incluindo os do Airbnb
+    (`pais_emissor_documento`/`pais_residencia`), para que um teste
+    que anule um campo só possa tropeçar nesse, e não num outro
+    campo obrigatório que ficou por preencher no fixture.
     """
 
     def cliente_valido(self):
-        """Devolve um cliente com todos os campos preenchidos —
-        válido para qualquer um dos dois regimes ao mesmo tempo, já
-        que reúne o que cada um exige (mensal: nif, morada,
-        estado_civil; Airbnb: nacionalidade).
+        """Cliente com todos os campos que QUALQUER um dos regimes
+        exige — mensal e Airbnb ao mesmo tempo. Cada teste anula só
+        o campo que quer examinar.
         """
         return {
             "nome": "Ana Silva",
@@ -69,20 +102,20 @@ class TesteValidarCliente(unittest.TestCase):
             "morada": "Rua do Porto, 12",
             "nacionalidade": "Portuguesa",
             "estado_civil": "Solteiro(a)",
+            "pais_emissor_documento": "Portugal",
+            "pais_residencia": "Portugal",
         }
 
-    def teste_cliente_completo_nao_tem_campos_em_falta(self):
-        """Com tudo preenchido, a lista devolvida é vazia, nos dois
-        regimes."""
-        em_falta_mensal = validacoes.validar_cliente(
-            self.cliente_valido(), "mensal"
-        )
-        self.assertEqual([], em_falta_mensal)
+    def teste_cliente_completo_nao_bloqueia(self):
+        """Com tudo preenchido, `validar_cliente` não levanta nada,
+        nos dois regimes.
 
-        em_falta_airbnb = validacoes.validar_cliente(
-            self.cliente_valido(), "airbnb"
-        )
-        self.assertEqual([], em_falta_airbnb)
+        Substitui o antigo `teste_cliente_completo_nao_tem_campos_em_
+        falta` — a função já não devolve lista, por isso o que
+        interessa verificar é que a chamada passa sem exceção.
+        """
+        validacoes.validar_cliente(self.cliente_valido(), "mensal")
+        validacoes.validar_cliente(self.cliente_valido(), "airbnb")
 
     def teste_nome_em_falta_bloqueia(self):
         """Sem nome, a gravação é recusada nos dois regimes."""
@@ -118,15 +151,21 @@ class TesteValidarCliente(unittest.TestCase):
         with self.assertRaises(ValueError):
             validacoes.validar_cliente(dados, "mensal")
 
-    def teste_validade_documento_em_falta_bloqueia(self):
-        """A validade do documento é obrigatória nos dois regimes
-        (decisão de 26/08, ponto 2)."""
-        for regime in ("mensal", "airbnb"):
-            dados = self.cliente_valido()
-            dados["validade_documento"] = None
+    def teste_validade_documento_obrigatoria_apenas_no_mensal(self):
+        """A validade do documento é obrigatória só no regime mensal
+        (reestruturação de 16/09/2026) — no Airbnb não faz parte do
+        regime, tal como o NIF, a morada, o estado civil e o
+        telefone.
+        """
+        dados = self.cliente_valido()
+        dados["validade_documento"] = None
 
-            with self.assertRaises(ValueError):
-                validacoes.validar_cliente(dados, regime)
+        with self.assertRaises(ValueError):
+            validacoes.validar_cliente(dados, "mensal")
+
+        # Airbnb: a validade em falta não bloqueia — o campo não
+        # pertence a este regime.
+        validacoes.validar_cliente(dados, "airbnb")
 
     def teste_data_nascimento_em_falta_bloqueia(self):
         """A data de nascimento é obrigatória nos dois regimes —
@@ -140,13 +179,11 @@ class TesteValidarCliente(unittest.TestCase):
                 validacoes.validar_cliente(dados, regime)
 
     def teste_nif_obrigatorio_apenas_no_regime_mensal(self):
-        """O NIF bloqueia no mensal e é dispensável no Airbnb —
-        nunca entra na lista de incompletos no Airbnb (decisão de
-        26/08: mantido exatamente como já estava).
+        """O NIF bloqueia no mensal e é dispensável no Airbnb.
 
-        O contrato de arrendamento gera obrigação fiscal; uma estadia de
-        três noites não. Exigir NIF a um hóspede estrangeiro recusaria
-        registos legítimos.
+        O contrato de arrendamento gera obrigação fiscal; uma estadia
+        de três noites não. Exigir NIF a um hóspede estrangeiro
+        recusaria registos legítimos.
         """
         dados = self.cliente_valido()
         dados["nif"] = ""
@@ -154,8 +191,9 @@ class TesteValidarCliente(unittest.TestCase):
         with self.assertRaises(ValueError):
             validacoes.validar_cliente(dados, "mensal")
 
-        em_falta = validacoes.validar_cliente(dados, "airbnb")
-        self.assertEqual([], em_falta)
+        # Airbnb: o NIF em branco não bloqueia (pais_emissor_documento
+        # e pais_residencia estão preenchidos no fixture).
+        validacoes.validar_cliente(dados, "airbnb")
 
     def teste_nif_invalido_bloqueia_no_regime_mensal(self):
         """Um NIF preenchido mas com dígito de controlo errado é recusado."""
@@ -167,41 +205,43 @@ class TesteValidarCliente(unittest.TestCase):
 
     def teste_morada_obrigatoria_apenas_no_regime_mensal(self):
         """A morada de residência bloqueia no mensal (decisão de
-        26/08, ponto 2); no Airbnb fica opcional, só marca
-        incompleto."""
+        26/08, ponto 2); no Airbnb é opcional."""
         dados = self.cliente_valido()
         dados["morada"] = ""
 
         with self.assertRaises(ValueError):
             validacoes.validar_cliente(dados, "mensal")
 
-        em_falta = validacoes.validar_cliente(dados, "airbnb")
-        self.assertEqual(["morada"], em_falta)
+        # Airbnb: sem morada, mas com todos os obrigatórios do regime,
+        # a chamada passa.
+        validacoes.validar_cliente(dados, "airbnb")
 
-    def teste_nacionalidade_obrigatoria_apenas_no_regime_airbnb(self):
-        """A nacionalidade bloqueia no Airbnb (decisão de 26/08,
-        ponto 2); no mensal fica opcional, só marca incompleto —
-        exatamente como já acontecia antes desta decisão."""
+    def teste_nacionalidade_obrigatoria_nos_dois_regimes(self):
+        """A nacionalidade é obrigatória nos DOIS regimes — o boletim
+        de alojamento exige-a no Airbnb, e o contrato mensal exige-a
+        no mensal. Não é um campo exclusivo de um regime.
+        """
         dados = self.cliente_valido()
         dados["nacionalidade"] = ""
 
         with self.assertRaises(ValueError):
-            validacoes.validar_cliente(dados, "airbnb")
+            validacoes.validar_cliente(dados, "mensal")
 
-        em_falta = validacoes.validar_cliente(dados, "mensal")
-        self.assertEqual(["nacionalidade"], em_falta)
+        with self.assertRaises(ValueError):
+            validacoes.validar_cliente(dados, "airbnb")
 
     def teste_estado_civil_obrigatorio_apenas_no_regime_mensal(self):
         """Campo novo (decisão de 26/08, ponto 2): bloqueia só no
-        mensal; no Airbnb nem é pedido, não entra em incompleto."""
+        mensal; no Airbnb nem é pedido."""
         dados = self.cliente_valido()
         dados["estado_civil"] = ""
 
         with self.assertRaises(ValueError):
             validacoes.validar_cliente(dados, "mensal")
 
-        em_falta = validacoes.validar_cliente(dados, "airbnb")
-        self.assertEqual([], em_falta)
+        # Airbnb: sem estado_civil, mas com os obrigatórios do
+        # regime preenchidos, a chamada passa.
+        validacoes.validar_cliente(dados, "airbnb")
 
     def teste_estado_civil_fora_da_lista_bloqueia_no_mensal(self):
         """Só são aceites os valores de TIPOS_ESTADO_CIVIL."""
@@ -211,28 +251,78 @@ class TesteValidarCliente(unittest.TestCase):
         with self.assertRaises(ValueError):
             validacoes.validar_cliente(dados, "mensal")
 
-    def teste_campos_opcionais_marcam_incompleto_no_mensal(self):
-        """No mensal, email/telefone/nacionalidade em falta marcam
-        incompleto, sem bloquear — é a decisão 11: bloqueia o
-        essencial, avisa no resto."""
+    def teste_telefone_obrigatorio_apenas_no_regime_mensal(self):
+        """O telefone é obrigatório no mensal (decisão 16/09/2026,
+        passou de opcional a obrigatório); no Airbnb não faz parte
+        do regime."""
+        dados = self.cliente_valido()
+        dados["telefone"] = ""
+
+        with self.assertRaises(ValueError):
+            validacoes.validar_cliente(dados, "mensal")
+
+        # Airbnb: sem telefone, mas com os obrigatórios do regime
+        # preenchidos, a chamada passa.
+        validacoes.validar_cliente(dados, "airbnb")
+
+    def teste_campos_opcionais_nao_bloqueiam_no_mensal(self):
+        """No mensal, email em falta NÃO bloqueia — o que é obrigatório
+        é o essencial (nome, documento, nif, morada, estado_civil,
+        nacionalidade, telefone, datas); o email é opcional.
+
+        Substitui o antigo `teste_campos_opcionais_marcam_incompleto_
+        no_mensal` — a função já não devolve lista de incompletos.
+        """
+        dados = self.cliente_valido()
+        dados["email"] = ""
+
+        # Não levanta: os obrigatórios estão todos preenchidos.
+        validacoes.validar_cliente(dados, "mensal")
+
+    def teste_campos_opcionais_nao_bloqueiam_no_airbnb(self):
+        """No Airbnb, email/telefone/morada em falta não bloqueiam —
+        não fazem parte do regime.
+
+        Substitui o antigo `teste_campos_opcionais_marcam_incompleto_
+        no_airbnb` — a função já não devolve lista de incompletos.
+        """
         dados = self.cliente_valido()
         dados["email"] = ""
         dados["telefone"] = ""
+        dados["morada"] = ""
 
-        em_falta = validacoes.validar_cliente(dados, "mensal")
+        # Não levanta: os obrigatórios do Airbnb estão todos
+        # preenchidos (nome, tipo/num documento, nacionalidade,
+        # data_nascimento, validade_documento, pais_emissor_documento,
+        # pais_residencia).
+        validacoes.validar_cliente(dados, "airbnb")
 
-        self.assertEqual(["email", "telefone"], em_falta)
-
-    def teste_campos_opcionais_marcam_incompleto_no_airbnb(self):
-        """No Airbnb, email/telefone/morada em falta marcam
-        incompleto, sem bloquear."""
+    def teste_pais_emissor_obrigatorio_apenas_no_airbnb(self):
+        """Campo novo (16/09/2026): bloqueia só no Airbnb — no mensal
+        nem é pedido."""
         dados = self.cliente_valido()
-        dados["email"] = ""
-        dados["telefone"] = ""
+        dados["pais_emissor_documento"] = ""
 
-        em_falta = validacoes.validar_cliente(dados, "airbnb")
+        with self.assertRaises(ValueError):
+            validacoes.validar_cliente(dados, "airbnb")
 
-        self.assertEqual(["email", "telefone"], em_falta)
+        validacoes.validar_cliente(dados, "mensal")
+
+    def teste_pais_residencia_obrigatorio_apenas_no_airbnb(self):
+        """Campo novo (16/09/2026): bloqueia só no Airbnb — no mensal
+        nem é pedido."""
+        dados = self.cliente_valido()
+        dados["pais_residencia"] = ""
+
+        with self.assertRaises(ValueError):
+            validacoes.validar_cliente(dados, "airbnb")
+
+        validacoes.validar_cliente(dados, "mensal")
+
+    def teste_regime_desconhecido_bloqueia(self):
+        """Um regime fora de TIPOS_UNIDADE é recusado."""
+        with self.assertRaises(ValueError):
+            validacoes.validar_cliente(self.cliente_valido(), "semanal")
 
 
 class TesteValidadeDocumento(unittest.TestCase):
@@ -387,14 +477,16 @@ class TesteIntervalo(unittest.TestCase):
     def teste_estadia_abaixo_do_minimo_e_recusada(self):
         """Uma noite é inferior ao mínimo de duas do regime Airbnb."""
         with self.assertRaises(ValueError):
-            validacoes.validar_intervalo(date(2026, 3, 10),
-            date(2026, 3, 11), minimo=2)
+            validacoes.validar_intervalo(
+                date(2026, 3, 10), date(2026, 3, 11), minimo=2
+            )
 
     def teste_estadia_acima_do_maximo_e_recusada(self):
         """Trinta noites excedem o máximo de vinte e oito."""
         with self.assertRaises(ValueError):
-            validacoes.validar_intervalo(date(2026, 3, 1),
-            date(2026, 3, 31), maximo=28)
+            validacoes.validar_intervalo(
+                date(2026, 3, 1), date(2026, 3, 31), maximo=28
+            )
 
     def teste_contrato_sem_termo_e_aceite(self):
         """Um contrato mensal em vigor não tem fim para validar.
@@ -456,18 +548,14 @@ class TesteTipoUnidade(unittest.TestCase):
 
 
 class TesteEpocaAlta(unittest.TestCase):
-    """Época alta exige indicador manual E data no
-
-    período(nunca automática).
-
+    """Época alta exige indicador manual E data no período (nunca
+    automática).
     """
 
     def teste_data_no_periodo_com_indicador_ativo(self):
         """As duas condições reunidas dão época alta."""
         self.assertTrue(
-            validacoes.em_epoca_alta(
-                date(2026, 8, 15), True, (7, 1), (9, 30)
-            )
+            validacoes.em_epoca_alta(date(2026, 8, 15), True, (7, 1), (9, 30))
         )
 
     def teste_data_no_periodo_sem_indicador(self):
@@ -477,31 +565,24 @@ class TesteEpocaAlta(unittest.TestCase):
         verão com preço base se o proprietário não a ativou.
         """
         self.assertFalse(
-            validacoes.em_epoca_alta(
-                date(2026, 8, 15), False, (7, 1), (9, 30)
-            )
+            validacoes.em_epoca_alta(date(2026, 8, 15), False, (7, 1), (9, 30))
         )
 
     def teste_data_fora_do_periodo_com_indicador_ativo(self):
         """Com o indicador ligado mas fora do período, é preço base."""
         self.assertFalse(
-            validacoes.em_epoca_alta(
-                date(2026, 3, 15), True, (7, 1), (9, 30)
-            )
+            validacoes.em_epoca_alta(date(2026, 3, 15), True, (7, 1), (9, 30))
         )
 
     def teste_limites_do_periodo_estao_incluidos(self):
         """O primeiro e o último dia do período contam como época alta."""
         self.assertTrue(
-            validacoes.em_epoca_alta(
-                date(2026, 7, 1), True, (7, 1), (9, 30)
-            )
+            validacoes.em_epoca_alta(date(2026, 7, 1), True, (7, 1), (9, 30))
         )
         self.assertTrue(
-            validacoes.em_epoca_alta(
-                date(2026, 9, 30), True, (7, 1), (9, 30)
-            )
+            validacoes.em_epoca_alta(date(2026, 9, 30), True, (7, 1), (9, 30))
         )
+
 
 if __name__ == "__main__":
     unittest.main()

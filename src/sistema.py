@@ -7,7 +7,8 @@ UTILIZADOR_PADRAO, PASSWORD_PADRAO).
 
 OPERATION CRÍTICA — o protocolo é:
 
-  1. Validar o autor (tem de ser Master).
+  1. Validar o autor (tem de ser Master) e confirmar a password
+     dele (regra movida da GUI para aqui em 23/09/2026).
   2. Fazer backup automático com prefixo "pre_reset" — o ficheiro
      .sql fica em `config.DIR_BACKUPS` e serve de rede de segurança.
   3. Apagar todas as tabelas do sistema (`repositorio.apagar_tudo`).
@@ -28,18 +29,29 @@ ter passado pelas duas confirmações (escrever "APAGAR TUDO" +
 password).
 """
 
+import logging
+
 import config
 import repositorio
 import responsaveis
 import utilizadores
 
+logger = logging.getLogger(__name__)
 
-def comecar_do_zero(autor):
+
+def comecar_do_zero(autor, password):
     """Apaga todos os dados e recria o Master padrão.
 
     Parâmetros:
-      - `autor`: o responsável ativo que está a executar o reset.
-                 Tem de ser Master. Validado aqui, não só na GUI.
+      - `autor`:    o responsável ativo que está a executar o reset.
+                    Tem de ser Master. Validado aqui, não só na GUI.
+      - `password`: a password do próprio autor, a confirmar a
+                    operação. Verificada AQUI (23/09/2026): até esta
+                    data a confirmação vivia só no modal da GUI, e
+                    qualquer outro caminho (CLI, um ecrã futuro)
+                    apagava tudo só com um Master na sessão. Usa o
+                    `utilizadores.verificar_password` — é uma
+                    confirmação, não um login.
 
     Devolve o registo do Master criado.
 
@@ -49,10 +61,25 @@ def comecar_do_zero(autor):
     """
     _validar_autor_master(autor)
 
+    if not utilizadores.verificar_password(autor["id"], password):
+        logger.warning(
+            "Reset do sistema recusado — password errada, autor_id=%s",
+            autor["id"],
+        )
+        raise ValueError(
+            "A password não corresponde ao utilizador ativo. O reset "
+            "não foi executado."
+        )
+
+    logger.warning("Reset do sistema pedido — autor_id=%s", autor["id"])
+
     # 1. Backup automático antes de apagar
     caminho_backup = repositorio.criar_backup_com_nome("pre_reset")
 
     if caminho_backup is None:
+        logger.error(
+            "Reset abortado — backup pré-reset falhou, nada foi apagado"
+        )
         raise ValueError(
             "Não foi possível criar o backup automático antes do "
             "reset. Verifique o `mysqldump` e a ligação MySQL."
@@ -61,30 +88,44 @@ def comecar_do_zero(autor):
     # 2. Apagar tudo
     repositorio.apagar_tudo()
 
-    # 2b. Reiniciar os contadores de IDs.
-    #     Sem isto, o Master criado a seguir seria RES-007 (ou o
-    #     número onde o contador estava), não RES-001. Tem de vir
-    #     ANTES de criar o Master: o `responsaveis.criar` chama o
-    #     `proximo_id("RES")` e lê o contador — se ainda estivesse
-    #     alto, não reiniciava nada.
-    _reiniciar_contadores()
+    # A partir daqui os dados já foram apagados. Qualquer falha deixa
+    # o sistema vazio e sem Master — fica registada com o caminho do
+    # backup a restaurar, e a exceção continua a subir.
+    try:
+        # 2b. Reiniciar os contadores de IDs.
+        #     Sem isto, o Master criado a seguir seria RES-007 (ou o
+        #     número onde o contador estava), não RES-001. Tem de vir
+        #     ANTES de criar o Master: o `responsaveis.criar` chama o
+        #     `proximo_id("RES")` e lê o contador — se ainda estivesse
+        #     alto, não reiniciava nada.
+        _reiniciar_contadores()
 
-    # 3. Criar o Master padrão
-    master = responsaveis.criar(
-        nome=config.NOME_MASTER_PADRAO,
-        contacto="",
-        tipo_utilizador="Master",
-        autor=None,  # não há autor — o sistema está a nascer de novo
-    )
+        # 3. Criar o Master padrão
+        master = responsaveis.criar(
+            nome=config.NOME_MASTER_PADRAO,
+            contacto="",
+            tipo_utilizador="Master",
+            autor=None,  # não há autor — o sistema está a nascer de novo
+        )
 
-    # 4. Definir a credencial — por escrita direta.
-    #
-    #    `utilizadores.definir_credencial` exige um `autor` ativo, e
-    #    aqui o sistema está literalmente a nascer de novo: não há
-    #    sessão antes do reset. Por isso replicamos aqui o que o
-    #    `bootstrap.py` já faz no `_definir_credencial_direto` —
-    #    hash + escrita direta na BD, sem validação de permissão.
-    _definir_credencial_inicial(master["id"])
+        # 4. Definir a credencial — por escrita direta.
+        #
+        #    `utilizadores.definir_credencial` exige um `autor` ativo, e
+        #    aqui o sistema está literalmente a nascer de novo: não há
+        #    sessão antes do reset. Por isso replicamos aqui o que o
+        #    `bootstrap.py` já faz no `_definir_credencial_direto` —
+        #    hash + escrita direta na BD, sem validação de permissão.
+        _definir_credencial_inicial(master["id"])
+    except Exception:
+        logger.critical(
+            "Reset incompleto — dados apagados mas o Master padrão não "
+            "foi criado. Intervenção manual necessária. Backup: %s",
+            caminho_backup,
+            exc_info=True,
+        )
+        raise
+
+    logger.warning("Reset concluído — novo Master id=%s", master["id"])
 
     # Devolver o Master para quem chamou (a GUI faz logoff)
     return master
@@ -113,6 +154,11 @@ def _validar_autor_master(autor):
         )
 
     if autor.get("tipo_utilizador") != "Master":
+        logger.warning(
+            "Tentativa de reset recusada — autor_id=%s, tipo=%s",
+            autor.get("id"),
+            autor.get("tipo_utilizador"),
+        )
         raise ValueError("Só um Master pode executar o reset do sistema.")
 
 
@@ -176,3 +222,4 @@ def _reiniciar_contadores():
 
     ficheiro = Path(config.DIR_DADOS) / "contadores.json"
     ficheiro.write_text(json.dumps({}), encoding="utf-8")
+    logger.info("Contadores de ID reiniciados")

@@ -4,9 +4,14 @@ com quem usa o sistema; este módulo não tem input() nem print()
 próprio).
 """
 
+import logging
+
 import cli
 import config
+import registo_logs
 import repositorio
+
+logger = logging.getLogger(__name__)
 
 
 def main():
@@ -33,11 +38,14 @@ def main():
     já não terem nenhum consumidor.
     """
     config.garantir_diretorios()
+    registo_logs.configurar("cli")
 
     repositorio.criar_backup()
     repositorio.limpar_backups_antigos()
 
     cli.menu_principal()
+
+    logger.info("Aplicação terminada")
 
 
 if __name__ == "__main__":

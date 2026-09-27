@@ -28,7 +28,11 @@ ALTERAÇÕES v1.5.0 (ronda de 17/09/2026):
     rebaixamento por outros.
 """
 
+import logging
+
 import repositorio
+
+logger = logging.getLogger(__name__)
 
 PREFIXO = "RES"
 
@@ -93,6 +97,12 @@ def criar(nome, contacto="", tipo_utilizador="Staff", autor=None):
     }
 
     repositorio.inserir_responsavel(responsavel)
+    logger.info(
+        "Responsável criado — id=%s, tipo=%s, autor_id=%s",
+        responsavel["id"],
+        tipo_utilizador,
+        autor.get("id") if autor is not None else None,
+    )
     return responsavel
 
 
@@ -115,7 +125,7 @@ def listar(incluir_inativos=False):
     return repositorio.listar_responsaveis(incluir_inativos=incluir_inativos)
 
 
-def atualizar(responsavel_id, nome=None, contacto=None):
+def atualizar(responsavel_id, nome=None, contacto=None, autor=None):
     """Altera o nome ou o contacto de um responsável existente.
 
     Um parâmetro a None significa não alterar; "" significa
@@ -128,12 +138,37 @@ def atualizar(responsavel_id, nome=None, contacto=None):
     Não altera `tipo_utilizador` também — isso é a
     `alterar_tipo_utilizador`, com as suas próprias regras.
 
+    Permissões (26/09/2026), quando `autor` é passado:
+
+      - Master edita qualquer responsável.
+      - Admin edita-se a si próprio e aos Staff.
+      - Staff não edita ninguém (nem a si próprio — só muda a
+        password, pelo `utilizadores.alterar_password`).
+
+    `autor` None mantém o comportamento antigo (CLI e testes).
+
     Devolve o registo atualizado.
     """
     responsavel = procurar(responsavel_id)
 
     if responsavel is None:
         raise ValueError(f"O responsável {responsavel_id} não existe.")
+
+    if autor is not None:
+        import utilizadores
+
+        # Sobre si próprio, o perfil do alvo não conta — só se
+        # confirma que o autor é Master ou Admin.
+        if autor.get("id") == responsavel_id:
+            perfil_alvo = None
+        else:
+            perfil_alvo = responsavel["tipo_utilizador"]
+
+        utilizadores.verificar_permissao(
+            autor,
+            {"Master", "Admin"},
+            perfil_alvo=perfil_alvo,
+        )
 
     campos = {}
 
@@ -227,15 +262,30 @@ def alterar_tipo_utilizador(responsavel_id, tipo_utilizador, autor):
         responsavel["tipo_utilizador"] == "Master"
         and autor["id"] != responsavel_id
     ):
+        logger.warning(
+            "Tentativa de rebaixar outro Master recusada — alvo_id=%s, "
+            "autor_id=%s",
+            responsavel_id,
+            autor["id"],
+        )
         raise ValueError(
             "Um Master não pode rebaixar outro Master. Só o próprio "
             "pode descer-se a si mesmo."
         )
 
+    tipo_anterior = responsavel["tipo_utilizador"]
+
     repositorio.atualizar_responsavel(
         responsavel_id, {"tipo_utilizador": tipo_utilizador}
     )
     responsavel["tipo_utilizador"] = tipo_utilizador
+    logger.info(
+        "Tipo de utilizador alterado — alvo_id=%s, %s → %s, autor_id=%s",
+        responsavel_id,
+        tipo_anterior,
+        tipo_utilizador,
+        autor["id"],
+    )
     return responsavel
 
 

@@ -438,6 +438,12 @@ def anonimizar(cliente_id, responsavel_id, data):
 
     responsavel = responsaveis.validar_autoria(responsavel_id)
 
+    # Decisão de 26/09/2026: só um Master autoriza a anonimização.
+    if responsavel["tipo_utilizador"] != "Master":
+        raise ValueError(
+            "Só um Master pode autorizar a anonimização de um cliente."
+        )
+
     if data is None:
         raise ValueError("A data da anonimização é obrigatória.")
 

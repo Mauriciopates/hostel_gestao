@@ -18,6 +18,22 @@ NOTA sobre identidade: `procurar()` faz sempre um SELECT novo à base
 de dados — já não devolve o MESMO objeto Python que `criar()`
 devolveu. Por isso comparamos com `assertEqual` (valores iguais),
 nunca com `assertIs` (mesmo objeto).
+
+NOTA sobre chaves dos dicionários (v1.6.0): `criar()` devolve o
+dicionário que construiu (id, nome, morada, iban, ativo);
+`procurar()`/`listar()` devolvem o que está gravado no MySQL, com
+`SELECT *` — trazem também `desativado_por_id` e `data_desativacao`.
+Comparar o dicionário devolvido por `criar()` com o devolvido por
+`procurar()` por igualdade literal NÃO funciona: os testes comparam
+por ID (ou pelo campo específico que estão a verificar), nunca o
+dicionário todo — mesma convenção já aplicada em teste_unidades.py,
+teste_clientes.py e teste_contratos.py.
+
+NOTA sobre desativação forçada (06/09/2026): `propriedades.desativar`
+com `forcar=True` exige `responsavel_id` sempre que há unidades
+ativas dependentes — o responsável que autoriza a exceção fica
+gravado em `desativado_por_id`/`data_desativacao`. Mesma convenção
+já aplicada em `unidades.desativar` e `estoque.desativar_produto`.
 """
 
 import sys
@@ -27,9 +43,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest
 
 import propriedades
+import responsaveis
 import unidades
 
 
@@ -90,12 +107,18 @@ class TesteProcurar(BaseMySQLTest):
     """Procura de uma propriedade pelo identificador."""
 
     def teste_procurar_encontra(self):
-        """Devolve o registo quando o identificador corresponde."""
+        """Devolve o registo quando o identificador corresponde.
+
+        Comparação por ID — `criar()` e `procurar()` devolvem
+        dicionários com chaves diferentes (ver a nota no topo do
+        ficheiro). O que interessa é que é a MESMA linha na base.
+        """
         criada = propriedades.criar("Rei Ramiro")
 
         encontrada = propriedades.procurar(criada["id"])
 
-        self.assertEqual(criada, encontrada)
+        self.assertIsNotNone(encontrada)
+        self.assertEqual(encontrada["id"], criada["id"])  # type: ignore
 
     def teste_procurar_inexistente_devolve_none(self):
         """Um identificador que não corresponde a nada devolve None.
@@ -171,7 +194,9 @@ class TesteAtualizar(BaseMySQLTest):
         p = propriedades.atualizar(pro_id, nome="Rei Ramiro 1-13")
 
         self.assertEqual("Rei Ramiro 1-13", p["nome"])
-        self.assertEqual("Rei Ramiro 1-13", propriedades.procurar(pro_id)["nome"])
+        self.assertEqual(
+            "Rei Ramiro 1-13", propriedades.procurar(pro_id)["nome"]
+        )
 
     def teste_atualizar_altera_a_morada(self):
         """A morada indicada substitui a anterior."""
@@ -280,8 +305,12 @@ class TesteDesativarReativar(BaseMySQLTest):
         desativar se existir alguma unidade ativa dependente."""
         pro_id = propriedades.criar("Aldoar")["id"]
         unidades.criar(
-            pro_id, "Unidade Teste", "mensal",
-            Decimal("250.00"), Decimal("250.00"), Decimal("20.00"),
+            pro_id,
+            "Unidade Teste",
+            "mensal",
+            Decimal("250.00"),
+            Decimal("250.00"),
+            Decimal("20.00"),
         )
 
         with self.assertRaises(ValueError):
@@ -289,14 +318,26 @@ class TesteDesativarReativar(BaseMySQLTest):
 
     def teste_desativar_com_forcar_ignora_unidades_ativas(self):
         """Com forcar=True, desativa mesmo com unidades ativas
-        dependentes — decisão consciente de quem chama."""
+        dependentes — decisão consciente de quem chama.
+
+        Desde a v1.5.0, forçar com dependências ativas exige também
+        `responsavel_id` — o responsável que autoriza a exceção fica
+        gravado em `desativado_por_id`/`data_desativacao`.
+        """
+        responsavel = responsaveis.criar("Gestor de Turno")
         pro_id = propriedades.criar("Aldoar")["id"]
         unidades.criar(
-            pro_id, "Unidade Teste", "mensal",
-            Decimal("250.00"), Decimal("250.00"), Decimal("20.00"),
+            pro_id,
+            "Unidade Teste",
+            "mensal",
+            Decimal("250.00"),
+            Decimal("250.00"),
+            Decimal("20.00"),
         )
 
-        p = propriedades.desativar(pro_id, forcar=True)
+        p = propriedades.desativar(
+            pro_id, forcar=True, responsavel_id=responsavel["id"]
+        )
 
         self.assertFalse(p["ativo"])
 
@@ -305,8 +346,12 @@ class TesteDesativarReativar(BaseMySQLTest):
         não exige forcar."""
         pro_id = propriedades.criar("Aldoar")["id"]
         unidade = unidades.criar(
-            pro_id, "Unidade Teste", "mensal",
-            Decimal("250.00"), Decimal("250.00"), Decimal("20.00"),
+            pro_id,
+            "Unidade Teste",
+            "mensal",
+            Decimal("250.00"),
+            Decimal("250.00"),
+            Decimal("20.00"),
         )
         unidades.desativar(unidade["id"])
 

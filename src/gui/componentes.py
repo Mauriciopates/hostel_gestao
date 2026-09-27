@@ -1,6 +1,6 @@
 import collections
 import datetime
-import tkinter.font as tkfont
+import tkinter
 from pathlib import Path
 from tkinter import messagebox
 
@@ -166,6 +166,45 @@ class BarraLateral(ctk.CTkFrame):
         ).pack(padx=6, pady=6)
 
         # =============================================================
+        # RODAPÉ: versão + botão de trocar utilizador
+        # =============================================================
+        # 26/09/2026 — o rodapé é empacotado ANTES dos itens: no
+        # pack, quem entra primeiro tem prioridade no espaço. Com o
+        # rodapé depois, o Master (com todos os itens) espremia o
+        # botão "Trocar utilizador".
+        ctk.CTkLabel(
+            self,
+            text=f"v{config.VERSAO}",
+            text_color=tema.COR_TEXTO_SIDEBAR_SECAO,
+            font=ctk.CTkFont(size=9),
+        ).pack(side="bottom", pady=10)
+
+        # Servidor em uso (26/09/2026): com Local e VM a terem bases
+        # independentes, tem de estar sempre à vista onde se está a gravar.
+        ctk.CTkLabel(
+            self,
+            text=f"● {config.SERVIDOR_NOME}",
+            text_color=tema.COR_TEXTO_SIDEBAR,
+            font=ctk.CTkFont(size=10, weight="bold"),
+        ).pack(side="bottom", pady=(6, 0))
+
+        # Botão cinza, colado acima da versão (empacotado DEPOIS
+        # dela — em pack(side="bottom") cada widget novo fica por
+        # cima do anterior, não por baixo). Cinzento reaproveita
+        # COR_TEXTO_SIDEBAR_SECAO, já usado nesta mesma barra (versão
+        # e rótulos de secção) — sem cor nova em tema.py.
+        ctk.CTkButton(
+            self,
+            text="Trocar utilizador",
+            fg_color=tema.COR_TEXTO_SIDEBAR_SECAO,
+            text_color=tema.COR_TEXTO_SIDEBAR,
+            hover_color=tema.AZUL_CLARO,
+            corner_radius=tema.RAIO_BOTAO,
+            height=30,
+            command=controlador.trocar_utilizador,
+        ).pack(side="bottom", fill="x", padx=10, pady=(4, 0))
+
+        # =============================================================
         # ITENS da navegação
         #
         # Cada botão de item é guardado em `self._botoes_por_ecra`
@@ -193,7 +232,7 @@ class BarraLateral(ctk.CTkFrame):
                     text_color=tema.COR_TEXTO_SIDEBAR_SECAO,
                     font=ctk.CTkFont(size=10, weight="bold"),
                     anchor="w",
-                ).pack(fill="x", padx=14, pady=(12, 4))
+                ).pack(fill="x", padx=14, pady=(8, 2))
             else:
                 botao = ctk.CTkButton(
                     self,
@@ -211,32 +250,6 @@ class BarraLateral(ctk.CTkFrame):
                 botao.pack(fill="x", padx=6, pady=1)
 
                 self._botoes_por_ecra[item["ecra"]] = botao
-
-        # =============================================================
-        # RODAPÉ: versão + botão de trocar utilizador
-        # =============================================================
-        ctk.CTkLabel(
-            self,
-            text=f"v{config.VERSAO}",
-            text_color=tema.COR_TEXTO_SIDEBAR_SECAO,
-            font=ctk.CTkFont(size=9),
-        ).pack(side="bottom", pady=10)
-
-        # Botão cinza, colado acima da versão (empacotado DEPOIS
-        # dela — em pack(side="bottom") cada widget novo fica por
-        # cima do anterior, não por baixo). Cinzento reaproveita
-        # COR_TEXTO_SIDEBAR_SECAO, já usado nesta mesma barra (versão
-        # e rótulos de secção) — sem cor nova em tema.py.
-        ctk.CTkButton(
-            self,
-            text="Trocar utilizador",
-            fg_color=tema.COR_TEXTO_SIDEBAR_SECAO,
-            text_color=tema.COR_TEXTO_SIDEBAR,
-            hover_color=tema.AZUL_CLARO,
-            corner_radius=tema.RAIO_BOTAO,
-            height=30,
-            command=controlador.trocar_utilizador,
-        ).pack(side="bottom", fill="x", padx=10, pady=(4, 0))
 
     def marcar_ativo(self, classe_ecra):
         """Pinta de azul o botão do ecrã indicado, e limpa os
@@ -343,6 +356,61 @@ _PADY_CABECALHO = 9
 # Folga entre botões dentro de uma célula de ações.
 _ESPACO_BOTOES = 6
 
+# Largura assumida para a barra de scroll do corpo enquanto ela
+# ainda não foi medida (ver `Tabela._ajustar_folga_scroll`). É só o
+# valor de partida: mal a tabela aparece no ecrã, a folga real passa
+# a ser medida e corrigida.
+_FOLGA_SCROLL_INICIAL = 16
+
+# Quantas vezes se tenta medir a folga antes de desistir (60 ms
+# entre tentativas, ou seja, cerca de 2 segundos). Existe só para
+# uma tabela que nunca chegue a ser mostrada não ficar a repetir a
+# medição para sempre.
+_TENTATIVAS_FOLGA_MAX = 30
+
+# Quantas passagens de confirmação o alinhamento do cabeçalho pode
+# fazer de cada vez. Cada passagem só acontece se a anterior mudou
+# alguma coisa; na prática bastam duas ou três, e o limite existe
+# para nunca haver um caso a repetir-se sem fim.
+_PASSAGENS_ALINHAMENTO_MAX = 6
+
+
+def pintar_fundo(widget, cor):
+    """Dá a `widget`, e a todos os descendentes que estejam
+    transparentes, a cor de fundo da linha onde ele está.
+
+    PORQUÊ (correção de 21/09/2026): no CustomTkinter um widget
+    transparente herda o fundo do seu PAI. O pai das células de uma
+    linha é a grelha da tabela, que é branca — a faixa com o tom
+    alternado é um IRMÃO que está por trás, não à volta. Resultado:
+    com `tom_alternado=True`, o tom só se via nas folgas entre as
+    células, e tudo o resto (o nome do cliente, o subtítulo, os
+    botões) aparecia branco por cima. É exatamente o mesmo problema
+    que o cabeçalho já tinha tido em 08/09/2026, e que lá foi
+    resolvido dizendo o `fg_color` a cada etiqueta em vez de a
+    deixar transparente.
+
+    Só pinta o que está transparente: um crachá (ID, ESTADO) ou
+    qualquer widget que já tenha cor própria fica exatamente como
+    estava. É isso que torna esta função segura de aplicar a todas
+    as células de todas as tabelas sem ter de saber o que cada ecrã
+    lá pôs.
+
+    O `try` existe porque nem tudo o que pode estar dentro de uma
+    célula é um widget do CustomTkinter — um widget do Tkinter de
+    base não conhece `fg_color` e responde com um erro em vez de uma
+    cor. Nesse caso não há nada a pintar, e a descida aos filhos
+    continua na mesma.
+    """
+    try:
+        if widget.cget("fg_color") == "transparent":
+            widget.configure(fg_color=cor)
+    except (AttributeError, ValueError, tkinter.TclError):
+        pass
+
+    for filho in widget.winfo_children():
+        pintar_fundo(filho, cor)
+
 
 class _CelulaAcoes(ctk.CTkFrame):
     """Célula que agrupa os botões de ação de uma linha.
@@ -353,19 +421,37 @@ class _CelulaAcoes(ctk.CTkFrame):
     omissão, e um botão que não coubesse nesses 200px era desenhado
     espremido a poucos pixéis em vez de ficar de fora de forma
     visível (08/09/2026).
+
+    `cor_fundo` (21/09/2026): a cor da linha onde esta célula está.
+    Os botões são acrescentados DEPOIS de a célula já estar colocada
+    na grelha, por isso não apanhariam a pintura que a `Tabela` faz
+    em `colocar` — ficavam brancos por cima das linhas com tom
+    alternado. Guardar a cor aqui é o que permite pintar cada botão
+    no momento em que ele entra.
     """
 
-    def __init__(self, master, largura, altura, espaco=_ESPACO_BOTOES):
+    def __init__(
+        self,
+        master,
+        largura,
+        altura,
+        espaco=_ESPACO_BOTOES,
+        cor_fundo=None,
+    ):
         # A altura é tão obrigatória como a largura, e por baixo é o
         # mesmo problema: com `pack_propagate(False)` o frame fica
         # com os 200px de altura por omissão do CTkFrame e obriga a
         # fila inteira da grelha a esticar até lá (08/09/2026,
         # apanhado a medir a tabela num ecrã virtual).
         super().__init__(
-            master, fg_color="transparent", width=largura, height=altura
+            master,
+            fg_color=cor_fundo if cor_fundo else "transparent",
+            width=largura,
+            height=altura,
         )
         self.pack_propagate(False)
         self._espaco = espaco
+        self._cor_fundo = cor_fundo
         self._primeiro = True
 
     def adicionar(self, widget):
@@ -375,32 +461,77 @@ class _CelulaAcoes(ctk.CTkFrame):
         )
         self._primeiro = False
 
+        if self._cor_fundo:
+            pintar_fundo(widget, self._cor_fundo)
+
         return widget
 
 
 class Tabela(ctk.CTkFrame):
-    """Tabela com cabeçalho e corpo na MESMA grelha.
+    """Tabela com cabeçalho FIXO e corpo com scroll.
 
-    Porque é que isto é uma grelha só, e não um cabeçalho mais uma
-    lista de linhas: o Tk não decide a largura de uma coluna só a
-    partir do peso e do mínimo que lhe damos — parte do que os
-    próprios filhos pedem e só depois reparte o que sobra. Duas
-    grelhas com configuração idêntica dão colunas diferentes se os
-    conteúdos forem diferentes, e são sempre: no cabeçalho estão
-    títulos curtos, nas linhas estão crachás de 90px e botões de
-    100px. Foi essa a causa do desalinhamento que se arrastou por
-    várias tentativas em 08/09/2026, e nenhum acerto de `padx` ou de
-    peso o resolvia.
+    ESTRUTURA (alterada em 21/09/2026, v1.6.0 — mockup aprovado
+    pelo aluno). Até aqui o cabeçalho era a linha 0 da mesma grelha
+    das linhas de dados, e a grelha inteira vivia dentro do
+    `CTkScrollableFrame`: ao descer a lista, o cabeçalho descia com
+    ela e desaparecia. Agora são dois blocos:
 
-    Com uma grelha única não há duas colunas para fazer coincidir:
-    há uma. O cabeçalho é a linha 0, cada registo é uma linha a
-    seguir, e o alinhamento deixa de ser uma propriedade que se
-    ajusta para passar a ser uma que não pode falhar.
+        Tabela (cartão com borda)
+        ├── cabecalho          -> CTkFrame fixo, NÃO faz scroll
+        │   └── grelha_cabecalho
+        ├── divisória de 1px
+        └── corpo              -> CTkScrollableFrame
+            └── grelha         -> só as linhas de dados
 
-    Como o fundo de cada linha (tom alternado e faixa do cabeçalho)
-    já não pode ser um frame que contém as células, é um frame
-    colocado na mesma célula da grelha com `columnspan`, criado
-    ANTES delas — no Tk, widgets criados depois ficam por cima.
+    O MOTIVO DE ANTES CONTINUA VÁLIDO, e é por isso que a separação
+    não é só "tirar o cabeçalho de dentro do scroll": o Tk não
+    decide a largura de uma coluna só a partir do peso e do mínimo
+    que lhe damos — parte do que os próprios filhos pedem e só
+    depois reparte o que sobra. Duas grelhas com conteúdos
+    diferentes (títulos curtos em cima, crachás de 90px e botões de
+    100px em baixo) dão colunas diferentes. Foi essa a causa do
+    desalinhamento de 08/09/2026, que nenhum acerto de `padx` ou de
+    peso resolvia.
+
+    O que substitui a garantia que existia quando havia uma grelha
+    só são três coisas, e as três têm de estar cá:
+
+    1. `_configurar_colunas` é chamada com a MESMA definição de
+       colunas nas duas grelhas — pesos e mínimos saem de um sítio
+       só, não podem divergir por um número esquecido de um lado.
+       Isto sozinho NÃO chega (ver ponto 3), mas é o que faz a
+       tabela nascer com as colunas certas antes de haver linhas
+       nenhumas para medir.
+
+    2. A barra de scroll do corpo ocupa largura que o cabeçalho não
+       tem. Sem compensar isso, a tabela de cima é mais larga do que
+       a de baixo. `_ajustar_folga_scroll` mede a diferença e
+       reserva-a à direita do cabeçalho — medida, não assumida: a
+       largura da barra muda com a versão do CustomTkinter e com a
+       escala do ecrã, e a barra só aparece quando há linhas a mais
+       para caber.
+
+    3. Mesmo com a largura total igual e a mesma configuração de
+       colunas nos dois lados, o Tk NÃO reparte o espaço da mesma
+       maneira: a largura exigida por uma coluna é o maior valor
+       entre o mínimo que lhe demos e o que os filhos DAQUELA grelha
+       pedem, folgas incluídas. A célula de ações do corpo pede 100px
+       mais 16 de margem; o título "AÇÕES" pede pouco mais de 40. Os
+       16px de diferença saem das colunas com peso, e as divisórias
+       verticais deixam de bater certo — foi este o bug de
+       08/09/2026, e é ele que volta se a separação parar no ponto 2.
+       `_sincronizar_colunas` resolve-o pela raiz: o corpo é a
+       verdade, e o cabeçalho copia dele a largura REAL de cada
+       coluna (`grid_bbox`), fixando-a sem peso. Deixa de haver duas
+       repartições para fazer coincidir — há uma, e a outra obedece.
+
+    Como o fundo de cada linha já não pode ser um frame que contém
+    as células, é um frame colocado na mesma célula da grelha com
+    `columnspan`, criado ANTES delas — no Tk, widgets criados depois
+    ficam por cima. As células que ficam por cima desse fundo são
+    pintadas com a cor da linha em `colocar` (ver `pintar_fundo`),
+    senão o tom alternado ficava escondido por baixo de retângulos
+    brancos.
 
     Uso típico:
 
@@ -409,17 +540,14 @@ class Tabela(ctk.CTkFrame):
             colunas=(
                 componentes.Coluna("ID", minimo=94, espaco=8),
                 componentes.Coluna("NOME", peso=3, minimo=190),
-                componentes.Coluna(
-                    "ESTADO", peso=1, minimo=90, alinhamento="centro"
-                ),
+                componentes.Coluna("ESTADO", peso=1, minimo=90),
                 componentes.Coluna(
                     "PREÇO", peso=1, minimo=80, alinhamento="e", espaco=8
                 ),
-                componentes.Coluna(
-                    "AÇÕES", minimo=100, alinhamento="e"
-                ),
+                componentes.Coluna("AÇÕES", minimo=100),
             ),
             altura_linha=52,
+            tom_alternado=True,
         )
         self.tabela.pack(fill="both", expand=True, padx=16, pady=10)
 
@@ -455,11 +583,6 @@ class Tabela(ctk.CTkFrame):
         linhas_verticais=True,
         tom_alternado=False,
     ):
-        # Nota sobre `tom_alternado`: se algum dia for ligado, as
-        # células das linhas tingidas precisam de receber o
-        # fg_color da linha, pela mesma razão dos títulos abaixo —
-        # transparente herda o branco da grelha, não o tom do fundo
-        # que está por trás.
         super().__init__(
             master,
             corner_radius=tema.RAIO_CARTAO,
@@ -475,7 +598,34 @@ class Tabela(ctk.CTkFrame):
         self._linhas_verticais = linhas_verticais
         self._tom_alternado = tom_alternado
         self._desenhadas = 0
+        self._fila_atual = 0
+        self._cor_fila_atual = tema.COR_FUNDO
+        self._folga_scroll = _FOLGA_SCROLL_INICIAL
+        self._tentativas_folga = 0
+        self._larguras_cabecalho = {}
+        self._alinhamento_agendado = None
+        self._passagens_alinhamento = 0
 
+        # -- cabeçalho fixo, fora do scroll ---------------------------
+        #
+        # O `padx=1, pady=(1, 0)` mete a faixa por dentro da borda de
+        # 1px do cartão. Sem isso, a faixa (de cantos retos) passava
+        # por cima dos cantos redondos do cartão e comia-os.
+        self.cabecalho = ctk.CTkFrame(
+            self, corner_radius=0, fg_color=tema.CABECALHO_TABELA_FUNDO
+        )
+        self.cabecalho.pack(fill="x", padx=1, pady=(1, 0))
+
+        self.grelha_cabecalho = ctk.CTkFrame(
+            self.cabecalho, fg_color="transparent"
+        )
+        self.grelha_cabecalho.pack(fill="x", padx=(0, self._folga_scroll))
+
+        ctk.CTkFrame(
+            self, height=1, corner_radius=0, fg_color=tema.COR_BORDA
+        ).pack(fill="x")
+
+        # -- corpo com scroll -----------------------------------------
         self.corpo = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.corpo.pack(fill="both", expand=True)
 
@@ -488,23 +638,226 @@ class Tabela(ctk.CTkFrame):
         # de 1px para as divisórias verticais. É o que faz a tabela
         # ler-se como tabela e o que torna impossível esconder um
         # desalinhamento: a linha vertical passa exatamente na
-        # fronteira de que estamos a falar.
-        for indice, coluna in enumerate(self._colunas):
-            self.grelha.grid_columnconfigure(
-                indice * 2, weight=coluna.peso, minsize=coluna.minimo
-            )
-
-            if indice < len(self._colunas) - 1:
-                self.grelha.grid_columnconfigure(
-                    indice * 2 + 1,
-                    weight=0,
-                    minsize=1 if linhas_verticais else 0,
-                )
+        # fronteira de que estamos a falar. A MESMA configuração vai
+        # para as duas grelhas — ver docstring da classe.
+        self._configurar_colunas(self.grelha_cabecalho)
+        self._configurar_colunas(self.grelha)
 
         self._proxima_linha = 0
         self._desenhar_cabecalho()
 
+        # O alinhamento do cabeçalho só pode ser medido depois de o
+        # Tk ter desenhado a tabela; daí o `after`, que se repete
+        # sozinho enquanto ainda não houver nada para medir. O
+        # `<Configure>` volta a medir sempre que a tabela muda de
+        # largura.
+        #
+        # LIÇÃO CARA (21/09/2026): o binding é feito no CABEÇALHO e
+        # com `add=True`, e as duas coisas são obrigatórias.
+        #
+        # - Em Tkinter, um `bind` sem `add` APAGA o que já lá
+        #   estava. O `CTkFrame` protege-se disso sozinho (o seu
+        #   `bind` reencaminha sempre com `add=True`), mas o
+        #   `CTkScrollableFrame` não redefine o `bind` — nele vale a
+        #   regra do Tkinter de base. Ligar um `<Configure>` por
+        #   cima do corpo apagou o binding interno que mantém a
+        #   `scrollregion` do canvas atualizada, e a tabela ficou
+        #   impossível de rolar: barra de scroll à vista, roda do
+        #   rato sem efeito e nenhum erro no ecrã (o
+        #   `_mouse_wheel_all` do CustomTkinter desiste em silêncio
+        #   quando o canvas julga que o conteúdo todo já cabe).
+        #
+        # - `add=True` e não `add="+"`: as duas funcionam em
+        #   execução, mas a assinatura do `CTkFrame.bind` declara
+        #   `add` como booleano e o Pylance/pyright acusa o `"+"`.
+        #
+        # - No cabeçalho, e não no corpo, para não se andar sequer à
+        #   volta dos bindings internos do `CTkScrollableFrame`. O
+        #   cabeçalho é um frame simples e muda de largura sempre
+        #   que a tabela muda — que é quando é preciso remedir. O
+        #   outro caso (a barra de scroll a aparecer ou a
+        #   desaparecer por a lista ter mudado de tamanho) é tratado
+        #   pelo `limpar`, que agenda o alinhamento a seguir a cada
+        #   redesenho.
+        self.after(60, self._alinhar_cabecalho)
+        self.cabecalho.bind("<Configure>", self._alinhar_cabecalho, add=True)
+
     # -- construção interna ------------------------------------------
+
+    def _configurar_colunas(self, grelha):
+        """Aplica a definição de colunas a uma grelha.
+
+        Chamada duas vezes, uma por grelha (cabeçalho e corpo), com
+        a mesma `self._colunas`. É esta função que substitui a
+        garantia de alinhamento que existia quando cabeçalho e
+        linhas viviam na mesma grelha.
+        """
+        for indice, coluna in enumerate(self._colunas):
+            grelha.grid_columnconfigure(
+                indice * 2, weight=coluna.peso, minsize=coluna.minimo
+            )
+
+            if indice < len(self._colunas) - 1:
+                grelha.grid_columnconfigure(
+                    indice * 2 + 1,
+                    weight=0,
+                    minsize=1 if self._linhas_verticais else 0,
+                )
+
+    def _alinhar_cabecalho(self, _evento=None):
+        """PEDE um alinhamento do cabeçalho ao corpo — não o faz já.
+
+        A diferença é o que faz isto funcionar. Este método é
+        chamado a partir do `<Configure>` do corpo, ou seja, no meio
+        de o Tk estar a refazer o desenho: medir ali dá as larguras
+        ANTERIORES, e o cabeçalho ficava uma passagem atrasado (foi
+        exatamente o que apanhou o teste de cenários — redimensionar
+        a janela deixava o cabeçalho com as colunas antigas). Agendar
+        com `after` põe a medição a correr depois de o desenho estar
+        feito.
+
+        Vários pedidos seguidos (o `<Configure>` dispara muitas
+        vezes por cada redimensionamento) juntam-se todos num só: se
+        já há um agendado, não se agenda outro.
+        """
+        if self._alinhamento_agendado is not None:
+            return
+
+        self._alinhamento_agendado = self.after(30, self._aplicar_alinhamento)
+
+    def _aplicar_alinhamento(self):
+        """Alinha o cabeçalho pelo corpo, e confirma o resultado.
+
+        Dois passos, sempre por esta ordem: primeiro igualar a
+        largura total (`_ajustar_folga_scroll`), depois copiar a
+        largura de cada coluna (`_sincronizar_colunas`) — copiar
+        colunas de uma tabela com outra largura total não serviria
+        de nada.
+
+        Mexer na geometria muda aquilo que estava a ser medido, por
+        isso, sempre que alguma coisa foi alterada, agenda-se mais
+        uma passagem para confirmar. Na prática convergem em duas ou
+        três; o limite existe só para nunca haver um caso patológico
+        a repetir isto para sempre.
+        """
+        self._alinhamento_agendado = None
+
+        try:
+            self.update_idletasks()
+        except tkinter.TclError:
+            # Tabela destruída entretanto (ecrã fechado) — não há
+            # nada para alinhar.
+            return
+
+        mudou = self._ajustar_folga_scroll()
+
+        if mudou:
+            self.update_idletasks()
+
+        if self._sincronizar_colunas():
+            mudou = True
+
+        if mudou and self._passagens_alinhamento < _PASSAGENS_ALINHAMENTO_MAX:
+            self._passagens_alinhamento += 1
+            self._alinhamento_agendado = self.after(
+                30, self._aplicar_alinhamento
+            )
+        else:
+            self._passagens_alinhamento = 0
+
+    def _sincronizar_colunas(self):
+        """Copia para o cabeçalho a largura real de cada coluna do
+        corpo, fixando-a (peso 0).
+
+        É isto que impede o bug de 08/09/2026 de voltar: com pesos
+        dos dois lados, cada grelha repartia o espaço à sua maneira,
+        porque o que os filhos pedem é diferente em cima e em baixo
+        (ver ponto 3 da docstring da classe). Aqui o corpo passa a
+        ser a única grelha que decide, e o cabeçalho limita-se a
+        obedecer.
+
+        Sem linhas não há nada para copiar — o cabeçalho fica com a
+        configuração de partida, que é a certa para uma tabela
+        vazia.
+
+        Devolve True se alguma coluna mudou de largura.
+        """
+        if self._desenhadas == 0:
+            return False
+
+        mudou = False
+
+        for indice in range(len(self._colunas) * 2 - 1):
+            caixa = self.grelha.grid_bbox(column=indice, row=0)
+
+            # Grelha ainda não desenhada: sai e tenta na próxima
+            # chamada, em vez de gravar larguras que não valem nada.
+            if not caixa or caixa[2] <= 0:
+                return mudou
+
+            largura = caixa[2]
+
+            if self._larguras_cabecalho.get(indice) == largura:
+                continue
+
+            self._larguras_cabecalho[indice] = largura
+            self.grelha_cabecalho.grid_columnconfigure(
+                indice, weight=0, minsize=largura
+            )
+            mudou = True
+
+        return mudou
+
+    def _ajustar_folga_scroll(self):
+        """Iguala a largura útil do cabeçalho à do corpo.
+
+        A conta é direta: `self.cabecalho` é um frame normal e
+        ocupa a largura toda do cartão; `self.corpo` é um
+        `CTkScrollableFrame`, e a largura que ele responde já é a
+        largura INTERIOR — ou seja, o que sobra depois da barra de
+        scroll. A diferença entre os dois é exatamente o espaço que
+        falta reservar à direita do cabeçalho.
+
+        Medir em vez de assumir um número: a largura da barra muda
+        com a versão do CustomTkinter e com a escala do ecrã, e a
+        barra só aparece quando há linhas a mais para caber — a
+        folga certa muda com a própria lista, não é uma constante.
+
+        Como a folga é calculada por diferença absoluta (e não somada
+        à anterior), chamar isto as vezes que o Tk quiser dá sempre o
+        mesmo resultado e não há ciclo: quando o valor já está certo,
+        a função sai sem mexer em nada.
+
+        Enquanto a tabela ainda não foi desenhada, o Tk responde 1 à
+        largura. Nesse caso não há nada a medir e a função volta a
+        tentar — com um limite, para uma tabela que nunca chegue a
+        aparecer no ecrã (um ecrã criado mas nunca aberto) não ficar
+        a acordar o Tk de 60 em 60 ms para sempre. Se esse ecrã for
+        aberto mais tarde, é o `<Configure>` do corpo que trata da
+        medição.
+
+        Devolve True se a folga mudou.
+        """
+        largura_cabecalho = self.cabecalho.winfo_width()
+        largura_corpo = self.corpo.winfo_width()
+
+        if largura_cabecalho <= 1 or largura_corpo <= 1:
+            if self._tentativas_folga < _TENTATIVAS_FOLGA_MAX:
+                self._tentativas_folga += 1
+                self.after(60, self._alinhar_cabecalho)
+
+            return False
+
+        self._tentativas_folga = 0
+        folga = max(largura_cabecalho - largura_corpo, 0)
+
+        if folga == self._folga_scroll:
+            return False
+
+        self._folga_scroll = folga
+        self.grelha_cabecalho.pack_configure(padx=(0, folga))
+
+        return True
 
     @property
     def _ultima_coluna(self):
@@ -547,17 +900,25 @@ class Tabela(ctk.CTkFrame):
 
         return fundo
 
-    def _verticais(self, fila):
-        """Divisórias verticais de uma fila."""
+    def _verticais(self, fila, grelha=None):
+        """Divisórias verticais de uma fila.
+
+        `grelha` existe porque o cabeçalho passou a ser uma grelha
+        separada (21/09/2026) e precisa das suas próprias
+        divisórias — por omissão continua a ser a grelha do corpo.
+        """
         if not self._linhas_verticais:
             return
+
+        if grelha is None:
+            grelha = self.grelha
 
         for indice in range(len(self._colunas) - 1):
             # height=1 pela mesma razão do `_fundo`: sem ela, cada
             # divisória vertical pedia 200px de altura e esticava a
             # fila toda.
             ctk.CTkFrame(
-                self.grelha,
+                grelha,
                 width=1,
                 height=1,
                 corner_radius=0,
@@ -583,57 +944,63 @@ class Tabela(ctk.CTkFrame):
         )
 
     def _desenhar_cabecalho(self):
-        fila = self._proxima_linha
-        self._proxima_linha += 1
+        """Desenha os títulos na grelha do cabeçalho (fila 0).
 
-        self._fundo(fila, tema.CABECALHO_TABELA_FUNDO)
-        self._verticais(fila)
+        Só é chamado uma vez, no `__init__`: o cabeçalho vive agora
+        fora do corpo, por isso o `limpar` nunca lhe toca e não há
+        filas fixas a proteger dentro da grelha de dados.
+        """
+        self._verticais(0, self.grelha_cabecalho)
 
         for indice, coluna in enumerate(self._colunas):
             ancora, sticky = _ALINHAMENTOS[coluna.alinhamento]
-            # O fg_color tem de ser dito, não pode ficar
-            # transparente: no CustomTkinter um widget transparente
-            # herda o fundo do seu PAI, e o pai destas etiquetas é a
-            # grelha (branca) — a faixa cinzenta é um irmão que está
-            # por trás, não à volta. Sem isto, o cabeçalho ficava
-            # cinzento com retângulos brancos por baixo de cada
-            # título (08/09/2026).
+            # O fg_color continua a ser dito em vez de ficar
+            # transparente. Hoje o pai já é a própria faixa cinzenta
+            # (o que por si só bastaria), mas dizer a cor mantém o
+            # cabeçalho correto mesmo que a estrutura volte a mudar
+            # — foi a falta disto que pintou o cabeçalho de branco
+            # em 08/09/2026.
             ctk.CTkLabel(
-                self.grelha,
+                self.grelha_cabecalho,
                 text=coluna.titulo,
                 text_color=tema.COR_TEXTO_SECUNDARIO,
                 fg_color=tema.CABECALHO_TABELA_FUNDO,
                 font=ctk.CTkFont(size=10, weight="bold"),
                 anchor=ancora,
             ).grid(
-                row=fila,
+                row=0,
                 column=indice * 2,
                 sticky=sticky or "ew",
                 padx=self._espaco(indice),
                 pady=_PADY_CABECALHO,
             )
 
-        self._divisoria_horizontal()
-
-        # Tudo o que existe até aqui é cabeçalho: `limpar` não lhe
-        # toca.
-        self._fixos = tuple(self.grelha.winfo_children())
-        self._primeira_fila_de_dados = self._proxima_linha
-
     # -- corpo -------------------------------------------------------
 
     def limpar(self):
-        """Apaga todas as linhas e reinicia o tom alternado."""
+        """Apaga todas as linhas e reinicia o tom alternado.
+
+        Desde 21/09/2026 pode apagar a grelha toda sem cuidados: o
+        cabeçalho já não vive aqui dentro.
+        """
         for widget in self.grelha.winfo_children():
-            if widget not in self._fixos:
-                widget.destroy()
+            widget.destroy()
 
         for widget in self.corpo.winfo_children():
             if widget is not self.grelha:
                 widget.destroy()
 
-        self._proxima_linha = self._primeira_fila_de_dados
+        self._proxima_linha = 0
         self._desenhadas = 0
+        self._cor_fila_atual = tema.COR_FUNDO
+
+        # As larguras copiadas para o cabeçalho eram as da lista
+        # anterior; a que vem a seguir pode ter outras (a barra de
+        # scroll aparece ou desaparece consoante o número de linhas).
+        # Esquecê-las obriga o próximo alinhamento a medir tudo de
+        # novo, em vez de confiar em valores já velhos.
+        self._larguras_cabecalho.clear()
+        self.after(60, self._alinhar_cabecalho)
 
     def nova_linha(self):
         """Abre uma linha nova e devolve a grelha, que é o master a
@@ -641,6 +1008,11 @@ class Tabela(ctk.CTkFrame):
 
         O tom alternado e a divisória são contados aqui: quem usa a
         tabela não precisa de saber em que linha vai.
+
+        Desde 21/09/2026 a fila tem SEMPRE um fundo próprio (branco
+        ou o tom alternado) e a cor fica guardada em
+        `_cor_fila_atual`, para o `colocar` poder pintar as células
+        com ela.
         """
         if self._divisorias and self._desenhadas:
             self._divisoria_horizontal()
@@ -652,8 +1024,11 @@ class Tabela(ctk.CTkFrame):
         )
 
         if self._tom_alternado and self._desenhadas % 2 == 1:
-            self._fundo(self._fila_atual, tema.LINHA_ALTERNADA)
+            self._cor_fila_atual = tema.LINHA_ALTERNADA
+        else:
+            self._cor_fila_atual = tema.COR_FUNDO
 
+        self._fundo(self._fila_atual, self._cor_fila_atual)
         self._verticais(self._fila_atual)
         self._desenhadas += 1
 
@@ -669,6 +1044,10 @@ class Tabela(ctk.CTkFrame):
 
         Por omissão o sticky vem do `alinhamento` da coluna, para a
         célula não poder discordar do seu próprio título.
+
+        A pintura no fim é o que faz o tom alternado ser visível:
+        sem ela, uma célula transparente herdava o branco da grelha
+        e tapava a faixa que está por trás (ver `pintar_fundo`).
         """
         if esticar is None:
             esticar = _ALINHAMENTOS[self._colunas[coluna].alinhamento][1]
@@ -679,6 +1058,8 @@ class Tabela(ctk.CTkFrame):
             sticky=esticar,
             padx=self._espaco(coluna),
         )
+
+        pintar_fundo(widget, self._cor_fila_atual)
 
         return widget
 
@@ -704,6 +1085,7 @@ class Tabela(ctk.CTkFrame):
             largura,
             altura,
             espaco if espaco is not None else _ESPACO_BOTOES,
+            cor_fundo=self._cor_fila_atual,
         )
         self.colocar(linha, coluna, acoes)
 
@@ -723,6 +1105,645 @@ class Tabela(ctk.CTkFrame):
         return self._desenhadas == 0
 
 
+# =====================================================================
+# SELETOR — o CTkOptionMenu com painel de scroll e pesquisa
+#
+# Decisão de arquitetura do aluno (21/09/2026): daqui para a frente os
+# ecrãs deixam de instanciar widgets do CustomTkinter diretamente e
+# passam por uma classe daqui, que HERDA a do CustomTkinter. Foi o que
+# faltou no caso do `CTkOptionMenu`: como cada ecrã o instanciava à
+# sua maneira, não havia um sítio só onde mudar — ao contrário da
+# `Tabela`, onde uma correção chegou a todos os ecrãs de uma vez.
+# =====================================================================
+
+# A partir de quantos itens é que o menu nativo deixa de servir. Uma
+# lista de meses, de estados civis ou de tipos de cama continua no
+# menu de sempre: é mais rápido, é o que o utilizador já conhece, e
+# trocá-lo não traria ganho nenhum.
+_LIMITE_MENU_NATIVO = 8
+
+# Linhas visíveis no painel antes de ser preciso rolar.
+_LINHAS_VISIVEIS = 6
+
+_ALTURA_OPCAO = 30
+_LARGURA_MINIMA_PAINEL = 280
+
+# Teto de opções desenhadas de uma vez. Cada linha é um CTkButton, e
+# criar centenas deles demora o suficiente para se notar ao abrir.
+# Com o teto, o painel abre sempre instantâneo e o rodapé diz que há
+# mais — que é também a melhor deixa para usar a pesquisa.
+_MAX_OPCOES_DESENHADAS = 60
+
+# Quantas vezes se vai ver se o menu nativo já fechou, de 200 em 200
+# ms (ver `_vigiar_menu_nativo`). Sessenta segundos é folgado para
+# alguém escolher uma opção; passado isso desiste-se, e a captura
+# acaba por ser reposta na interação seguinte.
+_TENTATIVAS_MENU_NATIVO = 300
+
+
+class Seletor(ctk.CTkOptionMenu):
+    """`CTkOptionMenu` que troca o menu nativo por um painel com
+    scroll e pesquisa quando a lista é grande.
+
+    PORQUÊ: o dropdown do `CTkOptionMenu` é um `DropdownMenu`, que
+    herda de `tkinter.Menu` — um menu nativo do sistema operativo.
+    Menus nativos não têm barra de scroll interna nem se deixam
+    limitar a um número de linhas, e com 100 clientes a lista passa a
+    ser impossível de navegar (problema levantado pelo aluno em
+    21/09/2026, a partir do campo Cliente da Nova Reserva Airbnb).
+
+    COMO: herda mesmo a classe e substitui UM método —
+    `_open_dropdown_menu`, cujo trabalho inteiro é mandar abrir o
+    menu. Tudo o resto vem de graça e continua a ser o do
+    CustomTkinter: o aspeto, a geometria, a escala, e a API
+    (`get`, `set`, `configure(values=...)`, `cget("values")`). Por
+    isso entra no lugar de um `CTkOptionMenu` sem mais nenhuma
+    alteração no código de quem o usa, e qualquer `isinstance` que
+    já exista sobre `CTkOptionMenu` continua a dar verdadeiro.
+
+    Listas curtas continuam no menu nativo. A decisão é tomada em
+    execução, pelo comprimento da lista, para os ecrãs não terem de
+    classificar campo a campo o que merece o painel novo.
+
+    A LISTA NUNCA É ALTERADA. A pesquisa filtra apenas o que se
+    desenha; `self._values` continua a ser a lista original, pela
+    ordem original. Isto não é um detalhe de estilo: o código dos
+    ecrãs faz `combo.cget("values").index(combo.get())` para voltar
+    do texto ao registo real (o cliente, o responsável, a unidade).
+    Se a lista fosse substituída pela filtrada, esse `.index()`
+    passaria a devolver o registo errado em silêncio — uma reserva
+    atribuída a outro cliente, sem erro nenhum no ecrã.
+
+    A escolha é entregue ao `_dropdown_callback` da classe base, o
+    mesmo que o menu nativo usa — atualiza o valor, a etiqueta, a
+    variável ligada e chama o `command`. Não há aqui uma segunda
+    cópia dessa lógica que pudesse divergir.
+
+    Uso — igual ao `CTkOptionMenu`, porque é um:
+
+        self.combo_cliente = componentes.Seletor(
+            bloco, values=["—"], width=1, command=self._ao_escolher
+        )
+    """
+
+    def __init__(
+        self,
+        master,
+        *args,
+        limite=_LIMITE_MENU_NATIVO,
+        linhas_visiveis=_LINHAS_VISIVEIS,
+        pesquisa=True,
+        **kwargs,
+    ):
+        super().__init__(master, *args, **kwargs)
+
+        self._limite = limite
+        self._linhas_visiveis = linhas_visiveis
+        self._com_pesquisa = pesquisa
+        self._painel = None
+        self._campo_pesquisa = None
+        self._lista_painel = None
+        self._rodape_painel = None
+        self._grab_anterior = None
+
+    # -- decisão -----------------------------------------------------
+
+    def _open_dropdown_menu(self):
+        """Único método da classe base que é substituído.
+
+        O `hasattr` no `super()` não é preciso aqui — este método
+        existe porque o estamos a redefinir — mas o caminho da lista
+        curta chama o original, e é esse que depende da biblioteca.
+        Se uma versão futura do CustomTkinter lhe mudar o nome, é
+        este método que deixa de ser chamado: o widget volta a
+        comportar-se como um `CTkOptionMenu` normal, com o menu
+        nativo, em vez de ficar um campo que não abre.
+        """
+        if len(self._values) <= self._limite:
+            anterior = self.grab_current()
+            super()._open_dropdown_menu()
+            self._vigiar_menu_nativo(anterior)
+            return
+
+        self._alternar_painel()
+
+    def _vigiar_menu_nativo(self, anterior, apareceu=False, tentativas=0):
+        """Devolve a captura de eventos ao modal depois de o menu
+        nativo fechar.
+
+        BUG ANTIGO, NÃO INTRODUZIDO AQUI (medido em 21/09/2026 com um
+        `CTkOptionMenu` original, sem nada deste ficheiro): ao abrir,
+        o menu nativo toma a captura de eventos; ao fechar, NÃO a
+        devolve — fica ela com o menu já fechado. Consequência real:
+        num modal, basta abrir um dropdown uma vez para o modal
+        deixar de bloquear a janela por trás, e o utilizador passa a
+        poder clicar no que devia estar bloqueado, sem aviso nenhum.
+
+        Como todos os seletores do sistema passam a ser desta classe,
+        este é o sítio onde isso se corrige de uma vez.
+
+        O `apareceu` existe por causa do tempo: logo a seguir a pedir
+        a abertura, o menu ainda não está no ecrã, e sem esta
+        bandeira a primeira verificação concluía "já fechou" e tirava
+        a captura ao menu que estava mesmo a abrir.
+        """
+        if anterior is None:
+            return
+
+        try:
+            mapeado = bool(self._dropdown_menu.winfo_ismapped())
+        except tkinter.TclError:
+            return
+
+        if mapeado:
+            apareceu = True
+        elif apareceu:
+            try:
+                anterior.grab_set()
+            except tkinter.TclError:
+                pass
+
+            return
+
+        if tentativas >= _TENTATIVAS_MENU_NATIVO:
+            return
+
+        try:
+            self.after(
+                200,
+                lambda: self._vigiar_menu_nativo(
+                    anterior, apareceu, tentativas + 1
+                ),
+            )
+        except tkinter.TclError:
+            pass
+
+    # -- painel ------------------------------------------------------
+
+    def _alternar_painel(self):
+        """Segundo clique no campo fecha o painel, em vez de abrir
+        outro por cima.
+        """
+        if self._painel is not None:
+            self._fechar_painel()
+            return
+
+        self._abrir_painel()
+
+    def _abrir_painel(self):
+        # Quem tem a captura de eventos neste momento — quase sempre
+        # o modal de onde este seletor foi aberto (a Nova Reserva
+        # Airbnb, por exemplo, chama `grab_set` através do
+        # `colocar_no_topo`). Guardar isto agora é o que permite
+        # devolver-lhe a captura quando o painel fechar; sem isso, o
+        # modal por baixo ficava a não responder a nada.
+        self._grab_anterior = self.grab_current()
+
+        painel = ctk.CTkToplevel(self)
+        self._painel = painel
+
+        # Sem barra de título nem moldura do sistema: isto é um
+        # painel colado ao campo, não uma janela.
+        painel.overrideredirect(True)
+        painel.configure(fg_color=tema.COR_BORDA)
+
+        moldura = ctk.CTkFrame(
+            painel,
+            corner_radius=tema.RAIO_CARTAO,
+            fg_color=tema.COR_FUNDO,
+            border_width=0,
+        )
+        moldura.pack(fill="both", expand=True, padx=1, pady=1)
+
+        if self._com_pesquisa:
+            self._campo_pesquisa = ctk.CTkEntry(
+                moldura,
+                corner_radius=tema.RAIO_CAMPO,
+                placeholder_text="Escrever para filtrar...",
+                height=30,
+            )
+            self._campo_pesquisa.pack(fill="x", padx=8, pady=(8, 4))
+            # KeyRelease e não FocusOut: gravar ou reagir no
+            # `<FocusOut>` de um campo é fonte de ciclos infinitos
+            # neste projeto (lição do `gui_configuracoes.py`,
+            # `_controlo_numerico`).
+            self._campo_pesquisa.bind(
+                "<KeyRelease>", self._ao_filtrar, add=True
+            )
+
+        self._lista_painel = ctk.CTkScrollableFrame(
+            moldura,
+            fg_color="transparent",
+            height=self._linhas_visiveis * _ALTURA_OPCAO,
+        )
+        self._lista_painel.pack(fill="both", expand=True, padx=4)
+
+        self._rodape_painel = ctk.CTkLabel(
+            moldura,
+            text="",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+            anchor="w",
+        )
+        self._rodape_painel.pack(fill="x", padx=12, pady=(2, 8))
+
+        self._desenhar_opcoes()
+        self._colocar_painel(painel)
+
+        # A captura passa para o painel. É ela que faz os cliques
+        # fora chegarem cá (ver `_ao_clicar`) e que deixa o campo de
+        # pesquisa receber o que se escreve mesmo com o modal de trás
+        # a ter pedido a captura antes.
+        painel.bind("<Button-1>", self._ao_clicar, add=True)
+        painel.bind("<Escape>", self._fechar_painel, add=True)
+
+        # Rodar a roda do rato FORA do painel fecha-o. Sem isto, um
+        # seletor dentro de um formulário com scroll (o
+        # `_FormularioCliente` e os cartões dos contratos vivem todos
+        # dentro de um `CTkScrollableFrame`) deixava o painel
+        # pendurado no sítio antigo enquanto o campo lhe fugia por
+        # baixo — medido em 21/09/2026: o campo desceu 360px e o
+        # painel não se mexeu um pixel. Rodar DENTRO do painel
+        # continua a rolar a lista, como deve ser.
+        #
+        # `<MouseWheel>` cobre Windows e macOS; `<Button-4>` e
+        # `<Button-5>` são o equivalente em Linux.
+        for evento_roda in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            painel.bind(evento_roda, self._ao_rodar, add=True)
+
+        painel.after(10, self._capturar)
+
+    def _capturar(self):
+        painel = self._painel
+
+        if painel is None:
+            return
+
+        try:
+            painel.grab_set()
+        except tkinter.TclError:
+            return
+
+        # Alguém dentro do painel tem de ficar com o foco do teclado,
+        # senão o Escape não chega cá: a caixa de pesquisa quando
+        # existe, o próprio painel quando não existe.
+        if self._campo_pesquisa is not None:
+            self._campo_pesquisa.focus_set()
+        else:
+            painel.focus_set()
+
+    def _colocar_painel(self, painel):
+        """Coloca o painel por baixo do campo, ou por cima se não
+        houver espaço até ao fundo do ecrã.
+
+        `tkinter.Toplevel.geometry` e não `painel.geometry`: o
+        `CTkToplevel` volta a multiplicar o valor pela escala da
+        janela, e estes números já vêm em pixéis reais
+        (`winfo_rootx`, `winfo_width`). É a lição de geometria de
+        16/09/2026 — com o `.geometry()` do CustomTkinter, o painel
+        crescia a cada abertura.
+        """
+        painel.update_idletasks()
+
+        largura = max(self.winfo_width(), _LARGURA_MINIMA_PAINEL)
+        altura = painel.winfo_reqheight()
+
+        x = self.winfo_rootx()
+        abaixo = self.winfo_rooty() + self.winfo_height() + 2
+
+        if abaixo + altura > painel.winfo_screenheight():
+            y = max(self.winfo_rooty() - altura - 2, 0)
+        else:
+            y = abaixo
+
+        tkinter.Toplevel.geometry(painel, f"{largura}x{altura}+{x}+{y}")
+        painel.lift()
+
+    # -- conteúdo ----------------------------------------------------
+
+    def _termo(self):
+        if self._campo_pesquisa is None:
+            return ""
+
+        return self._campo_pesquisa.get().strip().lower()
+
+    def _desenhar_opcoes(self):
+        """Desenha as opções que passam o filtro.
+
+        Lê `self._values` e não lhe toca — ver a nota sobre o
+        `.index()` na docstring da classe.
+        """
+        if self._lista_painel is None:
+            return
+
+        for widget in self._lista_painel.winfo_children():
+            widget.destroy()
+
+        termo = self._termo()
+        correspondem = [v for v in self._values if termo in v.lower()]
+        desenhadas = correspondem[:_MAX_OPCOES_DESENHADAS]
+
+        for valor in desenhadas:
+            escolhido = valor == self._current_value
+
+            ctk.CTkButton(
+                self._lista_painel,
+                text=valor,
+                anchor="w",
+                height=_ALTURA_OPCAO - 4,
+                corner_radius=tema.RAIO_BOTAO,
+                fg_color=(tema.ID_CHIP_FUNDO if escolhido else "transparent"),
+                text_color=tema.COR_TEXTO,
+                hover_color=tema.COR_BORDA,
+                font=ctk.CTkFont(size=12),
+                command=lambda v=valor: self._escolher(v),
+            ).pack(fill="x", pady=1)
+
+        if not correspondem:
+            ctk.CTkLabel(
+                self._lista_painel,
+                text="Sem resultados.",
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=12),
+            ).pack(pady=14)
+
+        self._atualizar_rodape(len(correspondem), len(desenhadas))
+
+    def _atualizar_rodape(self, encontradas, desenhadas):
+        if self._rodape_painel is None:
+            return
+
+        total = len(self._values)
+
+        if desenhadas < encontradas:
+            texto = (
+                f"a mostrar {desenhadas} de {encontradas} — "
+                f"filtra para ver o resto"
+            )
+        elif self._termo():
+            texto = f"{encontradas} de {total}"
+        else:
+            texto = f"{total} registos"
+
+        self._rodape_painel.configure(text=texto)
+
+    def _ao_filtrar(self, _evento=None):
+        self._desenhar_opcoes()
+
+    # -- fecho -------------------------------------------------------
+
+    def _ao_clicar(self, evento):
+        """Fecha o painel quando se clica fora dele.
+
+        LIÇÃO (21/09/2026, bug apanhado pelo aluno — o painel abria e
+        não havia maneira de sair sem escolher uma opção): com a
+        captura de eventos no painel, um clique em qualquer outro
+        sítio da aplicação É entregue ao painel, mas chega
+        disfarçado. O `evento.widget` aponta para o próprio painel (a
+        janela que tem a captura) e não para o sítio onde se clicou,
+        por isso perguntar "este widget pertence ao painel?"
+        respondia sempre que sim, e o painel nunca fechava. O
+        `evento.x`/`evento.y` também não servem: vêm relativos a essa
+        janela e caem dentro dos limites dela.
+
+        O que não mente são as coordenadas absolutas do ecrã
+        (`x_root`/`y_root`). Comparadas com a posição e o tamanho
+        reais do painel, dizem sem ambiguidade se o clique caiu cá
+        dentro ou lá fora, independentemente de a quem o evento foi
+        entregue.
+        """
+        if self._fora_do_painel(evento):
+            self._fechar_painel()
+
+    def _ao_rodar(self, evento):
+        """Fecha o painel se a roda do rato for usada fora dele.
+
+        Mesma pergunta do `_ao_clicar`, mesma resposta: o painel é
+        uma janela independente e não acompanha o formulário quando
+        este rola. Rodar dentro do painel rola a lista e não fecha
+        nada.
+        """
+        if self._fora_do_painel(evento):
+            self._fechar_painel()
+
+    def _fora_do_painel(self, evento):
+        """Diz se um evento de rato caiu fora do painel."""
+        painel = self._painel
+
+        if painel is None:
+            return False
+
+        esquerda = painel.winfo_rootx()
+        topo = painel.winfo_rooty()
+
+        return (
+            evento.x_root < esquerda
+            or evento.y_root < topo
+            or evento.x_root >= esquerda + painel.winfo_width()
+            or evento.y_root >= topo + painel.winfo_height()
+        )
+
+    def _escolher(self, valor):
+        self._fechar_painel()
+        # O mesmo caminho que o menu nativo usa: atualiza valor,
+        # etiqueta, variável ligada e chama o `command`.
+        self._dropdown_callback(valor)
+
+    def _fechar_painel(self, _evento=None):
+        painel = self._painel
+
+        if painel is None:
+            return
+
+        self._painel = None
+        self._campo_pesquisa = None
+        self._lista_painel = None
+        self._rodape_painel = None
+
+        try:
+            painel.grab_release()
+        except tkinter.TclError:
+            pass
+
+        painel.destroy()
+
+        # Devolver a captura a quem a tinha. O Tk não a repõe
+        # sozinho quando a janela que a tinha desaparece: sem isto, o
+        # modal de onde o seletor foi aberto ficava sem captura e,
+        # pior, a janela principal voltava a aceitar cliques por trás
+        # de um modal que era suposto bloqueá-la.
+        if self._grab_anterior is not None:
+            try:
+                self._grab_anterior.grab_set()
+            except tkinter.TclError:
+                pass
+
+        self._grab_anterior = None
+
+    def destroy(self):
+        """Fecha o painel se o próprio seletor for destruído.
+
+        Sem isto, fechar o modal com o painel aberto deixava uma
+        janela sem dono no ecrã e a captura de eventos por devolver.
+        """
+        self._fechar_painel()
+        super().destroy()
+
+# =====================================================================
+# BLOCO DE TERMO LEGAL (v1.6.0)
+#
+# O quadro que mostra um documento legal e recolhe a confirmação de
+# quem o leu. Vive aqui, e não em cada ecrã, porque aparece em dois
+# sítios diferentes — na atribuição da credencial e no arranque de
+# quem ainda não aceitou a versão em vigor — e vai aparecer num
+# terceiro quando a ficha do cliente passar a registar a informação
+# prestada ao hóspede.
+#
+# Não sabe nada de base de dados nem de regras: recebe o texto já
+# resolvido pelo `termos.verificar` e devolve, quando perguntado, se
+# a caixa está marcada. Quem decide o que fazer com isso é o ecrã.
+#
+# As duas cores do aviso não estão no `tema.py` porque são as
+# primeiras do género no sistema. Se aparecer uma segunda utilização,
+# mudam para lá — não vale a pena inventar já uma entrada no tema
+# para um sítio só.
+# =====================================================================
+
+
+_ALTURA_TEXTO_TERMO = 150
+
+
+class BlocoTermo(ctk.CTkFrame):
+    """Mostra um documento legal e a caixa de confirmação.
+
+    Parâmetros:
+
+      titulo          - o cabeçalho pequeno em maiúsculas
+      texto           - o corpo do documento (string)
+      versao          - a versão em vigor, mostrada no rodapé
+      rotulo          - o que fica ao lado da caixa de marcar
+      versao_anterior - a versão que a pessoa já tinha aceitado,
+                        ou None se nunca aceitou nenhuma
+      data_anterior   - a data dessa aceitação, ou None
+      aviso           - texto da faixa âmbar no topo; None esconde-a
+      ao_mudar        - chamado sem argumentos sempre que a caixa
+                        muda de estado
+
+    A caixa de texto é um `CTkTextbox` desativado: rola, seleciona-se
+    para copiar, mas não se edita. Um `CTkLabel` com o texto todo não
+    servia — crescia sem limite e empurrava os botões para fora do
+    ecrã num documento comprido.
+    """
+
+    def __init__(
+        self,
+        master,
+        titulo,
+        texto,
+        versao,
+        rotulo,
+        versao_anterior=None,
+        data_anterior=None,
+        aviso=None,
+        ao_mudar=None,
+        **kwargs,
+    ):
+        super().__init__(
+            master,
+            fg_color=tema.LINHA_ALTERNADA,
+            corner_radius=8,
+            **kwargs,
+        )
+
+        self._ao_mudar = ao_mudar
+        self.versao = versao
+
+        if aviso:
+            faixa = ctk.CTkLabel(
+                self,
+                text=aviso,
+                text_color=tema.TEXTO_AVISO,
+                fg_color=tema.AMARELO_AVISO,
+                corner_radius=6,
+                font=ctk.CTkFont(size=11),
+                anchor="w",
+                justify="left",
+                wraplength=380,
+            )
+            faixa.pack(fill="x", padx=12, pady=(12, 0))
+
+        ctk.CTkLabel(
+            self,
+            text=titulo.upper(),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            anchor="w",
+        ).pack(fill="x", padx=12, pady=(12, 4))
+
+        self.caixa_texto = ctk.CTkTextbox(
+            self,
+            height=_ALTURA_TEXTO_TERMO,
+            corner_radius=6,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            fg_color=tema.COR_FUNDO,
+            font=ctk.CTkFont(size=12),
+            wrap="word",
+        )
+        self.caixa_texto.pack(fill="x", padx=12)
+        self.caixa_texto.insert("1.0", texto)
+        self.caixa_texto.configure(state="disabled")
+
+        self.aceite = ctk.BooleanVar(value=False)
+
+        ctk.CTkCheckBox(
+            self,
+            text=rotulo,
+            variable=self.aceite,
+            command=self._mudou,
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=12),
+            checkbox_width=18,
+            checkbox_height=18,
+            corner_radius=4,
+            fg_color=tema.AZUL_PRINCIPAL,
+            hover_color=tema.AZUL_CLARO,
+        ).pack(anchor="w", padx=12, pady=(10, 0))
+
+        ctk.CTkLabel(
+            self,
+            text=self._rodape(versao, versao_anterior, data_anterior),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+            anchor="w",
+        ).pack(fill="x", padx=12, pady=(6, 12))
+
+    @staticmethod
+    def _rodape(versao, versao_anterior, data_anterior):
+        """A linha pequena do fundo.
+
+        Quem nunca aceitou vê só a versão em vigor. Quem já aceitou
+        uma anterior vê as duas, para perceber porque é que o ecrã
+        lhe apareceu outra vez.
+        """
+        if not versao_anterior:
+            return f"Versão {versao}"
+
+        data = str(data_anterior)[:10] if data_anterior else "—"
+
+        return (
+            f"Aceitou a versão {versao_anterior} em {data} · "
+            f"em vigor agora: {versao}"
+        )
+
+    def _mudou(self):
+        if self._ao_mudar is not None:
+            self._ao_mudar()
+
+    def esta_aceite(self):
+        """True se a caixa estiver marcada."""
+        return bool(self.aceite.get())
+    
 # =====================================================================
 # Helpers visuais genéricos — partilhados por todos os ecrãs
 #
@@ -750,6 +1771,11 @@ class Tabela(ctk.CTkFrame):
 #   removida — passou a chamar `componentes.truncar_texto`, mantendo
 #   o parâmetro `fonte` (a fonte é criada uma vez por recarregamento,
 #   não a cada linha).
+#
+# NOTA 21/09/2026: `pintar_fundo` também é um helper público, mas
+# vive lá em cima, logo antes da `Tabela` — está tão colado ao
+# funcionamento da tabela que separá-lo daqui só obrigava a saltar o
+# ficheiro de uma ponta à outra para perceber o tom alternado.
 # =====================================================================
 
 
@@ -859,3 +1885,234 @@ def formatar_valor(valor):
     texto = texto.replace(",", "X").replace(".", ",").replace("X", ".")
 
     return f"{texto} €"
+
+def cancelar_agendamentos(janela):
+    """Cancela os `after(...)` pendentes antes de destruir a janela.
+
+    <<< NOVO v1.6.0 >>>
+
+    Resolve as mensagens que apareciam no terminal ao fazer logoff:
+
+        invalid command name "...update"
+        invalid command name "...check_dpi_scaling"
+        bgerror failed to handle background error
+
+    Quem as provoca é o próprio CustomTkinter. O `ScalingTracker`
+    reagenda-se sozinho de 100 em 100 ms (`scaling_tracker.py`,
+    `add_widget` e `check_dpi_scaling`), e escolhe para isso uma
+    janela qualquer das que estão registadas. Quando essa janela é
+    destruída, o agendamento que já estava marcado dispara contra um
+    interpretador Tcl que já não existe — e o Tcl queixa-se. A
+    segunda mensagem é o próprio tratador de erros a falhar, pela
+    mesma razão.
+
+    Não é possível evitar isto do lado de fora sem cancelar os
+    agendamentos primeiro: quem os criou foi a biblioteca, na janela
+    que estamos prestes a fechar.
+
+    O `after info` é por interpretador, não por widget, por isso pode
+    ser chamado com qualquer widget da janela — o ecrã, o frame, a
+    própria `Aplicacao`. Devolve quantos cancelou, o que dá jeito
+    para confirmar em depuração.
+
+    Chamar isto só faz sentido imediatamente antes de um `destroy()`
+    definitivo. Num sítio qualquer, matava temporizadores que o
+    sistema ainda precisa.
+    """
+    try:
+        pendentes = janela.tk.eval("after info").split()
+    except tkinter.TclError:
+        return 0
+
+    for identificador in pendentes:
+        try:
+            janela.after_cancel(identificador)
+        except (tkinter.TclError, ValueError):
+            pass
+
+    return len(pendentes)
+
+
+# =====================================================================
+# VÍNCULOS POR ID (27/09/2026, v1.6.0)
+#
+# Padrão nascido em Propriedades (clicar no ID da propriedade abre as
+# unidades dela) e alargado ao resto do sistema: o crachá de ID de
+# uma linha é um atalho para o que está ligado a esse registo.
+# `ChipId` é o crachá; `ListaVinculadaModal` e `FichaModal` são as
+# duas formas de mostrar o que está do outro lado (uma lista de
+# registos ligados, ou os campos de um registo só) — só leitura.
+# =====================================================================
+
+
+def formatar_data(valor):
+    """Data em dd/mm/aaaa, ou "—" quando não há data."""
+    return valor.strftime("%d/%m/%Y") if valor else "—"
+
+
+class ChipId(ctk.CTkLabel):
+    """Crachá de ID de uma linha de tabela, opcionalmente clicável.
+
+    Com `ao_clicar` (função sem argumentos) fica com cursor de mão e
+    reage ao clique simples; sem ele é só o crachá, com o aspeto de
+    sempre. `inativo` só muda a cor do texto — quem não quer o
+    clique num registo inativo passa `ao_clicar=None`.
+
+    `cor_fundo` só existe para as unidades inativas, que usam o
+    fundo cinzento em vez do azul-claro.
+    """
+
+    def __init__(
+        self,
+        master,
+        texto,
+        ao_clicar=None,
+        inativo=False,
+        largura=70,
+        tamanho_fonte=11,
+        cor_fundo=None,
+    ):
+        clicavel = ao_clicar is not None
+        super().__init__(
+            master,
+            text=texto,
+            text_color=(
+                tema.TEXTO_INDISPONIVEL if inativo else tema.AZUL_PRINCIPAL
+            ),
+            fg_color=cor_fundo if cor_fundo else tema.ID_CHIP_FUNDO,
+            corner_radius=6,
+            font=ctk.CTkFont(size=tamanho_fonte, weight="bold"),
+            width=largura,
+            anchor="w",
+            cursor="hand2" if clicavel else "",
+        )
+        self.clicavel = clicavel
+        if ao_clicar is not None:
+            self.bind("<Button-1>", lambda evento, f=ao_clicar: f())
+
+
+class _ModalVinculo(ctk.CTkToplevel):
+    """Base das duas janelas de vínculo: título, subtítulo, corpo e
+    botão "Fechar". As subclasses só enchem `self.corpo`.
+    """
+
+    def __init__(self, master, titulo, subtitulo, largura, altura):
+        super().__init__(master)
+        self.title(titulo)
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(master.winfo_toplevel())
+
+        ctk.CTkLabel(
+            self,
+            text=subtitulo.upper(),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11, weight="bold"),
+        ).pack(anchor="w", padx=20, pady=(18, 0))
+        ctk.CTkLabel(
+            self,
+            text=titulo,
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=16, weight="bold"),
+        ).pack(anchor="w", padx=20, pady=(0, 10))
+
+        ctk.CTkButton(
+            self,
+            text="Fechar",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="bottom", anchor="e", padx=20, pady=(8, 16))
+
+        self.corpo = ctk.CTkFrame(self, fg_color="transparent")
+        self.corpo.pack(fill="both", expand=True, padx=20)
+
+        centrar_sobre(self, master.winfo_toplevel(), largura, altura)
+        colocar_no_topo(self)
+
+
+class ListaVinculadaModal(_ModalVinculo):
+    """Lista (só leitura) dos registos ligados a um ID — ex.: os
+    contratos de um cliente, os movimentos de um produto.
+
+    'colunas': tuplo de `Coluna`, a primeira é sempre o ID.
+    'linhas': lista de tuplos de texto, um valor por coluna. O
+    primeiro valor é desenhado como `ChipId`, os outros como texto.
+    """
+
+    def __init__(
+        self,
+        master,
+        titulo,
+        subtitulo,
+        colunas,
+        linhas,
+        mensagem_vazia="Sem registos ligados.",
+        largura=760,
+        altura=480,
+    ):
+        super().__init__(master, titulo, subtitulo, largura, altura)
+
+        self.tabela = Tabela(
+            self.corpo,
+            colunas=colunas,
+            altura_linha=40,
+            mensagem_vazia=mensagem_vazia,
+            tom_alternado=True,
+        )
+        self.tabela.pack(fill="both", expand=True)
+
+        for valores in linhas:
+            linha = self.tabela.nova_linha()
+            self.tabela.colocar(
+                linha,
+                0,
+                ChipId(linha, valores[0], largura=colunas[0].minimo - 16),
+                esticar="w",
+            )
+            for indice, valor in enumerate(valores[1:], start=1):
+                self.tabela.colocar(
+                    linha,
+                    indice,
+                    ctk.CTkLabel(
+                        linha,
+                        text=valor,
+                        text_color=tema.COR_TEXTO,
+                        font=ctk.CTkFont(size=12),
+                        anchor="w",
+                    ),
+                )
+
+        if self.tabela.vazia:
+            self.tabela.mostrar_vazio()
+
+
+class FichaModal(_ModalVinculo):
+    """Ficha (só leitura) de UM registo: pares rótulo → valor."""
+
+    def __init__(self, master, titulo, subtitulo, pares, largura=440):
+        altura = 180 + 36 * len(pares)
+        super().__init__(master, titulo, subtitulo, largura, altura)
+
+        self.corpo.grid_columnconfigure(1, weight=1)
+        for fila, (rotulo, valor) in enumerate(pares):
+            ctk.CTkLabel(
+                self.corpo,
+                text=rotulo,
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=12),
+                anchor="w",
+            ).grid(row=fila, column=0, sticky="w", pady=3, padx=(0, 16))
+            ctk.CTkLabel(
+                self.corpo,
+                text=valor,
+                text_color=tema.COR_TEXTO,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                anchor="w",
+                wraplength=largura - 200,
+                justify="left",
+            ).grid(row=fila, column=1, sticky="w", pady=3)

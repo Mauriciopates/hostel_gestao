@@ -50,16 +50,30 @@ Os identificadores continuam a verificar-se só pelo prefixo (ex.:
 "PRD-"), nunca pelo número exato — mesma convenção dos outros
 ficheiros de teste já migrados, apesar de os contadores serem agora
 mesmo reiniciados a cada teste (ver `apoio_bd.py`).
+
+NOTA sobre comparações de dicionário inteiro (v1.6.0): `criar_produto`
+devolve um dicionário com menos chaves que `procurar_produto` /
+`listar_produtos` — o `repositorio` devolve também
+`desativado_por_id` e `data_desativacao`, que o `criar_produto` não
+constrói. Comparar o dicionário todo rebenta. A convenção do projeto
+(ver teste_unidades.py, teste_clientes.py, teste_contratos.py) é
+comparar por ID ou pelo campo específico, nunca o dicionário todo.
+
+NOTA sobre `responsaveis.desativar` (v1.6.0): `desativar` ganhou o
+parâmetro obrigatório `autor` na v1.5.0 (só Master desativa). O
+helper `_responsavel_inativo` cria um Master de teste e passa-o como
+autor.
 """
 
 import sys
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest
 
 import estoque
 import repositorio
@@ -70,14 +84,26 @@ def _responsavel_ativo(nome="Ana Ferreira"):
     return responsaveis.criar(nome)
 
 
+def _admin_ativo(nome="Carla Admin"):
+    """Admin ativo. Desde 23/09/2026 só Master/Admin aprovam, rejeitam
+    e aceitam devoluções (regra movida da GUI para o módulo) — é quem
+    assina essas operações nos testes."""
+    return responsaveis.criar(nome, tipo_utilizador="Admin")
+
+
 def _responsavel_inativo(nome="Rui Nogueira"):
     """`desativar` devolve um dicionário novo (SELECT fresco), já não
     o MESMO objeto de `criar` — ao contrário da versão em memória, em
     que mutar o registo desativado também mutava esta referência.
     Por isso devolve-se o resultado de `desativar`, nunca `r`.
+
+    Desde a v1.5.0, `responsaveis.desativar` exige `autor` — só um
+    Master pode desativar. Cria-se um Master de teste e passa-se
+    como autor.
     """
     r = responsaveis.criar(nome)
-    return responsaveis.desativar(r["id"])
+    master = responsaveis.criar("Master de Teste", tipo_utilizador="Master")
+    return responsaveis.desativar(r["id"], autor=master)
 
 
 def _produto_ativo(nome="Toalhas", unidade_medida="unidade"):
@@ -161,13 +187,21 @@ def _item_da_devolucao(devolucao_id, produto_id):
 class TestCriarProduto(BaseMySQLTest):
 
     def test_cria_produto_valido(self):
+        """Comparação por ID — `criar_produto` e `procurar_produto`
+        devolvem dicionários com chaves diferentes (o segundo traz
+        `desativado_por_id`/`data_desativacao`). O que interessa é
+        que é a MESMA linha na base de dados.
+        """
         p = estoque.criar_produto("Toalhas", "unidade", 5)
         self.assertTrue(p["id"].startswith("PRD-"))
         self.assertEqual(p["nome"], "Toalhas")
         self.assertEqual(p["unidade_medida"], "unidade")
         self.assertEqual(p["stock_minimo"], 5)
         self.assertTrue(p["ativo"])
-        self.assertEqual(p, estoque.procurar_produto(p["id"]))
+
+        encontrado = estoque.procurar_produto(p["id"])
+        self.assertIsNotNone(encontrado)
+        self.assertEqual(encontrado["id"], p["id"])  # type: ignore
 
     def test_stock_minimo_omisso_fica_zero(self):
         p = estoque.criar_produto("Toalhas", "unidade")
@@ -206,8 +240,12 @@ class TestProcurarProduto(BaseMySQLTest):
         self.produto = _produto_ativo()
 
     def test_encontra_produto_existente(self):
+        """Comparação por ID — ver a nota no topo do ficheiro
+        sobre as diferentes formas dos dicionários.
+        """
         encontrado = estoque.procurar_produto(self.produto["id"])
-        self.assertEqual(encontrado, self.produto)
+        self.assertIsNotNone(encontrado)
+        self.assertEqual(encontrado["id"], self.produto["id"])  # type: ignore
 
     def test_devolve_none_para_id_inexistente(self):
         self.assertIsNone(estoque.procurar_produto("PRD-999"))
@@ -221,14 +259,19 @@ class TestListarProdutos(BaseMySQLTest):
         self.inativo = _produto_inativo("Sabonetes")
 
     def test_lista_so_ativos_por_omissao(self):
+        """Comparação por ID — `criar_produto` e `listar_produtos`
+        devolvem dicionários com chaves diferentes.
+        """
         resultado = estoque.listar_produtos()
-        self.assertIn(self.ativo, resultado)
-        self.assertNotIn(self.inativo, resultado)
+        ids = [p["id"] for p in resultado]
+        self.assertIn(self.ativo["id"], ids)
+        self.assertNotIn(self.inativo["id"], ids)
 
     def test_lista_todos_com_incluir_inativos(self):
         resultado = estoque.listar_produtos(incluir_inativos=True)
-        self.assertIn(self.ativo, resultado)
-        self.assertIn(self.inativo, resultado)
+        ids = [p["id"] for p in resultado]
+        self.assertIn(self.ativo["id"], ids)
+        self.assertIn(self.inativo["id"], ids)
 
     def test_devolve_lista_nova(self):
         resultado = estoque.listar_produtos()
@@ -419,9 +462,7 @@ class TestRegistarMovimento(BaseMySQLTest):
 
     def test_data_none_e_erro(self):
         with self.assertRaises(ValueError):
-            estoque.registar_movimento(
-                self.produto["id"], "entrada", 10, None
-            )
+            estoque.registar_movimento(self.produto["id"], "entrada", 10, None)
 
     def test_responsavel_id_vazio_e_aceite(self):
         m = estoque.registar_movimento(
@@ -476,9 +517,7 @@ class TestSaldoProduto(BaseMySQLTest):
         estoque.registar_movimento(
             self.produto["id"], "entrada", 20, self.hoje
         )
-        estoque.registar_movimento(
-            self.produto["id"], "saida", 5, self.hoje
-        )
+        estoque.registar_movimento(self.produto["id"], "saida", 5, self.hoje)
         self.assertEqual(estoque.saldo_produto(self.produto["id"]), 15)
 
     def test_saldo_com_ajuste_positivo_e_negativo(self):
@@ -550,7 +589,14 @@ class TesteAlertasStock(BaseMySQLTest):
             self.p4["id"], "entrada", 1, date(2026, 9, 1)
         )
 
-        estoque.desativar_produto(self.p4["id"])
+        # `desativar_produto` recusa sem forcar=True quando o produto
+        # tem dependências (aqui, o movimento de entrada acima).
+        responsavel = responsaveis.criar("Gestor de Teste")
+        estoque.desativar_produto(
+            self.p4["id"],
+            forcar=True,
+            responsavel_id=responsavel["id"],
+        )
 
     def test_abaixo_do_minimo_deteta(self):
         self.assertTrue(estoque.abaixo_do_minimo(self.p1["id"]))
@@ -593,9 +639,7 @@ class TesteAlertasStock(BaseMySQLTest):
         self.assertEqual(alertas[0]["em_falta"], 7)
 
     def test_listagem_ordena_pelo_que_falta_mais(self):
-        estoque.registar_movimento(
-            self.p2["id"], "saida", 4, date(2026, 9, 2)
-        )
+        estoque.registar_movimento(self.p2["id"], "saida", 4, date(2026, 9, 2))
         alertas = estoque.listar_alertas_stock()
         ids = [a["produto"]["id"] for a in alertas]
         self.assertEqual(ids, [self.p1["id"], self.p2["id"]])
@@ -808,9 +852,7 @@ class TestListarItensRequisicao(BaseMySQLTest):
         self.assertEqual(itens[0]["produto_id"], self.produto_a["id"])
 
     def test_procurar_encontra_item_existente(self):
-        item = _item_da_requisicao(
-            self.requisicao["id"], self.produto_a["id"]
-        )
+        item = _item_da_requisicao(self.requisicao["id"], self.produto_a["id"])
         if item is None:
             self.fail("Item de requisição não encontrado.")
         encontrado = estoque.procurar_item_requisicao(item["id"])
@@ -831,6 +873,7 @@ class TestProcurarListarRequisicao(BaseMySQLTest):
         super().setUp()
         self.resp_a = _responsavel_ativo("Ana Ferreira")
         self.resp_b = _responsavel_ativo("Bruno Alves")
+        self.admin = _admin_ativo("Carla Admin")
         self.produto_a = _produto_ativo("Toalhas")
         self.produto_b = _produto_ativo("Sabonetes")
         self.hoje = date.today()
@@ -861,7 +904,7 @@ class TestProcurarListarRequisicao(BaseMySQLTest):
     def test_listar_filtra_por_estado(self):
         estoque.rejeitar_requisicao(
             self.req_b["id"],
-            self.resp_a["id"],
+            self.admin["id"],
             "Sem stock",
         )
         pendentes = estoque.listar_requisicoes(estado="pendente")
@@ -874,9 +917,7 @@ class TestProcurarListarRequisicao(BaseMySQLTest):
         self.assertEqual(resultado, [self.req_a])
 
     def test_listar_filtra_por_produto(self):
-        resultado = estoque.listar_requisicoes(
-            produto_id=self.produto_b["id"]
-        )
+        resultado = estoque.listar_requisicoes(produto_id=self.produto_b["id"])
         self.assertEqual(resultado, [self.req_b])
 
     def test_listar_devolve_lista_nova(self):
@@ -890,7 +931,7 @@ class TestEnviarRequisicao(BaseMySQLTest):
     def setUp(self):
         super().setUp()
         self.responsavel = _responsavel_ativo()
-        self.admin = _responsavel_ativo("Bruno Alves")
+        self.admin = _admin_ativo("Bruno Alves")
         self.produto_a = _produto_ativo("Toalhas")
         self.produto_b = _produto_ativo("Sabonetes")
         self.hoje = date.today()
@@ -1060,7 +1101,7 @@ class TestRejeitarRequisicao(BaseMySQLTest):
     def setUp(self):
         super().setUp()
         self.responsavel = _responsavel_ativo()
-        self.admin = _responsavel_ativo("Bruno Alves")
+        self.admin = _admin_ativo("Bruno Alves")
         self.produto = _produto_ativo()
         self.hoje = date.today()
         self.requisicao = _requisicao_pendente(
@@ -1124,6 +1165,7 @@ class TestConfirmarRececaoRequisicao(BaseMySQLTest):
         super().setUp()
         self.responsavel = _responsavel_ativo("Ana Ferreira")
         self.outro = _responsavel_ativo("Bruno Alves")
+        self.admin = _admin_ativo("Carla Admin")
         self.produto = _produto_ativo()
         self.hoje = date.today()
         self.requisicao = _requisicao_pendente(
@@ -1137,7 +1179,7 @@ class TestConfirmarRececaoRequisicao(BaseMySQLTest):
         )
         estoque.enviar_requisicao(
             self.requisicao["id"],
-            self.outro["id"],
+            self.admin["id"],
             self.hoje,
         )
 
@@ -1199,6 +1241,7 @@ class TestReportarDevolucao(BaseMySQLTest):
         super().setUp()
         self.responsavel = _responsavel_ativo("Ana Ferreira")
         self.outro = _responsavel_ativo("Bruno Alves")
+        self.admin = _admin_ativo("Carla Admin")
         self.produto_a = _produto_ativo("Toalhas")
         self.produto_b = _produto_ativo("Sabonetes")
         self.hoje = date.today()
@@ -1224,7 +1267,7 @@ class TestReportarDevolucao(BaseMySQLTest):
         )
         estoque.enviar_requisicao(
             self.requisicao["id"],
-            self.outro["id"],
+            self.admin["id"],
             self.hoje,
         )
         estoque.confirmar_rececao_requisicao(
@@ -1416,6 +1459,7 @@ class TestListarItensDevolucao(BaseMySQLTest):
         super().setUp()
         self.responsavel = _responsavel_ativo()
         self.outro = _responsavel_ativo("Bruno Alves")
+        self.admin = _admin_ativo("Carla Admin")
         self.produto_a = _produto_ativo("Toalhas")
         self.produto_b = _produto_ativo("Sabonetes")
         self.hoje = date.today()
@@ -1441,7 +1485,7 @@ class TestListarItensDevolucao(BaseMySQLTest):
         )
         estoque.enviar_requisicao(
             self.requisicao["id"],
-            self.outro["id"],
+            self.admin["id"],
             self.hoje,
         )
         estoque.confirmar_rececao_requisicao(
@@ -1466,16 +1510,12 @@ class TestListarItensDevolucao(BaseMySQLTest):
         self.assertEqual(len(itens), 2)
 
     def test_filtra_por_produto(self):
-        itens = estoque.listar_itens_devolucao(
-            produto_id=self.produto_a["id"]
-        )
+        itens = estoque.listar_itens_devolucao(produto_id=self.produto_a["id"])
         self.assertEqual(len(itens), 1)
         self.assertEqual(itens[0]["produto_id"], self.produto_a["id"])
 
     def test_procurar_encontra_item_existente(self):
-        item = _item_da_devolucao(
-            self.devolucao["id"], self.produto_a["id"]
-        )
+        item = _item_da_devolucao(self.devolucao["id"], self.produto_a["id"])
         if item is None:
             self.fail("Item de devolução não encontrado.")
         encontrado = estoque.procurar_item_devolucao(item["id"])
@@ -1496,6 +1536,7 @@ class TestProcurarListarDevolucao(BaseMySQLTest):
         super().setUp()
         self.resp_a = _responsavel_ativo("Ana Ferreira")
         self.resp_b = _responsavel_ativo("Bruno Alves")
+        self.admin = _admin_ativo("Carla Admin")
         self.produto = _produto_ativo()
         self.hoje = date.today()
         self.req_a = _requisicao_pendente(
@@ -1515,12 +1556,12 @@ class TestProcurarListarDevolucao(BaseMySQLTest):
         )
         estoque.enviar_requisicao(
             self.req_a["id"],
-            self.resp_b["id"],
+            self.admin["id"],
             self.hoje,
         )
         estoque.enviar_requisicao(
             self.req_b["id"],
-            self.resp_a["id"],
+            self.admin["id"],
             self.hoje,
         )
         estoque.confirmar_rececao_requisicao(
@@ -1562,22 +1603,18 @@ class TestProcurarListarDevolucao(BaseMySQLTest):
     def test_listar_filtra_por_estado(self):
         estoque.fechar_devolucao(
             self.dev_a["id"],
-            self.resp_b["id"],
+            self.admin["id"],
             self.hoje,
         )
         pendentes = estoque.listar_devolucoes(estado="pendente")
         self.assertEqual(pendentes, [self.dev_b])
 
     def test_listar_filtra_por_requisicao(self):
-        resultado = estoque.listar_devolucoes(
-            requisicao_id=self.req_b["id"]
-        )
+        resultado = estoque.listar_devolucoes(requisicao_id=self.req_b["id"])
         self.assertEqual(resultado, [self.dev_b])
 
     def test_listar_filtra_por_responsavel(self):
-        resultado = estoque.listar_devolucoes(
-            responsavel_id=self.resp_a["id"]
-        )
+        resultado = estoque.listar_devolucoes(responsavel_id=self.resp_a["id"])
         self.assertEqual(resultado, [self.dev_a])
 
     def test_listar_devolve_lista_nova(self):
@@ -1591,7 +1628,7 @@ class TestFecharDevolucao(BaseMySQLTest):
     def setUp(self):
         super().setUp()
         self.responsavel = _responsavel_ativo("Ana Ferreira")
-        self.admin = _responsavel_ativo("Bruno Alves")
+        self.admin = _admin_ativo("Bruno Alves")
         self.produto_a = _produto_ativo("Toalhas")
         self.produto_b = _produto_ativo("Sabonetes")
         self.hoje = date.today()
@@ -1692,6 +1729,190 @@ class TestFecharDevolucao(BaseMySQLTest):
                 self.admin["id"],
                 None,
             )
+
+
+# =====================================================================
+# Perfis nas operações de armazém (regras movidas da GUI, 23/09/2026)
+# =====================================================================
+
+
+class TestePerfisOperacoesArmazem(BaseMySQLTest):
+    """Aprovar/enviar, rejeitar e aceitar devolução: só Master ou Admin.
+
+    Até 23/09/2026 estas regras viviam só na GUI (o hub escondia o
+    cartão a quem é Staff). Cada recusa tem de deixar tudo como estava
+    — estado e stock — e ficar registada no log.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.staff = _responsavel_ativo("Ana Ferreira")
+        self.admin = _admin_ativo("Carla Admin")
+        self.master = responsaveis.criar(
+            "Mário Master", tipo_utilizador="Master"
+        )
+        self.produto = _produto_ativo("Toalhas")
+        self.hoje = date.today()
+        estoque.registar_movimento(
+            self.produto["id"], "entrada", 30, self.hoje
+        )
+        self.requisicao = _requisicao_pendente(
+            self.staff["id"], self.produto["id"], 5, self.hoje
+        )
+
+    # -- enviar -------------------------------------------------------
+
+    def test_staff_nao_pode_enviar(self):
+        with self.assertRaises(ValueError):
+            estoque.enviar_requisicao(
+                self.requisicao["id"], self.staff["id"], self.hoje
+            )
+
+    def test_staff_recusado_deixa_requisicao_e_stock_como_estavam(self):
+        with self.assertRaises(ValueError):
+            estoque.enviar_requisicao(
+                self.requisicao["id"], self.staff["id"], self.hoje
+            )
+        requisicao = estoque.procurar_requisicao(self.requisicao["id"])
+        self.assertEqual(requisicao["estado"], "pendente")
+        self.assertEqual(estoque.saldo_produto(self.produto["id"]), 30)
+
+    def test_recusa_de_envio_fica_registada_no_log(self):
+        with self.assertLogs("estoque", level="WARNING") as registo:
+            with self.assertRaises(ValueError):
+                estoque.enviar_requisicao(
+                    self.requisicao["id"], self.staff["id"], self.hoje
+                )
+        self.assertIn("Aprovação de requisição recusada", registo.output[0])
+        self.assertIn(self.staff["id"], registo.output[0])
+
+    def test_admin_pode_enviar(self):
+        r = estoque.enviar_requisicao(
+            self.requisicao["id"], self.admin["id"], self.hoje
+        )
+        self.assertEqual(r["estado"], "enviada")
+
+    def test_master_pode_enviar(self):
+        r = estoque.enviar_requisicao(
+            self.requisicao["id"], self.master["id"], self.hoje
+        )
+        self.assertEqual(r["estado"], "enviada")
+
+    # -- rejeitar -----------------------------------------------------
+
+    def test_staff_nao_pode_rejeitar(self):
+        with self.assertLogs("estoque", level="WARNING") as registo:
+            with self.assertRaises(ValueError):
+                estoque.rejeitar_requisicao(
+                    self.requisicao["id"], self.staff["id"], "Sem stock"
+                )
+        requisicao = estoque.procurar_requisicao(self.requisicao["id"])
+        self.assertEqual(requisicao["estado"], "pendente")
+        self.assertIn("Rejeição de requisição recusada", registo.output[0])
+
+    def test_master_pode_rejeitar(self):
+        r = estoque.rejeitar_requisicao(
+            self.requisicao["id"], self.master["id"], "Sem stock"
+        )
+        self.assertEqual(r["estado"], "rejeitada")
+
+    # -- aceitar devolução --------------------------------------------
+
+    def _devolucao_pendente(self):
+        """Envia (Admin), confirma a receção (o próprio Staff) e reporta
+        uma sobra de 2 — devolve a devolução pendente."""
+        estoque.enviar_requisicao(
+            self.requisicao["id"], self.admin["id"], self.hoje
+        )
+        estoque.confirmar_rececao_requisicao(
+            self.requisicao["id"], self.staff["id"], self.hoje
+        )
+        return _reportar_devolucao_1_item(
+            self.requisicao["id"],
+            self.staff["id"],
+            self.produto["id"],
+            2,
+            self.hoje,
+        )
+
+    def test_staff_nao_pode_aceitar_devolucao(self):
+        devolucao = self._devolucao_pendente()
+        saldo_antes = estoque.saldo_produto(self.produto["id"])
+
+        with self.assertLogs("estoque", level="WARNING") as registo:
+            with self.assertRaises(ValueError):
+                estoque.fechar_devolucao(
+                    devolucao["id"], self.staff["id"], self.hoje
+                )
+
+        self.assertEqual(
+            estoque.procurar_devolucao(devolucao["id"])["estado"],
+            "pendente",
+        )
+        self.assertEqual(
+            estoque.saldo_produto(self.produto["id"]), saldo_antes
+        )
+        self.assertIn("Aceitação de devolução recusada", registo.output[0])
+
+    def test_admin_pode_aceitar_devolucao(self):
+        devolucao = self._devolucao_pendente()
+        d = estoque.fechar_devolucao(
+            devolucao["id"], self.admin["id"], self.hoje
+        )
+        self.assertEqual(d["estado"], "fechada")
+
+
+class TesteRolAutomaticoRegistadoPorStaff(BaseMySQLTest):
+    """O Rol de Lavanderia automático é a ÚNICA exceção à regra de
+    perfil do envio: quem regista a reserva pode ser um Staff, e com
+    stock suficiente o Rol sai logo "enviada" (decisão de 16/09/2026).
+
+    Este teste protege essa exceção: se um refactor futuro trocar o
+    `_executar_envio` do Rol pelo `enviar_requisicao` público, o Rol
+    deixa de funcionar para os Staff e é aqui que rebenta.
+
+    A regra de cálculo do Rol (lugares, regras por unidade) não é o
+    que se testa aqui — substitui-se por um resultado fixo.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.staff = _responsavel_ativo("Ana Ferreira")
+        self.produto = _produto_ativo("Lençóis")
+        self.hoje = date.today()
+        estoque.registar_movimento(
+            self.produto["id"], "entrada", 30, self.hoje
+        )
+
+    def _gerar_rol(self):
+        resultado_fixo = (
+            [
+                {
+                    "produto_id": self.produto["id"],
+                    "quantidade": 2,
+                    "nome": self.produto["nome"],
+                }
+            ],
+            [],
+        )
+        with patch(
+            "estoque.configuracoes.obter_bool", return_value=True
+        ), patch(
+            "estoque.calcular_rol_lavanderia", return_value=resultado_fixo
+        ):
+            return estoque.gerar_rol_lavanderia_automatico(
+                {"id": "OCU-TESTE", "unidade_id": "UNI-TESTE"},
+                self.staff["id"],
+            )
+
+    def test_rol_registado_por_staff_sai_enviado(self):
+        requisicao = self._gerar_rol()
+        self.assertIsNotNone(requisicao)
+        assert requisicao is not None
+
+    def test_rol_registado_por_staff_tira_do_stock(self):
+        self._gerar_rol()
+        self.assertEqual(estoque.saldo_produto(self.produto["id"]), 28)
 
 
 if __name__ == "__main__":

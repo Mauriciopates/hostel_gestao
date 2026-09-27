@@ -52,66 +52,116 @@ ALTERAÇÕES v1.5.x (19/09/2026):
     da lista crua.
 """
 
+import logging
+import sys
+import tkinter
+import traceback
+from types import TracebackType
+
 import customtkinter as ctk
 
 from pathlib import Path
 
+import config
+import termos
 import utilizadores
 from . import tema
 from . import componentes
 from . import sessao
 from .gui_dashboard import Dashboard
 from .gui_clientes import ListaClientes
-from .gui_contratos import ListaContratosMensais, ListaReservasAirbnb
+from .contratos.gui_cnt_mensal_lista import ListaContratosMensais
+from .contratos.gui_cnt_airbnb_lista import ListaReservasAirbnb
 from .gui_calendario import Calendario
-from .gui_est_hub import EcraStock
-from .gui_despesas import EcraDespesas
+from .estoque.gui_est_hub import EcraStock
+from .despesas.gui_desp_hub import EcraDespesas
 from .gui_responsaveis import ListaResponsaveis
 from .gui_propriedades import ListaPropriedades
-from .gui_relatorios import Relatorios
+from .relatorios.gui_relat_hub import Relatorios
 from .gui_configuracoes import Configuracoes
 from .sessao import tipo_utilizador_ativo  # <<< NOVO >>> — filtro de itens
+
+logger = logging.getLogger(__name__)
 
 _PASTA_IMG = Path(__file__).resolve().parent.parent.parent / "img"
 _ICONE_JANELA = _PASTA_IMG / "ico_hostel.png"
 
 
+# Perfis que veem cada item da sidebar (26/09/2026). A barreira
+# real está nos módulos de negócio; isto é a camada visual.
+_TODOS = ("Master", "Admin", "Staff")
+_GESTAO = ("Master", "Admin")
+_SO_MASTER = ("Master",)
+
 ITENS_MENU = [
     # ---- PAINEL -----------------------------------------------------
     {"tipo": "secao", "texto": "Painel"},
-    {"tipo": "item", "texto": "Dashboard", "ecra": Dashboard},
+    {
+        "tipo": "item",
+        "texto": "Dashboard",
+        "ecra": Dashboard,
+        "perfis": _GESTAO,
+    },
     # ---- GESTÃO -----------------------------------------------------
     {"tipo": "secao", "texto": "Gestão"},
     {
         "tipo": "item",
         "texto": "Gestão de Propriedades",
         "ecra": ListaPropriedades,
+        "perfis": _GESTAO,
     },
-    {"tipo": "item", "texto": "Clientes", "ecra": ListaClientes},
+    {
+        "tipo": "item",
+        "texto": "Clientes",
+        "ecra": ListaClientes,
+        "perfis": _GESTAO,
+    },
     {
         "tipo": "item",
         "texto": "Contratos Mensais",
         "ecra": ListaContratosMensais,
+        "perfis": _GESTAO,
     },
     {
         "tipo": "item",
         "texto": "Reservas Airbnb",
         "ecra": ListaReservasAirbnb,
+        "perfis": _GESTAO,
     },
     # ---- OPERAÇÃO ---------------------------------------------------
     {"tipo": "secao", "texto": "Operação"},
-    {"tipo": "item", "texto": "Calendário", "ecra": Calendario},
-    {"tipo": "item", "texto": "Stock", "ecra": EcraStock},
-    {"tipo": "item", "texto": "Despesas", "ecra": EcraDespesas},
-    {"tipo": "item", "texto": "Responsáveis", "ecra": ListaResponsaveis},
+    {
+        "tipo": "item",
+        "texto": "Calendário",
+        "ecra": Calendario,
+        "perfis": _GESTAO,
+    },
+    {"tipo": "item", "texto": "Stock", "ecra": EcraStock, "perfis": _TODOS},
+    {
+        "tipo": "item",
+        "texto": "Despesas",
+        "ecra": EcraDespesas,
+        "perfis": _GESTAO,
+    },
+    {
+        "tipo": "item",
+        "texto": "Responsáveis",
+        "ecra": ListaResponsaveis,
+        "perfis": _TODOS,
+    },
     # ---- SISTEMA ----------------------------------------------------
     {"tipo": "secao", "texto": "Sistema"},
-    {"tipo": "item", "texto": "Relatórios", "ecra": Relatorios},
+    {
+        "tipo": "item",
+        "texto": "Relatórios",
+        "ecra": Relatorios,
+        "perfis": _GESTAO,
+    },
     {
         "tipo": "item",
         "texto": "Configurações",
         "ecra": Configuracoes,
-        "so_admin": True,  # <<< NOVO >>> — só Master/Admin veem
+        "perfis": _SO_MASTER,
     },
 ]
 
@@ -119,23 +169,32 @@ ITENS_MENU = [
 def _itens_visiveis():
     """Devolve a lista do ITENS_MENU filtrada pelo perfil ativo.
 
-    <<< NOVO >>> — função acrescentada em 19/09/2026.
-
-    Itens marcados com `so_admin=True` (como o "Configurações")
-    só aparecem a Master ou Admin. Tudo o resto é visível a
-    todos os perfis.
+    26/09/2026 — cada item tem a chave `perfis` com os perfis que o
+    veem. Uma secção só aparece se tiver pelo menos um item visível
+    (o Staff, por exemplo, só vê a secção "Operação").
 
     Chamada uma única vez, na construção da `BarraLateral` —
     quando já há sessão ativa (o LoginModal já correu).
     """
     tipo = tipo_utilizador_ativo()
-    e_administrativo = tipo in ("Admin", "Master")
+    visiveis = []
+    secao_pendente = None
 
-    return [
-        item
-        for item in ITENS_MENU
-        if not item.get("so_admin") or e_administrativo
-    ]
+    for item in ITENS_MENU:
+        if item["tipo"] == "secao":
+            secao_pendente = item
+            continue
+
+        if tipo not in item["perfis"]:
+            continue
+
+        if secao_pendente is not None:
+            visiveis.append(secao_pendente)
+            secao_pendente = None
+
+        visiveis.append(item)
+
+    return visiveis
 
 
 _MENSAGENS_ERRO = {
@@ -292,7 +351,7 @@ class LoginModal(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             self,
-            text="v1.5.0",
+            text=f"v{config.VERSAO}",
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=10),
         ).pack(pady=(0, 16))
@@ -332,6 +391,10 @@ class LoginModal(ctk.CTkToplevel):
         try:
             sessao.definir_responsavel_ativo(registo["id"])
         except ValueError as erro:
+            logger.warning(
+                "Autenticado mas sessão recusada — responsavel_id=%s",
+                registo["id"],
+            )
             self.erro.configure(text=str(erro))
             self.campo_password.delete(0, "end")
             self.campo_password.focus_set()
@@ -403,7 +466,160 @@ class LoginModal(ctk.CTkToplevel):
         """
         self.sair_pedido = True
         self.grab_release()
+        componentes.cancelar_agendamentos(self)
         self.master.destroy()
+
+
+class TermoModal(ctk.CTkToplevel):
+    """Pede a aceitação do termo a quem ainda não aceitou a versão
+    em vigor.
+
+    <<< NOVO v1.6.0 >>>
+
+    Só aparece quando o `termos.verificar` diz que é preciso. Quem
+    já aceitou entra direto e nunca vê este ecrã — e é esta
+    verificação que resolve sozinha os utilizadores que já existiam
+    antes da v1.6.0: cada um aceita no seu próximo acesso, sem
+    migração nenhuma à tabela.
+
+    Bloqueante como o `LoginModal`: não se fecha pelo "X". Ou
+    aceita, ou sai — porque o termo é condição de acesso, não um
+    pedido de consentimento (esse nunca poderia bloquear).
+
+    `self.aceite` é lido pela `Aplicacao` depois do `wait_window`.
+    Fica False quando a pessoa clicou "Sair".
+    """
+
+    def __init__(self, master, responsavel, estado):
+        super().__init__(master)
+        self.protocol("WM_DELETE_WINDOW", lambda: None)
+
+        self.aceite = False
+        self.responsavel = responsavel
+
+        self.title("Hostel Clean — Termo de uso")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(master)
+
+        ctk.CTkLabel(
+            self,
+            text="Antes de entrar",
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=18, weight="bold"),
+        ).pack(anchor="w", padx=24, pady=(24, 2))
+
+        ctk.CTkLabel(
+            self,
+            text=f"{responsavel['nome']} — {responsavel['id']} · "
+            f"{responsavel['tipo_utilizador']}",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24, pady=(0, 16))
+
+        texto = estado["texto"]
+        versao = texto["versao"]
+
+        # A faixa de aviso só aparece a quem já tinha aceitado uma
+        # versão anterior. A quem nunca aceitou não há "atualização"
+        # nenhuma a anunciar — seria uma mensagem falsa.
+        aviso = None
+
+        if estado["versao_aceite"]:
+            aviso = (
+                "O termo de confidencialidade foi atualizado. Para "
+                "continuar a usar o sistema, é preciso aceitar a "
+                "versão em vigor."
+            )
+
+        self.bloco_termo = componentes.BlocoTermo(
+            self,
+            titulo="Termo de confidencialidade e uso do sistema",
+            texto=texto["texto"],
+            versao=versao,
+            rotulo=f"Li e aceito a versão {versao} do termo. *",
+            versao_anterior=estado["versao_aceite"],
+            data_anterior=estado["data_aceite"],
+            aviso=aviso,
+            ao_mudar=self._ao_mudar,
+        )
+        self.bloco_termo.pack(fill="x", padx=24)
+
+        rodape = ctk.CTkFrame(self, fg_color="transparent")
+        rodape.pack(fill="x", padx=24, pady=(16, 20))
+
+        ctk.CTkButton(
+            rodape,
+            text="Sair",
+            width=100,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="left")
+
+        self.botao_aceitar = ctk.CTkButton(
+            rodape,
+            text="Aceitar e entrar",
+            width=170,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.COR_BORDA,
+            hover_color=tema.AZUL_CLARO,
+            text_color_disabled=tema.TEXTO_INDISPONIVEL,
+            state="disabled",
+            command=self._aceitar,
+        )
+        self.botao_aceitar.pack(side="right")
+
+        # A altura sai do conteúdo, não de um número à mão: a faixa
+        # de aviso só existe em metade dos casos, e um valor fixo
+        # deixava um vazio grande no outro. Mesma técnica do
+        # `_AcoesResponsavelModal` no gui_responsaveis.
+        self.update_idletasks()
+        largura = 520
+        altura = self.winfo_reqheight()
+        x = self.winfo_screenwidth() // 2 - largura // 2
+        y = self.winfo_screenheight() // 2 - altura // 2
+        self.geometry(f"{largura}x{altura}+{max(x, 0)}+{max(y, 0)}")
+
+        self.after(
+            10,
+            lambda: (self.lift(), self.focus_force(), self.grab_set()),
+        )
+
+    def _ao_mudar(self):
+        """Liga e desliga o botão conforme a caixa."""
+        ligado = self.bloco_termo.esta_aceite()
+
+        self.botao_aceitar.configure(
+            state="normal" if ligado else "disabled",
+            fg_color=tema.AZUL_PRINCIPAL if ligado else tema.COR_BORDA,
+        )
+
+    def _aceitar(self):
+        """Grava a aceitação e deixa entrar.
+
+        O `registado_por_id` é a própria pessoa: ninguém aceita um
+        termo por outra. Na atribuição da credencial é diferente —
+        aí há um Master a registar.
+        """
+        try:
+            termos.registar(
+                termos.TITULAR_RESPONSAVEL,
+                self.responsavel["id"],
+                termos.CONFIDENCIALIDADE,
+                registado_por_id=self.responsavel["id"],
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        self.aceite = True
+        self.grab_release()
+        self.destroy()
 
 
 class Aplicacao(ctk.CTk):
@@ -420,6 +636,14 @@ class Aplicacao(ctk.CTk):
     def __init__(self):
         tema.aplicar_tema()
         super().__init__()
+
+        # Erros inesperados de qualquer botão/evento, em qualquer
+        # janela, vêm parar aqui. Atribui-se em vez de fazer override:
+        # no Tk isto é um ATRIBUTO que se substitui, não um método
+        # (é assim que o typeshed o declara, e um `def` com o mesmo
+        # nome dava aviso de override incompatível no Pylance).
+        # Fica logo no início para cobrir também o LoginModal.
+        self.report_callback_exception = self._tratar_erro_interface
 
         # Flag lida pelo `main_gui.py` depois do `mainloop()`.
         # False = terminar a aplicação de vez.
@@ -452,7 +676,7 @@ class Aplicacao(ctk.CTk):
         # A barra lateral e a área de conteúdo são construídas
         # DEPOIS do login — o `_itens_visiveis()` só funciona com
         # sessão ativa (antes disso, `tipo_utilizador_ativo()`
-        # devolve None e o filtro remove os itens `so_admin`).
+        # devolve None e o filtro não deixa passar nenhum item).
         self.frame_atual = None
 
         self.update_idletasks()
@@ -463,11 +687,26 @@ class Aplicacao(ctk.CTk):
             self.terminar_pedido = True
             return
 
+        # v1.6.0 — o termo. Corre DEPOIS do login (é preciso saber
+        # quem é) e ANTES de desenhar seja o que for. Quem já
+        # aceitou a versão em vigor nem dá por isto.
+        if not self._verificar_termo():
+            ativo = sessao.obter_responsavel_ativo()
+            logger.info(
+                "Termo não aceite — acesso recusado, responsavel_id=%s",
+                ativo["id"] if ativo else None,
+            )
+            self.terminar_pedido = True
+            componentes.cancelar_agendamentos(self)
+            self.destroy()
+            return
+
         # Agora sim — já há sessão ativa.
+        itens = _itens_visiveis()
         self.barra_lateral = componentes.BarraLateral(
             self,
             controlador=self,
-            itens=_itens_visiveis(),
+            itens=itens,
         )
         self.barra_lateral.configure(width=160)
         self.barra_lateral.grid(row=0, column=0, sticky="ns")
@@ -478,7 +717,116 @@ class Aplicacao(ctk.CTk):
         )
         self.area_conteudo.grid(row=0, column=1, sticky="nsew")
 
-        self.mostrar_frame(Dashboard)
+        # Primeiro ecrã = primeiro item visível do perfil (Master e
+        # Admin: Dashboard; Staff: Stock).
+        primeiro_ecra = next(
+            item["ecra"] for item in itens if item["tipo"] == "item"
+        )
+        self.mostrar_frame(primeiro_ecra)
+
+    def _tratar_erro_interface(
+        self,
+        exc: type[BaseException],
+        val: BaseException,
+        tb: TracebackType | None,
+    ) -> None:
+        """Apanha os erros inesperados de TODOS os ecrãs e modais.
+
+        Ligado no `__init__` (`self.report_callback_exception = ...`).
+
+        O Tkinter encaminha para a janela raiz qualquer exceção que
+        rebente dentro de um botão, de um evento ou de um `after` —
+        seja em que janela for. A raiz é sempre esta `Aplicacao`, por
+        isso este método único cobre o sistema inteiro.
+
+        Faz três coisas, por esta ordem:
+          1. Regista no log, com o traceback completo.
+          2. Mantém o comportamento normal do Tkinter (imprimir no
+             terminal) — útil durante o desenvolvimento.
+          3. Avisa o utilizador com um popup genérico. Antes disto, o
+             botão simplesmente "não fazia nada" e ninguém sabia que
+             tinha havido um erro.
+
+        Os `ValueError` de validação NÃO chegam aqui: esses são
+        apanhados pelos `try/except` de cada ecrã, que mostram a
+        mensagem própria. Aqui só cai o que ninguém previu.
+
+        Duas proteções no popup:
+          - Se a janela já foi destruída (erro durante um logoff, por
+            exemplo), não se mostra nada: abrir um popup sem janela
+            criava uma janela Tk nova e vazia.
+          - Se um erro se repetir em cadeia (um `after` que rebenta a
+            cada ciclo), só aparece um popup de cada vez.
+          Uma falha a mostrar o popup nunca pode gerar outro erro por
+          cima — fica só registada.
+        """
+        logger.error(
+            "Erro inesperado num evento da interface",
+            exc_info=(exc, val, tb),
+        )
+
+        # O que o Tkinter faria por omissão: imprimir no terminal.
+        print("Exception in Tkinter callback", file=sys.stderr)
+        traceback.print_exception(exc, val, tb)
+
+        if getattr(self, "_popup_erro_aberto", False):
+            return
+
+        try:
+            if not self.winfo_exists():
+                return
+        except tkinter.TclError:
+            return
+
+        self._popup_erro_aberto = True
+        try:
+            componentes.mostrar_erro(
+                "Ocorreu um erro inesperado e a operação não foi "
+                "concluída.\n\nO erro ficou registado no ficheiro de "
+                "log. Se voltar a acontecer, avise quem mantém o "
+                "sistema."
+            )
+        except Exception:
+            logger.exception("Falha ao mostrar o aviso de erro inesperado")
+        finally:
+            self._popup_erro_aberto = False
+
+    def _verificar_termo(self):
+        """True se a pessoa pode entrar; False se deve sair.
+
+        <<< NOVO v1.6.0 >>>
+        """
+        responsavel = sessao.obter_responsavel_ativo()
+
+        if responsavel is None:
+            return False
+
+        try:
+            estado = termos.verificar(
+                termos.TITULAR_RESPONSAVEL,
+                responsavel["id"],
+                termos.CONFIDENCIALIDADE,
+            )
+        except ValueError:
+            logger.warning(
+                "Entrada sem verificação do termo (nenhuma versão em "
+                "vigor) — responsavel_id=%s",
+                responsavel["id"],
+            )
+            # Não há texto publicado. Entra em silêncio: a falta de
+            # um documento é falha de configuração, não do
+            # utilizador. Quem publica vê o estado nas Configurações
+            # — avisar aqui, em todos os arranques, só treinava as
+            # pessoas a fechar caixas sem ler.
+            return True
+
+        if not estado["precisa_aceitar"]:
+            return True
+
+        popup = TermoModal(self, responsavel, estado)
+        self.wait_window(popup)
+
+        return popup.aceite
 
     def mostrar_frame(self, classe_frame, **kwargs):
         """Troca o ecrã atual pelo indicado em classe_frame."""
@@ -513,7 +861,13 @@ class Aplicacao(ctk.CTk):
         ):
             return
 
+        ativo = sessao.obter_responsavel_ativo()
+        logger.info(
+            "Logoff — responsavel_id=%s", ativo["id"] if ativo else None
+        )
+
         sessao.limpar_responsavel_ativo()
 
         self.reabrir = True
+        componentes.cancelar_agendamentos(self)
         self.destroy()

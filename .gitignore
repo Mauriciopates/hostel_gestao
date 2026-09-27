@@ -11,6 +11,7 @@ dados/
 backups/
 logs/
 contratos_gerados/
+testes/teste_logs/
 *.db
 *.sqlite3
 *.env*
@@ -20,3 +21,5 @@ contratos_gerados/
 .idea/
 .DS_Store
 Thumbs.db
+# Lista de servidores de base de dados (local de cada PC)
+servidores.json

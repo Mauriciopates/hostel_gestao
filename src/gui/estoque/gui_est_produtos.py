@@ -64,8 +64,8 @@ import customtkinter as ctk
 
 import estoque
 import responsaveis
-from . import componentes
-from . import tema
+from .. import componentes
+from .. import tema
 
 # =====================================================================
 # Lista de unidades de medida comuns — dropdown do formulário
@@ -303,20 +303,16 @@ class ListaProdutos(ctk.CTkFrame):
 
         linha = self.tabela.nova_linha()
 
+        # Clicar no ID abre os movimentos deste produto.
         self.tabela.colocar(
             linha,
             0,
-            ctk.CTkLabel(
+            componentes.ChipId(
                 linha,
-                text=produto["id"],
-                text_color=(
-                    tema.TEXTO_INDISPONIVEL if inativo else tema.AZUL_PRINCIPAL
-                ),
-                fg_color=tema.ID_CHIP_FUNDO,
-                corner_radius=6,
-                font=ctk.CTkFont(size=11, weight="bold"),
-                width=_LARGURA_ID,
-                anchor="w",
+                produto["id"],
+                ao_clicar=lambda: self._abrir_movimentos(produto),
+                inativo=inativo,
+                largura=_LARGURA_ID,
             ),
             esticar="w",
         )
@@ -404,6 +400,42 @@ class ListaProdutos(ctk.CTkFrame):
         return tema.COR_TEXTO
 
     # -- ações -------------------------------------------------------
+
+    def _abrir_movimentos(self, produto):
+        """Lista (só leitura) dos movimentos de um produto, do mais
+        recente para o mais antigo (ordem do `estoque`)."""
+        unidade = produto["unidade_medida"]
+        linhas = []
+        for movimento in estoque.listar_movimentos(produto_id=produto["id"]):
+            quantidade = movimento["quantidade"]
+            if movimento["tipo"] == "saida":
+                quantidade = -quantidade
+            linhas.append(
+                (
+                    movimento["id"],
+                    componentes.formatar_data(movimento["data"]),
+                    movimento["tipo"].capitalize(),
+                    f"{quantidade:+d} {unidade}",
+                    movimento["motivo"] or "—",
+                )
+            )
+
+        componentes.ListaVinculadaModal(
+            self,
+            titulo=f"{produto['nome']} ({produto['id']})",
+            subtitulo="Movimentos do produto",
+            colunas=(
+                componentes.Coluna("ID", minimo=100, espaco=8),
+                componentes.Coluna("DATA", minimo=90),
+                componentes.Coluna("TIPO", minimo=80),
+                componentes.Coluna(
+                    "QUANTIDADE", minimo=100, alinhamento="e", espaco=8
+                ),
+                componentes.Coluna("MOTIVO", peso=3, minimo=200),
+            ),
+            linhas=linhas,
+            mensagem_vazia="Este produto ainda não tem movimentos.",
+        )
 
     def _desativar(self, produto):
         """Desativa um produto, pedindo forçar se tiver dependências.
@@ -518,7 +550,7 @@ class _ConfirmarForcarProdutoModal(ctk.CTkToplevel):
         nomes = ["— Nenhum —"] + [
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
-        self.combo_responsavel = ctk.CTkOptionMenu(self, values=nomes)
+        self.combo_responsavel = componentes.Seletor(self, values=nomes)
         self.combo_responsavel.set(nomes[0])
         self.combo_responsavel.pack(fill="x", padx=20, pady=(2, 10))
 
@@ -779,7 +811,7 @@ class _FormularioProduto(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=24, pady=(10, 0))
 
-        self.combo_tipo_produto = ctk.CTkOptionMenu(
+        self.combo_tipo_produto = componentes.Seletor(
             self,
             values=list(TIPOS_PRODUTO_GUI),
             corner_radius=tema.RAIO_CAMPO,
@@ -859,7 +891,7 @@ class _FormularioProduto(ctk.CTkToplevel):
         self.campo_unidade.grid_remove()
 
         # Seletor — dropdown com placeholder + lista + "Outro".
-        self.combo_unidade = ctk.CTkOptionMenu(
+        self.combo_unidade = componentes.Seletor(
             bloco,
             values=(
                 [UNIDADE_PLACEHOLDER] + list(UNIDADES_MEDIDA) + [OUTRA_UNIDADE]
@@ -938,9 +970,7 @@ class _FormularioProduto(ctk.CTkToplevel):
         elif texto_minimo.isdigit():
             stock_minimo = int(texto_minimo)
         else:
-            raise ValueError(
-                "O stock mínimo tem de ser um número inteiro."
-            )
+            raise ValueError("O stock mínimo tem de ser um número inteiro.")
 
         tipo_produto = self.combo_tipo_produto.get()
 
@@ -959,7 +989,7 @@ class NovoProdutoModal(_FormularioProduto):
             titulo="Novo Produto",
             texto_botao="Criar",
         )
-        
+
     def _gravar(self):
         try:
             (

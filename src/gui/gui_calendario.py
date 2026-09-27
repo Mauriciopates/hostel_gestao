@@ -489,7 +489,7 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
         if disponibilidade not in _OPCOES_DISPONIBILIDADE:
             disponibilidade = _OPCOES_DISPONIBILIDADE[0]
 
-        self.combo_propriedade = ctk.CTkOptionMenu(
+        self.combo_propriedade = componentes.Seletor(
             barra,
             values=[_OPCAO_TODAS] + sorted(self.id_por_rotulo),
             width=260,
@@ -501,7 +501,7 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
         )
         self.combo_propriedade.pack(side="left")
 
-        self.combo_disponibilidade = ctk.CTkOptionMenu(
+        self.combo_disponibilidade = componentes.Seletor(
             barra,
             values=list(_OPCOES_DISPONIBILIDADE),
             width=200,
@@ -800,7 +800,7 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
 
         if visiveis == 0:
             self._mostrar_mensagem(_TEXTO_SEM_UNIDADES)
-    
+
     def _estados_da_semana(self, unidade_id):
         """Os sete estados de uma unidade, de segunda a domingo.
 
@@ -1512,7 +1512,7 @@ class DetalheDiaModal(ctk.CTkToplevel):
         ANTES de abrir o popup das unidades. Deixar a pilha de
         popups aberta punha o novo popup por baixo dos antigos.
         """
-        from gui.gui_contratos import ListaReservasAirbnb
+        from gui.contratos.gui_cnt_airbnb_lista import ListaReservasAirbnb
         from gui.gui_propriedades import (
             ListaPropriedades,
             UnidadesDaPropriedadeModal,

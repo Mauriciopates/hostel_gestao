@@ -76,10 +76,10 @@ import customtkinter as ctk
 import configuracoes
 import estoque
 import responsaveis
-from . import componentes
+from .. import componentes
 from . import gui_est_comum
-from . import sessao
-from . import tema
+from .. import sessao
+from .. import tema
 from .gui_est_requisicoes import _RejeitarRequisicaoModal
 
 # Aliases dos helpers partilhados — mesma convenção dos outros
@@ -156,7 +156,7 @@ class ListaAprovacao(ctk.CTkFrame):
             text_color=tema.AZUL_PRINCIPAL,
             hover_color=tema.COR_BORDA,
             command=lambda: controlador.mostrar_frame(
-                __import__("gui.gui_est_hub", fromlist=["EcraStock"]).EcraStock
+                __import__("gui.estoque.gui_est_hub", fromlist=["EcraStock"]).EcraStock
             ),
         ).pack(side="left")
 
@@ -164,7 +164,7 @@ class ListaAprovacao(ctk.CTkFrame):
         filtros = ctk.CTkFrame(self, fg_color="transparent")
         filtros.pack(fill="x", padx=20, pady=(0, 6))
 
-        self.combo_estado = ctk.CTkOptionMenu(
+        self.combo_estado = componentes.Seletor(
             filtros,
             values=[_OPCAO_TODOS_ESTADOS] + list(_ESTADOS_REQUISICAO),
             width=180,
@@ -174,7 +174,7 @@ class ListaAprovacao(ctk.CTkFrame):
         self.combo_estado.set(_OPCAO_TODOS_ESTADOS)
         self.combo_estado.pack(side="left")
 
-        self.combo_tipo = ctk.CTkOptionMenu(
+        self.combo_tipo = componentes.Seletor(
             filtros,
             values=[_OPCAO_TODOS_TIPOS, "Rol Lavanderia", "Pedido Staff"],
             width=180,
@@ -204,7 +204,7 @@ class ListaAprovacao(ctk.CTkFrame):
         self.combo_responsavel = None
 
         if e_administrativo:
-            self.combo_responsavel = ctk.CTkOptionMenu(
+            self.combo_responsavel = componentes.Seletor(
                 filtros,
                 values=(
                     [_OPCAO_TODOS_RESPONSAVEIS] + sorted(self.id_por_rotulo)
@@ -849,7 +849,15 @@ class ResumoAprovacaoModal(ctk.CTkToplevel):
             nome = produto["nome"] if produto else produto_id
             unidade = produto["unidade_medida"] if produto else ""
 
-            texto = self.campos_por_produto[produto_id].get().strip()
+            # Só há campo "A enviar" quando a requisição está pendente.
+            # Numa já enviada/fechada a coluna é só leitura e não há
+            # nada a avisar — sem isto, o "Gerir" dava KeyError.
+            campo = self.campos_por_produto.get(produto_id)
+
+            if campo is None:
+                continue
+
+            texto = campo.get().strip()
 
             if not texto.isdigit():
                 continue

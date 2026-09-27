@@ -19,10 +19,10 @@ import customtkinter as ctk
 
 import estoque
 import responsaveis
-from . import componentes
+from .. import componentes
 from . import gui_est_comum
-from . import sessao
-from . import tema
+from .. import sessao
+from .. import tema
 
 # Aliases dos helpers partilhados — ver o mesmo bloco em
 # gui_est_requisicoes.py para o porquê.
@@ -89,13 +89,13 @@ class ListaDevolucoes(ctk.CTkFrame):
             text_color=tema.AZUL_PRINCIPAL,
             hover_color=tema.COR_BORDA,
             command=lambda: controlador.mostrar_frame(
-                __import__("gui.gui_est_hub", fromlist=["EcraStock"]).EcraStock
+                __import__("gui.estoque.gui_est_hub", fromlist=["EcraStock"]).EcraStock
             ),
         ).pack(side="left")
 
         filtros = ctk.CTkFrame(self, fg_color="transparent")
         filtros.pack(fill="x", padx=20, pady=(0, 6))
-        self.combo_estado = ctk.CTkOptionMenu(
+        self.combo_estado = componentes.Seletor(
             filtros,
             values=[_OPCAO_TODOS_ESTADOS] + list(_ESTADOS_DEVOLUCAO),
             width=180,

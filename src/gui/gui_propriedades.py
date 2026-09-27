@@ -701,7 +701,7 @@ class _ConfirmarForcarModal(ctk.CTkToplevel):
         nomes = ["— Nenhum —"] + [
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
-        self.combo_responsavel = ctk.CTkOptionMenu(self, values=nomes)
+        self.combo_responsavel = componentes.Seletor(self, values=nomes)
         self.combo_responsavel.set(nomes[0])
         self.combo_responsavel.pack(fill="x", padx=20, pady=(2, 10))
 
@@ -869,25 +869,16 @@ class ListaPropriedades(ctk.CTkFrame):
 
         linha = self.tabela.nova_linha()
 
-        rotulo_id = ctk.CTkLabel(
-            linha,
-            text=prop["id"],
-            text_color=tema.AZUL_PRINCIPAL,
-            fg_color=tema.ID_CHIP_FUNDO,
-            corner_radius=6,
-            font=ctk.CTkFont(size=11, weight="bold"),
-            width=_LARGURA_ID,
-            anchor="w",
-            cursor="hand2",
-        )
-        self.tabela.colocar(linha, 0, rotulo_id, esticar="w")
         # Único sítio que abre as unidades da propriedade — decisão
         # do aluno, 07/09/2026 (ponto 10): nome e morada ficam só de
         # leitura aqui, editar continua no botão "Editar" de sempre.
-        rotulo_id.bind(
-            "<Button-1>",
-            lambda evento: UnidadesDaPropriedadeModal(self, prop),
+        rotulo_id = componentes.ChipId(
+            linha,
+            prop["id"],
+            ao_clicar=lambda: UnidadesDaPropriedadeModal(self, prop),
+            largura=_LARGURA_ID,
         )
+        self.tabela.colocar(linha, 0, rotulo_id, esticar="w")
 
         cor_nome = tema.COR_TEXTO_SECUNDARIO if inativa else tema.COR_TEXTO
         largura_texto_nome = _LARGURA_NOME_PROPRIEDADE - _MARGEM_TRUNCAGEM
@@ -1191,7 +1182,7 @@ class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
         self.campo_busca.pack(side="left")
         self.campo_busca.bind("<Return>", lambda evento: self._recarregar())
 
-        self.combo_estado = ctk.CTkOptionMenu(
+        self.combo_estado = componentes.Seletor(
             barra,
             values=["Todos"] + list(_ESTADOS_FILTRO),
             command=lambda _valor: self._recarregar(),
@@ -1342,15 +1333,18 @@ class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
 
         linha = self.tabela.nova_linha()
 
-        rotulo_id = ctk.CTkLabel(
+        # Clicar no ID abre a Planta de Lugares da unidade — mesmo
+        # vínculo do ID da propriedade (que abre as unidades). Inativa
+        # não abre: o "Gerir" dela também só oferece "Reativar".
+        rotulo_id = componentes.ChipId(
             linha,
-            text=uni["id"],
-            text_color=tema.TEXTO_INDISPONIVEL,
-            fg_color=tema.CINZA_INDISPONIVEL,
-            corner_radius=6,
-            font=ctk.CTkFont(size=10, weight="bold"),
-            width=_LARGURA_ID,
-            anchor="w",
+            uni["id"],
+            ao_clicar=(
+                None if inativa else lambda: self._abrir_planta(uni["id"])
+            ),
+            inativo=inativa,
+            largura=_LARGURA_ID,
+            cor_fundo=tema.CINZA_INDISPONIVEL if inativa else None,
         )
         self.tabela.colocar(linha, 0, rotulo_id, esticar="w")
 
@@ -1385,11 +1379,10 @@ class UnidadesDaPropriedadeModal(ctk.CTkToplevel):
         # atalho do ponto 9b, agora dentro do popup. Cada widget tem
         # de ser ligado à parte: um clique num widget-filho não
         # chega ao binding do pai, no Tkinter.
-        for widget in (rotulo_id, rotulo_nome):
-            widget.bind(
-                "<Double-Button-1>",
-                lambda evento: EditarUnidadeModal(self, uni, self.prop),
-            )
+        rotulo_nome.bind(
+            "<Double-Button-1>",
+            lambda evento: EditarUnidadeModal(self, uni, self.prop),
+        )
 
         # Sem pílula quando inativa/em manutenção — "—" no lugar,
         # mesma largura para a coluna Preço continuar alinhada.
@@ -2193,20 +2186,27 @@ class NovaUnidadeModal(ctk.CTkToplevel):
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=20)
-        self.combo_tipo = ctk.CTkOptionMenu(
+        self.combo_tipo = componentes.Seletor(
             self, values=["Mensal", "Airbnb"], command=self._ao_mudar_tipo
         )
         self.combo_tipo.set("Mensal")
         self.combo_tipo.pack(fill="x", padx=20, pady=(2, 10))
 
-        self.campo_nome = self._campo("Nome")
-        self.campo_preco_base = self._campo("Preço base (€)")
-        self.campo_preco_epoca_alta = self._campo("Preço época alta (€)")
-        self.campo_multa = self._campo("Multa check-in tardio (€)")
+        self.campo_nome = self._campo(self, "Nome")
+        self.campo_preco_base = self._campo(self, "Preço base (€)")
+
+        # Campos que só existem na Airbnb — escondidos em Mensal.
+        self.bloco_airbnb = ctk.CTkFrame(self, fg_color="transparent")
+        self.campo_preco_epoca_alta = self._campo(
+            self.bloco_airbnb, "Preço época alta (€)"
+        )
+        self.campo_multa = self._campo(
+            self.bloco_airbnb, "Multa check-in tardio (€)"
+        )
 
         self.epoca_alta_ativa = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
-            self,
+            self.bloco_airbnb,
             text="Época alta ativa",
             variable=self.epoca_alta_ativa,
             command=self._ao_marcar_epoca_alta,
@@ -2214,14 +2214,14 @@ class NovaUnidadeModal(ctk.CTkToplevel):
 
         self.permite_cama_extra = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
-            self,
+            self.bloco_airbnb,
             text="Permite cama extra",
             variable=self.permite_cama_extra,
             command=self._ao_marcar_cama_extra,
         ).pack(anchor="w", padx=20, pady=(10, 0))
 
         self.frame_resumo_cama_extra = ctk.CTkFrame(
-            self,
+            self.bloco_airbnb,
             fg_color=tema.ID_CHIP_FUNDO,
             corner_radius=tema.RAIO_CAMPO,
         )
@@ -2264,16 +2264,17 @@ class NovaUnidadeModal(ctk.CTkToplevel):
             command=self._criar,
         ).pack(side="right")
 
+        # Nasce em "Mensal": o bloco Airbnb fica escondido.
         _ajustar_tamanho(self, largura=380)
 
-    def _campo(self, rotulo):
+    def _campo(self, master, rotulo):
         ctk.CTkLabel(
-            self,
+            master,
             text=rotulo,
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=20, pady=(6, 2))
-        entrada = ctk.CTkEntry(self, corner_radius=tema.RAIO_CAMPO)
+        entrada = ctk.CTkEntry(master, corner_radius=tema.RAIO_CAMPO)
         entrada.pack(fill="x", padx=20)
         return entrada
 
@@ -2288,14 +2289,21 @@ class NovaUnidadeModal(ctk.CTkToplevel):
         (cobre trocar o tipo DEPOIS de já ter marcado a caixa, não
         só o caminho inverso).
         """
-        tipo_mensal = self._tipo_selecionado() == "mensal"
-        if tipo_mensal and self.epoca_alta_ativa.get():
-            self.epoca_alta_ativa.set(False)
-            componentes.mostrar_erro(
-                "Unidade do tipo mensal não existe época alta."
-            )
-        if tipo_mensal and self.permite_cama_extra.get():
-            self._desmarcar_cama_extra_com_aviso()
+        if self._tipo_selecionado() == "airbnb":
+            self.bloco_airbnb.pack(fill="x", after=self.campo_preco_base)
+            _ajustar_tamanho(self, largura=380)
+            return
+
+        # Mensal: limpa o que ficou escrito/marcado e esconde o bloco.
+        self.campo_preco_epoca_alta.delete(0, "end")
+        self.campo_multa.delete(0, "end")
+        self.epoca_alta_ativa.set(False)
+        self.permite_cama_extra.set(False)
+        self._cama_extra_qtd_texto = ""
+        self._cama_extra_tipo_texto = ""
+        self.frame_resumo_cama_extra.pack_forget()
+        self.bloco_airbnb.pack_forget()
+        _ajustar_tamanho(self, largura=380)
 
     def _ao_marcar_epoca_alta(self):
         tipo_mensal = self._tipo_selecionado() == "mensal"
@@ -2364,12 +2372,17 @@ class NovaUnidadeModal(ctk.CTkToplevel):
             preco_base = _ler_decimal(
                 self.campo_preco_base.get(), "Preço base"
             )
-            preco_epoca_alta = _ler_decimal(
-                self.campo_preco_epoca_alta.get(), "Preço época alta"
-            )
-            multa = _ler_decimal(
-                self.campo_multa.get(), "Multa de check-in tardio"
-            )
+            # Mensal não tem época alta nem multa: vão a 0.00, porque
+            # unidades.criar exige Decimal e não aceita None.
+            preco_epoca_alta = Decimal("0.00")
+            multa = Decimal("0.00")
+            if self._tipo_selecionado() == "airbnb":
+                preco_epoca_alta = _ler_decimal(
+                    self.campo_preco_epoca_alta.get(), "Preço época alta"
+                )
+                multa = _ler_decimal(
+                    self.campo_multa.get(), "Multa de check-in tardio"
+                )
             qtd_cama_extra = None
             if self.permite_cama_extra.get():
                 qtd_cama_extra = _ler_inteiro_cama_extra(
@@ -2463,42 +2476,48 @@ class EditarUnidadeModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=20, pady=(0, 14))
 
-        self.campo_nome = self._campo("Nome", uni["nome"])
+        self.campo_nome = self._campo(self, "Nome", uni["nome"])
         self.campo_preco_base = self._campo(
-            "Preço base (€)", _formatar_valor(uni["preco_base"])
+            self, "Preço base (€)", _formatar_valor(uni["preco_base"])
         )
+
+        # Campos que só existem na Airbnb — numa mensal nem aparecem
+        # (o tipo não se muda depois de criada).
+        airbnb = uni["tipo"] == "airbnb"
+        self.bloco_airbnb = ctk.CTkFrame(self, fg_color="transparent")
+        if airbnb:
+            self.bloco_airbnb.pack(fill="x")
         self.campo_preco_epoca_alta = self._campo(
-            "Preço época alta (€)", _formatar_valor(uni["preco_epoca_alta"])
+            self.bloco_airbnb,
+            "Preço época alta (€)",
+            _formatar_valor(uni["preco_epoca_alta"]),
         )
         self.campo_multa = self._campo(
+            self.bloco_airbnb,
             "Multa check-in tardio (€)",
             _formatar_valor(uni["multa_check_in_tardio"]),
         )
 
-        airbnb = uni["tipo"] == "airbnb"
-
         self.epoca_alta_ativa = ctk.BooleanVar(value=uni["epoca_alta_ativa"])
         ctk.CTkCheckBox(
-            self,
+            self.bloco_airbnb,
             text="Época alta ativa",
             variable=self.epoca_alta_ativa,
             command=self._ao_marcar_epoca_alta,
-            state="normal" if airbnb else "disabled",
         ).pack(anchor="w", padx=20, pady=(14, 0))
 
         self.permite_cama_extra = ctk.BooleanVar(
             value=uni["permite_cama_extra"]
         )
         ctk.CTkCheckBox(
-            self,
+            self.bloco_airbnb,
             text="Permite cama extra",
             variable=self.permite_cama_extra,
             command=self._ao_marcar_cama_extra,
-            state="normal" if airbnb else "disabled",
         ).pack(anchor="w", padx=20, pady=(10, 0))
 
         self.frame_resumo_cama_extra = ctk.CTkFrame(
-            self,
+            self.bloco_airbnb,
             fg_color=tema.ID_CHIP_FUNDO,
             corner_radius=tema.RAIO_CAMPO,
         )
@@ -2521,18 +2540,6 @@ class EditarUnidadeModal(ctk.CTkToplevel):
 
         if airbnb:
             self._atualizar_resumo_cama_extra()
-        else:
-            ctk.CTkLabel(
-                self,
-                text=(
-                    "Época alta e cama extra só se aplicam a "
-                    "unidades do tipo Airbnb."
-                ),
-                text_color=tema.COR_TEXTO_SECUNDARIO,
-                font=ctk.CTkFont(size=10),
-                wraplength=320,
-                justify="left",
-            ).pack(anchor="w", padx=20, pady=(8, 0))
 
         ctk.CTkFrame(self, height=1, fg_color=tema.COR_BORDA).pack(
             fill="x", padx=20, pady=(16, 12)
@@ -2615,14 +2622,14 @@ class EditarUnidadeModal(ctk.CTkToplevel):
         self.destroy()
         self.tela_lista._recarregar()
 
-    def _campo(self, rotulo, valor_inicial):
+    def _campo(self, master, rotulo, valor_inicial):
         ctk.CTkLabel(
-            self,
+            master,
             text=rotulo,
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=20, pady=(6, 2))
-        entrada = ctk.CTkEntry(self, corner_radius=tema.RAIO_CAMPO)
+        entrada = ctk.CTkEntry(master, corner_radius=tema.RAIO_CAMPO)
         entrada.insert(0, valor_inicial)
         entrada.pack(fill="x", padx=20)
         return entrada

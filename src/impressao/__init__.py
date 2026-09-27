@@ -41,6 +41,7 @@ porta de entrada.
 
 from .pdf import (
     gerar_contrato_pdf,
+    gerar_guia_entrega_pdf,
     gerar_relatorio_pdf,
 )
 from .csv import gerar_relatorio_csv
@@ -49,6 +50,7 @@ from .excel import gerar_relatorio_excel
 
 __all__ = [
     "gerar_contrato_pdf",
+    "gerar_guia_entrega_pdf",
     "gerar_relatorio_pdf",
     "gerar_relatorio_csv",
     "gerar_relatorio_excel",

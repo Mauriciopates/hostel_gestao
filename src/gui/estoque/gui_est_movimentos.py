@@ -47,9 +47,9 @@ import customtkinter as ctk
 
 import estoque
 import responsaveis
-from . import componentes
+from .. import componentes
 from . import gui_est_comum
-from . import tema
+from .. import tema
 
 
 # =====================================================================
@@ -124,7 +124,7 @@ class ListaMovimentos(ctk.CTkFrame):
             hover_color=tema.COR_BORDA,
             command=lambda: controlador.mostrar_frame(
                 __import__(
-                    "gui.gui_est_hub", fromlist=["EcraStock"]
+                    "gui.estoque.gui_est_hub", fromlist=["EcraStock"]
                 ).EcraStock
             ),
         ).pack(side="left", padx=(10, 0))
@@ -142,7 +142,7 @@ class ListaMovimentos(ctk.CTkFrame):
             for p in self.produtos_disponiveis
         }
 
-        self.combo_produto = ctk.CTkOptionMenu(
+        self.combo_produto = componentes.Seletor(
             filtros,
             values=(
                 [_OPCAO_TODOS_PRODUTOS]
@@ -155,7 +155,7 @@ class ListaMovimentos(ctk.CTkFrame):
         self.combo_produto.set(_OPCAO_TODOS_PRODUTOS)
         self.combo_produto.pack(side="left")
 
-        self.combo_tipo = ctk.CTkOptionMenu(
+        self.combo_tipo = componentes.Seletor(
             filtros,
             values=[_OPCAO_TODOS_TIPOS] + list(
                 gui_est_comum.TIPOS_MOVIMENTO
@@ -586,7 +586,7 @@ class RegistarMovimentoModal(ctk.CTkToplevel):
 
         rotulos = sorted(self.id_por_rotulo_produto)
 
-        self.combo_produto = ctk.CTkOptionMenu(
+        self.combo_produto = componentes.Seletor(
             self,
             values=rotulos or ["— Sem produtos —"],
             corner_radius=tema.RAIO_CAMPO,
@@ -680,7 +680,7 @@ class RegistarMovimentoModal(ctk.CTkToplevel):
             for r in self.responsaveis_disponiveis
         }
 
-        self.combo_responsavel = ctk.CTkOptionMenu(
+        self.combo_responsavel = componentes.Seletor(
             self,
             values=(
                 ["— Nenhum —"]

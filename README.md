@@ -19,7 +19,7 @@ e programação de sistemas de informação.
 |------|--------|--------|
 | 1.0 | CLI + JSON | Finalizado |
 | 2.0 | GUI CustomTkinter + MySQL + financeiro, relatórios, utilizadores | Em andamento |
-| 3.0 | Django + Nginx | Fora da entrega de outubro | Tentativa de entrega em Novembro na apresentação final
+| 3.0 | Django + Nginx | Fora da entrega de outubro — tentativa em novembro, na apresentação final |
 
 ---
 
@@ -43,12 +43,10 @@ Gestão de fluxo geral:
 - Apenas biblioteca padrão na Fase 1
 - Testes com `unittest`
 
-```
-bash
+```bash
 python -m venv .venv
 source .venv/Scripts/activate    # Windows (Git Bash)
 pip install -r requirements.txt
-
 ```
 
 ## Ambiente
@@ -60,9 +58,7 @@ pip install -r requirements.txt
 
 # 1. Preparar o Python
 
-```
-bash
-
+```bash
 sudo apt update
 sudo apt install -y software-properties-common
 sudo add-apt-repository ppa:deadsnakes/ppa -y
@@ -72,9 +68,7 @@ sudo apt install -y python3.11 python3.11-venv python3.11-dev python3.11-tk
 ```
 Recomendado a criação de ambiente virtual para a instalação
 
-```
-bash
-
+```bash
 python3.11 -m venv .venv
 source .venv/bin/activate
 
@@ -84,9 +78,53 @@ pip install -r requirements.txt
 
 ---
 
+## Comando para correr os testes
+
+Os testes correm contra uma base **separada**, `hostel_gestao_teste`
+(ou a indicada em `DB_NAME_TESTE` no `.env`) — nunca contra a base de
+trabalho. Ver `testes/apoio_BD.py`. É preciso o MySQL a correr e o
+`.venv` ativo.
+
+Correr **sempre a partir da raiz do repositório**:
+
+```bash
+# Todos os testes
+python -m unittest discover -s testes -p "teste_*.py" -t . -v
+
+# Um só ficheiro
+python -m unittest testes.teste_clientes -v
+
+# Uma só classe / um só teste
+python -m unittest testes.teste_clientes.TesteCriar -v
+python -m unittest testes.teste_clientes.TesteCriar.test_id_com_prefixo_cli -v
+```
+
+O `-t .` é obrigatório: os testes importam `from testes.apoio_BD import ...`,
+e sem ele o `unittest` não encontra o pacote `testes`.
+
+O registo de cada execução fica em `testes/teste_logs/testes.log`
+(fora do controlo de versões).
+
+Verificações estáticas antes de cada commit:
+
+```bash
+python -m compileall -q src testes
+python -m pyflakes src testes
+pyright src
+```
+
 ## Estrutura 
 
 src/ módulos da aplicação
+src/repositorio/ camada de persistência (única que fala com o MySQL),
+  um ficheiro por domínio: _base.py (ligação, contadores, backups)
+  e rep_<módulo>.py (ex.: rep_clientes.py). O código faz sempre
+  `import repositorio` — o __init__.py reexporta tudo
+src/gui/ interface gráfica (CustomTkinter), um ficheiro por ecrã;
+  os módulos grandes têm subpasta própria: gui/contratos/ (gui_cnt_*),
+  gui/despesas/ (gui_desp_*), gui/estoque/ (gui_est_*),
+  gui/relatorios/ (gui_relat_*)
+src/impressao/ exportação PDF, CSV e Excel
 testes/ testes unitários (prefixo teste_)
 docs/ análise, desenho, testes e manual
 img/ imagem do logo de sistema 
@@ -97,7 +135,7 @@ dados/ ficheiros de dados — fora do controlo de versões
 contratos/ ficheiro de armazenamento dos contratos emitidos 
 backups/ cópias de segurança — fora do controlo de versões
 logs/ registos — fora do controlo de versões
-relatorios/ fihceiros de armazenamento dos relatorios emitidos 
+relatorios/ ficheiros de armazenamento dos relatórios emitidos 
 
 
 ---

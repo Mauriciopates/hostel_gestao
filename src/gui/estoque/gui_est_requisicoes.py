@@ -102,10 +102,12 @@ import customtkinter as ctk
 
 import estoque
 import responsaveis
-from . import componentes
+from .. import componentes
 from . import gui_est_comum
-from . import sessao
-from . import tema
+from .gui_est_devolucoes import _ResumoRequisicaoModal
+from .gui_est_guia import GuiaEntregaModal
+from .. import sessao
+from .. import tema
 
 # Aliases dos helpers partilhados — os nomes antigos locais eram
 # usados no corpo das classes extraídas do gui_estoque.py; estes
@@ -170,6 +172,21 @@ class ListaRequisicoes(ctk.CTkFrame):
             command=lambda: _EscolherTipoRequisicaoModal(self),
         ).pack(side="left")
 
+        # Guia de entrega (27/09/2026): só Master/Admin, que são quem
+        # envia. `estoque.guia_entrega` volta a validar o perfil.
+        if sessao.tipo_utilizador_ativo() in ("Master", "Admin"):
+            ctk.CTkButton(
+                barra_criar,
+                text="Guia de entrega",
+                corner_radius=tema.RAIO_BOTAO,
+                fg_color="transparent",
+                border_width=2,
+                border_color=tema.AZUL_PRINCIPAL,
+                text_color=tema.AZUL_PRINCIPAL,
+                hover_color=tema.ID_CHIP_FUNDO,
+                command=lambda: GuiaEntregaModal(self),
+            ).pack(side="left", padx=(10, 0))
+
         barra = ctk.CTkFrame(self, fg_color="transparent")
         barra.pack(fill="x", padx=20, pady=(0, 6))
 
@@ -183,14 +200,14 @@ class ListaRequisicoes(ctk.CTkFrame):
             text_color=tema.AZUL_PRINCIPAL,
             hover_color=tema.COR_BORDA,
             command=lambda: controlador.mostrar_frame(
-                __import__("gui.gui_est_hub", fromlist=["EcraStock"]).EcraStock
+                __import__("gui.estoque.gui_est_hub", fromlist=["EcraStock"]).EcraStock
             ),
         ).pack(side="left")
 
         filtros = ctk.CTkFrame(self, fg_color="transparent")
         filtros.pack(fill="x", padx=20, pady=(0, 6))
 
-        self.combo_estado = ctk.CTkOptionMenu(
+        self.combo_estado = componentes.Seletor(
             filtros,
             values=[_OPCAO_TODOS_ESTADOS] + list(_ESTADOS_REQUISICAO),
             width=180,
@@ -211,7 +228,7 @@ class ListaRequisicoes(ctk.CTkFrame):
             r["id"]: r["nome"] for r in self.responsaveis_disponiveis
         }
 
-        self.combo_responsavel = ctk.CTkOptionMenu(
+        self.combo_responsavel = componentes.Seletor(
             filtros,
             values=([_OPCAO_TODOS_RESPONSAVEIS] + sorted(self.id_por_rotulo)),
             width=240,
@@ -337,13 +354,20 @@ class ListaRequisicoes(ctk.CTkFrame):
 
         # ---- Requisição (id + data) ----
         coluna_id = ctk.CTkFrame(linha, fg_color="transparent")
-        ctk.CTkLabel(
+        # Clicar no ID abre o resumo (só leitura) da requisição — o
+        # mesmo que a lista de devoluções já abria no "de REQ-...".
+        rotulo_id = ctk.CTkLabel(
             coluna_id,
             text=requisicao["id"],
-            text_color=tema.COR_TEXTO,
+            text_color=tema.AZUL_PRINCIPAL,
             font=ctk.CTkFont(size=12, weight="bold"),
             anchor="w",
-        ).pack(fill="x")
+        )
+        rotulo_id.pack(fill="x")
+        componentes.tornar_cliclavel(
+            rotulo_id,
+            lambda: _ResumoRequisicaoModal(self, requisicao["id"]),
+        )
         data = requisicao["data_pedido"]
         ctk.CTkLabel(
             coluna_id,
@@ -604,6 +628,11 @@ class _AcoesRequisicaoPendenteModal(ctk.CTkToplevel):
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
             return
+
+        componentes.mostrar_sucesso(
+            f"Requisição {self.requisicao['id']} cancelada."
+        )
+        self.tela_lista._recarregar()
 
 
 class _AcoesRequisicaoRejeitadaModal(ctk.CTkToplevel):
@@ -1014,6 +1043,12 @@ class _ConfirmarRececaoModal(ctk.CTkToplevel):
             componentes.mostrar_erro(str(erro))
             return
 
+        componentes.mostrar_sucesso(
+            f"Requisição {self.requisicao['id']} fechada."
+        )
+        self.destroy()
+        self.tela_lista._recarregar()
+
 
 class _RejeitarRequisicaoModal(ctk.CTkToplevel):
     """Motivo obrigatório antes de rejeitar — `rejeitar_requisicao`
@@ -1367,6 +1402,14 @@ class ReportarDevolucaoModal(ctk.CTkToplevel):
             componentes.mostrar_erro(str(erro))
             return
 
+        componentes.mostrar_sucesso(
+            f"Devolução reportada: {devolucao['id']} — fica "
+            f"pendente até o armazém aceitar, em \"Aceitar Sobra "
+            f"(Devolução)\"."
+        )
+        self.destroy()
+        self.tela_lista._recarregar()
+
 
 # =====================================================================
 # "+ NOVA REQUISIÇÃO" — escolher Requisição Staff / Rol de Lavanderia
@@ -1540,7 +1583,7 @@ class _LinhaProduto:
         self.moldura = ctk.CTkFrame(master, fg_color="transparent")
         self.moldura.pack(fill="x", padx=16, pady=3)
 
-        self.combo_produto = ctk.CTkOptionMenu(
+        self.combo_produto = componentes.Seletor(
             self.moldura,
             values=modal.rotulos_produtos,
             width=_LARGURA_PRODUTO,
@@ -1712,7 +1755,7 @@ class NovaRequisicaoModal(ctk.CTkToplevel):
             for r in self.responsaveis_disponiveis
         }
 
-        self.combo_responsavel = ctk.CTkOptionMenu(
+        self.combo_responsavel = componentes.Seletor(
             self,
             values=rotulos or ["— Nenhum —"],
             corner_radius=tema.RAIO_CAMPO,
@@ -2101,7 +2144,7 @@ class RolLavanderiaModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
             anchor="w",
         ).pack(fill="x")
-        self.combo_recebe = ctk.CTkOptionMenu(
+        self.combo_recebe = componentes.Seletor(
             coluna_recebe,
             values=rotulos or ["— Nenhum —"],
             corner_radius=tema.RAIO_CAMPO,
@@ -2119,7 +2162,7 @@ class RolLavanderiaModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
             anchor="w",
         ).pack(fill="x")
-        self.combo_envia = ctk.CTkOptionMenu(
+        self.combo_envia = componentes.Seletor(
             coluna_envia,
             values=rotulos or ["— Nenhum —"],
             corner_radius=tema.RAIO_CAMPO,

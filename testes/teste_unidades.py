@@ -11,9 +11,17 @@ como antes cada teste começava com um dicionário `dados` novo.
 NOTA sobre identidade: `procurar()`/`listar()` fazem sempre um SELECT
 novo à base de dados — já não devolvem o MESMO objeto Python que
 `criar()` devolveu. Por isso comparamos com `assertEqual` (valores
-iguais), nunca com `assertIs` (mesmo objeto); e "está na base de
-dados" verifica-se com `unidades.listar()` em vez de
-`assertIn(x, dados["unidades"])`.
+iguais), nunca com `assertIs` (mesmo objeto). E — mais forte do que
+isso — as duas fontes já não devolvem dicionários com as MESMAS
+chaves: `criar()` devolve o dicionário que construiu (sem
+`data_desativacao`, `desativado_por_id`, `categoria_cama_extra`, e
+com `tipo_cama_extra`/`posicao_beliche`/`beliche_grupo_id` a `None`
+quando vazios); o `repositorio` devolve o que está gravado (com
+essas chaves preenchidas — `""` onde é texto vazio, `None` onde é
+nullable). Por isso, comparar o dicionário devolvido por `criar()`
+com o devolvido por `listar()`/`procurar()` por igualdade literal
+NÃO funciona: os testes comparam por ID (ou pelo campo específico
+que estão a verificar), nunca o dicionário todo.
 
 NOTA sobre `atualizar`/`desativar`/`reativar`/`marcar_manutencao`/
 `desmarcar_manutencao` (e os equivalentes de quarto e lugar): estas
@@ -30,28 +38,29 @@ através de `contratos.py` (`criar_mensal`/`registar_airbnb`), que
 aplica as suas próprias regras de negócio (capacidade da unidade,
 sobreposição de datas Airbnb, um NIF não pode ter dois contratos
 mensais ativos ao mesmo tempo). Por isso cada ocupação mensal criada
-por este auxiliar usa sempre um cliente novo, com NIF distinto. Duas
-situações que a versão antiga simulava não têm forma de nascer por
-este caminho, porque `contratos.py` não as permite através da API
-pública (ver TesteEstado, o par de testes "encerrada"/"até ao dia
-anterior ao encerramento", e TesteQuartoPrivativoOcupado — caso da
-ocupação Airbnb): nesses casos, a linha é inserida diretamente com
-`repositorio.inserir_ocupacao`, ao nível dos dados, deliberadamente
-por baixo de `contratos.py` — porque o que se testa aí é o próprio
-código de `unidades.py` (a comparação de datas em `_estado_mensal`,
-o filtro por `tipo` em `quarto_privativo_ocupado`), não as regras de
-`contratos.py`.
+por este auxiliar usa sempre um cliente novo, com NIF distinto.
 
-NOTA sobre `tipo_cama` (06/09/2026): `unidades.criar_lugar` passou a
-exigir `tipo_cama` como terceiro parâmetro posicional, sem valor por
-omissão (só decide a aparência do lugar na planta de lugares da GUI
-— nunca a capacidade, decisão 17). Todas as chamadas a `criar_lugar`
-neste ficheiro passaram a indicar um tipo — "solteiro" onde o teste
-não depende do valor, ou um tipo que combina com o nome do lugar
-("casal"/"beliche") onde isso já fazia sentido pelo nome usado.
-`atualizar_lugar` continua com `tipo_cama=None` por omissão
-(convenção de "None não altera"), por isso as chamadas existentes
-que não mexem em tipo_cama não precisaram de mudar.
+NOTA sobre `tipo_cama` (06/09/2026 + reforço 15/09/2026): `criar_lugar`
+já não aceita `"beliche"` — um beliche são DUAS linhas ligadas por
+`beliche_grupo_id`, cada uma com `posicao_beliche` ('superior' ou
+'inferior'), e a função para o criar é `criar_beliche(quarto_id,
+nome_superior, nome_inferior)`. `criar_lugar` só serve solteiro e
+casal. Testes que queriam apenas "dois lugares no mesmo quarto" usam
+solteiro — o tipo de cama não interessa para a regra testada.
+
+NOTA sobre desativação forçada (06/09/2026): `unidades.desativar` com
+`forcar=True` exige `responsavel_id` sempre que há dependências
+ativas — o responsável que autoriza a exceção fica gravado em
+`desativado_por_id`/`data_desativacao`. Mesma convenção de
+`propriedades.desativar`. Testes que forçam passam um responsável
+criado no próprio teste.
+
+CLIENTES DE FIXTURE (16/09/2026): os dois helpers `criar_cliente_mensal`
+e `criar_cliente_airbnb` fornecem TODOS os campos que cada regime
+exige em `validacoes.validar_cliente` — nacionalidade e telefone no
+mensal, `pais_emissor_documento` e `pais_residencia` no airbnb, além
+dos que já existiam antes. Sem eles cada `clientes.criar(...)`
+rebentava antes sequer de o teste correr.
 """
 
 import itertools
@@ -63,12 +72,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest
 
 import clientes
 import contratos
 import propriedades
 import repositorio
+import responsaveis
 import unidades
 
 
@@ -113,7 +123,9 @@ def dar_lugares(unidade_id, capacidades):
     quarto = unidades.criar_quarto(unidade_id, "Quarto de teste")
     for capacidade in capacidades:
         unidades.criar_lugar(
-            quarto["id"], f"Lugar {capacidade}", "solteiro",
+            quarto["id"],
+            f"Lugar {capacidade}",
+            "solteiro",
             capacidade=capacidade,
         )
     return sum(capacidades)
@@ -141,12 +153,9 @@ def _gerar_nif():
 
 def criar_cliente_mensal():
     """Cliente completo e válido para o regime mensal — nif, morada,
-    estado civil, data de nascimento e validade do documento são
-    todos obrigatórios (validacoes.validar_cliente, regime mensal).
-    Usa "Outro" como tipo de documento para não depender da forma
-    exata do texto "Cartão (de) Cidadão", que difere entre
-    validacoes.TIPOS_DOCUMENTO e o ENUM da tabela `clientes` — fora
-    do âmbito desta migração.
+    estado_civil, telefone, nacionalidade, data de nascimento e
+    validade do documento são todos obrigatórios
+    (validacoes.validar_cliente, regime mensal, decisão 16/09/2026).
     """
     return clientes.criar(
         "Cliente Mensal Teste",
@@ -155,7 +164,9 @@ def criar_cliente_mensal():
         "mensal",
         nif=_gerar_nif(),
         morada="Rua de Teste, 1",
+        nacionalidade="Portuguesa",
         estado_civil="Solteiro(a)",
+        telefone="912345678",
         data_nascimento=date(1990, 1, 1),
         validade_documento=date(2035, 1, 1),
     )
@@ -163,8 +174,10 @@ def criar_cliente_mensal():
 
 def criar_cliente_airbnb():
     """Cliente completo e válido para o regime Airbnb —
-    nacionalidade, data de nascimento e validade do documento são
-    obrigatórios (validacoes.validar_cliente, regime airbnb)."""
+    nacionalidade, data de nascimento, validade do documento,
+    pais_emissor_documento e pais_residencia são todos obrigatórios
+    (validacoes.validar_cliente, regime airbnb, decisão 16/09/2026).
+    """
     return clientes.criar(
         "Cliente Airbnb Teste",
         "Outro",
@@ -173,28 +186,21 @@ def criar_cliente_airbnb():
         nacionalidade="Portuguesa",
         data_nascimento=date(1990, 1, 1),
         validade_documento=date(2035, 1, 1),
+        pais_emissor_documento="Portugal",
+        pais_residencia="Portugal",
     )
 
 
-# --- Ocupações de apoio -------------------------------------------------
+# --- Ocupações de apoio -----------------------------------------------
 
 
 def criar_ocupacao(unidade_id, tipo, data_inicio, data_fim=None, ativo=True):
     """Cria uma ocupação real: contrato mensal via
     contratos.criar_mensal ou reserva Airbnb via
-    contratos.registar_airbnb — já não é possível simular uma
-    ocupação só acrescentando um dicionário a uma lista em memória,
-    porque contratos.py aplica as suas próprias regras de negócio
-    (capacidade da unidade, sobreposição de datas, NIF único por
-    contrato mensal ativo).
+    contratos.registar_airbnb.
 
     'ativo=False' cria a ocupação normalmente e fecha-a logo a
-    seguir (encerrar_mensal / cancelar_airbnb) — é assim que uma
-    ocupação inativa nasce na base de dados real; a data de fim
-    usada para fechar um contrato mensal não é significativa para
-    quem chama com ativo=False (só interessa que fique inativa), por
-    isso usa-se 'data_fim' se vier indicada, senão um dia a seguir
-    ao início.
+    seguir (encerrar_mensal / cancelar_airbnb).
     """
     if tipo == "mensal":
         cliente = criar_cliente_mensal()
@@ -207,7 +213,11 @@ def criar_ocupacao(unidade_id, tipo, data_inicio, data_fim=None, ativo=True):
         )
 
         if not ativo:
-            fim = data_fim if data_fim is not None else data_inicio + timedelta(days=1)
+            fim = (
+                data_fim
+                if data_fim is not None
+                else data_inicio + timedelta(days=1)
+            )
             ocupacao, _ = contratos.encerrar_mensal(ocupacao["id"], fim)
 
         return ocupacao
@@ -227,15 +237,11 @@ def criar_ocupacao(unidade_id, tipo, data_inicio, data_fim=None, ativo=True):
 
 def criar_ocupacao_mensal_com_fim_marcado(unidade_id, data_inicio, data_fim):
     """Insere diretamente na tabela `ocupacoes` um contrato mensal
-    com data de fim marcada mas AINDA ativo — um estado que
-    contratos.encerrar_mensal já não permite produzir (encerrar
-    desativa sempre o contrato de imediato, os dois campos mudam
-    juntos), mas que a comparação de datas em unidades._estado_mensal
-    continua preparada para tratar (código defensivo, sem forma de
-    lá chegar pela API pública). Testa esse ramo diretamente ao
-    nível do repositório, por baixo de contratos.py — só a tabela
-    base é preciso preencher, porque _estado_mensal só lê 'ocupacoes',
-    nunca 'ocupacoes_mensal'.
+    com data de fim marcada mas AINDA ativo — estado que
+    contratos.encerrar_mensal já não permite produzir, mas que
+    `unidades._estado_mensal` continua preparada para tratar (código
+    defensivo). Só a tabela base é preenchida, porque
+    `_estado_mensal` só lê 'ocupacoes'.
     """
     cliente = criar_cliente_mensal()
     ocupacao = {
@@ -272,47 +278,71 @@ class TesteCriar(BaseMySQLTest):
     def test_recusa_propriedade_inexistente(self):
         with self.assertRaises(ValueError):
             unidades.criar(
-                "PRO-999", "Unidade Teste", "mensal",
-                Decimal("250.00"), Decimal("250.00"), Decimal("20.00"),
+                "PRO-999",
+                "Unidade Teste",
+                "mensal",
+                Decimal("250.00"),
+                Decimal("250.00"),
+                Decimal("20.00"),
             )
 
     def test_recusa_tipo_desconhecido(self):
         propriedade_id = criar_propriedade()["id"]
         with self.assertRaises(ValueError):
             unidades.criar(
-                propriedade_id, "Unidade Teste", "semanal",
-                Decimal("250.00"), Decimal("250.00"), Decimal("20.00"),
+                propriedade_id,
+                "Unidade Teste",
+                "semanal",
+                Decimal("250.00"),
+                Decimal("250.00"),
+                Decimal("20.00"),
             )
 
     def test_recusa_preco_em_falta(self):
         propriedade_id = criar_propriedade()["id"]
         with self.assertRaises(ValueError):
             unidades.criar(
-                propriedade_id, "Unidade Teste", "mensal",
-                None, Decimal("250.00"), Decimal("20.00"),
+                propriedade_id,
+                "Unidade Teste",
+                "mensal",
+                None,
+                Decimal("250.00"),
+                Decimal("20.00"),
             )
 
     def test_recusa_preco_nao_decimal(self):
         propriedade_id = criar_propriedade()["id"]
         with self.assertRaises(ValueError):
             unidades.criar(
-                propriedade_id, "Unidade Teste", "mensal",
-                250.00, Decimal("250.00"), Decimal("20.00"),
+                propriedade_id,
+                "Unidade Teste",
+                "mensal",
+                250.00,
+                Decimal("250.00"),
+                Decimal("20.00"),
             )
 
     def test_recusa_preco_negativo(self):
         propriedade_id = criar_propriedade()["id"]
         with self.assertRaises(ValueError):
             unidades.criar(
-                propriedade_id, "Unidade Teste", "mensal",
-                Decimal("-1"), Decimal("250.00"), Decimal("20.00"),
+                propriedade_id,
+                "Unidade Teste",
+                "mensal",
+                Decimal("-1"),
+                Decimal("250.00"),
+                Decimal("20.00"),
             )
 
     def test_epoca_alta_ativa_aceita_true(self):
         propriedade_id = criar_propriedade()["id"]
         unidade = unidades.criar(
-            propriedade_id, "Unidade Teste", "airbnb",
-            Decimal("45.00"), Decimal("90.00"), Decimal("20.00"),
+            propriedade_id,
+            "Unidade Teste",
+            "airbnb",
+            Decimal("45.00"),
+            Decimal("90.00"),
+            Decimal("20.00"),
             epoca_alta_ativa=True,
         )
         self.assertTrue(unidade["epoca_alta_ativa"])
@@ -321,10 +351,14 @@ class TesteCriar(BaseMySQLTest):
 class TesteProcurar(BaseMySQLTest):
 
     def test_encontra_unidade_existente(self):
+        """Comparação por ID — `criar()` e `procurar()` devolvem
+        dicionários com chaves diferentes (ver nota no topo do
+        ficheiro); o que interessa é que é a MESMA linha."""
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         encontrada = unidades.procurar(unidade["id"])
-        self.assertEqual(encontrada, unidade)
+        self.assertIsNotNone(encontrada)
+        self.assertEqual(encontrada["id"], unidade["id"])  # type: ignore
 
     def test_devolve_none_para_id_inexistente(self):
         self.assertIsNone(unidades.procurar("UNI-999"))
@@ -342,12 +376,14 @@ class TesteListar(BaseMySQLTest):
         self.assertEqual(unidades.listar(), [])
 
     def test_lista_so_ativas_por_omissao(self):
+        """Comparação por ID — `criar()` e `listar()` devolvem
+        dicionários com chaves diferentes."""
         propriedade = criar_propriedade()
         ativa = criar_unidade_mensal(propriedade["id"])
         inativa = criar_unidade_airbnb(propriedade["id"])
         unidades.desativar(inativa["id"])
         resultado = unidades.listar()
-        self.assertEqual(resultado, [ativa])
+        self.assertEqual([u["id"] for u in resultado], [ativa["id"]])
 
     def test_lista_incluir_inativas(self):
         propriedade = criar_propriedade()
@@ -358,19 +394,22 @@ class TesteListar(BaseMySQLTest):
         self.assertEqual(len(resultado), 2)
 
     def test_filtra_por_propriedade(self):
+        """Comparação por ID — os dicionários das duas origens têm
+        chaves diferentes."""
         propriedade = criar_propriedade()
         outra_propriedade = propriedades.criar("Aldoar")
         criar_unidade_mensal(propriedade["id"])
         da_segunda = criar_unidade_mensal(outra_propriedade["id"])
         resultado = unidades.listar(propriedade_id=outra_propriedade["id"])
-        self.assertEqual(resultado, [da_segunda])
+        self.assertEqual([u["id"] for u in resultado], [da_segunda["id"]])
 
     def test_filtra_por_tipo(self):
+        """Comparação por ID — mesma razão."""
         propriedade = criar_propriedade()
         criar_unidade_mensal(propriedade["id"])
         airbnb = criar_unidade_airbnb(propriedade["id"])
         resultado = unidades.listar(tipo="airbnb")
-        self.assertEqual(resultado, [airbnb])
+        self.assertEqual([u["id"] for u in resultado], [airbnb["id"]])
 
     def test_devolve_lista_nova(self):
         propriedade = criar_propriedade()
@@ -396,7 +435,9 @@ class TesteAtualizar(BaseMySQLTest):
     def test_altera_preco_base(self):
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
-        atualizado = unidades.atualizar(unidade["id"], preco_base=Decimal("300.00"))
+        atualizado = unidades.atualizar(
+            unidade["id"], preco_base=Decimal("300.00")
+        )
         self.assertEqual(atualizado["preco_base"], Decimal("300.00"))
 
     def test_altera_epoca_alta_ativa(self):
@@ -416,7 +457,8 @@ class TesteAtualizar(BaseMySQLTest):
         unidade = criar_unidade_mensal(propriedade["id"])
         with self.assertRaises(ValueError):
             unidades.atualizar(
-                unidade["id"], multa_check_in_tardio=Decimal("-5"),
+                unidade["id"],
+                multa_check_in_tardio=Decimal("-5"),
             )
 
 
@@ -457,8 +499,8 @@ class TesteDesativarReativar(BaseMySQLTest):
             unidades.reativar("UNI-999")
 
     def test_recusa_desativar_com_ocupacao_ativa_sem_forcar(self):
-        """Novo (decisão de 27/08, item 9): sem forcar=True, recusa
-        desativar se existir alguma ocupação ativa dependente."""
+        """Sem forcar=True, recusa desativar se existir alguma
+        ocupação ativa dependente (decisão de 27/08, item 9)."""
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         dar_lugares(unidade["id"], [1])
@@ -469,13 +511,17 @@ class TesteDesativarReativar(BaseMySQLTest):
 
     def test_desativar_com_forcar_ignora_ocupacoes_ativas(self):
         """Com forcar=True, desativa mesmo com ocupações ativas
-        dependentes — decisão consciente de quem chama."""
+        dependentes — mas só com responsável que autorize (mesma
+        regra de propriedades.desativar)."""
+        responsavel = responsaveis.criar("Gestor de Turno")
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         dar_lugares(unidade["id"], [1])
         criar_ocupacao(unidade["id"], "mensal", date(2026, 9, 1))
 
-        resultado = unidades.desativar(unidade["id"], forcar=True)
+        resultado = unidades.desativar(
+            unidade["id"], forcar=True, responsavel_id=responsavel["id"]
+        )
 
         self.assertFalse(resultado["ativo"])
 
@@ -538,15 +584,21 @@ class TesteCriarQuarto(BaseMySQLTest):
         self.assertFalse(quarto["limpeza_incluida"])
         self.assertTrue(quarto["ativo"])
         self.assertIn(
-            quarto["id"], [q["id"] for q in unidades.listar_quartos(unidade_id=unidade["id"])]
+            quarto["id"],
+            [
+                q["id"]
+                for q in unidades.listar_quartos(unidade_id=unidade["id"])
+            ],
         )
 
     def test_cria_quarto_privativo_com_limpeza(self):
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(
-            unidade["id"], "Suite",
-            privativo=True, limpeza_incluida=True,
+            unidade["id"],
+            "Suite",
+            privativo=True,
+            limpeza_incluida=True,
         )
         self.assertTrue(quarto["privativo"])
         self.assertTrue(quarto["limpeza_incluida"])
@@ -575,7 +627,8 @@ class TesteProcurarQuarto(BaseMySQLTest):
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Quarto 1")
         encontrado = unidades.procurar_quarto(quarto["id"])
-        self.assertEqual(encontrado, quarto)
+        self.assertIsNotNone(encontrado)
+        self.assertEqual(encontrado["id"], quarto["id"])  # type: ignore
 
     def test_devolve_none_para_id_inexistente(self):
         self.assertIsNone(unidades.procurar_quarto("QRT-999"))
@@ -590,7 +643,7 @@ class TesteListarQuartos(BaseMySQLTest):
         quarto_a = unidades.criar_quarto(unidade_a["id"], "A1")
         unidades.criar_quarto(unidade_b["id"], "B1")
         resultado = unidades.listar_quartos(unidade_id=unidade_a["id"])
-        self.assertEqual(resultado, [quarto_a])
+        self.assertEqual([q["id"] for q in resultado], [quarto_a["id"]])
 
     def test_lista_so_ativos_por_omissao(self):
         propriedade = criar_propriedade()
@@ -599,7 +652,7 @@ class TesteListarQuartos(BaseMySQLTest):
         inativo = unidades.criar_quarto(unidade["id"], "Q2")
         unidades.desativar_quarto(inativo["id"])
         resultado = unidades.listar_quartos(unidade_id=unidade["id"])
-        self.assertEqual(resultado, [ativo])
+        self.assertEqual([q["id"] for q in resultado], [ativo["id"]])
 
 
 class TesteAtualizarQuarto(BaseMySQLTest):
@@ -684,7 +737,8 @@ class TesteCriarLugar(BaseMySQLTest):
         self.assertEqual(lugar["capacidade"], 1)
         self.assertTrue(lugar["ativo"])
         self.assertIn(
-            lugar["id"], [l["id"] for l in unidades.listar_lugares(quarto_id=quarto["id"])]
+            lugar["id"],
+            [l["id"] for l in unidades.listar_lugares(quarto_id=quarto["id"])],
         )
 
     def test_cria_lugar_capacidade_dois(self):
@@ -697,13 +751,37 @@ class TesteCriarLugar(BaseMySQLTest):
         self.assertEqual(lugar["capacidade"], 2)
         self.assertEqual(lugar["tipo_cama"], "casal")
 
-    def test_cria_lugar_beliche(self):
+    def test_cria_beliche_cria_par_ligado(self):
+        """`criar_beliche` cria duas linhas com `tipo_cama='beliche'`,
+        `posicao_beliche` ('superior' / 'inferior') e o mesmo
+        `beliche_grupo_id`. `criar_lugar` já não aceita 'beliche'."""
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
-        lugar = unidades.criar_lugar(quarto["id"], "Beliche cima", "beliche")
-        self.assertEqual(lugar["tipo_cama"], "beliche")
-        self.assertEqual(lugar["capacidade"], 1)
+
+        inferior, superior = unidades.criar_beliche(
+            quarto["id"], "Beliche cima", "Beliche baixo"
+        )
+
+        self.assertEqual(inferior["tipo_cama"], "beliche")
+        self.assertEqual(superior["tipo_cama"], "beliche")
+        self.assertEqual(inferior["posicao_beliche"], "inferior")
+        self.assertEqual(superior["posicao_beliche"], "superior")
+        self.assertEqual(
+            inferior["beliche_grupo_id"], superior["beliche_grupo_id"]
+        )
+        self.assertEqual(inferior["capacidade"], 1)
+        self.assertEqual(superior["capacidade"], 1)
+
+    def test_criar_lugar_com_beliche_recusa(self):
+        """`criar_lugar` já não aceita 'beliche' — só `criar_beliche`
+        cria beliches. Reforça que a rota antiga foi fechada."""
+        propriedade = criar_propriedade()
+        unidade = criar_unidade_mensal(propriedade["id"])
+        quarto = unidades.criar_quarto(unidade["id"], "Q1")
+
+        with self.assertRaises(ValueError):
+            unidades.criar_lugar(quarto["id"], "Beliche cima", "beliche")
 
     def test_recusa_quarto_inexistente(self):
         with self.assertRaises(ValueError):
@@ -731,7 +809,9 @@ class TesteCriarLugar(BaseMySQLTest):
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
         with self.assertRaises(ValueError):
             unidades.criar_lugar(
-                quarto["id"], "Cama 1", "solteiro",
+                quarto["id"],
+                "Cama 1",
+                "solteiro",
                 capacidade=None,  # type: ignore
             )
 
@@ -753,12 +833,15 @@ class TesteCriarLugar(BaseMySQLTest):
 class TesteProcurarLugar(BaseMySQLTest):
 
     def test_encontra_lugar_existente(self):
+        """Comparação por ID — ver nota no topo do ficheiro sobre
+        as diferentes formas dos dicionários."""
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
         lugar = unidades.criar_lugar(quarto["id"], "Cama 1", "solteiro")
         encontrado = unidades.procurar_lugar(lugar["id"])
-        self.assertEqual(encontrado, lugar)
+        self.assertIsNotNone(encontrado)
+        self.assertEqual(encontrado["id"], lugar["id"])  # type: ignore
 
     def test_devolve_none_para_id_inexistente(self):
         self.assertIsNone(unidades.procurar_lugar("LUG-999"))
@@ -767,6 +850,7 @@ class TesteProcurarLugar(BaseMySQLTest):
 class TesteListarLugares(BaseMySQLTest):
 
     def test_filtra_por_quarto(self):
+        """Comparação por ID — mesma razão."""
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto_a = unidades.criar_quarto(unidade["id"], "A")
@@ -774,9 +858,10 @@ class TesteListarLugares(BaseMySQLTest):
         lugar_a = unidades.criar_lugar(quarto_a["id"], "Cama 1", "solteiro")
         unidades.criar_lugar(quarto_b["id"], "Cama 1", "solteiro")
         resultado = unidades.listar_lugares(quarto_id=quarto_a["id"])
-        self.assertEqual(resultado, [lugar_a])
+        self.assertEqual([l["id"] for l in resultado], [lugar_a["id"]])
 
     def test_lista_so_ativos_por_omissao(self):
+        """Comparação por ID — mesma razão."""
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         quarto = unidades.criar_quarto(unidade["id"], "Q1")
@@ -784,7 +869,7 @@ class TesteListarLugares(BaseMySQLTest):
         inativo = unidades.criar_lugar(quarto["id"], "Cama 2", "solteiro")
         unidades.desativar_lugar(inativo["id"])
         resultado = unidades.listar_lugares(quarto_id=quarto["id"])
-        self.assertEqual(resultado, [ativo])
+        self.assertEqual([l["id"] for l in resultado], [ativo["id"]])
 
 
 class TesteAtualizarLugar(BaseMySQLTest):
@@ -894,8 +979,6 @@ class TesteEstado(BaseMySQLTest):
         with self.assertRaises(ValueError):
             unidades.estado("UNI-999", date(2026, 9, 5))
 
-    # --- Mensal: proporção ---
-
     def test_mensal_sem_ocupacoes_e_zero_sobre_capacidade(self):
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
@@ -920,32 +1003,25 @@ class TesteEstado(BaseMySQLTest):
         self.assertEqual(resultado, "0/2")
 
     def test_mensal_ocupacao_encerrada_nao_conta(self):
-        """Ocupação inserida diretamente com a data de fim marcada
-        (ver criar_ocupacao_mensal_com_fim_marcado) — o mesmo
-        resultado se obteria criando o contrato e encerrando-o de
-        verdade, aqui, porque a data pedida (15) já é posterior à
-        data de fim (10)."""
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         dar_lugares(unidade["id"], [1, 1])
         criar_ocupacao_mensal_com_fim_marcado(
-            unidade["id"], date(2026, 9, 1), date(2026, 9, 10),
+            unidade["id"],
+            date(2026, 9, 1),
+            date(2026, 9, 10),
         )
         resultado = unidades.estado(unidade["id"], date(2026, 9, 15))
         self.assertEqual(resultado, "0/2")
 
     def test_mensal_ocupacao_ativa_ate_ao_dia_anterior_ao_encerramento(self):
-        """contratos.encerrar_mensal desativa o contrato de imediato
-        — já não há forma, pela API pública, de um contrato ficar
-        com data de fim marcada e continuar ativo até lá chegar; por
-        isso a ocupação é inserida diretamente (ver
-        criar_ocupacao_mensal_com_fim_marcado), para continuar a
-        testar a comparação de datas de unidades._estado_mensal."""
         propriedade = criar_propriedade()
         unidade = criar_unidade_mensal(propriedade["id"])
         dar_lugares(unidade["id"], [1, 1])
         criar_ocupacao_mensal_com_fim_marcado(
-            unidade["id"], date(2026, 9, 1), date(2026, 9, 10),
+            unidade["id"],
+            date(2026, 9, 1),
+            date(2026, 9, 10),
         )
         resultado = unidades.estado(unidade["id"], date(2026, 9, 9))
         self.assertEqual(resultado, "1/2")
@@ -968,8 +1044,6 @@ class TesteEstado(BaseMySQLTest):
         resultado = unidades.estado(unidade["id"], date(2026, 9, 5))
         self.assertEqual(resultado, "0/2")
 
-    # --- Airbnb: Livre / Ocupado / Reservado ---
-
     def test_airbnb_livre_sem_ocupacoes(self):
         propriedade = criar_propriedade()
         unidade = criar_unidade_airbnb(propriedade["id"])
@@ -980,8 +1054,10 @@ class TesteEstado(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_airbnb(propriedade["id"])
         criar_ocupacao(
-            unidade["id"], "airbnb",
-            date(2026, 9, 10), data_fim=date(2026, 9, 15),
+            unidade["id"],
+            "airbnb",
+            date(2026, 9, 10),
+            data_fim=date(2026, 9, 15),
         )
         resultado = unidades.estado(unidade["id"], date(2026, 9, 10))
         self.assertEqual(resultado, "Ocupado")
@@ -990,8 +1066,10 @@ class TesteEstado(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_airbnb(propriedade["id"])
         criar_ocupacao(
-            unidade["id"], "airbnb",
-            date(2026, 9, 10), data_fim=date(2026, 9, 15),
+            unidade["id"],
+            "airbnb",
+            date(2026, 9, 10),
+            data_fim=date(2026, 9, 15),
         )
         resultado = unidades.estado(unidade["id"], date(2026, 9, 12))
         self.assertEqual(resultado, "Ocupado")
@@ -1000,8 +1078,10 @@ class TesteEstado(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_airbnb(propriedade["id"])
         criar_ocupacao(
-            unidade["id"], "airbnb",
-            date(2026, 9, 10), data_fim=date(2026, 9, 15),
+            unidade["id"],
+            "airbnb",
+            date(2026, 9, 10),
+            data_fim=date(2026, 9, 15),
         )
         resultado = unidades.estado(unidade["id"], date(2026, 9, 14))
         self.assertEqual(resultado, "Ocupado")
@@ -1010,8 +1090,10 @@ class TesteEstado(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_airbnb(propriedade["id"])
         criar_ocupacao(
-            unidade["id"], "airbnb",
-            date(2026, 9, 10), data_fim=date(2026, 9, 15),
+            unidade["id"],
+            "airbnb",
+            date(2026, 9, 10),
+            data_fim=date(2026, 9, 15),
         )
         resultado = unidades.estado(unidade["id"], date(2026, 9, 15))
         self.assertEqual(resultado, "Livre")
@@ -1020,27 +1102,28 @@ class TesteEstado(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_airbnb(propriedade["id"])
         criar_ocupacao(
-            unidade["id"], "airbnb",
-            date(2026, 9, 10), data_fim=date(2026, 9, 15),
+            unidade["id"],
+            "airbnb",
+            date(2026, 9, 10),
+            data_fim=date(2026, 9, 15),
         )
         resultado = unidades.estado(unidade["id"], date(2026, 9, 5))
         self.assertEqual(resultado, "Reservado")
 
     def test_airbnb_entrada_e_saida_no_mesmo_dia_nao_e_conflito(self):
-        """Réplica, ao nível do estado(), do caso já coberto na
-        validação de sobreposição: a saída de uma reserva no mesmo
-        dia da entrada da seguinte não é conflito — a noite desse
-        dia fica com a segunda reserva.
-        """
         propriedade = criar_propriedade()
         unidade = criar_unidade_airbnb(propriedade["id"])
         criar_ocupacao(
-            unidade["id"], "airbnb",
-            date(2026, 9, 10), data_fim=date(2026, 9, 15),
+            unidade["id"],
+            "airbnb",
+            date(2026, 9, 10),
+            data_fim=date(2026, 9, 15),
         )
         criar_ocupacao(
-            unidade["id"], "airbnb",
-            date(2026, 9, 15), data_fim=date(2026, 9, 18),
+            unidade["id"],
+            "airbnb",
+            date(2026, 9, 15),
+            data_fim=date(2026, 9, 18),
         )
         resultado = unidades.estado(unidade["id"], date(2026, 9, 15))
         self.assertEqual(resultado, "Ocupado")
@@ -1049,14 +1132,14 @@ class TesteEstado(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_airbnb(propriedade["id"])
         criar_ocupacao(
-            unidade["id"], "airbnb",
-            date(2026, 9, 10), data_fim=date(2026, 9, 15),
+            unidade["id"],
+            "airbnb",
+            date(2026, 9, 10),
+            data_fim=date(2026, 9, 15),
             ativo=False,
         )
         resultado = unidades.estado(unidade["id"], date(2026, 9, 12))
         self.assertEqual(resultado, "Livre")
-
-    # --- Manutenção sobrepõe-se a tudo ---
 
     def test_manutencao_sobrepoe_se_sem_ocupacoes(self):
         propriedade = criar_propriedade()
@@ -1069,8 +1152,10 @@ class TesteEstado(BaseMySQLTest):
         propriedade = criar_propriedade()
         unidade = criar_unidade_airbnb(propriedade["id"])
         criar_ocupacao(
-            unidade["id"], "airbnb",
-            date(2026, 9, 10), data_fim=date(2026, 9, 15),
+            unidade["id"],
+            "airbnb",
+            date(2026, 9, 10),
+            data_fim=date(2026, 9, 15),
         )
         unidades.marcar_manutencao(unidade["id"])
         resultado = unidades.estado(unidade["id"], date(2026, 9, 12))
@@ -1097,12 +1182,16 @@ class TesteQuartoPrivativoOcupado(BaseMySQLTest):
         self.unidade_id = unidade["id"]
 
         privativo = unidades.criar_quarto(
-            unidade["id"], "Quarto privativo",
-            privativo=True, limpeza_incluida=True,
+            unidade["id"],
+            "Quarto privativo",
+            privativo=True,
+            limpeza_incluida=True,
         )
         partilhado = unidades.criar_quarto(
-            unidade["id"], "Quarto partilhado",
-            privativo=False, limpeza_incluida=True,
+            unidade["id"],
+            "Quarto partilhado",
+            privativo=False,
+            limpeza_incluida=True,
         )
 
         self.lugar_privativo_a = unidades.criar_lugar(
@@ -1111,37 +1200,40 @@ class TesteQuartoPrivativoOcupado(BaseMySQLTest):
         self.lugar_privativo_b = unidades.criar_lugar(
             privativo["id"], "Cama B", "solteiro"
         )["id"]
+        # O tipo de cama não interessa para o teste do quarto
+        # privativo — só queremos dois lugares no mesmo quarto
+        # partilhado. "solteiro" e não "beliche" porque `criar_lugar`
+        # já não aceita beliche (usar `criar_beliche` para isso).
         self.lugar_partilhado_a = unidades.criar_lugar(
-            partilhado["id"], "Beliche cima", "beliche"
+            partilhado["id"], "Cama C", "solteiro"
         )["id"]
         self.lugar_partilhado_b = unidades.criar_lugar(
-            partilhado["id"], "Beliche baixo", "beliche"
+            partilhado["id"], "Cama D", "solteiro"
         )["id"]
 
     def _ocupar(self, lugar_id, tipo="mensal", ativo=True):
         """Cria uma ocupação real no lugar indicado.
 
         Um contrato mensal passa por contratos.criar_mensal, com um
-        cliente novo (NIF distinto) a cada chamada — um NIF só pode
-        ter um contrato mensal ativo de cada vez; 'ativo=False'
+        cliente novo (NIF distinto) a cada chamada. 'ativo=False'
         encerra o contrato logo a seguir.
 
-        contratos.registar_airbnb não tem parâmetro de lugar — uma
-        reserva Airbnb nunca fica associada a um lugar concreto no
-        modelo atual. Para continuar a confirmar que
-        quarto_privativo_ocupado ignora ocupações Airbnb mesmo que
-        estejam associadas ao mesmo lugar físico (a regra é só dos
-        contratos mensais), insere-se aqui a linha diretamente no
-        repositório — por baixo de contratos.py, deliberadamente,
+        Para testar Airbnb com lugar_id atribuído (algo que o
+        `contratos.registar_airbnb` não faz), a linha é inserida
+        diretamente — por baixo de contratos.py, deliberadamente,
         porque o que se testa é o filtro por 'tipo' dentro de
-        unidades.quarto_privativo_ocupado, não uma regra de
+        `unidades.quarto_privativo_ocupado`, não uma regra de
         negócio de contratos.py.
         """
         if tipo == "mensal":
             cliente = criar_cliente_mensal()
             ocupacao, _ = contratos.criar_mensal(
-                self.unidade_id, cliente["id"], date(2026, 9, 1),
-                Decimal("250.00"), Decimal("250.00"), lugar_id=lugar_id,
+                self.unidade_id,
+                cliente["id"],
+                date(2026, 9, 1),
+                Decimal("250.00"),
+                Decimal("250.00"),
+                lugar_id=lugar_id,
             )
             if not ativo:
                 contratos.encerrar_mensal(ocupacao["id"], date(2026, 9, 10))
