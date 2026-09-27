@@ -6,10 +6,14 @@ próprio).
 
 import logging
 
+import sys
+
 import cli
 import config
+import configuracoes
 import registo_logs
 import repositorio
+import servidores
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +44,40 @@ def main():
     config.garantir_diretorios()
     registo_logs.configurar("cli")
 
+    # SERVIDOR (27/09/2026) — o mesmo passo que o main_gui faz em
+    # `gui_servidores.garantir_ligacao()`, sem janelas: abre o túnel
+    # SSH da VM (se o servidor ativo o usar) e confirma que o MySQL
+    # responde ANTES do backup, que já usa a base. Sem isto, com a VM
+    # ativa, o CLI nunca abria o túnel e rebentava na primeira
+    # consulta. Escolher ou corrigir um servidor continua a ser no GUI
+    # (Configurações → Sistema); aqui só se informa e termina.
+    id_servidor, servidor = servidores.servidor_ativo()
+
+    if id_servidor is None:
+        sys.exit(
+            "Ainda não há servidor de base de dados configurado. "
+            "Abre o GUI (python src/main_gui.py) para o configurar."
+        )
+
+    ok, texto = servidores.testar_id(id_servidor)
+
+    if not ok:
+        logger.warning("Servidor '%s' indisponível: %s", id_servidor, texto)
+        sys.exit(
+            f"Sem ligação ao servidor '{(servidor or {}).get('nome')}':\n"
+            f"{texto}\n"
+            "Muda ou corrige o servidor no GUI (Configurações → Sistema)."
+        )
+
+    logger.info("Servidor '%s': %s", id_servidor, texto)
+
     repositorio.criar_backup()
     repositorio.limpar_backups_antigos()
+
+    # Valores por omissão das Configurações — o GUI faz o mesmo no
+    # arranque; sem eles, uma base nova não tem as chaves que o
+    # negócio lê.
+    configuracoes.garantir_seed()
 
     cli.menu_principal()
 

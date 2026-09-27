@@ -16,6 +16,7 @@ nenhuma estrutura `dados` (o padrão descrito na secção 5.1 das
 orientações refere-se à Fase 1, em JSON).
 """
 
+import getpass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
@@ -26,7 +27,31 @@ import estoque
 import propriedades
 import responsaveis
 import unidades
+import utilizadores
 import validacoes
+
+# Responsável com sessão iniciada (27/09/2026, v1.6.0). É o mesmo
+# dicionário que o GUI guarda em `sessao.obter_responsavel_ativo()`:
+# desde a v1.5.0 várias funções de negócio recebem o `autor` para
+# validarem o perfil (Master/Admin/Staff), e o CLI deixou de poder
+# chamá-las sem ele — `responsaveis.desativar(id)` rebentava com
+# TypeError. O CLI passa, por isso, a pedir login no arranque, como o
+# GUI. O `cli` não importa o `gui.sessao` para não depender do pacote
+# gráfico: guarda o autor aqui.
+_autor = None
+
+_MENSAGENS_LOGIN = {
+    utilizadores.MOTIVO_NAO_ENCONTRADO: "Utilizador ou password errados.",
+    utilizadores.MOTIVO_PASSWORD_ERRADA: "Utilizador ou password errados.",
+    utilizadores.MOTIVO_SEM_CREDENCIAL: (
+        "Este responsável ainda não tem credencial — um Master ou "
+        "Admin define-a no GUI (Responsáveis)."
+    ),
+    utilizadores.MOTIVO_INATIVO: "Este responsável está desativado.",
+}
+
+# Tentativas de login antes de o CLI terminar.
+_TENTATIVAS_LOGIN = 3
 
 
 def ler_texto(mensagem, obrigatorio=True):
@@ -701,13 +726,22 @@ def _criar_unidade():
     nome = ler_texto("Nome da unidade: ")
     tipo = ler_escolha("Tipo", validacoes.TIPOS_UNIDADE)
     preco_base = ler_decimal("Preço base: ", minimo=Decimal("0"))
-    preco_epoca_alta = ler_decimal(
-        "Preço em época alta: ", minimo=Decimal("0")
-    )
-    multa_check_in_tardio = ler_decimal(
-        "Multa de check-in tardio: ", minimo=Decimal("0")
-    )
-    epoca_alta_ativa = confirmar("Época alta ativa nesta unidade?")
+
+    # Igual ao GUI desde 27/09/2026 (commit 4854a47): época alta e
+    # multa de check-in tardio só existem no Airbnb. Numa unidade
+    # mensal não se perguntam e gravam 0,00 / não.
+    if tipo == "airbnb":
+        preco_epoca_alta = ler_decimal(
+            "Preço em época alta: ", minimo=Decimal("0")
+        )
+        multa_check_in_tardio = ler_decimal(
+            "Multa de check-in tardio: ", minimo=Decimal("0")
+        )
+        epoca_alta_ativa = confirmar("Época alta ativa nesta unidade?")
+    else:
+        preco_epoca_alta = Decimal("0")
+        multa_check_in_tardio = Decimal("0")
+        epoca_alta_ativa = False
 
     try:
         unidade = unidades.criar(
@@ -809,22 +843,29 @@ def _atualizar_unidade():
         obrigatorio=False,
         minimo=Decimal("0"),
     )
-    preco_epoca_alta = ler_decimal(
-        "Preço em época alta [atual: "
-        f"{formatar_valor(unidade['preco_epoca_alta'])}, Enter mantém]: ",
-        obrigatorio=False,
-        minimo=Decimal("0"),
-    )
-    multa_check_in_tardio = ler_decimal(
-        "Multa de check-in tardio [atual: "
-        f"{formatar_valor(unidade['multa_check_in_tardio'])}, "
-        f"Enter mantém]: ",
-        obrigatorio=False,
-        minimo=Decimal("0"),
-    )
-    epoca_alta_ativa = ler_booleano_atualizacao(
-        "Época alta ativa", unidade["epoca_alta_ativa"]
-    )
+    # Só Airbnb, como no GUI (ver `_criar_unidade`). None = mantém.
+    preco_epoca_alta = None
+    multa_check_in_tardio = None
+    epoca_alta_ativa = None
+
+    if unidade["tipo"] == "airbnb":
+        preco_epoca_alta = ler_decimal(
+            "Preço em época alta [atual: "
+            f"{formatar_valor(unidade['preco_epoca_alta'])}, "
+            f"Enter mantém]: ",
+            obrigatorio=False,
+            minimo=Decimal("0"),
+        )
+        multa_check_in_tardio = ler_decimal(
+            "Multa de check-in tardio [atual: "
+            f"{formatar_valor(unidade['multa_check_in_tardio'])}, "
+            f"Enter mantém]: ",
+            obrigatorio=False,
+            minimo=Decimal("0"),
+        )
+        epoca_alta_ativa = ler_booleano_atualizacao(
+            "Época alta ativa", unidade["epoca_alta_ativa"]
+        )
 
     try:
         unidade = unidades.atualizar(
@@ -1327,9 +1368,16 @@ def _criar_responsavel():
 
     nome = ler_texto("Nome: ")
     contacto = ler_texto("Contacto: ", obrigatorio=False)
+    # O perfil e a permissão de o escolher são validados no negócio
+    # com o `autor` (Master cria qualquer perfil, Admin só Staff).
+    tipo_utilizador = (
+        ler_escolha("Perfil", responsaveis.TIPOS_UTILIZADOR) or "Staff"
+    )
 
     try:
-        responsavel = responsaveis.criar(nome, contacto)
+        responsavel = responsaveis.criar(
+            nome, contacto, tipo_utilizador, autor=_autor
+        )
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
@@ -1352,7 +1400,10 @@ def _listar_responsaveis():
 
     for r in lista:
         estado = "ativo" if r["ativo"] else "inativo"
-        print(f"{r['id']} — {r['nome']} ({estado})")
+        print(
+            f"{r['id']} — {r['nome']} "
+            f"[{r.get('tipo_utilizador') or '—'}] ({estado})"
+        )
 
         if r["contacto"]:
             print(f"    contacto: {r['contacto']}")
@@ -1375,7 +1426,7 @@ def _atualizar_responsavel():
 
     try:
         responsavel = responsaveis.atualizar(
-            responsavel_id, nome=nome, contacto=contacto
+            responsavel_id, nome=nome, contacto=contacto, autor=_autor
         )
     except ValueError as erro:
         print(f"Erro: {erro}")
@@ -1393,7 +1444,7 @@ def _desativar_responsavel():
     responsavel_id = ler_texto("ID do responsável: ")
 
     try:
-        responsavel = responsaveis.desativar(responsavel_id)
+        responsavel = responsaveis.desativar(responsavel_id, _autor)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
@@ -1407,7 +1458,7 @@ def _reativar_responsavel():
     responsavel_id = ler_texto("ID do responsável: ")
 
     try:
-        responsavel = responsaveis.reativar(responsavel_id)
+        responsavel = responsaveis.reativar(responsavel_id, _autor)
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
@@ -2597,8 +2648,29 @@ def _desativar_produto():
 
     produto_id = ler_texto("ID do produto: ")
 
+    # Com histórico (movimentos, requisições, devoluções) o negócio
+    # recusa sem `forcar`. Mesmo fluxo de `_desativar_unidade`:
+    # confirmar e registar quem autoriza — aqui, quem tem a sessão
+    # iniciada (27/09/2026).
+    dependencias = estoque.contar_dependencias_produto(produto_id)
+    forcar = False
+    responsavel_id = None
+
+    if dependencias:
+        if not confirmar(
+            f"Este produto tem {dependencias} registo(s) no histórico "
+            f"(movimentos, requisições ou devoluções) — confirmas a "
+            f"desativação mesmo assim?"
+        ):
+            print("Desativação cancelada.")
+            return
+        forcar = True
+        responsavel_id = _autor["id"] if _autor else None
+
     try:
-        produto = estoque.desativar_produto(produto_id)
+        produto = estoque.desativar_produto(
+            produto_id, forcar=forcar, responsavel_id=responsavel_id
+        )
     except ValueError as erro:
         print(f"Erro: {erro}")
         return
@@ -3187,6 +3259,41 @@ def menu_estoque():
         acoes[escolha]()
 
 
+def iniciar_sessao():
+    """Pede utilizador e password até um login válido.
+
+    Mesma regra do `LoginModal` do GUI (`utilizadores.autenticar`):
+    sem login não se entra nos menus. A password lê-se com
+    `getpass`, para não aparecer no ecrã. Devolve True com a sessão
+    iniciada, ou False ao fim de `_TENTATIVAS_LOGIN` falhas.
+    """
+    global _autor
+
+    print("\n--- Iniciar sessão ---")
+
+    for tentativa in range(1, _TENTATIVAS_LOGIN + 1):
+        username = ler_texto("Utilizador: ")
+        password = getpass.getpass("Password: ")
+
+        registo, motivo = utilizadores.autenticar(username, password)
+
+        if registo is not None:
+            _autor = registo
+            print(
+                f"Sessão iniciada: {registo['nome']} "
+                f"({registo['tipo_utilizador']})."
+            )
+            return True
+
+        print(_MENSAGENS_LOGIN.get(motivo, "Não foi possível entrar."))
+
+        if tentativa < _TENTATIVAS_LOGIN:
+            print(f"Tentativa {tentativa} de {_TENTATIVAS_LOGIN}.")
+
+    print("Demasiadas tentativas falhadas.")
+    return False
+
+
 def menu_principal():
     """Menu principal — ponto de entrada do cli.py, chamado por
     main.py depois da cópia de segurança diária.
@@ -3220,10 +3327,23 @@ def menu_principal():
         "Stock",
     ]
 
+    if _autor is None and not iniciar_sessao():
+        return
+
+    # Cópia local só para o pyright: ele não sabe que o
+    # `iniciar_sessao` acabou de preencher o global.
+    autor = _autor
+
+    if autor is None:
+        return
+
+    titulo = (
+        f"Hostel Cleaning — Menu Principal "
+        f"[{autor['nome']} · {autor['tipo_utilizador']}]"
+    )
+
     while True:
-        escolha = mostrar_menu(
-            "Hostel Cleaning — Menu Principal", rotulos, texto_saida="Sair"
-        )
+        escolha = mostrar_menu(titulo, rotulos, texto_saida="Sair")
 
         if escolha is None:
             print("\nAté à próxima.")
