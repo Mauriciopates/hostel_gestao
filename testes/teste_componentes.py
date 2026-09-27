@@ -39,8 +39,10 @@ ESTRUTURA:
 """
 
 import sys
+import tkinter
 import unittest
 from decimal import Decimal
+from typing import Any
 from pathlib import Path
 
 _SRC = Path(__file__).resolve().parent.parent / "src"
@@ -65,6 +67,35 @@ def _criar_root():
     root.withdraw()
     root.update_idletasks()
     return root
+
+
+def _destruir_root(root):
+    """Fecha a root de uma classe de testes sem deixar lixo no terminal.
+
+    Sem isto, cada `destroy()` deixava `after(...)` pendentes — do
+    CustomTkinter (`update`, `check_dpi_scaling`,
+    `_check_if_scrollbars_needed`...) e da própria `Tabela`
+    (`_alinhar_cabecalho`) — que disparavam já sem janela e enchiam o
+    output da bateria com `invalid command name` e `bgerror`. Não
+    eram falhas (os testes davam OK), mas pareciam (27/09/2026).
+
+    Cancela-se com o `after cancel` do próprio Tcl e não com o
+    `after_cancel` do Tkinter: este também apaga o comando Python
+    ligado ao temporizador, e o `destroy()` a seguir tentava apagá-lo
+    outra vez ("can't delete Tcl command").
+    """
+    try:
+        pendentes = root.tk.eval("after info").split()
+    except tkinter.TclError:
+        pendentes = []
+
+    for identificador in pendentes:
+        try:
+            root.tk.call("after", "cancel", identificador)
+        except tkinter.TclError:
+            pass
+
+    root.destroy()
 
 
 # ---------------------------------------------------------------------
@@ -127,7 +158,7 @@ class TesteSeletor(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.root.destroy()
+        _destruir_root(cls.root)
 
     def _criar_seletor(self, values, command=None, limite=8, pesquisa=True):
         from gui.componentes import Seletor
@@ -295,7 +326,7 @@ class TesteTabela(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.root.destroy()
+        _destruir_root(cls.root)
 
     def _criar_tabela(self, colunas=None, tom_alternado=False):
         from gui.componentes import Coluna, Tabela
@@ -454,7 +485,7 @@ class TesteBlocoTermo(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.root.destroy()
+        _destruir_root(cls.root)
 
     def _criar_bloco(self, **overrides):
         from gui.componentes import BlocoTermo
@@ -568,6 +599,194 @@ class TesteBlocoTermo(unittest.TestCase):
             data_anterior=None,
         )
         self.assertIsNotNone(b)
+
+
+class TesteChaveOrdenacao(unittest.TestCase):
+    """`componentes.chave_ordenacao` — como o texto de uma célula é
+    lido antes de comparar (27/09/2026). Não precisa de janela."""
+
+    def _ordenar(self, textos):
+        from gui.componentes import chave_ordenacao
+
+        # `Any`: o pyright não consegue provar que as chaves (tuplos
+        # de tipos diferentes) se comparam — em execução comparam,
+        # porque o 1.º elemento separa os tipos.
+        chave: Any = chave_ordenacao
+        return sorted(textos, key=chave)
+
+    def test_texto_ignora_maiusculas_e_acentos(self):
+        self.assertEqual(
+            self._ordenar(["bruno", "Álvaro", "Carla", "alberto"]),
+            ["alberto", "Álvaro", "bruno", "Carla"],
+        )
+
+    def test_ids_por_ordem_natural(self):
+        """PRO-10 depois de PRO-9, não entre PRO-1 e PRO-2."""
+        self.assertEqual(
+            self._ordenar(["PRO-10", "PRO-2", "PRO-1", "PRO-9"]),
+            ["PRO-1", "PRO-2", "PRO-9", "PRO-10"],
+        )
+
+    def test_datas_pt_por_data_e_nao_por_texto(self):
+        self.assertEqual(
+            self._ordenar(["02/01/2027", "15/12/2026", "01/12/2026"]),
+            ["01/12/2026", "15/12/2026", "02/01/2027"],
+        )
+
+    def test_datas_com_hora(self):
+        self.assertEqual(
+            self._ordenar(["01/12/2026 18:30", "01/12/2026 09:05"]),
+            ["01/12/2026 09:05", "01/12/2026 18:30"],
+        )
+
+    def test_valores_em_euros_por_numero(self):
+        self.assertEqual(
+            self._ordenar(["1.234,56 €", "9,00 €", "-5,00 €", "10,00 €"]),
+            ["-5,00 €", "9,00 €", "10,00 €", "1.234,56 €"],
+        )
+
+    def test_vazio_e_travessao_devolvem_none(self):
+        from gui.componentes import chave_ordenacao
+
+        self.assertIsNone(chave_ordenacao(""))
+        self.assertIsNone(chave_ordenacao("—"))
+        self.assertIsNone(chave_ordenacao(None))
+
+    def test_aceita_valores_que_nao_sao_texto(self):
+        from gui.componentes import chave_ordenacao
+
+        dois: Any = chave_ordenacao(Decimal("2"))
+        self.assertLess(dois, chave_ordenacao(10))
+
+
+class TesteTabelaOrdenacao(unittest.TestCase):
+    """Clique no título da `Tabela` ordena as linhas (27/09/2026)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.root = _criar_root()
+
+    @classmethod
+    def tearDownClass(cls):
+        _destruir_root(cls.root)
+
+    def _criar_tabela(self, nomes, tom_alternado=False, total=False):
+        from gui.componentes import Coluna, Tabela
+
+        tabela = Tabela(
+            self.root,
+            colunas=(
+                Coluna("ID", minimo=90),
+                Coluna("NOME", peso=1, minimo=180),
+                Coluna("AÇÕES", minimo=100),
+            ),
+            tom_alternado=tom_alternado,
+        )
+        tabela.pack()
+        self._preencher(tabela, nomes, total)
+        self.root.update_idletasks()
+        return tabela
+
+    def _preencher(self, tabela, nomes, total=False):
+        tabela.limpar()
+
+        for numero, nome in enumerate(nomes, start=1):
+            linha = tabela.nova_linha()
+            tabela.colocar(
+                linha, 0, ctk.CTkLabel(linha, text=f"CLI-{numero:03d}")
+            )
+            tabela.colocar(linha, 1, ctk.CTkLabel(linha, text=nome))
+            acoes = tabela.celula_acoes(linha, 2)
+            acoes.adicionar(ctk.CTkButton(acoes, text="Editar", width=60))
+
+        if total:
+            linha = tabela.nova_linha(fixa=True)
+            tabela.colocar(linha, 1, ctk.CTkLabel(linha, text="TOTAL"))
+
+    @staticmethod
+    def _nomes_no_ecra(tabela):
+        """Nomes da coluna 1, pela fila em que estão na grelha."""
+        celulas = [
+            w
+            for w in tabela.grelha.grid_slaves(column=2)
+            if isinstance(w, ctk.CTkLabel)
+        ]
+        celulas.sort(key=lambda w: int(w.grid_info()["row"]))
+        return [w.cget("text") for w in celulas]
+
+    def test_colunas_de_acoes_nao_ordenam(self):
+        t = self._criar_tabela(["b", "a"])
+        self.assertTrue(t.coluna_ordenavel(0))
+        self.assertTrue(t.coluna_ordenavel(1))
+        self.assertFalse(t.coluna_ordenavel(2))
+
+    def test_primeiro_clique_crescente_segundo_decrescente(self):
+        t = self._criar_tabela(["Carla", "alberto", "Bruno"])
+
+        t.ordenar_por(1)
+        self.assertEqual(t.ordem, (1, False))
+        self.assertEqual(
+            self._nomes_no_ecra(t), ["alberto", "Bruno", "Carla"]
+        )
+
+        t.ordenar_por(1)
+        self.assertEqual(t.ordem, (1, True))
+        self.assertEqual(
+            self._nomes_no_ecra(t), ["Carla", "Bruno", "alberto"]
+        )
+
+    def test_mudar_de_coluna_recomeca_em_crescente(self):
+        t = self._criar_tabela(["b", "a"])
+        t.ordenar_por(1)
+        t.ordenar_por(1)
+        t.ordenar_por(0)
+        self.assertEqual(t.ordem, (0, False))
+
+    def test_seta_no_titulo_da_coluna_ativa(self):
+        t = self._criar_tabela(["b", "a"])
+        t.ordenar_por(1)
+        self.assertEqual(t._titulos[1].cget("text"), "NOME ▲")
+        self.assertEqual(t._titulos[0].cget("text"), "ID")
+        t.ordenar_por(1)
+        self.assertEqual(t._titulos[1].cget("text"), "NOME ▼")
+
+    def test_clique_em_coluna_de_acoes_nao_faz_nada(self):
+        t = self._criar_tabela(["b", "a"])
+        t.ordenar_por(2)
+        self.assertIsNone(t.ordem)
+
+    def test_linha_fixa_fica_sempre_no_fim(self):
+        t = self._criar_tabela(["b", "a", "c"], total=True)
+        t.ordenar_por(1, decrescente=True)
+        self.assertEqual(self._nomes_no_ecra(t), ["c", "b", "a", "TOTAL"])
+        t.ordenar_por(1, decrescente=False)
+        self.assertEqual(self._nomes_no_ecra(t), ["a", "b", "c", "TOTAL"])
+
+    def test_ordem_mantem_se_depois_de_recarregar(self):
+        """O ecrã recarrega a lista (limpar + linhas novas) depois de
+        gravar: a ordem escolhida volta a aplicar-se sozinha."""
+        t = self._criar_tabela(["b", "a"])
+        t.ordenar_por(1, decrescente=True)
+
+        self._preencher(t, ["x", "z", "y"])
+        self.root.update()
+
+        self.assertEqual(self._nomes_no_ecra(t), ["z", "y", "x"])
+
+    def test_tom_alternado_segue_a_posicao(self):
+        from gui import tema
+
+        t = self._criar_tabela(["c", "b", "a"], tom_alternado=True)
+        t.ordenar_por(1)
+
+        cores = [r["cor"] for r in t._registos]
+        self.assertEqual(
+            cores, [tema.COR_FUNDO, tema.LINHA_ALTERNADA, tema.COR_FUNDO]
+        )
+        # O botão da célula de ações acompanha a cor da sua linha.
+        for registo in t._registos:
+            for acoes in registo["acoes"]:
+                self.assertEqual(acoes._cor_fundo, registo["cor"])
 
 
 if __name__ == "__main__":

@@ -1,6 +1,9 @@
 import collections
 import datetime
+import decimal
+import re
 import tkinter
+import unicodedata
 from pathlib import Path
 from tkinter import messagebox
 
@@ -314,8 +317,8 @@ class Cabecalho(ctk.CTkFrame):
 
 Coluna = collections.namedtuple(
     "Coluna",
-    ("titulo", "peso", "minimo", "alinhamento", "espaco"),
-    defaults=("", 0, 0, "w", 0),
+    ("titulo", "peso", "minimo", "alinhamento", "espaco", "ordenavel"),
+    defaults=("", 0, 0, "w", 0, None),
 )
 Coluna.__doc__ = """Definição de uma coluna de `Tabela`.
 
@@ -327,6 +330,10 @@ Coluna.__doc__ = """Definição de uma coluna de `Tabela`.
   o título E para a célula: é daqui que sai o anchor do cabeçalho e
   o sticky do conteúdo, para os dois não poderem discordar.
 - espaco: folga em pixéis à direita da célula.
+- ordenavel (27/09/2026): se o clique no título ordena a tabela por
+  esta coluna. None (omissão) = decide sozinho: ordena, a não ser que
+  o título esteja vazio ou seja uma coluna de botões ("AÇÕES",
+  "GERIR"). True/False forçam.
 """
 
 # Alinhamento da coluna -> (anchor do título, sticky da célula).
@@ -374,8 +381,33 @@ _TENTATIVAS_FOLGA_MAX = 30
 # para nunca haver um caso a repetir-se sem fim.
 _PASSAGENS_ALINHAMENTO_MAX = 6
 
+# -- Ordenação por clique no cabeçalho (27/09/2026) ---------------------
+#
+# Títulos que nunca ordenam por omissão: são colunas de botões, não de
+# dados. Comparados em maiúsculas.
+_TITULOS_SEM_ORDEM = frozenset({"", "AÇÕES", "ACOES", "GERIR"})
 
-def pintar_fundo(widget, cor):
+# Setas mostradas à frente do título da coluna ativa.
+_SETA_CRESCENTE = " ▲"
+_SETA_DECRESCENTE = " ▼"
+
+# Textos que contam como "célula vazia" — vão sempre para o fim, seja
+# a ordem crescente ou decrescente.
+_TEXTOS_VAZIOS = frozenset({"", "—", "-", "–"})
+
+_RE_DATA_PT = re.compile(
+    r"^(\d{1,2})/(\d{1,2})/(\d{4})(?:\s+(\d{1,2})[:h](\d{2}))?"
+)
+_RE_DATA_ISO = re.compile(
+    r"^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?"
+)
+_RE_NUMERO_PT = re.compile(
+    r"^[-+]?\d{1,3}(\.\d{3})*(,\d+)?$|^[-+]?\d+(,\d+)?$"
+)
+_RE_PARTES = re.compile(r"(\d+)")
+
+
+def pintar_fundo(widget, cor, pintados=None):
     """Dá a `widget`, e a todos os descendentes que estejam
     transparentes, a cor de fundo da linha onde ele está.
 
@@ -401,15 +433,23 @@ def pintar_fundo(widget, cor):
     base não conhece `fg_color` e responde com um erro em vez de uma
     cor. Nesse caso não há nada a pintar, e a descida aos filhos
     continua na mesma.
+
+    `pintados` (27/09/2026, opcional): lista onde se acrescenta cada
+    widget que foi de facto pintado. A `Tabela` usa-a para, ao
+    reordenar, trocar a cor só a esses — e não a um botão que por
+    acaso tenha a mesma cor da linha.
     """
     try:
         if widget.cget("fg_color") == "transparent":
             widget.configure(fg_color=cor)
+
+            if pintados is not None:
+                pintados.append(widget)
     except (AttributeError, ValueError, tkinter.TclError):
         pass
 
     for filho in widget.winfo_children():
-        pintar_fundo(filho, cor)
+        pintar_fundo(filho, cor, pintados)
 
 
 class _CelulaAcoes(ctk.CTkFrame):
@@ -453,6 +493,9 @@ class _CelulaAcoes(ctk.CTkFrame):
         self._espaco = espaco
         self._cor_fundo = cor_fundo
         self._primeiro = True
+        # Botões pintados com a cor da linha — a Tabela troca-lhes a
+        # cor quando a linha muda de posição (ordenação, 27/09/2026).
+        self._pintados = []
 
     def adicionar(self, widget):
         """Junta um botão à direita dos que já lá estão."""
@@ -462,9 +505,21 @@ class _CelulaAcoes(ctk.CTkFrame):
         self._primeiro = False
 
         if self._cor_fundo:
-            pintar_fundo(widget, self._cor_fundo)
+            pintar_fundo(widget, self._cor_fundo, self._pintados)
 
         return widget
+
+    def trocar_cor(self, cor):
+        """Muda a cor de fundo da célula e dos botões que a herdaram.
+
+        Chamada pela `Tabela` quando a ordenação muda a linha de
+        posição e, com ela, o tom alternado.
+        """
+        self._cor_fundo = cor
+        _configurar_fundo(self, cor)
+
+        for widget in self._pintados:
+            _configurar_fundo(widget, cor)
 
 
 class Tabela(ctk.CTkFrame):
@@ -605,6 +660,16 @@ class Tabela(ctk.CTkFrame):
         self._larguras_cabecalho = {}
         self._alinhamento_agendado = None
         self._passagens_alinhamento = 0
+
+        # -- ordenação por clique no título (27/09/2026) --
+        # Uma entrada por linha de dados, pela ordem em que foram
+        # criadas (ver `nova_linha`). `_ordem` é None enquanto
+        # ninguém clicou num título, ou (índice da coluna, decrescente).
+        self._registos = []
+        self._registo_atual = None
+        self._ordem = None
+        self._titulos = {}
+        self._reordenacao_agendada = None
 
         # -- cabeçalho fixo, fora do scroll ---------------------------
         #
@@ -907,8 +972,10 @@ class Tabela(ctk.CTkFrame):
         separada (21/09/2026) e precisa das suas próprias
         divisórias — por omissão continua a ser a grelha do corpo.
         """
+        criadas = []
+
         if not self._linhas_verticais:
-            return
+            return criadas
 
         if grelha is None:
             grelha = self.grelha
@@ -917,13 +984,17 @@ class Tabela(ctk.CTkFrame):
             # height=1 pela mesma razão do `_fundo`: sem ela, cada
             # divisória vertical pedia 200px de altura e esticava a
             # fila toda.
-            ctk.CTkFrame(
+            divisoria = ctk.CTkFrame(
                 grelha,
                 width=1,
                 height=1,
                 corner_radius=0,
                 fg_color=tema.COR_BORDA,
-            ).grid(row=fila, column=indice * 2 + 1, sticky="ns")
+            )
+            divisoria.grid(row=fila, column=indice * 2 + 1, sticky="ns")
+            criadas.append(divisoria)
+
+        return criadas
 
     def _divisoria_horizontal(self):
         """Risco de 1px a toda a largura, entre duas filas."""
@@ -960,20 +1031,29 @@ class Tabela(ctk.CTkFrame):
             # cabeçalho correto mesmo que a estrutura volte a mudar
             # — foi a falta disto que pintou o cabeçalho de branco
             # em 08/09/2026.
-            ctk.CTkLabel(
+            titulo = ctk.CTkLabel(
                 self.grelha_cabecalho,
                 text=coluna.titulo,
                 text_color=tema.COR_TEXTO_SECUNDARIO,
                 fg_color=tema.CABECALHO_TABELA_FUNDO,
                 font=ctk.CTkFont(size=10, weight="bold"),
                 anchor=ancora,
-            ).grid(
+            )
+            titulo.grid(
                 row=0,
                 column=indice * 2,
                 sticky=sticky or "ew",
                 padx=self._espaco(indice),
                 pady=_PADY_CABECALHO,
             )
+
+            if self.coluna_ordenavel(indice):
+                self._titulos[indice] = titulo
+                titulo.configure(cursor="hand2")
+                titulo.bind(
+                    "<Button-1>",
+                    lambda _evento, i=indice: self.ordenar_por(i),
+                )
 
     # -- corpo -------------------------------------------------------
 
@@ -994,6 +1074,12 @@ class Tabela(ctk.CTkFrame):
         self._desenhadas = 0
         self._cor_fila_atual = tema.COR_FUNDO
 
+        # A ordem escolhida (`_ordem`) NÃO se esquece: um ecrã que
+        # recarrega a lista depois de gravar continua ordenado como o
+        # utilizador o deixou. Só os registos das linhas antigas saem.
+        self._registos = []
+        self._registo_atual = None
+
         # As larguras copiadas para o cabeçalho eram as da lista
         # anterior; a que vem a seguir pode ter outras (a barra de
         # scroll aparece ou desaparece consoante o número de linhas).
@@ -1002,7 +1088,7 @@ class Tabela(ctk.CTkFrame):
         self._larguras_cabecalho.clear()
         self.after(60, self._alinhar_cabecalho)
 
-    def nova_linha(self):
+    def nova_linha(self, fixa=False):
         """Abre uma linha nova e devolve a grelha, que é o master a
         usar para criar as células.
 
@@ -1013,6 +1099,9 @@ class Tabela(ctk.CTkFrame):
         ou o tom alternado) e a cor fica guardada em
         `_cor_fila_atual`, para o `colocar` poder pintar as células
         com ela.
+
+        `fixa` (27/09/2026): a linha não entra na ordenação e fica
+        sempre no fim — é para as linhas de TOTAL dos relatórios.
         """
         if self._divisorias and self._desenhadas:
             self._divisoria_horizontal()
@@ -1028,13 +1117,34 @@ class Tabela(ctk.CTkFrame):
         else:
             self._cor_fila_atual = tema.COR_FUNDO
 
-        self._fundo(self._fila_atual, self._cor_fila_atual)
-        self._verticais(self._fila_atual)
+        fundo = self._fundo(self._fila_atual, self._cor_fila_atual)
+        verticais = self._verticais(self._fila_atual)
         self._desenhadas += 1
+
+        self._registo_atual = {
+            "fila": self._fila_atual,
+            "cor": self._cor_fila_atual,
+            "fixa": fixa,
+            "widgets": [fundo] + verticais,
+            "fundo": fundo,
+            "pintados": [],
+            "acoes": [],
+            "celulas": {},
+            "chaves": {},
+        }
+        self._registos.append(self._registo_atual)
+
+        # Lista a ser (re)desenhada com uma ordem já escolhida: a
+        # reordenação corre UMA vez, quando o ecrã acabar de acrescentar
+        # as linhas todas (`after_idle`), e não a cada linha.
+        if self._ordem is not None and self._reordenacao_agendada is None:
+            self._reordenacao_agendada = self.after_idle(
+                self._reordenar_agendado
+            )
 
         return self.grelha
 
-    def colocar(self, linha, coluna, widget, esticar=None):
+    def colocar(self, linha, coluna, widget, esticar=None, chave=None):
         """Coloca um widget numa coluna da linha aberta.
 
         'linha' é a grelha devolvida por `nova_linha` — está na
@@ -1048,6 +1158,10 @@ class Tabela(ctk.CTkFrame):
         A pintura no fim é o que faz o tom alternado ser visível:
         sem ela, uma célula transparente herdava o branco da grelha
         e tapava a faixa que está por trás (ver `pintar_fundo`).
+
+        `chave` (27/09/2026, opcional): valor a usar na ordenação desta
+        célula, quando o texto que se vê não serve (ex.: um crachá com
+        ícone). Sem ela, ordena-se pelo texto da célula.
         """
         if esticar is None:
             esticar = _ALINHAMENTOS[self._colunas[coluna].alinhamento][1]
@@ -1059,7 +1173,21 @@ class Tabela(ctk.CTkFrame):
             padx=self._espaco(coluna),
         )
 
-        pintar_fundo(widget, self._cor_fila_atual)
+        registo = self._registo_atual
+
+        if registo is None:
+            pintar_fundo(widget, self._cor_fila_atual)
+            return widget
+
+        pintar_fundo(widget, self._cor_fila_atual, registo["pintados"])
+        registo["widgets"].append(widget)
+        registo["celulas"].setdefault(coluna, widget)
+
+        if isinstance(widget, _CelulaAcoes):
+            registo["acoes"].append(widget)
+
+        if chave is not None:
+            registo["chaves"][coluna] = chave
 
         return widget
 
@@ -1091,6 +1219,146 @@ class Tabela(ctk.CTkFrame):
 
         return acoes
 
+    # -- ordenação ---------------------------------------------------
+
+    def coluna_ordenavel(self, indice):
+        """True se o clique no título da coluna `indice` ordena."""
+        coluna = self._colunas[indice]
+
+        if coluna.ordenavel is not None:
+            return bool(coluna.ordenavel)
+
+        return coluna.titulo.strip().upper() not in _TITULOS_SEM_ORDEM
+
+    @property
+    def ordem(self):
+        """(índice da coluna, decrescente) ou None se não há ordem."""
+        return self._ordem
+
+    def ordenar_por(self, indice, decrescente=None):
+        """Ordena as linhas pela coluna `indice`.
+
+        É o que corre ao clicar num título. Sem `decrescente`, o
+        primeiro clique numa coluna ordena de forma crescente e cada
+        clique seguinte na MESMA coluna inverte (A→Z, Z→A, A→Z...).
+        Mudar de coluna recomeça em crescente.
+        """
+        if not self.coluna_ordenavel(indice):
+            return
+
+        if decrescente is None:
+            decrescente = (
+                self._ordem is not None
+                and self._ordem[0] == indice
+                and not self._ordem[1]
+            )
+
+        self._ordem = (indice, bool(decrescente))
+        self._atualizar_setas()
+        self._reordenar()
+
+    def _atualizar_setas(self):
+        """Mostra ▲/▼ no título da coluna ativa e limpa as outras."""
+        for indice, titulo in self._titulos.items():
+            texto = self._colunas[indice].titulo
+
+            if self._ordem is not None and self._ordem[0] == indice:
+                texto += (
+                    _SETA_DECRESCENTE if self._ordem[1] else _SETA_CRESCENTE
+                )
+
+            try:
+                titulo.configure(text=texto)
+            except tkinter.TclError:
+                pass
+
+    def _reordenar_agendado(self):
+        self._reordenacao_agendada = None
+        self._reordenar()
+
+    def _reordenar(self):
+        """Muda as linhas de sítio conforme `_ordem`.
+
+        As linhas não são desenhadas de novo: cada widget muda só de
+        fila na grelha (`grid_configure(row=...)`). As filas das
+        divisórias horizontais ficam onde estão — são todas iguais,
+        não é preciso mexer-lhes. As linhas `fixa` vão para o fim,
+        pela ordem em que foram criadas.
+
+        Como o tom alternado depende da POSIÇÃO, uma linha que muda de
+        posição pode mudar de cor: troca-se a cor do fundo e das
+        células que foram pintadas com ela (e só dessas).
+        """
+        if self._ordem is None or not self._registos:
+            return
+
+        indice, decrescente = self._ordem
+        moveis = [r for r in self._registos if not r["fixa"]]
+        fixas = [r for r in self._registos if r["fixa"]]
+
+        com_valor = []
+        vazias = []
+
+        for registo in moveis:
+            chave = self._chave_do_registo(registo, indice)
+
+            if chave is None:
+                vazias.append(registo)
+            else:
+                com_valor.append((chave, registo))
+
+        # Crescente e decrescente só trocam a ordem das que têm valor;
+        # as vazias vão sempre para o fim. O sort do Python é estável,
+        # por isso valores iguais mantêm a ordem em que vieram.
+        com_valor.sort(key=lambda par: par[0], reverse=decrescente)
+        nova_ordem = [r for _, r in com_valor] + vazias + fixas
+
+        filas = sorted(r["fila"] for r in self._registos)
+
+        for posicao, (fila, registo) in enumerate(zip(filas, nova_ordem)):
+            if registo["fila"] != fila:
+                for widget in registo["widgets"]:
+                    try:
+                        widget.grid_configure(row=fila)
+                    except tkinter.TclError:
+                        pass
+
+                registo["fila"] = fila
+
+            if self._tom_alternado and posicao % 2 == 1:
+                cor = tema.LINHA_ALTERNADA
+            else:
+                cor = tema.COR_FUNDO
+
+            if cor != registo["cor"]:
+                self._trocar_cor_registo(registo, cor)
+
+        self._registos = nova_ordem
+
+    @staticmethod
+    def _trocar_cor_registo(registo, cor):
+        registo["cor"] = cor
+        _configurar_fundo(registo["fundo"], cor)
+
+        for widget in registo["pintados"]:
+            _configurar_fundo(widget, cor)
+
+        for acoes in registo["acoes"]:
+            acoes.trocar_cor(cor)
+
+    @staticmethod
+    def _chave_do_registo(registo, indice):
+        if indice in registo["chaves"]:
+            valor = registo["chaves"][indice]
+            return chave_ordenacao(valor)
+
+        widget = registo["celulas"].get(indice)
+
+        if widget is None or isinstance(widget, _CelulaAcoes):
+            return None
+
+        return chave_ordenacao(texto_do_widget(widget))
+
     def mostrar_vazio(self, mensagem=None):
         """Mensagem central para quando não há nada a listar."""
         ctk.CTkLabel(
@@ -1103,6 +1371,127 @@ class Tabela(ctk.CTkFrame):
     @property
     def vazia(self):
         return self._desenhadas == 0
+
+
+def _configurar_fundo(widget, cor):
+    """`configure(fg_color=cor)` que não rebenta num widget já
+    destruído (o ecrã pode ter fechado entretanto)."""
+    try:
+        widget.configure(fg_color=cor)
+    except (AttributeError, ValueError, tkinter.TclError):
+        pass
+
+
+def texto_do_widget(widget):
+    """Primeiro texto não vazio de um widget ou dos seus filhos.
+
+    É o que a `Tabela` usa para ordenar: numa célula simples é o
+    texto da etiqueta; num bloco (frame com um crachá e um texto ao
+    lado, por exemplo) é o primeiro texto que aparecer.
+    """
+    try:
+        texto = widget.cget("text")
+    except (AttributeError, ValueError, tkinter.TclError):
+        texto = None
+
+    if isinstance(texto, str) and texto.strip():
+        return texto
+
+    for filho in widget.winfo_children():
+        texto = texto_do_widget(filho)
+
+        if texto:
+            return texto
+
+    return ""
+
+
+def _sem_acentos(texto):
+    decomposto = unicodedata.normalize("NFKD", texto)
+    return "".join(c for c in decomposto if not unicodedata.combining(c))
+
+
+def chave_ordenacao(valor):
+    """Chave de ordenação de uma célula — None se estiver vazia.
+
+    Um clique no título ordena "por ordem alfabética", mas a ordem
+    alfabética pura estraga três casos que aparecem em quase todas as
+    tabelas do sistema, e por isso o texto é lido antes de comparar:
+
+    - DATAS (dd/mm/aaaa, com ou sem hora): "02/01/2027" viria antes
+      de "15/12/2026" por ordem alfabética. Compara-se (ano, mês,
+      dia, hora, minuto).
+    - VALORES ("1.234,56 €", "45,00 €", "12"): "9,00 €" viria depois
+      de "10,00 €". Compara-se o número.
+    - IDs e textos com números ("PRO-2", "PRO-10"): compara-se a parte
+      numérica como número ("ordem natural"), e o resto sem acentos
+      nem maiúsculas ("Álvaro" ao pé de "Alberto", não no fim).
+
+    O primeiro elemento da chave (0 número, 1 data, 2 texto) só serve
+    para numa coluna mista nunca se compararem tipos diferentes.
+
+    Também aceita valores que não são texto (a `chave=` do
+    `Tabela.colocar`): números, datas e Decimals comparam-se pelo
+    próprio valor.
+    """
+    if valor is None:
+        return None
+
+    if isinstance(valor, bool):
+        return (0, decimal.Decimal(int(valor)))
+
+    if isinstance(valor, (int, float, decimal.Decimal)):
+        return (0, decimal.Decimal(str(valor)))
+
+    if isinstance(valor, datetime.datetime):
+        return (1, valor.timetuple()[:5])
+
+    if isinstance(valor, datetime.date):
+        return (1, (valor.year, valor.month, valor.day, 0, 0))
+
+    texto = str(valor).strip()
+
+    if texto in _TEXTOS_VAZIOS:
+        return None
+
+    data = _RE_DATA_PT.match(texto)
+
+    if data:
+        dia, mes, ano, hora, minuto = data.groups()
+        return (
+            1,
+            (int(ano), int(mes), int(dia), int(hora or 0), int(minuto or 0)),
+        )
+
+    data = _RE_DATA_ISO.match(texto)
+
+    if data:
+        ano, mes, dia, hora, minuto = data.groups()
+        return (
+            1,
+            (int(ano), int(mes), int(dia), int(hora or 0), int(minuto or 0)),
+        )
+
+    numero = texto.replace("€", "").replace("%", "")
+    numero = numero.replace("\u00a0", "").replace(" ", "")
+
+    if numero and _RE_NUMERO_PT.match(numero):
+        try:
+            return (
+                0,
+                decimal.Decimal(numero.replace(".", "").replace(",", ".")),
+            )
+        except decimal.InvalidOperation:
+            pass
+
+    normalizado = _sem_acentos(texto).casefold()
+    partes = tuple(
+        (0, int(parte), "") if parte.isdigit() else (1, 0, parte)
+        for parte in _RE_PARTES.split(normalizado)
+        if parte
+    )
+
+    return (2, partes)
 
 
 # =====================================================================

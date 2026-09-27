@@ -491,7 +491,7 @@ class RelatFinanceiro(RelatorioBase):
             )
 
         # Linha de total — fundo destacado, negrito, borda azul.
-        linha_total = tabela.nova_linha()
+        linha_total = tabela.nova_linha(fixa=True)
         tabela.colocar(
             linha_total,
             0,
@@ -627,7 +627,7 @@ class RelatFinanceiro(RelatorioBase):
                 ]
             )
         # Linha de total
-        linha_total = tabela.nova_linha()
+        linha_total = tabela.nova_linha(fixa=True)
         tabela.colocar(
             linha_total,
             0,
