@@ -1,9 +1,12 @@
 import collections
+import ctypes
 import datetime
 import decimal
 import re
+import sys
 import tkinter
 import unicodedata
+from ctypes import wintypes
 from pathlib import Path
 from tkinter import messagebox
 
@@ -2168,6 +2171,163 @@ class BlocoTermo(ctk.CTkFrame):
 # =====================================================================
 
 
+# Altura da barra de título do Windows, em pixels a 100%. O
+# `.geometry()` mede só o interior da janela; a moldura fica por
+# cima e também tem de caber no ecrã.
+_ALTURA_MOLDURA = 32
+
+# Fora do Windows (Linux, testes) não há API para a área útil:
+# reserva-se esta altura no fundo do ecrã para a barra de tarefas.
+_ALTURA_BARRA_TAREFAS = 48
+
+# Constante da API do Windows: "devolve a área útil do ecrã".
+_SPI_GETWORKAREA = 0x0030
+
+
+def escala(janela):
+    """Fator de escala da janela (DPI do Windows x escala do CTk).
+
+    O `.geometry()` do CustomTkinter recebe tamanhos LÓGICOS e
+    multiplica-os por este fator; o `winfo_*` e o ecrã estão em
+    pixels REAIS. As contas de posição usam sempre os reais.
+    """
+    return ctk.ScalingTracker.get_window_scaling(janela)
+
+
+def area_util_ecra(janela):
+    """(x, y, largura, altura) da área útil do ecrã, em pixels reais.
+
+    "Útil" = sem a barra de tarefas. No Windows pergunta-se ao
+    sistema (a barra pode estar em baixo, em cima ou de lado).
+    """
+    if sys.platform == "win32":
+        retangulo = wintypes.RECT()
+        ok = ctypes.windll.user32.SystemParametersInfoW(
+            _SPI_GETWORKAREA, 0, ctypes.byref(retangulo), 0
+        )
+
+        if ok:
+            return (
+                retangulo.left,
+                retangulo.top,
+                retangulo.right - retangulo.left,
+                retangulo.bottom - retangulo.top,
+            )
+
+    return (
+        0,
+        0,
+        janela.winfo_screenwidth(),
+        janela.winfo_screenheight() - _ALTURA_BARRA_TAREFAS,
+    )
+
+
+def _aplicar_geometria(janela, x, y, largura, altura):
+    """Encaixa o retângulo na área útil e aplica-o à janela.
+
+    Se não couber, encolhe; se sair por um lado, é empurrado para
+    dentro. Tudo em pixels reais — por isso usa a versão de base do
+    Tkinter (`Wm.wm_geometry`): o `.geometry()` do CTk voltava a
+    multiplicar pela escala (lição do ficheiro 11).
+    """
+    area_x, area_y, area_l, area_a = area_util_ecra(janela)
+    area_a -= round(_ALTURA_MOLDURA * escala(janela))
+
+    largura = min(largura, area_l)
+    altura = min(altura, area_a)
+    x = max(area_x, min(x, area_x + area_l - largura))
+    y = max(area_y, min(y, area_y + area_a - altura))
+
+    tkinter.Wm.wm_geometry(janela, f"{largura}x{altura}+{x}+{y}")
+
+
+def centrar_no_ecra(janela, largura, altura):
+    """Dá à janela o tamanho LÓGICO pedido, centrada no ecrã.
+
+    Usado pela janela principal e pelos modais que abrem antes dela
+    (login, termo). Garante sempre que a janela cabe no ecrã.
+    """
+    fator = escala(janela)
+    largura = round(largura * fator)
+    altura = round(altura * fator)
+
+    area_x, area_y, area_l, area_a = area_util_ecra(janela)
+    x = area_x + (area_l - largura) // 2
+    y = area_y + (area_a - altura) // 2
+
+    _aplicar_geometria(janela, x, y, largura, altura)
+    setattr(janela, "_posicionada", True)
+
+
+def tamanho_minimo(janela, largura, altura):
+    """Devolve (largura, altura) mínimas LÓGICAS que cabem no ecrã.
+
+    Um `minsize` maior do que o ecrã obriga o Windows a abrir a
+    janela com parte dela fora — acontecia com 950x620 num portátil
+    de 1366x768 a 125%.
+    """
+    fator = escala(janela)
+    _, _, area_l, area_a = area_util_ecra(janela)
+    area_a -= round(_ALTURA_MOLDURA * fator)
+
+    return (
+        min(largura, int(area_l / fator)),
+        min(altura, int(area_a / fator)),
+    )
+
+
+def centrar_sobre(janela, master, largura, altura):
+    """Centra um popup (CTkToplevel) sobre a janela que o abriu.
+
+    Sem isto o Tk coloca o popup no canto superior esquerdo do ecrã,
+    longe do botão que acabou de ser clicado.
+
+    `largura`/`altura` em unidades LÓGICAS (as mesmas do
+    `.geometry()`). v1.6.0: passam para pixels reais antes das
+    contas — antes, com escala a 125%/150%, o popup ficava
+    descentrado — e a janela nunca sai da área útil do ecrã.
+    """
+    master.update_idletasks()
+    fator = escala(janela)
+    largura = round(largura * fator)
+    altura = round(altura * fator)
+
+    x = master.winfo_rootx() + (master.winfo_width() - largura) // 2
+    y = master.winfo_rooty() + (master.winfo_height() - altura) // 2
+
+    _aplicar_geometria(janela, x, y, largura, altura)
+    setattr(janela, "_posicionada", True)
+
+
+def enquadrar(janela):
+    """Rede de segurança: garante que o popup está todo no ecrã.
+
+    Chamada pelo `colocar_no_topo`, já com a janela mapeada. Se
+    ninguém a posicionou (`centrar_sobre`/`centrar_no_ecra` marcam
+    `_posicionada`), centra-a sobre a janela principal; em qualquer
+    caso encaixa-a na área útil. Mantém o tamanho que a janela tem.
+    """
+    janela.update_idletasks()
+    medida = re.match(
+        r"(\d+)x(\d+)\+(-?\d+)\+(-?\d+)", tkinter.Wm.wm_geometry(janela)
+    )
+
+    if medida is None:
+        return
+
+    largura, altura, x, y = (int(valor) for valor in medida.groups())
+
+    if largura <= 1 or altura <= 1:
+        return
+
+    if not getattr(janela, "_posicionada", False):
+        principal = janela.master.winfo_toplevel()
+        x = principal.winfo_rootx() + (principal.winfo_width() - largura) // 2
+        y = principal.winfo_rooty() + (principal.winfo_height() - altura) // 2
+
+    _aplicar_geometria(janela, x, y, largura, altura)
+
+
 def colocar_no_topo(janela):
     """Traz um popup (CTkToplevel) para a frente da janela principal.
 
@@ -2177,22 +2337,28 @@ def colocar_no_topo(janela):
     `grab_set()` — chamado logo a seguir ao `super().__init__(...)`,
     `grab_set()` falha com "grab failed: window not viewable" em
     alguns sistemas.
+
+    v1.6.0: antes de a trazer para a frente, `enquadrar` põe-na
+    dentro do ecrã — é isto que cobre, de uma vez, todos os modais
+    que só fazem `.geometry("LxA")` sem posição.
     """
-    janela.after(
-        10, lambda: (janela.lift(), janela.focus_force(), janela.grab_set())
-    )
 
+    def _trazer(tentativas=20):
+        if not janela.winfo_exists():
+            return
 
-def centrar_sobre(janela, master, largura, altura):
-    """Centra um popup (CTkToplevel) sobre a janela que o abriu.
+        # Ainda não está no ecrã: sem isto o tamanho lido é 1x1 e o
+        # `grab_set()` falha. Tenta de novo daqui a 10ms.
+        if not janela.winfo_viewable() and tentativas > 0:
+            janela.after(10, _trazer, tentativas - 1)
+            return
 
-    Sem isto o Tk coloca o popup no canto superior esquerdo do ecrã,
-    longe do botão que acabou de ser clicado.
-    """
-    master.update_idletasks()
-    x = master.winfo_rootx() + (master.winfo_width() - largura) // 2
-    y = master.winfo_rooty() + (master.winfo_height() - altura) // 2
-    janela.geometry(f"{largura}x{altura}+{max(x, 0)}+{max(y, 0)}")
+        enquadrar(janela)
+        janela.lift()
+        janela.focus_force()
+        janela.grab_set()
+
+    janela.after(10, _trazer)
 
 
 def tornar_cliclavel(widget, ao_clicar):
@@ -2505,3 +2671,296 @@ class FichaModal(_ModalVinculo):
                 wraplength=largura - 200,
                 justify="left",
             ).grid(row=fila, column=1, sticky="w", pady=3)
+
+
+# =====================================================================
+# Blocos visuais do Dashboard (v1.6.0, 27/09/2026)
+#
+# Regra de 21/09/2026: os ecrãs não instanciam widgets CustomTkinter
+# diretamente — passam por uma classe daqui. Estas nasceram com o
+# Dashboard novo, mas são genéricas: qualquer ecrã que precise de um
+# cartão com título, um número grande ou uma etiqueta colorida pode
+# (e deve) usá-las em vez de repetir `ctk.CTkFrame(...)` com as
+# mesmas cinco opções de estilo.
+# =====================================================================
+
+# Estilos de texto: (tamanho, negrito, cor). Um estilo é uma
+# intenção ("título de cartão", "número de KPI"), não um tamanho —
+# mudar o aspeto de todos os títulos de cartão é mudar uma linha.
+_ESTILOS_ROTULO = {
+    "titulo": (18, True, tema.COR_TEXTO),
+    "cartao": (13, True, tema.COR_TEXTO),
+    "numero": (26, True, tema.COR_TEXTO),
+    "texto": (12, False, tema.COR_TEXTO),
+    "forte": (12, True, tema.COR_TEXTO),
+    "secundario": (11, False, tema.COR_TEXTO_SECUNDARIO),
+    "secao": (10, True, tema.COR_TEXTO_SECUNDARIO),
+}
+
+# Estilos de etiqueta (pílula): (fundo, texto). Os mesmos pares do
+# `tema.py` que o resto da aplicação já usa para estados.
+_ESTILOS_ETIQUETA = {
+    "erro": (tema.VERMELHO_ERRO, tema.TEXTO_ERRO),
+    "aviso": (tema.AMARELO_AVISO, tema.TEXTO_AVISO),
+    "livre": (tema.VERDE_LIVRE, tema.TEXTO_LIVRE),
+    "info": (tema.CINZA_INDISPONIVEL, tema.TEXTO_INDISPONIVEL),
+    "azul": (tema.ID_CHIP_FUNDO, tema.AZUL_PRINCIPAL),
+}
+
+# Cores da barra de nível, pelo mesmo nome das etiquetas.
+_CORES_NIVEL = {
+    "erro": tema.TEXTO_ERRO,
+    "aviso": tema.TEXTO_AVISO,
+    "livre": tema.TEXTO_LIVRE,
+    "azul": tema.AZUL_PRINCIPAL,
+}
+
+
+class Contentor(ctk.CTkFrame):
+    """Frame transparente, sem cantos — só para arrumar widgets."""
+
+    def __init__(self, master, **kwargs):
+        kwargs.setdefault("fg_color", "transparent")
+        kwargs.setdefault("corner_radius", 0)
+        super().__init__(master, **kwargs)
+
+
+class AreaRolavel(ctk.CTkScrollableFrame):
+    """Área com scroll vertical, transparente.
+
+    Lição da v1.6.0 (ficheiro 11, A.5 n.º 1): NUNCA ligar
+    `<Configure>` a este widget sem `add=True` — mata o updater do
+    `scrollregion` e a área deixa de rolar.
+    """
+
+    def __init__(self, master, **kwargs):
+        kwargs.setdefault("fg_color", "transparent")
+        super().__init__(master, **kwargs)
+
+
+class Rotulo(ctk.CTkLabel):
+    """Texto com um dos estilos de `_ESTILOS_ROTULO`.
+
+    `cor` substitui a cor do estilo (ex.: um número a verde). Os
+    restantes kwargs vão direitos ao CTkLabel (wraplength, justify).
+    """
+
+    def __init__(self, master, texto, estilo="texto", cor=None, **kwargs):
+        tamanho, negrito, cor_estilo = _ESTILOS_ROTULO[estilo]
+        kwargs.setdefault("anchor", "w")
+        # O CTkLabel reserva 28px de altura por omissão, seja qual for
+        # a letra — numa lista, título e detalhe ficavam afastados.
+        kwargs.setdefault("height", tamanho + 8)
+        super().__init__(
+            master,
+            text=texto,
+            text_color=cor if cor is not None else cor_estilo,
+            font=ctk.CTkFont(
+                size=tamanho, weight="bold" if negrito else "normal"
+            ),
+            **kwargs,
+        )
+
+
+class Etiqueta(ctk.CTkLabel):
+    """Pílula colorida (estado, prioridade, regime).
+
+    `largura` fixa a largura em pixels — numa lista, pílulas com a
+    mesma largura deixam as colunas à esquerda alinhadas.
+    """
+
+    def __init__(self, master, texto, estilo="info", largura=0):
+        fundo, cor = _ESTILOS_ETIQUETA[estilo]
+        super().__init__(
+            master,
+            text=f" {texto} ",
+            fg_color=fundo,
+            text_color=cor,
+            corner_radius=8,
+            height=22,
+            width=largura,
+            font=ctk.CTkFont(size=11, weight="bold"),
+        )
+
+
+class Botao(ctk.CTkButton):
+    """Botão com um de quatro estilos.
+
+    - "primario": azul da marca (ação principal do bloco).
+    - "sucesso": verde (confirmar, aprovar).
+    - "contorno": só a borda (ações secundárias, atalhos).
+    - "discreto": sem borda nem fundo (setas ◀ ▶, "Ver ›").
+    """
+
+    def __init__(self, master, texto, comando=None, estilo="contorno",
+                 **kwargs):
+        kwargs.setdefault("height", 30)
+        # Largura MÍNIMA: o botão cresce com o texto. Os 140px por
+        # omissão do CTkButton faziam "↻ Atualizar" parecer um campo.
+        kwargs.setdefault("width", 60)
+        kwargs.setdefault("corner_radius", tema.RAIO_BOTAO)
+        kwargs.setdefault("font", ctk.CTkFont(size=12))
+
+        if estilo == "primario":
+            kwargs.update(
+                fg_color=tema.AZUL_PRINCIPAL,
+                hover_color=tema.AZUL_CLARO,
+                text_color="#FFFFFF",
+            )
+        elif estilo == "sucesso":
+            kwargs.update(
+                fg_color=tema.VERDE,
+                hover_color=tema.TEXTO_LIVRE,
+                text_color="#FFFFFF",
+            )
+        elif estilo == "discreto":
+            kwargs.update(
+                fg_color="transparent",
+                hover_color=tema.LINHA_ALTERNADA,
+                text_color=tema.COR_TEXTO,
+            )
+        else:
+            kwargs.update(
+                fg_color="transparent",
+                border_width=1,
+                border_color=tema.COR_BORDA,
+                hover_color=tema.LINHA_ALTERNADA,
+                text_color=tema.COR_TEXTO,
+            )
+
+        super().__init__(master, text=texto, command=comando, **kwargs)
+
+
+class SeletorVistas(ctk.CTkSegmentedButton):
+    """Seletor de vistas em pílula ("Hoje | Financeiro").
+
+    A opção escolhida fica em branco, sobre uma faixa cinzenta — o
+    mesmo desenho aprovado no mockup de 27/09/2026. `ao_mudar`
+    recebe o texto da opção escolhida.
+    """
+
+    def __init__(self, master, opcoes, ao_mudar, inicial=None):
+        super().__init__(
+            master,
+            values=list(opcoes),
+            command=ao_mudar,
+            fg_color=tema.CINZA_INDISPONIVEL,
+            selected_color=tema.COR_FUNDO,
+            selected_hover_color=tema.COR_FUNDO,
+            unselected_color=tema.CINZA_INDISPONIVEL,
+            unselected_hover_color=tema.LINHA_ALTERNADA,
+            text_color=tema.COR_TEXTO,
+            corner_radius=tema.RAIO_CAMPO,
+            height=30,
+            font=ctk.CTkFont(size=12, weight="bold"),
+        )
+        self.set(inicial if inicial is not None else opcoes[0])
+
+
+class BarraNivel(ctk.CTkProgressBar):
+    """Barra de nível só de leitura (ocupação, stock, receita).
+
+    `valor` entre 0 e 1 (é cortado a esse intervalo); `cor` é um
+    dos nomes de `_CORES_NIVEL`.
+    """
+
+    def __init__(self, master, valor, cor="azul", largura=120, altura=8):
+        super().__init__(
+            master,
+            width=largura,
+            height=altura,
+            corner_radius=altura // 2,
+            fg_color=tema.CINZA_INDISPONIVEL,
+            progress_color=_CORES_NIVEL[cor],
+        )
+        self.set(max(0.0, min(1.0, float(valor))))
+
+
+class Separador(ctk.CTkFrame):
+    """Linha horizontal de 1px, na cor das bordas."""
+
+    def __init__(self, master):
+        # `bg_color` também: com 1px de altura o CTkFrame não chega a
+        # desenhar o retângulo de fundo, e só a cor do canvas aparece.
+        super().__init__(
+            master,
+            height=1,
+            corner_radius=0,
+            fg_color=tema.COR_BORDA,
+            bg_color=tema.COR_BORDA,
+        )
+
+
+class Cartao(ctk.CTkFrame):
+    """Cartão com borda, título opcional à esquerda e subtítulo
+    opcional à direita. O conteúdo vai para `self.corpo`.
+    """
+
+    def __init__(self, master, titulo="", subtitulo=""):
+        super().__init__(
+            master,
+            corner_radius=tema.RAIO_CARTAO,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            fg_color=tema.COR_FUNDO,
+        )
+
+        if titulo or subtitulo:
+            self.topo = Contentor(self)
+            self.topo.pack(fill="x", padx=16, pady=(14, 8))
+            Rotulo(self.topo, titulo, "cartao").pack(side="left")
+
+            if subtitulo:
+                Rotulo(self.topo, subtitulo, "secundario").pack(
+                    side="right"
+                )
+
+        self.corpo = Contentor(self)
+        self.corpo.pack(
+            fill="both",
+            expand=True,
+            padx=16,
+            pady=(0 if titulo or subtitulo else 14, 14),
+        )
+
+
+class CartaoKpi(Cartao):
+    """Cartão de um número: rótulo, valor grande e uma linha de
+    contexto por baixo. Com `nivel` (0 a 1) mostra também uma barra.
+    """
+
+    def __init__(self, master, rotulo, valor, contexto="",
+                 cor_valor=None, cor_contexto=None, nivel=None,
+                 cor_nivel="azul"):
+        super().__init__(master)
+
+        Rotulo(self.corpo, rotulo, "secundario").pack(fill="x")
+        Rotulo(self.corpo, valor, "numero", cor=cor_valor).pack(
+            fill="x", pady=(2, 0)
+        )
+
+        if nivel is not None:
+            BarraNivel(self.corpo, nivel, cor=cor_nivel).pack(
+                fill="x", pady=(4, 2)
+            )
+
+        if contexto:
+            Rotulo(self.corpo, contexto, "secundario", cor=cor_contexto).pack(
+                fill="x", pady=(2, 0)
+            )
+
+
+def fila_de_cartoes(master, colunas):
+    """Contentor em grelha com `colunas` colunas iguais (`uniform`).
+
+    Devolve o contentor; quem chama põe cada cartão com
+    `.grid(row=0, column=n, sticky="nsew", padx=...)`. Sem o
+    `uniform`, cartões com textos de larguras diferentes ficavam com
+    larguras diferentes.
+    """
+    fila = Contentor(master)
+
+    for coluna in range(colunas):
+        fila.grid_columnconfigure(coluna, weight=1, uniform="cartoes")
+
+    return fila

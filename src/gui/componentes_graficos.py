@@ -65,6 +65,7 @@ matplotlib.use("TkAgg")   # ANTES de qualquer outro import do matplotlib
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
+from matplotlib.ticker import FuncFormatter, MaxNLocator
 
 import customtkinter as ctk
 
@@ -461,3 +462,66 @@ class GraficoRequisicoes(Grafico):
             self.ax.set_ylim(len(estados) - 0.5, -0.5)
         else:
             self.ax.set_ylim(0.5, -0.5)
+
+
+class GraficoReceitaDespesas(Grafico):
+    """Receita e despesas por mês — barras agrupadas (v1.6.0).
+
+    Usado na vista Financeiro do Dashboard. Receita a azul da marca,
+    despesas no dourado dos avisos (`tema.TEXTO_AVISO`) — as duas já
+    existem no `tema.py`, não há cor nova.
+
+    O eixo Y mostra milhares como "2k" — o valor exato está nos
+    cartões por cima do gráfico; aqui interessa a tendência.
+    """
+
+    def _desenhar(self, rotulos, receita, despesas):
+        """`rotulos`: nomes dos meses; `receita` e `despesas`: listas
+        paralelas de números (Decimal ou float), já calculadas por
+        quem chama (`painel.evolucao_mensal`)."""
+        posicoes = list(range(len(rotulos)))
+        largura = 0.38
+
+        self.ax.bar(
+            [p - largura / 2 for p in posicoes],
+            [float(v) for v in receita],
+            width=largura,
+            color=tema.AZUL_PRINCIPAL,
+            label="Receita",
+            zorder=3,
+        )
+        self.ax.bar(
+            [p + largura / 2 for p in posicoes],
+            [float(v) for v in despesas],
+            width=largura,
+            color=_cor_para_matplotlib(tema.TEXTO_AVISO),
+            label="Despesas",
+            zorder=3,
+        )
+
+        self.ax.set_xticks(posicoes)
+        self.ax.set_xticklabels(rotulos)
+
+        maximo = max([float(v) for v in receita + despesas] or [0])
+        self.ax.set_ylim(0, maximo * 1.15 if maximo > 0 else 1)
+        self.ax.yaxis.set_major_locator(MaxNLocator(nbins=4, integer=True))
+        self.ax.yaxis.set_major_formatter(
+            FuncFormatter(_formatar_milhares)
+        )
+
+        self.ax.legend(
+            loc="upper left",
+            frameon=False,
+            fontsize=9,
+            labelcolor=_cor_para_matplotlib(tema.COR_TEXTO_SECUNDARIO),
+            ncol=2,
+        )
+
+
+def _formatar_milhares(valor, _posicao):
+    """Rótulo do eixo Y: 2000 → "2k", 1500 → "1,5k", 800 → "800"."""
+    if valor >= 1000:
+        texto = f"{valor / 1000:.1f}".rstrip("0").rstrip(".")
+        return f"{texto.replace('.', ',')}k"
+
+    return f"{valor:.0f}"

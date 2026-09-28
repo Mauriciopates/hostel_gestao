@@ -68,7 +68,7 @@ import utilizadores
 from . import tema
 from . import componentes
 from . import sessao
-from .gui_dashboard import Dashboard
+from .dashboard.gui_dash_hub import Dashboard
 from .gui_clientes import ListaClientes
 from .contratos.gui_cnt_mensal_lista import ListaContratosMensais
 from .contratos.gui_cnt_airbnb_lista import ListaReservasAirbnb
@@ -100,7 +100,7 @@ ITENS_MENU = [
         "tipo": "item",
         "texto": "Dashboard",
         "ecra": Dashboard,
-        "perfis": _GESTAO,
+        "perfis": _TODOS,
     },
     # ---- GESTÃO -----------------------------------------------------
     {"tipo": "secao", "texto": "Gestão"},
@@ -254,9 +254,7 @@ class LoginModal(ctk.CTkToplevel):
         self.configure(fg_color=tema.COR_FUNDO)
         self.transient(master)
 
-        x = self.winfo_screenwidth() // 2 - largura // 2
-        y = self.winfo_screenheight() // 2 - altura // 2
-        self.geometry(f"{largura}x{altura}+{x}+{y}")
+        componentes.centrar_no_ecra(self, largura, altura)
 
         self._animacao_id = None
         self._animacao_passo = 0
@@ -580,10 +578,8 @@ class TermoModal(ctk.CTkToplevel):
         # `_AcoesResponsavelModal` no gui_responsaveis.
         self.update_idletasks()
         largura = 520
-        altura = self.winfo_reqheight()
-        x = self.winfo_screenwidth() // 2 - largura // 2
-        y = self.winfo_screenheight() // 2 - altura // 2
-        self.geometry(f"{largura}x{altura}+{max(x, 0)}+{max(y, 0)}")
+        altura = round(self.winfo_reqheight() / componentes.escala(self))
+        componentes.centrar_no_ecra(self, largura, altura)
 
         self.after(
             10,
@@ -665,8 +661,8 @@ class Aplicacao(ctk.CTk):
         except Exception:
             pass
 
-        self.geometry("1100x700")
-        self.minsize(950, 620)
+        componentes.centrar_no_ecra(self, 1100, 700)
+        self.minsize(*componentes.tamanho_minimo(self, 950, 620))
         self.resizable(True, True)
         self.configure(fg_color=tema.COR_FUNDO)
 
@@ -717,8 +713,8 @@ class Aplicacao(ctk.CTk):
         )
         self.area_conteudo.grid(row=0, column=1, sticky="nsew")
 
-        # Primeiro ecrã = primeiro item visível do perfil (Master e
-        # Admin: Dashboard; Staff: Stock).
+        # Primeiro ecrã = primeiro item visível do perfil — desde a
+        # v1.6.0 é o Dashboard para todos (o Staff tem vista própria).
         primeiro_ecra = next(
             item["ecra"] for item in itens if item["tipo"] == "item"
         )
