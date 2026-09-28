@@ -427,5 +427,8 @@ def _dimensionar(janela, master):
     """Altura a partir do conteúdo, centrada sobre quem a abriu."""
     janela.update_idletasks()
     componentes.centrar_sobre(
-        janela, master, _LARGURA_MODAL, janela.winfo_reqheight()
+        janela,
+        master,
+        _LARGURA_MODAL,
+        round(janela.winfo_reqheight() / componentes.escala(janela)),
     )
