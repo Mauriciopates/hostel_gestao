@@ -67,16 +67,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from testes.apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest  # noqa: E402
 
-import clientes
-import contratos
-import despesas
-import estoque
-import financeiro
-import propriedades
-import responsaveis
-import unidades
+import clientes  # noqa: E402
+import contratos  # noqa: E402
+import despesas  # noqa: E402
+import estoque  # noqa: E402
+import financeiro  # noqa: E402
+import propriedades  # noqa: E402
+import responsaveis  # noqa: E402
+import unidades  # noqa: E402
 
 # =====================================================================
 # Helpers de fixture — só usados pelos testes com MySQL
@@ -114,7 +114,8 @@ def _criar_unidade_airbnb(
         Decimal(preco_base),
         Decimal(preco_epoca_alta),
         Decimal("20.00"),
-        epoca_alta_ativa=False,  # desligada: os testes não querem época alta automática
+        # Desligada: os testes não querem época alta automática.
+        epoca_alta_ativa=False,
     )
 
 

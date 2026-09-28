@@ -61,10 +61,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-import mysql.connector
+import mysql.connector  # noqa: E402
 
-import config
-import repositorio
+import config  # noqa: E402
+import repositorio  # noqa: E402
 
 # Logs durante os testes (v1.6.0, 23/09/2026).
 #
@@ -130,7 +130,8 @@ CREATE TABLE IF NOT EXISTS responsaveis (
     id                      VARCHAR(10)  PRIMARY KEY,
     nome                    VARCHAR(150) NOT NULL,
     contacto                VARCHAR(100),
-    tipo_utilizador         ENUM('Master','Admin','Staff') NOT NULL DEFAULT 'Staff',
+    tipo_utilizador         ENUM('Master','Admin','Staff')
+                            NOT NULL DEFAULT 'Staff',
     ativo                   BOOLEAN      NOT NULL DEFAULT 1,
     username                VARCHAR(50)  UNIQUE,
     password_hash           VARCHAR(255),
@@ -188,7 +189,8 @@ CREATE TABLE IF NOT EXISTS lugares (
     id                 VARCHAR(10)  PRIMARY KEY,
     quarto_id          VARCHAR(10)  NOT NULL,
     nome               VARCHAR(100) NOT NULL,
-    tipo_cama          ENUM('solteiro','casal','beliche') NOT NULL DEFAULT 'solteiro',
+    tipo_cama          ENUM('solteiro','casal','beliche')
+                       NOT NULL DEFAULT 'solteiro',
     posicao_beliche    ENUM('superior','inferior') DEFAULT NULL,
     beliche_grupo_id   VARCHAR(10)  DEFAULT NULL,
     capacidade         INT          NOT NULL CHECK (capacidade >= 1),
@@ -199,7 +201,13 @@ CREATE TABLE IF NOT EXISTS lugares (
 CREATE TABLE IF NOT EXISTS clientes (
     id                          VARCHAR(10)  PRIMARY KEY,
     nome                        VARCHAR(150) NOT NULL,
-    tipo_documento              ENUM('Cartão de Cidadão', 'Passaporte', 'Título de Residência', 'Outro') NOT NULL,
+    tipo_documento              ENUM(
+                                    'Cartão de Cidadão',
+                                    'Passaporte',
+                                    'Título de Residência',
+                                    'Outro'
+                                )
+                                NOT NULL,
     numero_documento            VARCHAR(50)  NOT NULL,
     nif                         VARCHAR(20),
     email                       VARCHAR(150),
@@ -245,7 +253,9 @@ CREATE TABLE IF NOT EXISTS ocupacoes_mensal (
     caucao_exige_confirmacao        BOOLEAN       NOT NULL DEFAULT 0,
     motivo_alteracao_renda          VARCHAR(255),
     motivo_alteracao_caucao         VARCHAR(255),
-    dia_vencimento                  INT           NOT NULL CHECK (dia_vencimento BETWEEN 1 AND 28),
+    dia_vencimento                  INT
+                                    NOT NULL
+                                    CHECK (dia_vencimento BETWEEN 1 AND 28),
     motivo_encerramento             VARCHAR(255),
     duracao_abaixo_minima           BOOLEAN       NOT NULL DEFAULT 0,
     aviso_previo_insuficiente       BOOLEAN       NOT NULL DEFAULT 0,
@@ -273,18 +283,27 @@ CREATE TABLE IF NOT EXISTS produtos (
     id                  VARCHAR(10)  PRIMARY KEY,
     nome                VARCHAR(150) NOT NULL,
     unidade_medida      VARCHAR(30)  NOT NULL,
-    stock_minimo        INT          NOT NULL DEFAULT 0 CHECK (stock_minimo >= 0),
+    stock_minimo        INT
+                        NOT NULL DEFAULT 0 CHECK (stock_minimo >= 0),
     ativo               BOOLEAN      NOT NULL DEFAULT 1,
     desativado_por_id   VARCHAR(10),
     data_desativacao    DATE,
-    tipo_produto        ENUM('consumivel','roupa_cama','roupa_banho','outro') NOT NULL DEFAULT 'consumivel',
+    tipo_produto        ENUM('consumivel','roupa_cama','roupa_banho','outro')
+                        NOT NULL DEFAULT 'consumivel',
     FOREIGN KEY (desativado_por_id) REFERENCES responsaveis(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS requisicoes (
     id                        VARCHAR(10) PRIMARY KEY,
     responsavel_id            VARCHAR(10) NOT NULL,
-    estado                    ENUM('pendente','enviada','fechada','rejeitada','cancelada') NOT NULL DEFAULT 'pendente',
+    estado                    ENUM(
+                                  'pendente',
+                                  'enviada',
+                                  'fechada',
+                                  'rejeitada',
+                                  'cancelada'
+                              )
+                              NOT NULL DEFAULT 'pendente',
     data_pedido               DATE        NOT NULL,
     data_envio                DATE,
     data_fecho                DATE,
@@ -407,7 +426,8 @@ CREATE TABLE IF NOT EXISTS despesas (
     data_lancamento                 DATE          NOT NULL,
     data_pagamento                  DATE,
     data_vencimento                 DATE,
-    estado                          ENUM('pendente','paga','cancelada') NOT NULL DEFAULT 'pendente',
+    estado                          ENUM('pendente','paga','cancelada')
+                                    NOT NULL DEFAULT 'pendente',
     recorrente                      BOOLEAN       NOT NULL DEFAULT 0,
     despesa_origem_id               VARCHAR(10),
     itens_confirmados               BOOLEAN       NOT NULL DEFAULT 1,
@@ -426,7 +446,8 @@ CREATE TABLE IF NOT EXISTS despesas (
     FOREIGN KEY (responsavel_cancelamento_id) REFERENCES responsaveis(id),
     FOREIGN KEY (itens_confirmados_por_id) REFERENCES responsaveis(id),
     CHECK (valor >= 0),
-    CHECK (estado <> 'cancelada' OR (motivo_cancelamento IS NOT NULL AND responsavel_cancelamento_id IS NOT NULL))
+    CHECK (estado <> 'cancelada' OR (motivo_cancelamento IS NOT NULL AND
+        responsavel_cancelamento_id IS NOT NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS itens_despesa (
@@ -442,7 +463,12 @@ CREATE TABLE IF NOT EXISTS itens_despesa (
 
 CREATE TABLE IF NOT EXISTS textos_legais (
     id            INT NOT NULL AUTO_INCREMENT,
-    tipo          ENUM('privacidade_hospede','privacidade_colaborador','confidencialidade') NOT NULL,
+    tipo          ENUM(
+                      'privacidade_hospede',
+                      'privacidade_colaborador',
+                      'confidencialidade'
+                  )
+                  NOT NULL,
     versao        VARCHAR(20) NOT NULL,
     texto         MEDIUMTEXT  NOT NULL,
     publicado_em  DATE        NOT NULL,
@@ -456,11 +482,17 @@ CREATE TABLE IF NOT EXISTS avisos_privacidade (
     id                INT NOT NULL AUTO_INCREMENT,
     titular_tipo      ENUM('cliente','responsavel') NOT NULL,
     titular_id        VARCHAR(10) NOT NULL,
-    documento         ENUM('privacidade_hospede','privacidade_colaborador','confidencialidade') NOT NULL,
+    documento         ENUM(
+                          'privacidade_hospede',
+                          'privacidade_colaborador',
+                          'confidencialidade'
+                      )
+                      NOT NULL,
     versao_texto      VARCHAR(20) NOT NULL,
     data_entrega      DATETIME    NOT NULL,
     registado_por_id  VARCHAR(10),
-    suporte           ENUM('papel','contrato','web','sistema') NOT NULL DEFAULT 'papel',
+    suporte           ENUM('papel','contrato','web','sistema')
+                      NOT NULL DEFAULT 'papel',
     arquivo           VARCHAR(255),
     PRIMARY KEY (id),
     KEY idx_aviso_titular (titular_tipo, titular_id),

@@ -84,7 +84,8 @@ PRAZO_CONSERVACAO_HOSPEDES_DIAS = 365  # boletins SIBA/AIMA
 PRAZO_CONSERVACAO_FISCAL_DIAS = 3650  # art.º 40.º Código Comercial
 PRAZO_CONSERVACAO_LOGS_DIAS = 180  # minimização
 
-VERSAO = "1.6.0"  # mostrada na interface (decisão 21); atualizar a cada fecho de versão
+# Mostrada na interface (decisão 21); atualizar a cada fecho de versão.
+VERSAO = "1.6.0"
 
 # --- Utilizador Master padrão (reset do sistema) ----------------------------
 # Usados pela função "Começar do zero" (gui_configuracoes.py → Fase 4).
@@ -126,7 +127,8 @@ def garantir_diretorios():
     na raiz do disco, no Windows), cai para `Path.home() /
     "Hostel_gestao"` e todas as subpastas passam a viver aí.
     """
-    global DIR_BASE, DIR_DADOS, DIR_BACKUPS, DIR_CONTRATOS, DIR_RELATORIOS, DIR_LOGS
+    global DIR_BASE, DIR_DADOS, DIR_BACKUPS, DIR_CONTRATOS
+    global DIR_RELATORIOS, DIR_LOGS
     try:
         DIR_BASE.mkdir(parents=True, exist_ok=True)
     except OSError:

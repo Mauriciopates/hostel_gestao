@@ -51,19 +51,18 @@ _SRC = Path(__file__).resolve().parent.parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from testes.apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest  # noqa: E402
 
-import clientes
-import config
-import contratos
-import propriedades
-import responsaveis
-import unidades
+import clientes  # noqa: E402
+import contratos  # noqa: E402
+import propriedades  # noqa: E402
+import responsaveis  # noqa: E402
+import unidades  # noqa: E402
 
-from impressao import base as impressao_base
-from impressao import csv as impressao_csv
-from impressao import excel as impressao_excel
-from impressao import pdf as impressao_pdf
+from impressao import base as impressao_base  # noqa: E402
+from impressao import csv as impressao_csv  # noqa: E402
+from impressao import excel as impressao_excel  # noqa: E402
+from impressao import pdf as impressao_pdf  # noqa: E402
 
 # ---------------------------------------------------------------------
 # Helpers de fixture — para as classes que precisam de BD
@@ -271,7 +270,7 @@ class TesteBase(unittest.TestCase):
         # Formato termina com "NNhNN" — oito caracteres a seguir
         # ao último underscore.
         ultimo_underscore = nome.rfind("_")
-        sufixo = nome[ultimo_underscore + 1 :]
+        sufixo = nome[ultimo_underscore + 1:]
         self.assertRegex(sufixo, r"^\d{2}h\d{2}$")
 
     # -- pasta_relatorios ---------------------------------------------
@@ -289,7 +288,7 @@ class TesteBase(unittest.TestCase):
         impressao_base.abrir_no_sistema("/caminho/que/nao/existe.pdf")
 
     def test_abrir_no_sistema_windows_chama_os_startfile(self):
-        with patch("os.startfile", create=True) as mock_startfile:
+        with patch("os.startfile", create=True):
             with patch("sys.platform", "win32"):
                 impressao_base.abrir_no_sistema("/tmp/teste.pdf")
 

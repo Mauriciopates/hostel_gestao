@@ -25,8 +25,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-import config
-import registo_logs
+import config  # noqa: E402
+import registo_logs  # noqa: E402
 
 
 class TesteConfigurar(unittest.TestCase):

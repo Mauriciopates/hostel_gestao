@@ -36,17 +36,16 @@ errado e verificam que o `definir` recusa com ValueError.
 
 import sys
 import unittest
-from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from testes.apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest  # noqa: E402
 
-import configuracoes
-import repositorio
-import responsaveis
+import configuracoes  # noqa: E402
+import repositorio  # noqa: E402
+import responsaveis  # noqa: E402
 
 
 # ---------------------------------------------------------------------

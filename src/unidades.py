@@ -46,7 +46,7 @@ POSICOES_BELICHE = ("superior", "inferior")
 
 
 def _validar_cama_extra(tipo, permite_cama_extra, qtd_cama_extra,
-                         tipo_cama_extra):
+                        tipo_cama_extra):
     """Valida os três campos de cama extra do Airbnb em conjunto
     (Fase 2, v1.4.0, item (d) do plano de correções).
 
@@ -313,7 +313,7 @@ def atualizar(
         )
 
         _validar_cama_extra(unidade["tipo"], novo_permite, novo_qtd,
-                             novo_tipo)
+                            novo_tipo)
 
         campos["permite_cama_extra"] = novo_permite
         campos["qtd_cama_extra"] = novo_qtd if novo_permite else None
@@ -849,7 +849,6 @@ def listar_lugares(incluir_inativas=False, quarto_id=None):
     return repositorio.listar_lugares(
         incluir_inativas=incluir_inativas, quarto_id=quarto_id
     )
-
 
 
 def desativar_lugar(lugar_id):

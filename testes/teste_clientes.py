@@ -75,10 +75,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from testes.apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest  # noqa: E402
 
-import clientes
-import responsaveis
+import clientes  # noqa: E402
+import responsaveis  # noqa: E402
 
 
 def criar_cliente_mensal(**overrides):

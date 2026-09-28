@@ -73,11 +73,11 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from testes.apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest  # noqa: E402
 
-import estoque
-import repositorio
-import responsaveis
+import estoque  # noqa: E402
+import repositorio  # noqa: E402
+import responsaveis  # noqa: E402
 
 
 def _responsavel_ativo(nome="Ana Ferreira"):

@@ -74,6 +74,7 @@ RAIO_BOTAO = 10
 RAIO_CARTAO = 14
 RAIO_CAMPO = 8
 
+
 def aplicar_tema():
     """Configura o modo de aparência inicial da aplicação. Chamar
     uma única vez, no arranque de app.py, antes de criar a janela

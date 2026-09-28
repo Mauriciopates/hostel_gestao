@@ -28,8 +28,7 @@ _intervalo_do_atalho = gui_relat_comum.intervalo_do_atalho
 _intervalo_personalizado = gui_relat_comum.intervalo_personalizado
 _intervalo_visivel = gui_relat_comum.intervalo_visivel
 
-
-    # =====================================================================
+# =====================================================================
 
 
 # POPUP DE UMA ÁREA — RelatorioModal
@@ -732,7 +731,10 @@ class RelatorioBase(ctk.CTkToplevel):
         """
         if self._relatorio_atual_aplica_periodo():
             inicio, fim = self._intervalo_visivel_atual()
-            texto = f"{titulo.upper()} · {inicio.strftime('%d/%m/%Y')} → {fim.strftime('%d/%m/%Y')}"
+            texto = (
+                f"{titulo.upper()} · {inicio.strftime('%d/%m/%Y')} → "
+                f"{fim.strftime('%d/%m/%Y')}"
+            )
         else:
             texto = titulo.upper()
 

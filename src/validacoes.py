@@ -65,7 +65,7 @@ def nif_valido(nif):
 # nas finanças.
 """ Regra para saber se é um NIF Multiplica-se
 cada um dos 8 primeiros dígitos por pesos de 9 a 2
-soma-se tudo, e o resto da divisão por 11 tem de 
+soma-se tudo, e o resto da divisão por 11 tem de
 coincidir com o 9.º dígito (11 menos o resto,
 ou 0 se o resto for 0 ou 1).
 """
@@ -160,6 +160,7 @@ def validar_cliente(dados, regime):
                 "Airbnb."
             )
 
+
 def documento_expira_durante_estadia(validade, data_inicio, data_fim):
     """Verifica se o documento caduca durante a permanência.
 
@@ -236,7 +237,8 @@ def validar_intervalo(data_inicio, data_fim, minimo=None, maximo=None):
 
     if minimo is not None and noites < minimo:
         raise ValueError(
-        f"A estadia de {noites} noites é inferior ao mínimo de " f"{minimo}."
+            f"A estadia de {noites} noites é inferior ao mínimo de "
+            f"{minimo}."
         )
 
     if maximo is not None and noites > maximo:
@@ -307,7 +309,8 @@ def em_epoca_alta(data, epoca_alta_ativa, inicio, fim):
 
     return inicio <= (data.month, data.day) <= fim
 
-#Criado na fase GUI
+# Criado na fase GUI
+
 
 def validar_tipo_cama(tipo_cama):
     """Verifica que o tipo de cama é um dos valores fixos aceites.

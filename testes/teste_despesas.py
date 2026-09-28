@@ -26,10 +26,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from testes.apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest  # noqa: E402
 
-import despesas
-import responsaveis
+import despesas  # noqa: E402
+import responsaveis  # noqa: E402
 
 
 # =====================================================================
@@ -595,7 +595,7 @@ class TesteVia2(BaseMySQLTest):
         self.assertEqual(len(itens), 1)
         self.assertTrue(itens[0]["produto_id"].startswith("PRD-"))
 
-    def test_criar_despesa_stock_categoria_compra_stock_inexistente_falha(self):
+    def test_criar_despesa_stock_sem_categoria_compra_stock_falha(self):
         # Sem chamar _criar_categoria_compra_stock, a categoria não
         # existe — a VIA 2 tem de rebentar com mensagem clara.
         import despesas as desp
@@ -795,8 +795,8 @@ class TesteRecorrencias(BaseMySQLTest):
         """Uma recorrente pendente (não paga) do mês passado também
         gera a deste mês — não se espera pelo pagamento (decisão do
         handoff, B.6)."""
-        original = self._criar_despesa_recorrente(meses_atras=1)
-        # `original` nasce pendente — não se marca paga.
+        self._criar_despesa_recorrente(meses_atras=1)
+        # A original nasce pendente — não se marca paga.
 
         geradas = despesas.gerar_recorrencias_pendentes(self.autor)
 

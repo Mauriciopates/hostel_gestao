@@ -46,9 +46,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from testes.apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest  # noqa: E402
 
-import responsaveis
+import responsaveis  # noqa: E402
 
 
 def _criar_master(nome="Master de Teste"):

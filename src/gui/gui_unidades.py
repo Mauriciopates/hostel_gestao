@@ -849,7 +849,8 @@ class PlantaLugares(ctk.CTkFrame):
                 for widget in etiquetas_corpo:
                     _tornar_clicavel(
                         widget,
-                        lambda lugar=lugar, ocupantes=ocupantes, estado=estado: (
+                        lambda lugar=lugar, ocupantes=ocupantes,
+                        estado=estado: (
                             _DetalheLugarModal(
                                 self, lugar, ocupantes[0], estado
                             )
@@ -2049,6 +2050,7 @@ class _DetalheLugarModal(ctk.CTkToplevel):
         self.destroy()
         self.tela_planta.controlador.mostrar_frame(
             __import__(
-                "gui.contratos.gui_cnt_mensal_lista", fromlist=["ListaContratosMensais"]
+                "gui.contratos.gui_cnt_mensal_lista",
+                fromlist=["ListaContratosMensais"],
             ).ListaContratosMensais
         )

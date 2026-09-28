@@ -82,7 +82,6 @@ from decimal import Decimal
 import despesas
 import estoque
 import repositorio
-import unidades
 
 
 # =====================================================================
@@ -191,6 +190,7 @@ def _meses_do_periodo(data_inicio, data_fim):
             mes += 1
 
     return meses
+
 
 def _primeiro_dia_do_mes(ano, mes):
     """Devolve o `date` do dia 1 do mês indicado."""
@@ -704,7 +704,8 @@ def resultado(data_inicio, data_fim):
             "receita": Decimal(...),           # mensal + airbnb
             "descontos": Decimal(...),          # mensal + airbnb
             "despesas_operacionais": Decimal(...),
-            "resultado_liquido": Decimal(...),  # receita − descontos − despesas
+            # receita − descontos − despesas
+            "resultado_liquido": Decimal(...),
             "cogs_quantidade": int,             # NÃO entra no resultado
         }
 

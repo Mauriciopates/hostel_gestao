@@ -56,7 +56,7 @@ class VistaFinanceiro(comum.VistaBase):
 
     def _construir(self):
         inicio, fim = painel.periodo_do_mes(self.ano, self.mes)
-        ano_ant, mes_ant = painel.mes_anterior(self.ano, self.mes)
+        _, mes_ant = painel.mes_anterior(self.ano, self.mes)
         nome_mes = comum.NOMES_MESES_LONGOS[self.mes - 1]
         nome_ant = comum.NOMES_MESES_LONGOS[mes_ant - 1]
 

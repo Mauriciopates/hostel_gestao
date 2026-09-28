@@ -43,11 +43,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from testes.apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest  # noqa: E402
 
-import propriedades
-import responsaveis
-import unidades
+import propriedades  # noqa: E402
+import responsaveis  # noqa: E402
+import unidades  # noqa: E402
 
 
 class TesteCriar(BaseMySQLTest):

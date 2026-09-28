@@ -14,7 +14,7 @@ as datas usam `-` em vez de `—`. Quem gera PDF tem de continuar
 a respeitar esta regra.
 """
 
-from datetime import date, datetime
+from datetime import datetime
 
 import config
 

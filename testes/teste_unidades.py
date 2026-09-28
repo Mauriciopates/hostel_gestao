@@ -72,14 +72,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from testes.apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest  # noqa: E402
 
-import clientes
-import contratos
-import propriedades
-import repositorio
-import responsaveis
-import unidades
+import clientes  # noqa: E402
+import contratos  # noqa: E402
+import propriedades  # noqa: E402
+import repositorio  # noqa: E402
+import responsaveis  # noqa: E402
+import unidades  # noqa: E402
 
 
 def criar_propriedade():
@@ -738,7 +738,10 @@ class TesteCriarLugar(BaseMySQLTest):
         self.assertTrue(lugar["ativo"])
         self.assertIn(
             lugar["id"],
-            [l["id"] for l in unidades.listar_lugares(quarto_id=quarto["id"])],
+            [
+                lug["id"]
+                for lug in unidades.listar_lugares(quarto_id=quarto["id"])
+            ],
         )
 
     def test_cria_lugar_capacidade_dois(self):
@@ -858,7 +861,7 @@ class TesteListarLugares(BaseMySQLTest):
         lugar_a = unidades.criar_lugar(quarto_a["id"], "Cama 1", "solteiro")
         unidades.criar_lugar(quarto_b["id"], "Cama 1", "solteiro")
         resultado = unidades.listar_lugares(quarto_id=quarto_a["id"])
-        self.assertEqual([l["id"] for l in resultado], [lugar_a["id"]])
+        self.assertEqual([lug["id"] for lug in resultado], [lugar_a["id"]])
 
     def test_lista_so_ativos_por_omissao(self):
         """Comparação por ID — mesma razão."""
@@ -869,7 +872,7 @@ class TesteListarLugares(BaseMySQLTest):
         inativo = unidades.criar_lugar(quarto["id"], "Cama 2", "solteiro")
         unidades.desativar_lugar(inativo["id"])
         resultado = unidades.listar_lugares(quarto_id=quarto["id"])
-        self.assertEqual([l["id"] for l in resultado], [ativo["id"]])
+        self.assertEqual([lug["id"] for lug in resultado], [ativo["id"]])
 
 
 class TesteAtualizarLugar(BaseMySQLTest):

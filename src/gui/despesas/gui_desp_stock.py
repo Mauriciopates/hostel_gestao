@@ -400,7 +400,7 @@ class NovaDespesaStockModal(ctk.CTkToplevel):
             fg_color="transparent",
             text_color=tema.TEXTO_ERRO,
             hover_color=tema.VERMELHO_ERRO,
-            command=lambda l=linha: self._remover_linha(l),
+            command=lambda lin=linha: self._remover_linha(lin),
         ).pack(side="left", padx=(10, 0))
 
     def _remover_linha(self, linha):
@@ -419,7 +419,7 @@ class NovaDespesaStockModal(ctk.CTkToplevel):
         if self._produtos:
             moldura.destroy()
             self._linhas = [
-                l for l in self._linhas if l["moldura"] is not moldura
+                lin for lin in self._linhas if lin["moldura"] is not moldura
             ]
         self._abrir_criar_produto()
 

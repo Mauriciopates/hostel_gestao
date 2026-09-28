@@ -38,8 +38,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-import config
-import repositorio
+import config  # noqa: E402
+import repositorio  # noqa: E402
 
 
 class BaseRepositorio(unittest.TestCase):

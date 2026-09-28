@@ -132,7 +132,9 @@ def guardar(id_servidor, servidor, password=None):
     servidor = dict(servidor)
     if servidor.get("tunel"):
         tunel = dict(servidor["tunel"])
-        tunel["porta_local"] = _porta_local_livre(dados["servidores"], id_servidor)
+        tunel["porta_local"] = _porta_local_livre(
+            dados["servidores"], id_servidor
+        )
         servidor["tunel"] = tunel
 
     dados["servidores"][id_servidor] = servidor
@@ -161,7 +163,11 @@ def remover(id_servidor):
 
 def _novo_id(nome, existentes):
     """'VM (VirtualBox)' -> 'vm-virtualbox', sem repetir."""
-    base = unicodedata.normalize("NFKD", nome).encode("ascii", "ignore").decode()
+    base = (
+        unicodedata.normalize("NFKD", nome)
+        .encode("ascii", "ignore")
+        .decode()
+    )
     base = re.sub(r"[^a-z0-9]+", "-", base.lower()).strip("-") or "servidor"
     candidato, n = base, 2
     while candidato in existentes:
@@ -208,7 +214,8 @@ def _guardar_password(id_servidor, password):
 
 def obter_password(id_servidor):
     try:
-        return _cofre().get_password(SERVICO_COFRE, _chave_cofre(id_servidor)) or ""
+        chave = _chave_cofre(id_servidor)
+        return _cofre().get_password(SERVICO_COFRE, chave) or ""
     except ErroServidor:
         raise
     except Exception as erro:
@@ -307,7 +314,8 @@ def abrir_tunel(servidor):
     ]
     opcoes = {}
     if os.name == "nt":
-        opcoes["creationflags"] = subprocess.CREATE_NO_WINDOW  # sem janela preta
+        # Sem janela preta de consola.
+        opcoes["creationflags"] = subprocess.CREATE_NO_WINDOW
 
     logger.info("A abrir túnel SSH: %s", " ".join(comando[1:]))
     processo = subprocess.Popen(
@@ -325,7 +333,8 @@ def abrir_tunel(servidor):
             logger.info("Túnel aberto na porta %s", porta)
             return
         if processo.poll() is not None:
-            erro = processo.stderr.read().decode(errors="replace").strip()
+            saida = processo.stderr.read() if processo.stderr else b""
+            erro = saida.decode(errors="replace").strip()
             _tuneis.pop(porta, None)
             raise ErroServidor(_explicar_erro_ssh(erro, tunel))
         time.sleep(0.3)
@@ -353,7 +362,10 @@ def _explicar_erro_ssh(erro, tunel):
             "segurança a ligação foi recusada."
         )
     elif "address already in use" in texto:
-        causa = f"A porta {tunel['porta_local']} do PC está ocupada por outro programa."
+        causa = (
+            f"A porta {tunel['porta_local']} do PC está ocupada por "
+            "outro programa."
+        )
     else:
         causa = "O túnel SSH não abriu."
     return f"{causa}\n\nMensagem do ssh: {erro or '(nenhuma)'}"
@@ -396,10 +408,10 @@ def testar(servidor, password):
         try:
             cursor = conexao.cursor()
             cursor.execute(
-                "SELECT COUNT(*) FROM information_schema.tables "
+                "SELECT table_name FROM information_schema.tables "
                 "WHERE table_schema = DATABASE()"
             )
-            (tabelas,) = cursor.fetchone()
+            tabelas = len(cursor.fetchall())
         finally:
             conexao.close()
     except ErroServidor as erro:
@@ -407,7 +419,9 @@ def testar(servidor, password):
     except mysql.connector.Error as erro:
         return False, f"O MySQL recusou a ligação.\n\n{erro}"
 
-    return True, f"Ligação a '{servidor['base']}' com sucesso — {tabelas} tabelas."
+    return True, (
+        f"Ligação a '{servidor['base']}' com sucesso — {tabelas} tabelas."
+    )
 
 
 def testar_id(id_servidor):
@@ -422,7 +436,9 @@ def reiniciar_aplicacao():
     """
     fechar_tuneis()
     ambiente = {k: v for k, v in os.environ.items() if k != VARIAVEL_FORCAR}
-    subprocess.Popen([sys.executable] + sys.argv, env=ambiente, cwd=os.getcwd())
+    subprocess.Popen(
+        [sys.executable] + sys.argv, env=ambiente, cwd=os.getcwd()
+    )
 
 
 # =====================================================================
@@ -454,7 +470,7 @@ def _importar_ficheiros_env():
         dados["servidores"]["local"] = {
             "nome": "Local (Windows)",
             "host": v.get("DB_HOST", "localhost"),
-            "porta": int(v.get("DB_PORT", "3306")),
+            "porta": int(v.get("DB_PORT") or "3306"),
             "utilizador": v.get("DB_USER", "root"),
             "base": v.get("DB_NAME", "hostel_gestao"),
             "tunel": None,
@@ -476,7 +492,7 @@ def _importar_ficheiros_env():
                 "ssh_host": "192.168.56.10",
                 "ssh_porta": 22,
                 "porta_mysql": 6213,
-                "porta_local": int(v.get("DB_PORT", "3307")),
+                "porta_local": int(v.get("DB_PORT") or "3307"),
             },
         }
         _importar_password("vm", v.get("DB_PASSWORD", ""))

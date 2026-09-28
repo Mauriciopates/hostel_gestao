@@ -69,7 +69,7 @@ do aluno), antes deste ficheiro:
    a aceitar `responsavel_id` e a gravá-lo (com a data) em
    `desativado_por_id`/`data_desativacao`, só quando a desativação
    é mesmo forçada com dependências ativas — nova coluna em
-   propriedades/unidades (ver claude/esquema_mysql.sql, ALTER
+   propriedades/unidades (ver o esquema SQL em docs/, ALTER
    TABLE). cli.py também passou a pedir o responsável ao forçar,
    para as duas interfaces ficarem consistentes.
 
@@ -379,7 +379,7 @@ do aluno), antes deste ficheiro:
       espaços) para facilitar a leitura a olho, mas limpa os espaços
       antes de gravar — a base recebe sempre o cru.
     - `ALTER TABLE propriedades ADD COLUMN iban VARCHAR(34)` fica
-      documentado para correr na base (ver claude/esquema_mysql.sql),
+      documentado para correr na base (ver o esquema SQL em docs/),
       mas o aluno combinou só o correr quando todos os ficheiros
       desta ronda estiverem entregues — para a aplicação não
       rebentar a meio.
@@ -647,7 +647,7 @@ def _formatar_iban(iban):
     if not iban:
         return "—"
 
-    return " ".join(iban[i : i + 4] for i in range(0, len(iban), 4))
+    return " ".join(iban[i: i + 4] for i in range(0, len(iban), 4))
 
 
 class _ConfirmarForcarModal(ctk.CTkToplevel):

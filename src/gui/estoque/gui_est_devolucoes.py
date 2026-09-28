@@ -89,7 +89,9 @@ class ListaDevolucoes(ctk.CTkFrame):
             text_color=tema.AZUL_PRINCIPAL,
             hover_color=tema.COR_BORDA,
             command=lambda: controlador.mostrar_frame(
-                __import__("gui.estoque.gui_est_hub", fromlist=["EcraStock"]).EcraStock
+                __import__(
+                    "gui.estoque.gui_est_hub", fromlist=["EcraStock"]
+                ).EcraStock
             ),
         ).pack(side="left")
 

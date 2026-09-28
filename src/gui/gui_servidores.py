@@ -24,6 +24,7 @@ gui_configuracoes.py já passa das mil linhas.
 """
 
 import logging
+from typing import TYPE_CHECKING
 
 import customtkinter as ctk
 
@@ -43,6 +44,14 @@ logger = logging.getLogger(__name__)
 class _Formulario:
     """Campos de um servidor. Quem herda chama `_construir_formulario`
     depois de criar a janela e implementa `_depois_de_gravar(id)`."""
+
+    # Mixin: a janela real (CTk ou CTkToplevel) vem da outra classe
+    # base. Estas duas declarações só existem para o Pylance saber
+    # que os métodos existem — não correm (TYPE_CHECKING é False).
+    if TYPE_CHECKING:
+        def update_idletasks(self) -> None: ...
+
+        def destroy(self) -> None: ...
 
     def _construir_formulario(self, corpo, id_servidor, titulo, texto_gravar,
                               com_sair=False):
@@ -74,7 +83,10 @@ class _Formulario:
         self.var_tunel = ctk.BooleanVar(value=bool(tunel))
         ctk.CTkCheckBox(
             grelha,
-            text="Ligar por túnel SSH (servidor que só aceita ligações por dentro)",
+            text=(
+                "Ligar por túnel SSH (servidor que só aceita ligações "
+                "por dentro)"
+            ),
             variable=self.var_tunel, command=self._mostrar_modo,
             text_color=tema.COR_TEXTO, font=ctk.CTkFont(size=12),
         ).grid(row=self._proxima(grelha), column=0, columnspan=2,
@@ -100,26 +112,30 @@ class _Formulario:
                               columnspan=2, sticky="ew")
         self.bloco_tunel.grid_columnconfigure(1, weight=1)
         self.campo_ssh_utilizador = self._campo(
-            self.bloco_tunel, "Utilizador SSH", tunel.get("ssh_utilizador", ""),
+            self.bloco_tunel, "Utilizador SSH",
+            tunel.get("ssh_utilizador", ""),
             "Ex.: db-server")
         self.campo_ssh_host = self._campo(
             self.bloco_tunel, "Endereço da máquina", tunel.get("ssh_host", ""),
             "Ex.: 192.168.56.10")
         self.campo_ssh_porta = self._campo(
-            self.bloco_tunel, "Porta SSH", str(tunel.get("ssh_porta", 22)), "22")
+            self.bloco_tunel, "Porta SSH",
+            str(tunel.get("ssh_porta", 22)), "22")
         self.campo_porta_mysql = self._campo(
             self.bloco_tunel, "Porta do MySQL nessa máquina",
             str(tunel.get("porta_mysql", 3306)), "3306")
 
         # --- comum ---
         self.campo_utilizador = self._campo(
-            grelha, "Utilizador MySQL", (servidor or {}).get("utilizador", "root"), "root")
+            grelha, "Utilizador MySQL",
+            (servidor or {}).get("utilizador", "root"), "root")
         self.campo_password = self._campo(
             grelha, "Password",
             "", "deixe vazio para manter a atual" if id_servidor else "",
             mostrar="•")
         self.campo_base = self._campo(
-            grelha, "Base de dados", (servidor or {}).get("base", "hostel_gestao"),
+            grelha, "Base de dados",
+            (servidor or {}).get("base", "hostel_gestao"),
             "hostel_gestao")
 
         self.resultado = ctk.CTkLabel(
@@ -130,13 +146,16 @@ class _Formulario:
         botoes = ctk.CTkFrame(corpo, fg_color="transparent")
         botoes.pack(fill="x", pady=(12, 0))
         ctk.CTkButton(
-            botoes, text=texto_gravar, height=34, corner_radius=tema.RAIO_BOTAO,
+            botoes, text=texto_gravar, height=34,
+            corner_radius=tema.RAIO_BOTAO,
             fg_color=tema.AZUL_PRINCIPAL, hover_color=tema.AZUL_CLARO,
             command=self._gravar,
         ).pack(side="right")
         ctk.CTkButton(
-            botoes, text="Testar ligação", height=34, corner_radius=tema.RAIO_BOTAO,
-            fg_color="transparent", border_width=1, border_color=tema.COR_BORDA,
+            botoes, text="Testar ligação", height=34,
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent", border_width=1,
+            border_color=tema.COR_BORDA,
             text_color=tema.COR_TEXTO, hover_color=tema.COR_BORDA,
             command=self._testar,
         ).pack(side="right", padx=(0, 8))
@@ -256,7 +275,9 @@ class _Formulario:
             return False
         if password is None:
             password = servidores.obter_password(self._id)
-        self.resultado.configure(text="A testar…", text_color=tema.COR_TEXTO_SECUNDARIO)
+        self.resultado.configure(
+            text="A testar…", text_color=tema.COR_TEXTO_SECUNDARIO
+        )
         self.update_idletasks()
         ok, texto = servidores.testar(servidor, password)
         self._mostrar(texto, ok)
@@ -269,7 +290,8 @@ class _Formulario:
             self._mostrar(str(erro), False)
             return
         if not self._testar() and not componentes.confirmar(
-            "A ligação a este servidor falhou (ver a mensagem no formulário).\n\n"
+            "A ligação a este servidor falhou (ver a mensagem no "
+            "formulário).\n\n"
             "Gravar mesmo assim?", titulo="Ligação falhou",
         ):
             return
@@ -515,7 +537,8 @@ class JanelaFalhaLigacao(ctk.CTk):
 
         ctk.CTkLabel(
             corpo, text=f"Não consegui ligar a «{nome_atual}»",
-            text_color=tema.COR_TEXTO, font=ctk.CTkFont(size=16, weight="bold"),
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=16, weight="bold"),
             anchor="w",
         ).pack(fill="x")
         ctk.CTkLabel(
@@ -529,7 +552,8 @@ class JanelaFalhaLigacao(ctk.CTk):
                 corpo, text=rotulo, height=34, corner_radius=tema.RAIO_BOTAO,
                 fg_color=tema.AZUL_PRINCIPAL if principal else "transparent",
                 hover_color=tema.AZUL_CLARO if principal else tema.COR_BORDA,
-                border_width=0 if principal else 1, border_color=tema.COR_BORDA,
+                border_width=0 if principal else 1,
+                border_color=tema.COR_BORDA,
                 text_color=None if principal else tema.COR_TEXTO,
                 command=lambda: self._escolher(acao, id_servidor),
             ).pack(fill="x", pady=(0, 8))
@@ -577,7 +601,8 @@ def garantir_ligacao():
             return True
 
         logger.warning("Servidor '%s' indisponível: %s", id_servidor, texto)
-        janela = JanelaFalhaLigacao(id_servidor, servidor["nome"], texto)
+        nome = servidor["nome"] if servidor else id_servidor
+        janela = JanelaFalhaLigacao(id_servidor, nome, texto)
         janela.mainloop()
         acao, escolhido = janela.escolha
 

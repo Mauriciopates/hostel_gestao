@@ -2240,7 +2240,6 @@ def _contagem_com_extra(unidade):
     return contagem
 
 
-
 # =====================================================================
 # GUIA DE ENTREGA (27/09/2026, v1.6.0 — mockup aprovado pelo aluno)
 #
@@ -2249,7 +2248,6 @@ def _contagem_com_extra(unidade):
 # staff (`responsavel_unidade`). Cada bloco tem as requisições
 # normais, o Rol de Lavanderia e o total somado por produto.
 # =====================================================================
-
 # Estados que já saíram do armazém — "fechada" também entra: a guia
 # é o retrato do que foi enviado nesse dia, confirmado ou não.
 _ESTADOS_GUIA = ("enviada", "fechada")

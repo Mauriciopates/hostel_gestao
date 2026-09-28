@@ -20,12 +20,12 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from testes.apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest  # noqa: E402
 
-import estoque
-import propriedades
-import responsaveis
-import unidades
+import estoque  # noqa: E402
+import propriedades  # noqa: E402
+import responsaveis  # noqa: E402
+import unidades  # noqa: E402
 
 
 # =====================================================================

@@ -6,7 +6,8 @@ testes correm contra a base de dados de teste dedicada (ver
 `apoio_BD.py`) — NUNCA contra a base de dados real. Cada teste começa
 com as tabelas vazias e os contadores reiniciados.
 
-ÂMBITO: só a função pública `sistema.comecar_do_zero(autor, password, PASSWORD_TESTE)`. As três
+ÂMBITO: só a função pública
+`sistema.comecar_do_zero(autor, password, PASSWORD_TESTE)`. As três
 funções privadas (`_validar_autor_master`, `_reiniciar_contadores`,
 `_definir_credencial_inicial`) NÃO são testadas isoladamente — os seus
 efeitos são observáveis pela própria `comecar_do_zero`:
@@ -39,25 +40,25 @@ NUNCA toca na base de dados real: `BaseMySQLTest.setUp` substitui
 
 import sys
 import unittest
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from testes.apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest  # noqa: E402
 
-import clientes
-import config
-import configuracoes
-import estoque
-import propriedades
-import repositorio
-import responsaveis
-import sistema
-import unidades
-import utilizadores
+import clientes  # noqa: E402
+import config  # noqa: E402
+import configuracoes  # noqa: E402
+import estoque  # noqa: E402
+import propriedades  # noqa: E402
+import repositorio  # noqa: E402
+import responsaveis  # noqa: E402
+import sistema  # noqa: E402
+import unidades  # noqa: E402
+import utilizadores  # noqa: E402
 
 
 # ---------------------------------------------------------------------
@@ -310,7 +311,8 @@ class TesteFalhaDoBackup(BaseMySQLTest):
         ids = [r["id"] for r in lista]
         self.assertIn(master_original["id"], ids)
         # Não apareceu um segundo Master criado pelo reset.
-        self.assertEqual(len([r for r in lista if r["tipo_utilizador"] == "Master"]), 1)
+        masters = [r for r in lista if r["tipo_utilizador"] == "Master"]
+        self.assertEqual(len(masters), 1)
 
 
 # =====================================================================

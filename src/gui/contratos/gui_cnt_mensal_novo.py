@@ -145,7 +145,10 @@ class NovoContratoMensal(ctk.CTkFrame):
         self._linha(corpo, 1, "Dia de vencimento")
         self.campo_dia_vencimento = ctk.CTkEntry(
             corpo,
-            placeholder_text=f" Manter vazio para registrar o dia {config.DIA_VENCIMENTO}",
+            placeholder_text=(
+                " Manter vazio para registrar o dia "
+                f"{config.DIA_VENCIMENTO}"
+            ),
         )
         self.campo_dia_vencimento.grid(row=1, column=1, sticky="ew", pady=6)
 

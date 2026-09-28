@@ -16,7 +16,7 @@ import config
 logger = logging.getLogger(__name__)
 
 
-## Funções de leitura e escrita de ficheiros
+# Funções de leitura e escrita de ficheiros
 
 
 def _garantir_pastas():
@@ -209,7 +209,7 @@ def proximo_id(prefixo):
     return f"{prefixo}-{numero:03d}"
 
 
-## Ligação e funções por entidade (MySQL)
+# Ligação e funções por entidade (MySQL)
 #
 # Funções que falam diretamente com o MySQL, uma ligação nova por
 # operação (mais simples e mais seguro em concorrência do que

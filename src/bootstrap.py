@@ -34,10 +34,8 @@ _SRC = Path(__file__).resolve().parent
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-import configuracoes
-import repositorio
-import responsaveis
-import utilizadores
+import configuracoes  # noqa: E402
+import responsaveis  # noqa: E402
 
 # =====================================================================
 # CREDENCIAIS DO MASTER INICIAL

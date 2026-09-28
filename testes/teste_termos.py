@@ -41,12 +41,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from testes.apoio_BD import BaseTermosTest
+from testes.apoio_BD import BaseTermosTest  # noqa: E402
 
-import clientes
-import repositorio
-import responsaveis
-import termos
+import clientes  # noqa: E402
+import repositorio  # noqa: E402
+import responsaveis  # noqa: E402
+import termos  # noqa: E402
 
 
 # ---------------------------------------------------------------------

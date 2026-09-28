@@ -73,7 +73,6 @@ import repositorio
 logger = logging.getLogger(__name__)
 
 
-
 # =====================================================================
 # MAPA DAS CHAVES
 # =====================================================================
@@ -100,13 +99,17 @@ _CHAVES = {
         "tipo": "int",
         "perfil": "master",
         "default": config.AVISO_PREVIO_DIAS,
-        "descricao": "Antecedência mínima para encerramento de um contrato mensal.",
+        "descricao": (
+            "Antecedência mínima para encerramento de um contrato mensal."
+        ),
     },
     "operacao.duracao_minima_meses": {
         "tipo": "int",
         "perfil": "master",
         "default": config.DURACAO_MINIMA_MESES,
-        "descricao": "Abaixo deste valor, o encerramento é sinalizado com aviso.",
+        "descricao": (
+            "Abaixo deste valor, o encerramento é sinalizado com aviso."
+        ),
     },
 
     # --- Financeiro ----------------------------------------------------
@@ -114,7 +117,10 @@ _CHAVES = {
         "tipo": "decimal",
         "perfil": "master",
         "default": config.MULTIPLICADOR_CAUCAO,
-        "descricao": "Quantas rendas sugerir como caução ao criar um contrato mensal.",
+        "descricao": (
+            "Quantas rendas sugerir como caução ao criar um contrato "
+            "mensal."
+        ),
     },
     "financeiro.multiplicador_maximo_caucao": {
         "tipo": "decimal",
@@ -126,7 +132,9 @@ _CHAVES = {
         "tipo": "tupla_mes_dia",
         "perfil": "master",
         "default": config.EPOCA_ALTA_INICIO,
-        "descricao": "Mês e dia de início da época alta (independente do ano).",
+        "descricao": (
+            "Mês e dia de início da época alta (independente do ano)."
+        ),
     },
     "financeiro.epoca_alta_fim": {
         "tipo": "tupla_mes_dia",

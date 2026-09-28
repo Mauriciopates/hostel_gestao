@@ -22,12 +22,14 @@ def definir_responsavel_ativo(responsavel_id):
     _responsavel_ativo = responsaveis.validar_autoria(responsavel_id)
     return _responsavel_ativo
 
+
 def obter_responsavel_ativo():
     """Devolve o responsável ativo desta sessão, ou None se ainda
     não tiver sido definido (nenhuma chamada bem-sucedida a
     definir_responsavel_ativo desde o arranque da aplicação).
     """
     return _responsavel_ativo
+
 
 def tipo_utilizador_ativo():
     """Devolve o tipo_utilizador (Master/Admin/Staff) do responsável
@@ -45,6 +47,7 @@ def tipo_utilizador_ativo():
         return None
 
     return _responsavel_ativo["tipo_utilizador"]
+
 
 def limpar_responsavel_ativo():
     """Repõe a sessão para nenhum responsável ativo — por exemplo,

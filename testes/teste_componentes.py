@@ -49,7 +49,7 @@ _SRC = Path(__file__).resolve().parent.parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-import customtkinter as ctk
+import customtkinter as ctk  # noqa: E402
 
 # ---------------------------------------------------------------------
 # Helpers de fixture para os testes com Tk
@@ -178,7 +178,7 @@ class TesteSeletor(unittest.TestCase):
         self.assertEqual(s.get(), "A")
 
     def test_seletor_com_lista_vazia_nao_rebenta(self):
-        s = self._criar_seletor([])
+        self._criar_seletor([])
         # Não deve rebentar a construção.
 
     # -- decisão de menu nativo vs painel -----------------------------

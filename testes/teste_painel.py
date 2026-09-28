@@ -24,15 +24,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from testes.apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest  # noqa: E402
 
-import clientes
-import contratos
-import estoque
-import painel
-import propriedades
-import responsaveis
-import unidades
+import clientes  # noqa: E402
+import contratos  # noqa: E402
+import estoque  # noqa: E402
+import painel  # noqa: E402
+import propriedades  # noqa: E402
+import responsaveis  # noqa: E402
+import unidades  # noqa: E402
 
 HOJE = date(2026, 10, 14)
 
