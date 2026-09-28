@@ -3,12 +3,227 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [1.6.0] — 2026-09-28
+
+Versão de estabilização da Fase 2 (21/09 a 28/09/2026, 32 commits
+depois do fecho da 1.5.0): tabelas e seletores corrigidos, termos de
+uso RGPD, revisão completa dos testes, logs, seletor de servidores,
+reorganização em pacotes, permissões por perfil, vínculos por ID,
+guia de entrega, ordenação, Dashboard novo e revisão geral do código
+antes da entrega de outubro.
+
+### Adicionado
+
+- **Termos de uso RGPD** (22/09) — tabelas `textos_legais` e
+  `avisos_privacidade`, módulo `src/termos.py`, `TermoModal` a seguir
+  ao login (quem não aceitou a versão em vigor não entra),
+  `componentes.BlocoTermo`, `src/gui/gui_documentos_legais.py` e
+  secção "Documentos legais" em Configurações → Sistema. Campos da
+  credencial bloqueados no `DefinirCredencialModal` enquanto o termo
+  não é aceite. `termos.publicar` valida o autor no negócio.
+  Migração em `docs/2_desenho/Modelo_de_dados/migracao_rgpd_prechecking_1.sql`
+  (parte `hostel_gestao` + base separada `hostel_prechecking` para o
+  futuro site de pré check-in); esquema de referência passa a
+  `Modelo_de_dados_esquema_v.1.5.6.sql`.
+
+- **Testes novos** (23/09) — `teste_componentes.py`,
+  `teste_configuracoes.py`, `teste_financeiro.py`,
+  `teste_impressao.py`, `teste_sistema.py` e `teste_utilizadores.py`
+  (os módulos com regra de negócio que ainda não tinham testes), e
+  `teste_termos.py`, `teste_logs.py`, `teste_guia_entrega.py` e
+  `teste_painel.py` ao longo da versão.
+
+- **Logs automáticos** (23/09) — `src/registo_logs.py`: um ficheiro
+  por dia (`hostel.log`) em `config.DIR_LOGS`, guardado 90 dias,
+  configurado só nos pontos de entrada (`main.py`, `main_gui.py`).
+  Os módulos de negócio (`estoque`, `responsaveis`, `sistema`,
+  `termos`, `utilizadores`, `configuracoes`) registam operações,
+  recusas de permissão e falhas de autenticação — só IDs, nunca
+  passwords, usernames tentados nem dados pessoais.
+  `Aplicacao._tratar_erro_interface` (via
+  `report_callback_exception`) regista e mostra qualquer erro
+  inesperado de um botão ou evento. Testes em `teste_logs.py`.
+
+- **Seletor de servidores** (26/09) — `src/servidores.py` e
+  `src/gui/gui_servidores.py`. Escolher, testar, editar e remover o
+  MySQL (Local, VM) só pelo ecrã, em Configurações → Sistema. Lista em
+  `%APPDATA%\HostelGestao\servidores.json`, passwords no Gestor de
+  Credenciais do Windows (`keyring`, novo no `requirements.txt`),
+  túnel SSH automático para a VM, janela de primeira instalação e
+  janela de falha de ligação no arranque (`garantir_ligacao`).
+  `config.py` deixa de ler os `.env` (só importados no 1.º arranque).
+  Servidor ativo visível na sidebar.
+
+- **Permissões por perfil** (26/09) — `ITENS_MENU` com a chave
+  `perfis`; secções sem itens visíveis escondem-se. Admin vê-se a si
+  e ao Staff (`utilizadores.responsaveis_visiveis`); só o Master
+  altera o nome de utilizador (`utilizadores.alterar_username`,
+  `AlterarUtilizadorModal`) e anonimiza clientes. Staff vê só a
+  secção Operação e, em Responsáveis, só o próprio registo com
+  "Alterar password". "Definir como responsável ativo" retirado:
+  trocar de pessoa passa a ser logoff. Todas as chaves das
+  Configurações passam a perfil `master`.
+
+- **Vínculos por ID** (27/09) — `componentes.ChipId`,
+  `ListaVinculadaModal` e `FichaModal`: clicar no ID abre os registos
+  ligados (unidade → planta, cliente → contratos e reservas, contrato
+  mensal → ficha, reserva → detalhe, despesa, categoria, fornecedor,
+  produto → movimentos, requisição → resumo).
+
+- **Guia de entrega** (27/09) — `estoque.montar_guia_entrega` (pura)
+  e `estoque.guia_entrega` (valida Master/Admin), PDF com uma página
+  por staff e bloco "Por atribuir" (`impressao.gerar_guia_entrega_pdf`),
+  `GuiaEntregaModal` em Stock · Requisições. O Rol de Lavandaria passa
+  a ficar em nome do staff da unidade (`estoque._dono_do_rol`); com 0
+  ou mais de 1 staff fica em nome de quem registou a reserva e vai
+  para "Por atribuir".
+
+- **Ordenação nas tabelas** (27/09) — clique no título ordena (▲/▼)
+  em todas as `componentes.Tabela`; datas, valores em € e IDs com
+  ordem natural (`componentes.chave_ordenacao`); vazios no fim;
+  linhas de TOTAL fixas (`nova_linha(fixa=True)`); a ordem mantém-se
+  ao recarregar.
+
+- **Dashboard novo** (28/09) — `src/painel.py` (módulo de negócio) e
+  pacote `src/gui/dashboard/`:
+  - Master/Admin: vistas **Hoje** (movimento do dia, limpezas com o
+    staff da unidade, próximos 3 dias, alertas com detalhe, ações
+    rápidas) e **Financeiro** (mês navegável, resultado do
+    `financeiro.resultado` com comparação com o mês anterior, receita
+    vs. despesas de 6 meses, receita por propriedade, despesas por
+    categoria, rendas a vencer).
+  - Staff: vista própria (as minhas limpezas, requisições a
+    confirmar, stock disponível) e passa a arrancar no Dashboard.
+  - Vistas construídas só quando abertas e guardadas; botão
+    "↻ Atualizar"; sem temporizadores em fundo.
+
+- **Centralização das janelas** (28/09) —
+  `componentes.centrar_no_ecra`, `tamanho_minimo`, `enquadrar` e
+  `escala`. A janela principal abre centrada e dentro da área útil do
+  ecrã; todos os popups ficam sempre dentro do ecrã (pelo
+  `colocar_no_topo`).
+
+- **Troca obrigatória da password de fábrica** (28/09) —
+  `TrocarPasswordModal` a seguir ao login quando se entra com
+  `config.PASSWORD_PADRAO`; `utilizadores.usa_password_padrao`.
+
+- Componentes novos (regra de 21/09/2026): `Seletor`, `pintar_fundo`,
+  `cancelar_agendamentos`, `BlocoTermo`, `ChipId`,
+  `ListaVinculadaModal`, `FichaModal`, `Contentor`, `AreaRolavel`,
+  `Rotulo`, `Etiqueta`, `Botao`, `SeletorVistas`, `BarraNivel`,
+  `Separador`, `Cartao`, `CartaoKpi`, `CampoTexto` e
+  `fila_de_cartoes`; `GraficoReceitaDespesas` em
+  `componentes_graficos.py`.
+
+- `sistema.criar_backup_manual` — o backup manual das Configurações
+  passa pela camada de negócio.
+
+### Alterado
+
+- **Testes revistos** (23/09) — `testes/apoio_BD.py` (`BaseMySQLTest`)
+  atualizado face ao `repositorio`, com as tabelas novas no TRUNCATE;
+  11 ficheiros de teste corrigidos. Bateria: 1011 testes (26/09) →
+  1061 (27/09) → 1088 (28/09).
+- `src/repositorio.py` (3 557 linhas) dividido no pacote
+  `src/repositorio/` (`_base.py` + 9 ficheiros `rep_*`) (26/09); o
+  `__init__.py` reexporta tudo, nenhum consumidor mudou.
+- GUI reorganizada em subpastas (26/09): `gui/contratos/`,
+  `gui/despesas/`, `gui/estoque/` e `gui/relatorios/` (os módulos com
+  mais de duas mil linhas foram divididos por ecrã).
+- `componentes.Tabela` (21/09) com cabeçalho fixo e corpo com scroll
+  próprio; o cabeçalho copia as larguras reais das colunas do corpo.
+- `componentes.Seletor` (21/09) substitui o `CTkOptionMenu` em 61
+  sítios: acima de 12 opções abre um painel com 6 linhas e scroll.
+- Gestão de responsáveis (26/09): CRUD de utilizadores com vista por
+  perfil; rodapé da sidebar ("Trocar utilizador") empacotado antes
+  dos itens.
+- Aprovações de despesas reescritas com `componentes.Tabela` (28/09):
+  colunas alinhadas, situação do prazo em etiqueta colorida,
+  descrições longas cortadas; coluna Lançamento só no "Gerir".
+- CLI alinhado com o GUI (27/09): login obrigatório, autor nas
+  operações de responsáveis, perfil ao criar, unidade mensal
+  simplificada, desativar produto com forçar, teste do servidor e
+  túnel e seed no arranque.
+- Nova/Editar Unidade mensal só com Nome e Preço base (27/09).
+- `impressao/pdf.py` (27/09): `ln=1` obsoleto do fpdf2 substituído
+  por `new_x`/`new_y`.
+- `config.VERSAO` passa a 1.6.0; o `LoginModal` lê a versão do config.
+- `README.md` (26/09): como correr os testes, estrutura do
+  `repositorio/` e das subpastas do `gui/`.
+- `.gitignore`: `testes/teste_logs/` e `servidores.json`; removido do
+  repositório o `resultado_testes_logs.txt`.
+- Comparação dos hashes de password com `hmac.compare_digest`.
+- `pyflakes`, `pycodestyle` (79 colunas) e `pyright` limpos em `src/`
+  e `testes/` (28/09).
+
+### Corrigido
+
+- Zebra das tabelas com a coluna do nome sempre branca; dados
+  centrados em vez de alinhados à esquerda (21/09).
+- O menu nativo do CustomTkinter roubava o `grab` dos modais e nunca o
+  devolvia — qualquer modal deixava de bloquear depois de usar um
+  dropdown (21/09).
+- **Financeiro contava um mês a mais** (22/09): um período que
+  acabasse no dia 1 de um mês incluía esse mês, e um contrato em
+  vigor contava 4 rendas em vez de 3 (`_meses_do_periodo`, encontrado
+  pelo `teste_financeiro.py`).
+- `utilizadores.definir_credencial` deixava um Staff autenticado
+  definir credenciais — a barreira de perfil passa a estar no módulo
+  (`verificar_permissao`) (22/09).
+- Histórico das configurações devolvia `None` no motivo em vez de
+  texto vazio (22/09).
+- `KeyError` no Gerir de requisições já enviadas (23/09).
+- Mensagens `invalid command name` / `bgerror` ao fazer logoff
+  (`componentes.cancelar_agendamentos`).
+- Confirmar receção, cancelar requisição e reportar devolução
+  gravavam mas não davam sucesso nem fechavam o modal — regressão do
+  02f2c62 (27/09).
+- Janelas a abrir fora do ecrã e popups descentrados com a escala do
+  Windows acima de 100%; modais dos documentos legais com espaço vazio
+  (altura multiplicada duas vezes pela escala) (28/09).
+- Despesas recorrentes nunca eram lançadas: nenhum ecrã chamava
+  `despesas.gerar_recorrencias_pendentes` (passa a correr ao abrir
+  Despesas) (28/09).
+- Campo "Motivo" do desconto Airbnb pedido mas nunca gravado —
+  retirado da confirmação e da edição da reserva (decisão 18: o
+  desconto identifica-se pelo responsável) (28/09).
+- "+ Novo cliente" do Dashboard antigo chamava um modal que já não
+  existia (28/09).
+- `TesteAvisosEncerramento` lia a base real e falhava sem a seed das
+  configurações — passa a usar a base de teste (28/09).
+
+### Removido
+
+- `src/gui/gui_dashboard.py` e os gráficos `GraficoOcupacao` /
+  `GraficoRequisicoes`.
+- `ListaRequisicoes._pode_reportar_devolucao` e
+  `gui_relat_comum.ultimo_dia_do_mes` (sem uso).
+- Botão e método "Definir como responsável ativo".
+
+### Notas
+
+- Os dois testes de backup (`TesteBackups`) só falham em Linux;
+  confirmar no Windows.
+- Regra de componentes (21/09/2026): os ecrãs novos ou tocados não
+  instanciam widgets CustomTkinter diretamente. Os ecrãs antigos
+  migram à medida que forem tocados.
+- Nos Relatórios e no Dashboard, as LEITURAS continuam sem barreira
+  de perfil no negócio (as escritas têm); o Staff só não os vê na
+  sidebar.
+- Pendentes para a 2.0.0: botão para o `DividirPorPropriedadeModal`;
+  GUI para `rol_lavanderia_regras`; anonimização RGPD por prazo;
+  campos de país no `EditarClienteModal`; Rol antigos em "Por
+  atribuir" na guia; sidebar sem scroll em ecrãs baixos; mock do menu
+  A/B/C em `teste_componentes`; instalação assistida (INST-01..06).
+
+
 ## [1.5.0] — 2026-09-20
 
 Módulos `utilizadores.py` , `despesas.py`, `financeiro.py`, `relatorios.py`
 e decisão de implementação `configuracoes.py`
 
 ### Adicionado
+
 
 Continuação da Fase 3 — migração das configurações da GUI para a base
 de dados, no módulo `estoque.py`. Duas chaves passaram a ser lidas
@@ -22,8 +237,6 @@ a tag 1.5.0 de vez. As duas chaves de stock eram as últimas que a
 GUI já mostrava mas que o motor ainda ignorava — o ecrã de
 Configurações gravava na BD, mas o `estoque.py` continuava a agir
 como se as chaves não existissem.
-
-### Adicionado
 
 - `src/configuracoes.py` — módulo novo. Centraliza as configurações
   globais do sistema: mapa das chaves (`_CHAVES`), conversões
