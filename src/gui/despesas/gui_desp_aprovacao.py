@@ -184,15 +184,57 @@ class ConfirmarItensModal(ctk.CTkToplevel):
 # =====================================================================
 
 
+# Colunas das duas tabelas (21/09/2026 era o ponto aberto do
+# CHANGELOG da v1.5.0: "a tabela das Aprovações tem de passar para
+# `componentes.Tabela`"). Feito a 27/09/2026: as linhas antigas eram
+# `pack(side="left")` com larguras fixas célula a célula — bastava um
+# texto maior (ou a escala do Windows) para uma coluna empurrar as
+# seguintes e o cabeçalho deixar de bater com as linhas. A `Tabela`
+# alinha o cabeçalho pelas larguras REAIS do corpo.
+_COLUNAS_PENDENTES = (
+    componentes.Coluna("ID", minimo=92, espaco=8),
+    componentes.Coluna("DESCRIÇÃO", peso=3, minimo=150),
+    componentes.Coluna("CATEGORIA", peso=2, minimo=96),
+    componentes.Coluna("VALOR", peso=1, minimo=80, alinhamento="e", espaco=8),
+    componentes.Coluna("VENCIMENTO", peso=1, minimo=84, alinhamento="centro"),
+    componentes.Coluna("SITUAÇÃO", peso=1, minimo=124, alinhamento="centro"),
+    componentes.Coluna("AÇÕES", minimo=80, alinhamento="centro"),
+)
+
+_COLUNAS_VIA2 = (
+    componentes.Coluna("ID", minimo=92, espaco=8),
+    componentes.Coluna("DESCRIÇÃO", peso=3, minimo=170),
+    componentes.Coluna("ITENS", peso=1, minimo=60, alinhamento="centro"),
+    componentes.Coluna("VALOR", peso=1, minimo=80, alinhamento="e", espaco=8),
+    componentes.Coluna("FORNECEDOR", peso=2, minimo=100),
+    componentes.Coluna("PAGO EM", peso=1, minimo=84, alinhamento="centro"),
+    componentes.Coluna("AÇÕES", minimo=126, alinhamento="centro"),
+)
+
+# Descrições compridas são cortadas com "…" — o texto inteiro está no
+# "Gerir". Sem corte, uma descrição longa entrava pela coluna seguinte.
+_MAX_DESCRICAO = 34
+
+_ALTURA_LINHA = 48
+
+# Uma despesa que vence dentro destes dias fica com a etiqueta
+# amarela ("vence em 3 dias"); mais longe, cinzenta.
+_DIAS_AVISO_PRAZO = 7
+
+
 class Aprovacoes(ctk.CTkFrame):
     """Ecrã "Aprovações" — despesas pendentes + itens VIA 2 por
     confirmar.
 
-    Duas secções, cada uma com a sua tabela:
+    Duas secções, cada uma com a sua `componentes.Tabela` (cabeçalho
+    fixo, corpo com scroll próprio):
       - Despesas pendentes (VIA 1) → botão "Gerir" abre o
-        `_GerirDespesaPendenteModal`.
+        `_AprovarDespesaModal`.
       - Itens de despesa via stock por confirmar → botão
-        "Confirmar" abre o `ConfirmarItensModal`.
+        "Confirmar itens" abre o `ConfirmarItensModal`.
+
+    O ecrã em si NÃO tem scroll: cada tabela rola sozinha. Scroll
+    dentro de scroll era o que deixava a roda do rato "presa".
     """
 
     def __init__(self, master, controlador):
@@ -203,7 +245,7 @@ class Aprovacoes(ctk.CTkFrame):
 
         componentes.Cabecalho(self, titulo="Aprovações").pack(fill="x")
 
-        self._area = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self._area = componentes.Contentor(self)
         self._area.pack(fill="both", expand=True, padx=20, pady=(4, 12))
 
         self._recarregar()
@@ -218,391 +260,225 @@ class Aprovacoes(ctk.CTkFrame):
             c["id"]: c for c in despesas.listar_categorias()
         }
 
-        self._desenhar_seccao_pendentes()
-        self._desenhar_seccao_itens_via2()
+        pendentes = despesas.listar_despesas(estado="pendente")
+        por_confirmar = [
+            d for d in despesas.listar_despesas(estado="paga")
+            if not d["itens_confirmados"]
+        ]
+
+        # A secção com linhas fica com o espaço que sobra; a vazia
+        # fica só com a altura da mensagem.
+        self._area.grid_columnconfigure(0, weight=1)
+        self._area.grid_rowconfigure(1, weight=3 if pendentes else 0)
+        self._area.grid_rowconfigure(3, weight=2 if por_confirmar else 0)
+
+        self._desenhar_seccao_pendentes(pendentes)
+        self._desenhar_seccao_itens_via2(por_confirmar)
 
     # -- secção 1 — despesas pendentes --------------------------------
 
-    def _desenhar_seccao_pendentes(self):
-        pendentes = despesas.listar_despesas(estado="pendente")
-
-        self._titulo_seccao("Despesas pendentes", len(pendentes))
+    def _desenhar_seccao_pendentes(self, pendentes):
+        self._titulo_seccao("Despesas pendentes", len(pendentes), fila=0)
 
         if not pendentes:
             self._mensagem_vazio(
-                "Sem despesas pendentes. "
-                "Todas as despesas lançadas já foram pagas ou "
-                "canceladas."
+                "Sem despesas pendentes. Todas as despesas lançadas já "
+                "foram pagas ou canceladas.",
+                fila=1,
             )
             return
 
-        tabela = ctk.CTkFrame(
+        tabela = componentes.Tabela(
             self._area,
-            corner_radius=tema.RAIO_CARTAO,
-            border_width=1,
-            border_color=tema.COR_BORDA,
-            fg_color=tema.COR_FUNDO,
+            colunas=_COLUNAS_PENDENTES,
+            altura_linha=_ALTURA_LINHA,
+            tom_alternado=True,
         )
-        tabela.pack(fill="x", pady=(0, 20))
+        tabela.grid(row=1, column=0, sticky="nsew", pady=(0, 16))
 
-        # Cabeçalho (grid alinhado com as linhas — mesma largura
-        # de coluna em ambos).
-        cabecalho = ctk.CTkFrame(
-            tabela,
-            corner_radius=0,
-            fg_color=tema.CABECALHO_TABELA_FUNDO,
-        )
-        cabecalho.pack(fill="x")
-        grelha_cab = ctk.CTkFrame(cabecalho, fg_color="transparent")
-        grelha_cab.pack(fill="x", padx=16, pady=8)
+        for d in pendentes:
+            self._linha_pendente(tabela, d)
 
-        for texto, largura, alinhamento in (
-            ("ID", 80, "w"),
-            ("DESCRIÇÃO", 200, "w"),
-            ("CATEGORIA", 110, "w"),
-            ("VALOR", 90, "e"),
-            ("VENCIMENTO", 100, "center"),
-            ("SITUAÇÃO", 130, "w"),
-            ("LANÇAMENTO", 100, "center"),
-            ("AÇÕES", 100, "center"),
-        ):
-            ctk.CTkLabel(
-                grelha_cab,
-                text=texto,
-                text_color=tema.COR_TEXTO_SECUNDARIO,
-                font=ctk.CTkFont(size=10, weight="bold"),
-                width=largura,
-                anchor=alinhamento,
-            ).pack(side="left")
-
-        ctk.CTkFrame(tabela, height=1, fg_color=tema.COR_BORDA).pack(fill="x")
-
-        for i, d in enumerate(pendentes):
-            self._linha_pendente(tabela, d, i)
-
-    def _linha_pendente(self, master, d, indice):
-        vencida = despesas.esta_vencida(d)
-
-        cor_fundo = tema.LINHA_ALTERNADA if indice % 2 else "transparent"
-
-        linha = ctk.CTkFrame(master, fg_color=cor_fundo, height=52)
-        linha.pack(fill="x")
-        linha.pack_propagate(False)
-
-        # Borda vermelha à esquerda se vencida — simulada com um
-        # frame fino à esquerda.
-        if vencida:
-            ctk.CTkFrame(linha, width=4, fg_color=tema.VERMELHO_ERRO).pack(
-                side="left", fill="y"
-            )
-
-        grelha = ctk.CTkFrame(linha, fg_color="transparent")
-        grelha.pack(fill="x", padx=16, pady=8)
-
-        # ID
-        ctk.CTkLabel(
-            grelha,
-            text=d["id"],
-            text_color=tema.AZUL_PRINCIPAL,
-            fg_color=tema.ID_CHIP_FUNDO,
-            corner_radius=6,
-            font=ctk.CTkFont(size=11, weight="bold"),
-            width=90,
-            anchor="w",
-        ).pack(side="left")
-
-        # Descrição
-        ctk.CTkLabel(
-            grelha,
-            text=d["descricao"] or "(sem descrição)",
-            text_color=tema.COR_TEXTO,
-            font=ctk.CTkFont(size=12),
-            width=200,
-            anchor="w",
-        ).pack(side="left")
-
-        # Categoria
+    def _linha_pendente(self, tabela, d):
+        linha = tabela.nova_linha()
         cat = self._categorias_por_id.get(d["categoria_id"])
-        ctk.CTkLabel(
-            grelha,
-            text=cat["nome"] if cat else "—",
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=11),
-            width=130,
-            anchor="w",
-        ).pack(side="left")
 
-        # Valor
-        ctk.CTkLabel(
-            grelha,
-            text=componentes.formatar_valor(d["valor"]),
-            text_color=tema.COR_TEXTO,
-            font=ctk.CTkFont(size=12, weight="bold"),
-            width=110,
-            anchor="e",
-        ).pack(side="left")
-
-        # Vencimento
-        ctk.CTkLabel(
-            grelha,
-            text=_formatar_data(d["data_vencimento"]),
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=11),
-            width=100,
-            anchor="center",
-        ).pack(side="left")
-
-        # Situação (texto descritivo do prazo)
-        ctk.CTkLabel(
-            grelha,
-            text=self._situacao_prazo(d),
-            text_color=(
-                tema.TEXTO_ERRO if vencida else tema.COR_TEXTO_SECUNDARIO
+        tabela.colocar(
+            linha, 0,
+            componentes.ChipId(linha, d["id"], largura=80),
+            esticar="w",
+        )
+        tabela.colocar(
+            linha, 1,
+            componentes.Rotulo(linha, _descricao(d)),
+        )
+        tabela.colocar(
+            linha, 2,
+            componentes.Rotulo(linha, cat["nome"] if cat else "—",
+                               "secundario"),
+        )
+        tabela.colocar(
+            linha, 3,
+            componentes.Rotulo(
+                linha, componentes.formatar_valor(d["valor"]), "forte",
+                anchor="e",
             ),
-            font=ctk.CTkFont(size=11),
-            width=130,
-            anchor="w",
-        ).pack(side="left")
+        )
+        tabela.colocar(
+            linha, 4,
+            componentes.Rotulo(
+                linha, _formatar_data(d["data_vencimento"]), "secundario",
+                anchor="center",
+            ),
+        )
 
-        # Lançamento
-        ctk.CTkLabel(
-            grelha,
-            text=_formatar_data(d["data_lancamento"]),
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=11),
-            width=110,
-            anchor="center",
-        ).pack(side="left")
-
-        # Botão Gerir
-        ctk.CTkButton(
-            grelha,
-            text="Gerir",
-            width=76,
-            height=26,
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color="transparent",
-            border_width=1,
-            border_color=tema.COR_BORDA,
-            text_color=tema.COR_TEXTO,
-            hover_color=tema.COR_BORDA,
-            command=lambda d=d: _AprovarDespesaModal(self, d),
-        ).pack(side="left")
+        texto, estilo = self._situacao_prazo(d)
+        tabela.colocar(
+            linha, 5,
+            componentes.Etiqueta(linha, texto, estilo, largura=116),
+            chave=d["data_vencimento"] or datetime.date.max,
+        )
+        acoes = tabela.celula_acoes(linha, 6)
+        acoes.adicionar(
+            componentes.Botao(
+                acoes, "Gerir", lambda d=d: _AprovarDespesaModal(self, d),
+                "contorno", width=64, height=26,
+            )
+        )
 
     def _situacao_prazo(self, d):
-        """Texto descritivo do prazo: 'vencida há X dias',
-        'vence em X dias' ou 'sem prazo'."""
+        """(texto, estilo da etiqueta) do prazo: 'vencida há X dias'
+        a vermelho, 'vence hoje'/'vence em X dias' a amarelo quando
+        está perto, cinzento quando está longe ou não tem prazo."""
         if d["data_vencimento"] is None:
-            return "sem prazo"
+            return "sem prazo", "info"
 
         delta = (d["data_vencimento"] - datetime.date.today()).days
         if delta < 0:
-            return f"vencida há {abs(delta)} dias"
+            dias = abs(delta)
+            return f"vencida há {dias} {'dia' if dias == 1 else 'dias'}", (
+                "erro"
+            )
         if delta == 0:
-            return "vence hoje"
-        return f"vence em {delta} dias"
+            return "vence hoje", "aviso"
+
+        texto = f"vence em {delta} {'dia' if delta == 1 else 'dias'}"
+        return texto, "aviso" if delta <= _DIAS_AVISO_PRAZO else "info"
 
     # -- secção 2 — itens VIA 2 por confirmar -------------------------
 
-    def _desenhar_seccao_itens_via2(self):
-        # Todas as despesas via stock cujos itens ainda não foram
-        # confirmados. Filtra pela flag `itens_confirmados`.
-        todas = despesas.listar_despesas(estado="paga")
-        por_confirmar = [d for d in todas if not d["itens_confirmados"]]
-
+    def _desenhar_seccao_itens_via2(self, por_confirmar):
         self._titulo_seccao(
             "Itens de despesa por confirmar (VIA 2)",
             len(por_confirmar),
+            fila=2,
         )
 
         if not por_confirmar:
             self._mensagem_vazio(
                 "Sem itens por confirmar. Todas as compras via "
-                "stock já foram verificadas."
+                "stock já foram verificadas.",
+                fila=3,
             )
             return
 
-        tabela = ctk.CTkFrame(
+        tabela = componentes.Tabela(
             self._area,
-            corner_radius=tema.RAIO_CARTAO,
-            border_width=1,
-            border_color=tema.COR_BORDA,
-            fg_color=tema.COR_FUNDO,
+            colunas=_COLUNAS_VIA2,
+            altura_linha=_ALTURA_LINHA,
+            tom_alternado=True,
         )
-        tabela.pack(fill="x", pady=(0, 12))
+        tabela.grid(row=3, column=0, sticky="nsew")
 
-        cabecalho = ctk.CTkFrame(
-            tabela,
-            corner_radius=0,
-            fg_color=tema.CABECALHO_TABELA_FUNDO,
+        for d in por_confirmar:
+            self._linha_itens_via2(tabela, d)
+
+    def _linha_itens_via2(self, tabela, d):
+        linha = tabela.nova_linha()
+
+        tabela.colocar(
+            linha, 0,
+            componentes.ChipId(linha, d["id"], largura=80),
+            esticar="w",
         )
-        cabecalho.pack(fill="x")
-        grelha_cab = ctk.CTkFrame(cabecalho, fg_color="transparent")
-        grelha_cab.pack(fill="x", padx=16, pady=8)
 
-        for texto, largura, alinhamento in (
-            ("ID", 90, "w"),
-            ("DESCRIÇÃO", 260, "w"),
-            ("ITENS", 110, "center"),
-            ("VALOR", 110, "e"),
-            ("FORNECEDOR", 140, "w"),
-            ("PAGO EM", 110, "center"),
-            ("AÇÕES", 160, "center"),
-        ):
-            ctk.CTkLabel(
-                grelha_cab,
-                text=texto,
-                text_color=tema.COR_TEXTO_SECUNDARIO,
-                font=ctk.CTkFont(size=10, weight="bold"),
-                width=largura,
-                anchor=alinhamento,
-            ).pack(side="left")
-
-        ctk.CTkFrame(tabela, height=1, fg_color=tema.COR_BORDA).pack(fill="x")
-
-        for i, d in enumerate(por_confirmar):
-            self._linha_itens_via2(tabela, d, i)
-
-    def _linha_itens_via2(self, master, d, indice):
-        cor_fundo = tema.LINHA_ALTERNADA if indice % 2 else "transparent"
-
-        linha = ctk.CTkFrame(master, fg_color=cor_fundo, height=52)
-        linha.pack(fill="x")
-        linha.pack_propagate(False)
-
-        grelha = ctk.CTkFrame(linha, fg_color="transparent")
-        grelha.pack(fill="x", padx=16, pady=8)
-
-        # ID
-        ctk.CTkLabel(
-            grelha,
-            text=d["id"],
-            text_color=tema.AZUL_PRINCIPAL,
-            fg_color=tema.ID_CHIP_FUNDO,
-            corner_radius=6,
-            font=ctk.CTkFont(size=11, weight="bold"),
-            width=90,
-            anchor="w",
-        ).pack(side="left")
-
-        # Descrição + badge "via stock"
-        bloco_desc = ctk.CTkFrame(grelha, fg_color="transparent")
-        bloco_desc.pack(side="left")
-        ctk.CTkLabel(
-            bloco_desc,
-            text=d["descricao"] or "(sem descrição)",
-            text_color=tema.COR_TEXTO,
-            font=ctk.CTkFont(size=12),
-            anchor="w",
-        ).pack(side="left")
-        ctk.CTkLabel(
-            bloco_desc,
-            text=" via stock ",
-            text_color=tema.AZUL_PRINCIPAL,
-            fg_color=tema.ID_CHIP_FUNDO,
-            corner_radius=6,
-            font=ctk.CTkFont(size=10, weight="bold"),
-        ).pack(side="left", padx=(6, 0))
-
-        # Bloco invisível para reservar largura à descrição (260px)
-        # — sem isto, o "pack" encolhia a célula ao tamanho real.
-        espacador = ctk.CTkFrame(
-            grelha, fg_color="transparent", width=260, height=1
+        # Descrição + etiqueta "via stock" na mesma célula.
+        bloco = componentes.Contentor(linha)
+        componentes.Rotulo(bloco, _descricao(d, _MAX_DESCRICAO - 10)).pack(
+            side="left"
         )
-        espacador.pack(side="left")
-        espacador.pack_propagate(False)
+        componentes.Etiqueta(bloco, "via stock", "azul").pack(
+            side="left", padx=(6, 0)
+        )
+        tabela.colocar(linha, 1, bloco, esticar="w")
 
-        # Contagem de itens
-        itens = despesas.listar_itens_despesa(d["id"])
-        ctk.CTkLabel(
-            grelha,
-            text=f"{len(itens)} item(ns)",
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=11),
-            width=110,
-            anchor="center",
-        ).pack(side="left")
+        n_itens = len(despesas.listar_itens_despesa(d["id"]))
+        tabela.colocar(
+            linha, 2,
+            componentes.Rotulo(
+                linha, f"{n_itens} {'item' if n_itens == 1 else 'itens'}",
+                "secundario", anchor="center",
+            ),
+            chave=n_itens,
+        )
+        tabela.colocar(
+            linha, 3,
+            componentes.Rotulo(
+                linha, componentes.formatar_valor(d["valor"]), "forte",
+                anchor="e",
+            ),
+        )
 
-        # Valor
-        ctk.CTkLabel(
-            grelha,
-            text=componentes.formatar_valor(d["valor"]),
-            text_color=tema.COR_TEXTO,
-            font=ctk.CTkFont(size=12, weight="bold"),
-            width=110,
-            anchor="e",
-        ).pack(side="left")
-
-        # Fornecedor
         fornecedor_nome = "—"
         if d["fornecedor_id"]:
             forn = despesas.procurar_fornecedor(d["fornecedor_id"])
             if forn:
                 fornecedor_nome = forn["nome"]
-        ctk.CTkLabel(
-            grelha,
-            text=fornecedor_nome,
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=11),
-            width=140,
-            anchor="w",
-        ).pack(side="left")
+        tabela.colocar(
+            linha, 4, componentes.Rotulo(linha, fornecedor_nome, "secundario")
+        )
+        tabela.colocar(
+            linha, 5,
+            componentes.Rotulo(
+                linha, _formatar_data(d["data_pagamento"]), "secundario",
+                anchor="center",
+            ),
+        )
 
-        # Pago em
-        ctk.CTkLabel(
-            grelha,
-            text=_formatar_data(d["data_pagamento"]),
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=11),
-            width=110,
-            anchor="center",
-        ).pack(side="left")
-
-        # Botão Confirmar
-        ctk.CTkButton(
-            grelha,
-            text="Confirmar itens",
-            width=140,
-            height=26,
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color=tema.VERDE,
-            hover_color=tema.VERDE,
-            command=lambda d=d: ConfirmarItensModal(self, d),
-        ).pack(side="left")
+        acoes = tabela.celula_acoes(linha, 6)
+        acoes.adicionar(
+            componentes.Botao(
+                acoes, "Confirmar itens",
+                lambda d=d: ConfirmarItensModal(self, d),
+                "sucesso", width=112, height=26,
+            )
+        )
 
     # -- helpers de apresentação --------------------------------------
 
-    def _titulo_seccao(self, texto, contagem):
-        bloco = ctk.CTkFrame(self._area, fg_color="transparent")
-        bloco.pack(fill="x", pady=(8, 8))
+    def _titulo_seccao(self, texto, contagem, fila):
+        bloco = componentes.Contentor(self._area)
+        bloco.grid(row=fila, column=0, sticky="ew", pady=(8, 8))
 
-        ctk.CTkLabel(
-            bloco,
-            text=texto.upper(),
-            text_color=tema.COR_TEXTO,
-            font=ctk.CTkFont(size=13, weight="bold"),
-        ).pack(side="left")
+        componentes.Rotulo(bloco, texto.upper(), "cartao").pack(side="left")
+        componentes.Etiqueta(bloco, str(contagem), "azul", largura=30).pack(
+            side="left", padx=(8, 0)
+        )
 
-        ctk.CTkLabel(
-            bloco,
-            text=f"  {contagem}",
-            text_color=tema.AZUL_PRINCIPAL,
-            fg_color=tema.ID_CHIP_FUNDO,
-            corner_radius=10,
-            font=ctk.CTkFont(size=11, weight="bold"),
-            padx=9,
-            pady=2,
-        ).pack(side="left")
+    def _mensagem_vazio(self, texto, fila):
+        componentes.Rotulo(
+            self._area, texto, "secundario", wraplength=760, justify="left"
+        ).grid(row=fila, column=0, sticky="nw", pady=(4, 20))
 
-    def _mensagem_vazio(self, texto):
-        ctk.CTkLabel(
-            self._area,
-            text=texto,
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=12),
-            wraplength=760,
-            justify="left",
-        ).pack(anchor="w", pady=(4, 20))
+
+def _descricao(d, maximo=_MAX_DESCRICAO):
+    """Descrição da despesa, cortada com "…" acima de `maximo`."""
+    texto = d["descricao"] or "(sem descrição)"
+
+    if len(texto) <= maximo:
+        return texto
+
+    return texto[: maximo - 1].rstrip() + "…"
 
 
 # =====================================================================
