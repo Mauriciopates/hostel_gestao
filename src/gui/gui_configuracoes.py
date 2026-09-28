@@ -550,9 +550,15 @@ class Configuracoes(ctk.CTkFrame):
         mapa = {
             "operacao.dia_vencimento": "Dia de vencimento padrão",
             "operacao.aviso_previo_dias": "Aviso prévio padrão (dias)",
-            "operacao.duracao_minima_meses": "Duração mínima de contrato (meses)",
-            "financeiro.multiplicador_caucao": "Multiplicador de caução sugerido",
-            "financeiro.multiplicador_maximo_caucao": "Multiplicador máximo de caução",
+            "operacao.duracao_minima_meses": (
+                "Duração mínima de contrato (meses)"
+            ),
+            "financeiro.multiplicador_caucao": (
+                "Multiplicador de caução sugerido"
+            ),
+            "financeiro.multiplicador_maximo_caucao": (
+                "Multiplicador máximo de caução"
+            ),
             "financeiro.epoca_alta_inicio": "Início da época alta",
             "financeiro.epoca_alta_fim": "Fim da época alta",
             "empresa.pasta_relatorios": "Pasta dos relatórios",
@@ -1123,21 +1129,14 @@ class Configuracoes(ctk.CTkFrame):
         componentes.mostrar_sucesso(f"Pasta alterada: {pasta}")
 
     def _forcar_backup(self):
-        """Executa o backup fora do arranque normal."""
-        import repositorio
+        """Executa o backup fora do arranque normal.
 
-        autor = sessao.obter_responsavel_ativo()
-        logger.info(
-            "Backup manual pedido — autor_id=%s",
-            autor["id"] if autor else None,
+        28/09/2026 — a chamada ao `repositorio` passou para
+        `sistema.criar_backup_manual` (a GUI não fala com a base).
+        """
+        caminho = sistema.criar_backup_manual(
+            sessao.obter_responsavel_ativo()
         )
-
-        try:
-            caminho = repositorio.criar_backup_com_nome("manual")
-        except AttributeError:
-            # Se ainda não existir `criar_backup_com_nome`, cai no
-            # `criar_backup` normal.
-            caminho = repositorio.criar_backup()
 
         if caminho is None:
             componentes.mostrar_erro(

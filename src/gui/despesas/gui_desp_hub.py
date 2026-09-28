@@ -36,14 +36,21 @@ ALTERAÇÕES 26/09/2026 (divisão em ficheiros):
   gui_desp_comum (helpers). Código movido sem alterações.
 """
 
+import logging
+
 import customtkinter as ctk
 
+import despesas
 from .. import componentes
+from .. import sessao
 from .. import tema
 from .gui_desp_lista import ListaDespesas
 from .gui_desp_aprovacao import Aprovacoes
 from .gui_desp_categorias import Categorias
 from .gui_desp_fornecedores import Fornecedores
+
+
+logger = logging.getLogger(__name__)
 
 
 # =====================================================================
@@ -106,6 +113,49 @@ class EcraDespesas(ctk.CTkFrame):
 
         for indice, (titulo, descricao, destino) in enumerate(self._AREAS):
             self._desenhar_cartao(grelha, titulo, descricao, destino, indice)
+
+        # Depois de o ecrã aparecer: um aviso a meio da construção
+        # abria antes de o ecrã estar desenhado.
+        self.after(200, self._gerar_recorrencias)
+
+    def _gerar_recorrencias(self):
+        """Lança as despesas recorrentes do mês (28/09/2026).
+
+        O `despesas.gerar_recorrencias_pendentes` existia e estava
+        testado, mas nenhum ecrã o chamava: marcar uma despesa como
+        "recorrente" não tinha efeito nenhum. O docstring dele diz
+        que corre "ao abrir o ecrã de despesas" — é aqui. Não
+        duplica: cada cadeia só ganha um lançamento por mês.
+        """
+        if not self.winfo_exists():
+            return
+
+        try:
+            geradas = despesas.gerar_recorrencias_pendentes(
+                sessao.obter_responsavel_ativo()
+            )
+        except ValueError as erro:
+            # Staff (ou sessão vazia) não lança despesas — não é erro
+            # para mostrar, só para registar.
+            logger.info("Recorrências não geradas: %s", erro)
+            return
+
+        if not geradas:
+            return
+
+        n = len(geradas)
+        if n == 1:
+            frase = "1 despesa recorrente foi lançada"
+        else:
+            frase = f"{n} despesas recorrentes foram lançadas"
+
+        componentes.mostrar_sucesso(
+            f"{frase} "
+            "para este mês, com o valor a 0,00 €.\n\n"
+            "Preencha o valor em Despesas (botão Gerir da linha) antes "
+            "de a marcar como paga.",
+            titulo="Despesas recorrentes",
+        )
 
     def _desenhar_cartao(self, master, titulo, descricao, destino, indice):
         cartao = ctk.CTkFrame(

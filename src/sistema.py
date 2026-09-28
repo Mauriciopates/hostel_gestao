@@ -39,6 +39,26 @@ import utilizadores
 logger = logging.getLogger(__name__)
 
 
+def criar_backup_manual(autor):
+    """Backup pedido à mão, nas Configurações (28/09/2026).
+
+    Vivia no próprio ecrã, que importava o `repositorio` — a única
+    exceção à regra "só o repositório toca na base, e a GUI só fala
+    com módulos de negócio". Passou para aqui.
+
+    Gera sempre um ficheiro novo (`manual_<data>_<hora>.sql`) e
+    devolve o caminho, ou None se o `mysqldump` falhar. `autor` é só
+    para o registo — qualquer perfil que veja o botão pode pedir uma
+    cópia.
+    """
+    logger.info(
+        "Backup manual pedido — autor_id=%s",
+        autor["id"] if autor else None,
+    )
+
+    return repositorio.criar_backup_com_nome("manual")
+
+
 def comecar_do_zero(autor, password):
     """Apaga todos os dados e recria o Master padrão.
 
