@@ -467,7 +467,8 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         "— (escolhe as datas)", mesmo com as datas preenchidas (bug
         apanhado pelo aluno, 13/09/2026).
         """
-        preco_calculado = self._preco_calculado()
+        resumo = self._resumo() or {}
+        preco_calculado = resumo.get("preco_calculado")
 
         # Rótulo do Preço calculado, dentro do cartão Estadia.
         if preco_calculado is None:
@@ -478,45 +479,23 @@ class NovaReservaAirbnb(ctk.CTkFrame):
             )
 
         # Linha 1: N noites × preço.
-        data_inicio = self._ler_data(self.campo_data_inicio)
-        data_fim = self._ler_data(self.campo_data_fim)
-
         rotulo_noites, valor_noites = self.linha_noites
 
-        if (
-            data_inicio is None
-            or data_fim is None
-            or data_fim <= data_inicio
-            or preco_calculado is None
-        ):
+        if preco_calculado is None:
             rotulo_noites.configure(text="0 noites × —")
             valor_noites.configure(text="—")
         else:
-            noites = (data_fim - data_inicio).days
-            preco_noite = preco_calculado / noites
             rotulo_noites.configure(
-                text=(f"{noites} noites × " f"{_formatar_valor(preco_noite)}")
+                text=(
+                    f"{resumo.get('noites')} noites × "
+                    f"{_formatar_valor(resumo.get('preco_noite'))}"
+                )
             )
             valor_noites.configure(text=_formatar_valor(preco_calculado))
 
-        # Linha 2: multa de check-in tardio (valor praticado escrito,
-        # ou a multa calculada, se o campo estiver vazio).
-        multa_calculada = Decimal("0.00")
-        if self.unidade_selecionada is not None:
-            multa_calculada = self.unidade_selecionada["multa_check_in_tardio"]
-
-        texto_multa = self.campo_multa_praticada.get().strip()
-        if self.checkin_tardio.get():
-            if texto_multa:
-                try:
-                    multa_valor = Decimal(texto_multa.replace(",", "."))
-                except InvalidOperation:
-                    multa_valor = multa_calculada
-            else:
-                multa_valor = multa_calculada
-        else:
-            multa_valor = Decimal("0.00")
-
+        # Linha 2: multa de check-in tardio (regra em
+        # contratos.resumo_airbnb).
+        multa_valor = resumo.get("multa", Decimal("0.00"))
         _, valor_multa = self.linha_multa
         valor_multa.configure(text=_formatar_valor(multa_valor))
 
@@ -525,9 +504,33 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         if preco_calculado is None:
             valor_total.configure(text="—")
         else:
-            valor_total.configure(
-                text=_formatar_valor(preco_calculado + multa_valor)
-            )
+            valor_total.configure(text=_formatar_valor(resumo.get("total")))
+
+    def _resumo(self):
+        """Pede ao `contratos.resumo_airbnb` os valores do resumo
+        (noites, preço, multa, total), ou None sem unidade escolhida.
+
+        Aqui só se converte o texto do campo "Multa praticada": vazio
+        ou inválido conta como "não escrita" (usa a da unidade).
+        """
+        if self.unidade_selecionada is None:
+            return None
+
+        multa_praticada = None
+        texto_multa = self.campo_multa_praticada.get().strip()
+        if texto_multa:
+            try:
+                multa_praticada = Decimal(texto_multa.replace(",", "."))
+            except InvalidOperation:
+                multa_praticada = None
+
+        return contratos.resumo_airbnb(
+            self.unidade_selecionada,
+            self._ler_data(self.campo_data_inicio),
+            self._ler_data(self.campo_data_fim),
+            check_in_tardio=bool(self.checkin_tardio.get()),
+            multa_praticada=multa_praticada,
+        )
 
     # -- submissão ----------------------------------------------------
 

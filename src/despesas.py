@@ -359,6 +359,47 @@ def esta_vencida(despesa):
     return despesa["data_vencimento"] < date.today()
 
 
+# Uma despesa com prazo a N dias ou menos está "perto do prazo"
+# (v1.7.0 — era a constante _DIAS_AVISO_PRAZO do ecrã Aprovações).
+DIAS_AVISO_PRAZO = 7
+
+
+def dias_para_vencimento(despesa, hoje=None):
+    """Dias que faltam até ao vencimento da despesa: positivo antes,
+    0 no próprio dia, negativo depois (vencida há -N dias). None se a
+    despesa não tiver `data_vencimento`.
+    """
+    if despesa["data_vencimento"] is None:
+        return None
+
+    return (despesa["data_vencimento"] - (hoje or date.today())).days
+
+
+def situacao_prazo(despesa, hoje=None):
+    """Classifica o prazo de uma despesa para os avisos da interface.
+
+    Devolve `(situacao, dias)`:
+      - ("sem_prazo", None) — sem data de vencimento;
+      - ("vencida", N)      — venceu há N dias (N > 0);
+      - ("hoje", 0)         — vence hoje;
+      - ("proximo", N)      — vence em N dias, N <= DIAS_AVISO_PRAZO;
+      - ("longe", N)        — vence em N dias, mais longe que isso.
+
+    O texto e a cor de cada situação ficam na GUI.
+    """
+    dias = dias_para_vencimento(despesa, hoje)
+
+    if dias is None:
+        return "sem_prazo", None
+    if dias < 0:
+        return "vencida", -dias
+    if dias == 0:
+        return "hoje", 0
+    if dias <= DIAS_AVISO_PRAZO:
+        return "proximo", dias
+    return "longe", dias
+
+
 # =====================================================================
 # CATEGORIAS DE DESPESA — gestão (só Master)
 # =====================================================================

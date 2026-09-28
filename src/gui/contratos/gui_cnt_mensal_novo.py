@@ -315,18 +315,12 @@ class NovoContratoMensal(ctk.CTkFrame):
             self.combo_lugar.set(opcoes[0])
             return
 
-        contratos_da_unidade = contratos.listar(
-            unidade_id=self.unidade_selecionada["id"], tipo="mensal"
-        )
-
         for quarto in unidades.listar_quartos(
             unidade_id=self.unidade_selecionada["id"]
         ):
             for lugar in unidades.listar_lugares(quarto_id=quarto["id"]):
-                ocupantes = sum(
-                    1
-                    for c in contratos_da_unidade
-                    if c["lugar_id"] == lugar["id"]
+                ocupantes = contratos.ocupantes_mensal(
+                    self.unidade_selecionada["id"], lugar["id"]
                 )
                 self.lugares_da_unidade.append(lugar)
                 opcoes.append(

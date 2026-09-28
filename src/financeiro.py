@@ -499,6 +499,38 @@ def receita_por_unidade(data_inicio, data_fim):
     return sorted(por_unidade.values(), key=lambda d: d["unidade_id"])
 
 
+def receita_por_tipo(data_inicio, data_fim):
+    """Devolve a receita do período separada por regime.
+
+    Estrutura devolvida:
+
+        {"mensal": Decimal(...), "airbnb": Decimal(...)}
+
+    Existe para o relatório "Resultado" mostrar as duas linhas
+    (receita mensal e receita Airbnb) sem refazer o cálculo na
+    interface (v1.7.0 — regras de negócio nos módulos). Usa a mesma
+    função central do motor (`_valores_da_ocupacao_no_periodo`), por
+    isso a soma das duas é sempre igual à `receita` de `resultado`.
+    """
+    _validar_periodo(data_inicio, data_fim)
+    meses = _meses_do_periodo(data_inicio, data_fim)
+
+    totais = {_TIPO_MENSAL: Decimal("0.00"), "airbnb": Decimal("0.00")}
+
+    for ocupacao in _listar_ocupacoes_do_periodo(data_inicio, data_fim):
+        mensal, airbnb = _detalhes_da_ocupacao(ocupacao)
+
+        if mensal is None and airbnb is None:
+            continue
+
+        receita, _ = _valores_da_ocupacao_no_periodo(
+            ocupacao, meses, data_inicio, data_fim, mensal, airbnb
+        )
+        totais[ocupacao["tipo"]] += receita
+
+    return totais
+
+
 def receita_por_propriedade(data_inicio, data_fim):
     """Devolve a receita e o desconto de cada propriedade no
     período, agregando as suas unidades.

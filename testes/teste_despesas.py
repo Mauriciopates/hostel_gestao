@@ -956,5 +956,44 @@ class TesteLeituras(BaseMySQLTest):
 # =====================================================================
 
 
+class TestePrazo(unittest.TestCase):
+    """`dias_para_vencimento` e `situacao_prazo` (v1.7.0 — a regra
+    dos 7 dias vivia no ecrã Aprovações). Funções puras."""
+
+    HOJE = date(2026, 9, 28)
+
+    def _despesa(self, dias):
+        vencimento = None if dias is None else self.HOJE + timedelta(dias)
+        return {"estado": "pendente", "data_vencimento": vencimento}
+
+    def test_dias_para_vencimento(self):
+        self.assertIsNone(
+            despesas.dias_para_vencimento(self._despesa(None), self.HOJE)
+        )
+        self.assertEqual(
+            despesas.dias_para_vencimento(self._despesa(3), self.HOJE), 3
+        )
+        self.assertEqual(
+            despesas.dias_para_vencimento(self._despesa(-2), self.HOJE), -2
+        )
+
+    def test_situacao_prazo(self):
+        casos = {
+            None: ("sem_prazo", None),
+            -2: ("vencida", 2),
+            0: ("hoje", 0),
+            despesas.DIAS_AVISO_PRAZO: ("proximo", despesas.DIAS_AVISO_PRAZO),
+            despesas.DIAS_AVISO_PRAZO + 1: (
+                "longe", despesas.DIAS_AVISO_PRAZO + 1
+            ),
+        }
+        for dias, esperado in casos.items():
+            self.assertEqual(
+                despesas.situacao_prazo(self._despesa(dias), self.HOJE),
+                esperado,
+                dias,
+            )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

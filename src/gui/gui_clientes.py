@@ -174,7 +174,6 @@ campos no formulário de Cliente (Airbnb vs Mensal)":
 """
 
 import datetime
-import re
 
 import customtkinter as ctk
 
@@ -229,8 +228,6 @@ NACIONALIDADES = (
 NACIONALIDADE_PLACEHOLDER = "— Escolher —"
 OUTRA_NACIONALIDADE = "Outra (escrever ao lado)"
 
-_PADRAO_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-
 
 # =====================================================================
 # Larguras fixas das colunas da tabela (mesma disciplina de
@@ -282,18 +279,6 @@ def _ler_data(texto, nome_campo):
         return datetime.datetime.strptime(texto, "%d/%m/%Y").date()
     except ValueError:
         raise ValueError(f"{nome_campo} inválida (usa dd/mm/aaaa).")
-
-
-def _email_valido(email):
-    """Formato simples de email (regra pedida pelo aluno, 06/09/2026,
-    só para o ecrã Clientes): tem de ter uma parte antes do "@", um
-    "@", e um domínio com pelo menos um ponto — a mesma regra base
-    que a generalidade dos sistemas usa para apanhar erros de
-    digitação óbvios (ex. falta do "@" ou do domínio). Não é uma
-    verificação RFC 5322 completa, nem confirma que a caixa de
-    correio existe de facto.
-    """
-    return bool(_PADRAO_EMAIL.match(email))
 
 
 def _recarregar_tela_lista(tela_lista):
@@ -1087,13 +1072,9 @@ class NovoClienteMensalModal(_FormularioCliente):
             componentes.mostrar_erro(str(erro))
             return
 
+        # O formato do email é validado em `clientes.criar`
+        # (validacoes.validar_cliente) — v1.7.0.
         email = self.campo_email.get().strip()
-        if email and not _email_valido(email):
-            componentes.mostrar_erro(
-                "Email em formato inválido (esperado algo como "
-                "nome@dominio.com)."
-            )
-            return
 
         try:
             cliente = clientes.criar(
@@ -1302,12 +1283,8 @@ class EditarClienteModal(_FormularioCliente):
             self.campo_validade_documento.get(), "Validade do documento"
         )
 
+        # Formato do email: validado em `clientes.atualizar`.
         email = self.campo_email.get().strip()
-        if email and not _email_valido(email):
-            raise ValueError(
-                "Email em formato inválido (esperado algo como "
-                "nome@dominio.com)."
-            )
 
         return {
             "nome": self.campo_nome.get(),

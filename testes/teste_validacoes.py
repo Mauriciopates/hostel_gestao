@@ -584,5 +584,37 @@ class TesteEpocaAlta(unittest.TestCase):
         )
 
 
+class TesteEmail(unittest.TestCase):
+    """Formato do email (v1.7.0 — passou da GUI para aqui)."""
+
+    def test_formatos_validos(self):
+        for email in ("ana@exemplo.pt", "a.b+c@sub.dominio.com"):
+            self.assertTrue(validacoes.email_valido(email), email)
+
+    def test_formatos_invalidos(self):
+        for email in ("ana", "ana@", "@exemplo.pt", "ana@exemplo",
+                      "ana silva@exemplo.pt", "ana@@exemplo.pt"):
+            self.assertFalse(validacoes.email_valido(email), email)
+
+    def _cliente(self, email):
+        return {
+            "nome": "Ana Silva",
+            "tipo_documento": "Passaporte",
+            "numero_documento": "X1",
+            "data_nascimento": date(1990, 5, 20),
+            "nacionalidade": "Portuguesa",
+            "pais_emissor_documento": "Portugal",
+            "pais_residencia": "Portugal",
+            "email": email,
+        }
+
+    def test_validar_cliente_recusa_email_invalido(self):
+        with self.assertRaises(ValueError):
+            validacoes.validar_cliente(self._cliente("ana@"), "airbnb")
+
+    def test_validar_cliente_aceita_email_vazio(self):
+        validacoes.validar_cliente(self._cliente(""), "airbnb")
+
+
 if __name__ == "__main__":
     unittest.main()

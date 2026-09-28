@@ -253,41 +253,6 @@ def _agrupar_para_planta(lugares):
     return grupos
 
 
-def _ocupantes_atuais(ocupacoes_mensais, lugar_id, hoje):
-    """Filtra as ocupações mensais em vigor no lugar indicado, na
-    data indicada.
-    """
-    atuais = []
-
-    for ocupacao in ocupacoes_mensais:
-        if ocupacao["lugar_id"] != lugar_id:
-            continue
-
-        if ocupacao["data_inicio"] > hoje:
-            continue
-
-        if ocupacao["data_fim"] is not None and ocupacao["data_fim"] <= hoje:
-            continue
-
-        atuais.append(ocupacao)
-
-    return atuais
-
-
-def _proxima_reserva(ocupacoes_mensais, lugar_id, hoje):
-    """Devolve a ocupação futura mais próxima desse lugar, ou None."""
-    futuras = [
-        o
-        for o in ocupacoes_mensais
-        if o["lugar_id"] == lugar_id and o["data_inicio"] > hoje
-    ]
-
-    if not futuras:
-        return None
-
-    return min(futuras, key=lambda o: o["data_inicio"])
-
-
 def _nomes_ocupantes(ocupacoes):
     """Devolve os nomes dos clientes de uma lista de ocupações."""
     nomes = []
@@ -297,19 +262,6 @@ def _nomes_ocupantes(ocupacoes):
         nomes.append(cliente["nome"] if cliente else "Cliente desconhecido")
 
     return nomes
-
-
-def _estado_ocupacao(total_ocupantes, capacidade, tem_reserva_futura):
-    """Classifica a ocupação de um lugar em livre / reservado /
-    parcial / ocupado.
-    """
-    if total_ocupantes == 0:
-        return "reservado" if tem_reserva_futura else "livre"
-
-    if total_ocupantes < capacidade:
-        return "parcial"
-
-    return "ocupado"
 
 
 def _texto_estado(estado, ocupantes, capacidade, reserva):
@@ -662,11 +614,10 @@ class PlantaLugares(ctk.CTkFrame):
           do estado. O `conteudo` e a `caixa` NÃO são ligados,
           para não haver dois sítios a disparar a mesma coisa.
         """
-        ocupantes = _ocupantes_atuais(ocupacoes_mensais, lugar["id"], hoje)
-        reserva = _proxima_reserva(ocupacoes_mensais, lugar["id"], hoje)
-        estado = _estado_ocupacao(
-            len(ocupantes), lugar["capacidade"], reserva is not None
-        )
+        situacao = contratos.situacao_lugar(lugar, ocupacoes_mensais, hoje)
+        estado = situacao["estado"]
+        ocupantes = situacao["ocupantes"]
+        reserva = situacao["reserva"]
         cor_fundo, cor_texto = _cores_estado(estado)
 
         largura = LARGURA_CAIXA[lugar["tipo_cama"]]
@@ -771,11 +722,12 @@ class PlantaLugares(ctk.CTkFrame):
         limite = LIMITE_CARATERES["beliche"]
 
         for lugar in par:
-            ocupantes = _ocupantes_atuais(ocupacoes_mensais, lugar["id"], hoje)
-            reserva = _proxima_reserva(ocupacoes_mensais, lugar["id"], hoje)
-            estado = _estado_ocupacao(
-                len(ocupantes), lugar["capacidade"], reserva is not None
+            situacao = contratos.situacao_lugar(
+                lugar, ocupacoes_mensais, hoje
             )
+            estado = situacao["estado"]
+            ocupantes = situacao["ocupantes"]
+            reserva = situacao["reserva"]
             cor_fundo, cor_texto = _cores_estado(estado)
 
             caixa = ctk.CTkFrame(

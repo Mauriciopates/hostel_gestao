@@ -27,10 +27,9 @@ ESTRUTURA DO FICHEIRO — quatro classes:
 NOTA sobre helpers privados testados diretamente: `_meses_do_periodo`,
 `_listar_ocupacoes_do_periodo`, `_meses_de_vigencia_no_periodo`,
 `_noites_totais`, `_noites_no_periodo` e `_ratear` são privados pela
-convenção do underscore, mas o `gui_relatorios.py` já os chama
-diretamente (ver `_receita_mensal_do_periodo` e `_receita_airbnb_do_periodo`
-nesse ficheiro). São privados na convenção, públicos de facto dentro
-do projeto. Testá-los diretamente garante os cálculos de datas — a
+convenção do underscore (desde a v1.7.0 a GUI já não os chama — o
+relatório "Resultado" usa `receita_por_tipo`). Testá-los
+diretamente garante os cálculos de datas — a
 parte mais frágil — sem depender de os exercitar todos via as funções
 públicas. Mesma convenção já usada em `teste_contratos.py`
 (`_sobrepoe`) e `teste_unidades.py` (`_contagem_mensal`).
@@ -901,6 +900,62 @@ class TesteReceita(BaseMySQLTest):
             ),
             [],
         )
+
+    # -- receita_por_tipo (v1.7.0) ------------------------------------
+
+    def test_receita_por_tipo_sem_ocupacoes_e_zero(self):
+        self.assertEqual(
+            financeiro.receita_por_tipo(date(2026, 1, 1), date(2026, 2, 1)),
+            {"mensal": Decimal("0.00"), "airbnb": Decimal("0.00")},
+        )
+
+    def test_receita_por_tipo_separa_os_regimes(self):
+        _criar_contrato_mensal(
+            self.unidade_mensal["id"],
+            self.cliente_mensal["id"],
+            date(2026, 1, 1),
+            renda="250.00",
+            data_fim=date(2026, 2, 1),
+        )
+        _criar_reserva_airbnb(
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 1, 10),
+            date(2026, 1, 14),
+        )
+
+        por_tipo = financeiro.receita_por_tipo(
+            date(2026, 1, 1), date(2026, 2, 1)
+        )
+
+        self.assertEqual(por_tipo["mensal"], Decimal("250.00"))
+        self.assertEqual(por_tipo["airbnb"], Decimal("180.00"))
+
+    def test_receita_por_tipo_soma_igual_ao_resultado(self):
+        _criar_contrato_mensal(
+            self.unidade_mensal["id"],
+            self.cliente_mensal["id"],
+            date(2026, 1, 1),
+            renda="250.00",
+        )
+        _criar_reserva_airbnb(
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 1, 1),
+            date(2026, 1, 11),
+        )
+        inicio, fim = date(2026, 1, 1), date(2026, 1, 5)
+
+        por_tipo = financeiro.receita_por_tipo(inicio, fim)
+
+        self.assertEqual(
+            por_tipo["mensal"] + por_tipo["airbnb"],
+            financeiro.resultado(inicio, fim)["receita"],
+        )
+
+    def test_receita_por_tipo_valida_periodo(self):
+        with self.assertRaises(ValueError):
+            financeiro.receita_por_tipo(date(2026, 2, 1), date(2026, 1, 1))
 
 
 # =====================================================================
