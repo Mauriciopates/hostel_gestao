@@ -217,10 +217,6 @@ _MAX_DESCRICAO = 34
 
 _ALTURA_LINHA = 48
 
-# Uma despesa que vence dentro destes dias fica com a etiqueta
-# amarela ("vence em 3 dias"); mais longe, cinzenta.
-_DIAS_AVISO_PRAZO = 7
-
 
 class Aprovacoes(ctk.CTkFrame):
     """Ecrã "Aprovações" — despesas pendentes + itens VIA 2 por
@@ -350,20 +346,19 @@ class Aprovacoes(ctk.CTkFrame):
         """(texto, estilo da etiqueta) do prazo: 'vencida há X dias'
         a vermelho, 'vence hoje'/'vence em X dias' a amarelo quando
         está perto, cinzento quando está longe ou não tem prazo."""
-        if d["data_vencimento"] is None:
-            return "sem prazo", "info"
+        situacao, dias = despesas.situacao_prazo(d)
 
-        delta = (d["data_vencimento"] - datetime.date.today()).days
-        if delta < 0:
-            dias = abs(delta)
+        if situacao == "sem_prazo":
+            return "sem prazo", "info"
+        if situacao == "vencida":
             return f"vencida há {dias} {'dia' if dias == 1 else 'dias'}", (
                 "erro"
             )
-        if delta == 0:
+        if situacao == "hoje":
             return "vence hoje", "aviso"
 
-        texto = f"vence em {delta} {'dia' if delta == 1 else 'dias'}"
-        return texto, "aviso" if delta <= _DIAS_AVISO_PRAZO else "info"
+        texto = f"vence em {dias} {'dia' if dias == 1 else 'dias'}"
+        return texto, "aviso" if situacao == "proximo" else "info"
 
     # -- secção 2 — itens VIA 2 por confirmar -------------------------
 
@@ -551,9 +546,7 @@ class _AprovarDespesaModal(ctk.CTkToplevel):
     def _montar_ficha(self):
         # Aviso de vencida (só se aplicável).
         if despesas.esta_vencida(self.despesa):
-            delta = (
-                datetime.date.today() - self.despesa["data_vencimento"]
-            ).days
+            delta = -(despesas.dias_para_vencimento(self.despesa) or 0)
             aviso = ctk.CTkFrame(
                 self,
                 fg_color=tema.VERMELHO_ERRO,

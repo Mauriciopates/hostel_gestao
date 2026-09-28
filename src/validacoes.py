@@ -17,6 +17,11 @@ contrato mensal):
   digitação. Chamada pelo `gui_propriedades.py` antes de gravar.
 """
 
+import re
+
+# Formato simples de email (v1.7.0: vivia só no ecrã Clientes).
+_PADRAO_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
 # O que muda aqui mudar o modelo de negício
 # Não altera as configurações de validação.
 
@@ -71,6 +76,18 @@ ou 0 se o resto for 0 ou 1).
 """
 
 
+def email_valido(email):
+    """Formato simples de email (regra pedida pelo aluno, 06/09/2026):
+    uma parte antes do "@", um "@", e um domínio com pelo menos um
+    ponto. Apanha erros de digitação óbvios; não é uma verificação
+    RFC 5322 completa nem confirma que a caixa de correio existe.
+
+    v1.7.0: passou do `gui_clientes.py` para aqui, para a CLI e a
+    GUI aplicarem a mesma regra (via `validar_cliente`).
+    """
+    return bool(_PADRAO_EMAIL.match(email))
+
+
 def validar_cliente(dados, regime):
     """Valida os dados de um cliente para o regime indicado.
 
@@ -115,6 +132,14 @@ def validar_cliente(dados, regime):
 
     if not dados.get("nacionalidade", "").strip():
         raise ValueError("A nacionalidade é obrigatória.")
+
+    # O email nunca é obrigatório, mas, se vier, tem de ter formato.
+    email = dados.get("email", "").strip()
+    if email and not email_valido(email):
+        raise ValueError(
+            "Email em formato inválido (esperado algo como "
+            "nome@dominio.com)."
+        )
 
     if dados.get("data_nascimento") is None:
         raise ValueError("A data de nascimento é obrigatória.")

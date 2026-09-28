@@ -85,6 +85,17 @@ def _ocupantes_mensal(unidade_id, lugar_id=None):
     return len(ocupacoes)
 
 
+def ocupantes_mensal(unidade_id, lugar_id=None):
+    """Número de contratos mensais ativos da unidade (ou só do lugar).
+
+    Versão pública de `_ocupantes_mensal` — a mesma contagem que a
+    regra de capacidade usa ao criar um contrato, para o formulário
+    "Novo contrato" mostrar "1/2" com o mesmo critério (v1.7.0: a GUI
+    contava à parte).
+    """
+    return _ocupantes_mensal(unidade_id, lugar_id)
+
+
 def _validar_dia_vencimento(dia_vencimento):
     """Valida que 'dia_vencimento' é um inteiro entre 1 e 28.
 
@@ -296,9 +307,11 @@ def listar(
     cliente_id=None,
     tipo=None,
     aviso_documento=None,
+    data_inicio=None,
+    data_fim=None,
 ):
-    """Devolve as ocupações, filtráveis por unidade, cliente, tipo
-    e aviso de documento.
+    """Devolve as ocupações, filtráveis por unidade, cliente, tipo,
+    aviso de documento e período.
 
     Serve os dois regimes ao mesmo tempo — filtrar por
     tipo="mensal" ou tipo="airbnb" é o que separa um do outro
@@ -310,18 +323,76 @@ def listar(
     decisão 11 (senão o aviso nunca mais seria encontrado depois
     de criado o contrato).
 
+    'data_inicio' e 'data_fim' (os dois, ou nenhum) devolvem só as
+    ocupações que tocam o período, com 'data_fim' EXCLUSIVO e um
+    contrato sem fim a contar como em vigor — mesma regra de
+    sobreposição de `_sobrepoe` (v1.7.0: antes vivia repetida nos
+    relatórios da GUI).
+
     Os filtros aplicam-se na própria consulta SQL, em
     `repositorio.listar_ocupacoes` — devolve sempre lista nova
     (mesma convenção de propriedades.listar, unidades.listar e
     clientes.listar).
     """
+    if (data_inicio is None) != (data_fim is None):
+        raise ValueError(
+            "O período precisa das duas datas: início e fim."
+        )
+
     return repositorio.listar_ocupacoes(
         incluir_inativas=incluir_inativas,
         unidade_id=unidade_id,
         cliente_id=cliente_id,
         tipo=tipo,
         aviso_documento=aviso_documento,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
     )
+
+
+def duracao_meses(ocupacao, ate=None):
+    """Duração de um contrato em meses de calendário, sem contar
+    dias: diferença simples entre ano/mês de início e de fim.
+
+    'ate' é a data de fim a usar; omisso, usa a `data_fim` da
+    ocupação e, se o contrato ainda não tiver fim, a data de hoje.
+    É a mesma contagem de `avisos_encerramento` (duração mínima) —
+    uma só fórmula para o relatório de Encerramentos e para o aviso.
+    """
+    fim = ate or ocupacao["data_fim"] or date.today()
+    inicio = ocupacao["data_inicio"]
+
+    return (fim.year - inicio.year) * 12 + (fim.month - inicio.month)
+
+
+def encerramentos_fora_das_regras():
+    """Devolve os contratos mensais encerrados fora das regras da
+    casa — duração abaixo do mínimo e/ou aviso prévio insuficiente
+    (as duas marcas que `encerrar_mensal` grava).
+
+    Lista de pares `(ocupacao, mensal)`, do fim mais recente para o
+    mais antigo. Serve o relatório "Encerramentos" (v1.7.0: o filtro
+    vivia na GUI).
+    """
+    candidatas = []
+
+    for ocupacao in listar(incluir_inativas=True, tipo="mensal"):
+        mensal = detalhes_mensal(ocupacao["id"])
+
+        if mensal is None:
+            continue
+
+        if (
+            mensal["duracao_abaixo_minima"]
+            or mensal["aviso_previo_insuficiente"]
+        ):
+            candidatas.append((ocupacao, mensal))
+
+    candidatas.sort(
+        key=lambda par: par[0]["data_fim"] or date.min, reverse=True
+    )
+
+    return candidatas
 
 
 def avisos_encerramento(ocupacao, data_fim):
@@ -341,9 +412,7 @@ def avisos_encerramento(ocupacao, data_fim):
     identificador — não vai buscar nada ao repositório, mesma
     convenção de `calcular_preco_airbnb`, que recebe a unidade.
     """
-    meses = (data_fim.year - ocupacao["data_inicio"].year) * 12 + (
-        data_fim.month - ocupacao["data_inicio"].month
-    )
+    meses = duracao_meses(ocupacao, ate=data_fim)
 
     # Lê as duas configurações da casa (podem ter sido alteradas na
     # GUI), com fallback automático para os valores do `config.py`
@@ -622,6 +691,132 @@ def calcular_preco_airbnb(unidade, data_inicio, data_fim):
     cli.py não devia chamar diretamente.
     """
     return _preco_calculado_airbnb(unidade, data_inicio, data_fim)
+
+
+def situacao_lugar(lugar, ocupacoes_mensais, data):
+    """Situação de um lugar de uma unidade mensal numa data.
+
+    Devolve um dicionário:
+
+        {
+            "estado": "livre" | "reservado" | "parcial" | "ocupado",
+            "ocupantes": [ocupação, ...],   # em vigor na data
+            "reserva": ocupação | None,     # a futura mais próxima
+        }
+
+    Regras (v1.7.0 — viviam no `gui_unidades.py`):
+      - em vigor: começou até à data e ainda não acabou (o dia de
+        saída já não conta);
+      - sem ninguém: "reservado" se houver uma entrada futura,
+        senão "livre";
+      - com gente: "parcial" abaixo da capacidade, "ocupado" cheio.
+
+    Recebe as ocupações mensais já lidas (as da unidade inteira), para
+    o ecrã não fazer uma consulta por lugar. Não vai à base de dados.
+    """
+    do_lugar = [o for o in ocupacoes_mensais if o["lugar_id"] == lugar["id"]]
+
+    ocupantes = [
+        o
+        for o in do_lugar
+        if o["data_inicio"] <= data
+        and (o["data_fim"] is None or o["data_fim"] > data)
+    ]
+
+    futuras = [o for o in do_lugar if o["data_inicio"] > data]
+    reserva = min(futuras, key=lambda o: o["data_inicio"]) if futuras else None
+
+    if not ocupantes:
+        estado = "reservado" if reserva is not None else "livre"
+    elif len(ocupantes) < lugar["capacidade"]:
+        estado = "parcial"
+    else:
+        estado = "ocupado"
+
+    return {"estado": estado, "ocupantes": ocupantes, "reserva": reserva}
+
+
+def ocupacao_airbnb_no_dia(unidade_id, dia):
+    """Devolve a reserva Airbnb ativa da unidade que cobre 'dia'
+    (a noite de 'dia' para 'dia + 1'), ou None se estiver livre.
+
+    Usa a regra de sobreposição de `_sobrepoe` — nunca uma igualdade
+    de datas, para não apanhar a reserva que sai nesse dia
+    (v1.7.0 — vivia no `gui_calendario.py`).
+    """
+    fim_janela = dia + timedelta(days=1)
+
+    for ocupacao in repositorio.listar_ocupacoes(
+        unidade_id=unidade_id, tipo="airbnb"
+    ):
+        if _sobrepoe(
+            dia, fim_janela, ocupacao["data_inicio"], ocupacao["data_fim"]
+        ):
+            return ocupacao
+
+    return None
+
+
+def noites(data_inicio, data_fim):
+    """Número de noites de uma estadia (o dia de saída não conta).
+    Devolve None se faltar alguma das datas ou o fim não for
+    posterior ao início.
+    """
+    if data_inicio is None or data_fim is None or data_fim <= data_inicio:
+        return None
+
+    return (data_fim - data_inicio).days
+
+
+def resumo_airbnb(
+    unidade, data_inicio, data_fim, check_in_tardio=False,
+    multa_praticada=None,
+):
+    """Resumo de valores de uma reserva Airbnb, sem registar nada —
+    o que o formulário "Nova reserva" mostra antes de gravar.
+
+    Devolve:
+
+        {
+            "noites": int | None,
+            "preco_calculado": Decimal | None,
+            "preco_noite": Decimal | None,
+            "multa": Decimal,          # a que vai ser cobrada
+            "total": Decimal | None,   # preço + multa
+        }
+
+    Multa: sem check-in tardio é 0; com check-in tardio é a
+    'multa_praticada' se vier, senão a multa da unidade — a mesma
+    regra de `registar_airbnb` (v1.7.0 — vivia na GUI).
+    Preço e total ficam None enquanto as datas não forem válidas.
+    """
+    n_noites = noites(data_inicio, data_fim)
+
+    if not check_in_tardio:
+        multa = Decimal("0.00")
+    elif multa_praticada is not None:
+        multa = multa_praticada
+    else:
+        multa = unidade["multa_check_in_tardio"]
+
+    if n_noites is None:
+        return {
+            "noites": None,
+            "preco_calculado": None,
+            "preco_noite": None,
+            "multa": multa,
+            "total": None,
+        }
+
+    preco = _preco_calculado_airbnb(unidade, data_inicio, data_fim)
+
+    return {
+        "noites": n_noites,
+        "preco_calculado": preco,
+        "preco_noite": preco / n_noites,
+        "multa": multa,
+        "total": preco + multa,
+    }
 
 
 def registar_airbnb(

@@ -35,34 +35,17 @@ class RelatContratos(RelatorioBase):
     # RELATÓRIOS — ÁREA CONTRATOS
     # =================================================================
 
-    def _ocupacao_toca_periodo(self, ocupacao):
-        """Verifica se uma ocupação tocou o período atual.
-
-        Fórmula de sobreposição do `contratos._sobrepoe`:
-            inicio_A < fim_B  E  (fim_A IS NULL  OU  fim_A > inicio_B)
-
-        `self.data_fim` é exclusivo (o +1 dia do motor), por isso
-        usar aqui diretamente é correto — uma ocupação que acaba
-        exactamente no dia `self.data_fim - 1` é tocada, e uma que
-        começa no `self.data_fim` não é.
-        """
-        inicio = ocupacao["data_inicio"]
-        fim = ocupacao["data_fim"]
-
-        if inicio >= self.data_fim:
-            return False
-        if fim is not None and fim <= self.data_inicio:
-            return False
-        return True
-
     # -- 6. OCUPAÇÕES NO PERÍODO --------------------------------------
 
     def _desenhar_ocupacoes(self, master):
         """Relatório "Ocupações no período" — listagem de registos
         individuais. Sem total.
         """
-        todas = contratos.listar(incluir_inativas=True)
-        tocadas = [o for o in todas if self._ocupacao_toca_periodo(o)]
+        tocadas = contratos.listar(
+            incluir_inativas=True,
+            data_inicio=self.data_inicio,
+            data_fim=self.data_fim,
+        )
 
         # Ordena por data de início, mais recentes primeiro.
         tocadas.sort(
@@ -290,8 +273,11 @@ class RelatContratos(RelatorioBase):
         """Relatório "Contratos mensais" — colunas específicas do
         regime mensal (renda, caução, vencimento, autorização).
         """
-        todas = contratos.listar(incluir_inativas=True, tipo="mensal")
-        tocadas = [o for o in todas if self._ocupacao_toca_periodo(o)]
+        tocadas = contratos.listar(
+            incluir_inativas=True, tipo="mensal",
+            data_inicio=self.data_inicio,
+            data_fim=self.data_fim,
+        )
         tocadas.sort(
             key=lambda o: o["data_inicio"] or date.min,
             reverse=True,
@@ -550,8 +536,11 @@ class RelatContratos(RelatorioBase):
         """Relatório "Reservas Airbnb" — colunas específicas do
         regime airbnb (preço, check-in tardio, multas, autorizações).
         """
-        todas = contratos.listar(incluir_inativas=True, tipo="airbnb")
-        tocadas = [o for o in todas if self._ocupacao_toca_periodo(o)]
+        tocadas = contratos.listar(
+            incluir_inativas=True, tipo="airbnb",
+            data_inicio=self.data_inicio,
+            data_fim=self.data_fim,
+        )
         tocadas.sort(
             key=lambda o: o["data_inicio"] or date.min,
             reverse=True,
@@ -890,32 +879,9 @@ class RelatContratos(RelatorioBase):
         da área Contratos. A coluna Avisos mostra um chip por cada
         condição; um contrato pode ter os dois em simultâneo.
         """
-        # ---- 1. Ler todas as ocupações mensais (ativas e encerradas)
-        todas = contratos.listar(incluir_inativas=True, tipo="mensal")
-
-        # ---- 2. Filtrar as que têm pelo menos um dos avisos
-        # O detalhe mensal é lido uma vez por ocupação. Como o
-        # volume é pequeno, não vale a pena otimizar com mapas.
-        candidatas = []
-
-        for ocupacao in todas:
-            mensal = contratos.detalhes_mensal(ocupacao["id"])
-            if mensal is None:
-                continue
-
-            if not (
-                mensal["duracao_abaixo_minima"]
-                or mensal["aviso_previo_insuficiente"]
-            ):
-                continue
-
-            candidatas.append((ocupacao, mensal))
-
-        # ---- 3. Ordenar por data de fim, mais recentes primeiro
-        candidatas.sort(
-            key=lambda par: par[0]["data_fim"] or date.min,
-            reverse=True,
-        )
+        # ---- 1. Contratos com pelo menos um dos avisos, do fim
+        # mais recente para o mais antigo (regra no contratos.py).
+        candidatas = contratos.encerramentos_fora_das_regras()
 
         # ---- 4. Mapas de unidades e clientes — uma leitura só
         mapa_unidades = _mapa_por_id(unidades.listar(incluir_inativas=True))
@@ -968,13 +934,8 @@ class RelatContratos(RelatorioBase):
                 cliente["nome"] if cliente else ocupacao["cliente_id"]
             )
 
-            # Duração em meses — mesma fórmula do
-            # `contratos.avisos_encerramento` e do
-            # `financeiro._meses_do_periodo`. Diferença simples
-            # entre anos/meses, sem dias.
-            inicio = ocupacao["data_inicio"]
-            fim = ocupacao["data_fim"] or date.today()
-            meses = (fim.year - inicio.year) * 12 + (fim.month - inicio.month)
+            # Duração em meses — a mesma fórmula da duração mínima.
+            meses = contratos.duracao_meses(ocupacao)
             texto_duracao = f"{meses} mes" if meses == 1 else f"{meses} meses"
 
             texto_motivo = mensal["motivo_encerramento"] or "—"

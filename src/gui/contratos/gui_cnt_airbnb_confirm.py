@@ -3,6 +3,7 @@
 
 import customtkinter as ctk
 
+import contratos
 import estoque
 import responsaveis
 import unidades
@@ -162,7 +163,7 @@ class _ConfirmacaoAirbnb(ctk.CTkToplevel):
             anchor="w",
         ).pack(fill="x")
 
-        noites = (self.data_fim - self.data_inicio).days
+        noites = contratos.noites(self.data_inicio, self.data_fim)
         meta = (
             f"Cliente: {self.cliente['nome']} "
             f"({self.cliente['id']}) · "

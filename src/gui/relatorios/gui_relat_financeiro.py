@@ -80,9 +80,12 @@ class RelatFinanceiro(RelatorioBase):
             componentes.Coluna("Valor", peso=1, minimo=140, alinhamento="e"),
         )
 
+        por_tipo = financeiro.receita_por_tipo(
+            self.data_inicio, self.data_fim
+        )
         linhas = (
-            ("Receita mensal", self._receita_mensal_do_periodo()),
-            ("Receita Airbnb", self._receita_airbnb_do_periodo()),
+            ("Receita mensal", por_tipo["mensal"]),
+            ("Receita Airbnb", por_tipo["airbnb"]),
             ("Descontos", descontos),
             ("Despesas operacionais", despesas_op),
             ("Resultado líquido", resultado_liquido),
@@ -215,68 +218,6 @@ class RelatFinanceiro(RelatorioBase):
             font=ctk.CTkFont(size=16, weight="bold"),
             anchor="w",
         ).pack(fill="x", padx=12, pady=(0, 10))
-
-    def _receita_mensal_do_periodo(self):
-        """Soma a receita das ocupações do tipo mensal no período.
-
-        Não há no `financeiro.py` uma função que devolva só a
-        receita mensal — a `receita_por_unidade` já devolve o total
-        misturado (mensal + airbnb). Para o relatório "Resultado"
-        precisamos da separação; é feita aqui, em cima das
-        ocupações do período.
-        """
-        # Reaproveita o mesmo mecanismo do `financeiro.py`: lê as
-        # ocupações que tocaram o período, e soma mês a mês.
-        import contratos as _contratos
-
-        meses = financeiro._meses_do_periodo(self.data_inicio, self.data_fim)
-        ocupacoes = financeiro._listar_ocupacoes_do_periodo(
-            self.data_inicio, self.data_fim, tipo="mensal"
-        )
-
-        total = Decimal("0.00")
-        for ocupacao in ocupacoes:
-            mensal = _contratos.detalhes_mensal(ocupacao["id"])
-            if mensal is None:
-                continue
-            meses_vigorados = financeiro._meses_de_vigencia_no_periodo(
-                ocupacao, meses
-            )
-            total += mensal["renda_praticada"] * meses_vigorados
-
-        return total.quantize(Decimal("0.01"))
-
-    def _receita_airbnb_do_periodo(self):
-        """Soma a receita das ocupações do tipo airbnb no período,
-        com rateio por noites — mesma lógica do `financeiro.py`.
-        """
-        import contratos as _contratos
-
-        ocupacoes = financeiro._listar_ocupacoes_do_periodo(
-            self.data_inicio, self.data_fim, tipo="airbnb"
-        )
-
-        total = Decimal("0.00")
-        for ocupacao in ocupacoes:
-            airbnb = _contratos.detalhes_airbnb(ocupacao["id"])
-            if airbnb is None:
-                continue
-
-            noites_totais = financeiro._noites_totais(ocupacao)
-            noites_periodo = financeiro._noites_no_periodo(
-                ocupacao, self.data_inicio, self.data_fim
-            )
-
-            if noites_totais == 0 or noites_periodo == 0:
-                continue
-
-            total += financeiro._ratear(
-                airbnb["preco_praticado"],
-                noites_periodo,
-                noites_totais,
-            )
-
-        return total.quantize(Decimal("0.01"))
 
     # -- 2. RECEITA POR UNIDADE ---------------------------------------
 

@@ -1352,5 +1352,165 @@ class TesteAvisosEncerramento(BaseMySQLTest):
         )
 
 
+class TesteRegrasV17(BaseContratosTest):
+    """Funções públicas criadas na v1.7.0 para tirar regras da GUI."""
+
+    def _mensal(self, inicio, fim=None):
+        ocupacao, mensal = contratos.criar_mensal(
+            self.unidade_mensal["id"],
+            self.cliente_mensal["id"],
+            inicio,
+            Decimal("250.00"),
+            Decimal("250.00"),
+            lugar_id=self.lugar["id"],
+        )
+        if fim is not None:
+            ocupacao, mensal = contratos.encerrar_mensal(ocupacao["id"], fim)
+        return ocupacao, mensal
+
+    # -- listar por período ------------------------------------------
+
+    def test_listar_no_periodo_usa_fim_exclusivo(self):
+        contratos.registar_airbnb(
+            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
+            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
+        )
+        antes = contratos.listar(
+            tipo="airbnb", data_inicio=date(2026, 1, 1),
+            data_fim=date(2026, 1, 10),
+        )
+        dentro = contratos.listar(
+            tipo="airbnb", data_inicio=date(2026, 1, 14),
+            data_fim=date(2026, 1, 20),
+        )
+        self.assertEqual(antes, [])
+        self.assertEqual(len(dentro), 1)
+
+    def test_listar_no_periodo_exige_as_duas_datas(self):
+        with self.assertRaises(ValueError):
+            contratos.listar(data_inicio=date(2026, 1, 1))
+
+    # -- duração e encerramentos -------------------------------------
+
+    def test_duracao_meses(self):
+        ocupacao = {"data_inicio": date(2026, 1, 10),
+                    "data_fim": date(2026, 6, 1)}
+        self.assertEqual(contratos.duracao_meses(ocupacao), 5)
+        self.assertEqual(
+            contratos.duracao_meses(ocupacao, ate=date(2026, 3, 1)), 2
+        )
+
+    def test_encerramentos_fora_das_regras(self):
+        curto, _ = self._mensal(date(2026, 1, 10), date(2026, 2, 1))
+
+        lista = contratos.encerramentos_fora_das_regras()
+
+        self.assertEqual([o["id"] for o, _ in lista], [curto["id"]])
+        self.assertTrue(lista[0][1]["duracao_abaixo_minima"])
+
+    # -- lugar ----------------------------------------------------------
+
+    def test_situacao_lugar(self):
+        dia = date(2026, 3, 1)
+        lugar = {"id": "L1", "capacidade": 2}
+
+        def ocup(inicio, fim=None, lugar_id="L1"):
+            return {"lugar_id": lugar_id, "data_inicio": inicio,
+                    "data_fim": fim}
+
+        casos = (
+            ([], "livre"),
+            ([ocup(date(2026, 4, 1))], "reservado"),
+            ([ocup(date(2026, 1, 1))], "parcial"),
+            ([ocup(date(2026, 1, 1)), ocup(date(2026, 2, 1))], "ocupado"),
+            ([ocup(date(2026, 1, 1), date(2026, 3, 1))], "livre"),
+            ([ocup(date(2026, 1, 1), lugar_id="L2")], "livre"),
+        )
+        for ocupacoes, esperado in casos:
+            situacao = contratos.situacao_lugar(lugar, ocupacoes, dia)
+            self.assertEqual(situacao["estado"], esperado, ocupacoes)
+
+    def test_situacao_lugar_devolve_reserva_mais_proxima(self):
+        lugar = {"id": "L1", "capacidade": 1}
+        perto = {"lugar_id": "L1", "data_inicio": date(2026, 4, 1),
+                 "data_fim": None}
+        longe = {"lugar_id": "L1", "data_inicio": date(2026, 6, 1),
+                 "data_fim": None}
+
+        situacao = contratos.situacao_lugar(
+            lugar, [longe, perto], date(2026, 3, 1)
+        )
+
+        self.assertIs(situacao["reserva"], perto)
+
+    def test_ocupantes_mensal_por_lugar(self):
+        self._mensal(date(2026, 1, 10))
+        self.assertEqual(
+            contratos.ocupantes_mensal(
+                self.unidade_mensal["id"], self.lugar["id"]
+            ),
+            1,
+        )
+
+    # -- Airbnb ---------------------------------------------------------
+
+    def test_ocupacao_airbnb_no_dia(self):
+        ocupacao, _ = contratos.registar_airbnb(
+            self.unidade_airbnb["id"], self.cliente_airbnb["id"],
+            date(2026, 1, 10), date(2026, 1, 15), Decimal("225.00"),
+        )
+        uid = self.unidade_airbnb["id"]
+
+        self.assertEqual(
+            contratos.ocupacao_airbnb_no_dia(uid, date(2026, 1, 14))["id"],
+            ocupacao["id"],
+        )
+        # O dia de saída já está livre.
+        self.assertIsNone(
+            contratos.ocupacao_airbnb_no_dia(uid, date(2026, 1, 15))
+        )
+
+    def test_noites(self):
+        self.assertEqual(
+            contratos.noites(date(2026, 1, 10), date(2026, 1, 15)), 5
+        )
+        self.assertIsNone(contratos.noites(date(2026, 1, 10), None))
+        self.assertIsNone(
+            contratos.noites(date(2026, 1, 10), date(2026, 1, 10))
+        )
+
+    def test_resumo_airbnb_sem_check_in_tardio(self):
+        # Janeiro fica fora da época alta: 5 noites × 45.
+        resumo = contratos.resumo_airbnb(
+            self.unidade_airbnb, date(2026, 1, 10), date(2026, 1, 15)
+        )
+        self.assertEqual(resumo["noites"], 5)
+        self.assertEqual(resumo["preco_calculado"], Decimal("225.00"))
+        self.assertEqual(resumo["preco_noite"], Decimal("45.00"))
+        self.assertEqual(resumo["multa"], Decimal("0.00"))
+        self.assertEqual(resumo["total"], Decimal("225.00"))
+
+    def test_resumo_airbnb_multa(self):
+        inicio, fim = date(2026, 1, 10), date(2026, 1, 15)
+        da_unidade = contratos.resumo_airbnb(
+            self.unidade_airbnb, inicio, fim, check_in_tardio=True
+        )
+        praticada = contratos.resumo_airbnb(
+            self.unidade_airbnb, inicio, fim, check_in_tardio=True,
+            multa_praticada=Decimal("5.00"),
+        )
+        self.assertEqual(da_unidade["multa"], Decimal("20.00"))
+        self.assertEqual(da_unidade["total"], Decimal("245.00"))
+        self.assertEqual(praticada["total"], Decimal("230.00"))
+
+    def test_resumo_airbnb_datas_invalidas(self):
+        resumo = contratos.resumo_airbnb(
+            self.unidade_airbnb, date(2026, 1, 15), date(2026, 1, 10),
+            check_in_tardio=True,
+        )
+        self.assertIsNone(resumo["total"])
+        self.assertEqual(resumo["multa"], Decimal("20.00"))
+
+
 if __name__ == "__main__":
     unittest.main()

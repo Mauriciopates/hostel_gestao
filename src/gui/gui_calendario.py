@@ -1316,7 +1316,7 @@ class DetalheDiaModal(ctk.CTkToplevel):
         critério de sobreposição da secção 4, aplicado aqui para
         identificar QUAL reserva é a que a célula está a mostrar.
         """
-        ocupacao = _ocupacao_ativa_no_dia(self.uni["id"], self.dia)
+        ocupacao = contratos.ocupacao_airbnb_no_dia(self.uni["id"], self.dia)
 
         corpo_cartao = _criar_cartao(master)
 
@@ -1353,7 +1353,9 @@ class DetalheDiaModal(ctk.CTkToplevel):
             )
             _linha_cartao(corpo_cartao, "Hóspede", nome_cliente)
 
-            noites = (ocupacao["data_fim"] - ocupacao["data_inicio"]).days
+            noites = contratos.noites(
+                ocupacao["data_inicio"], ocupacao["data_fim"]
+            )
             _linha_cartao(
                 corpo_cartao,
                 "Estadia",
@@ -1390,7 +1392,7 @@ class DetalheDiaModal(ctk.CTkToplevel):
 
             if janela is not None:
                 inicio, fim = janela
-                noites = (fim - inicio).days if fim is not None else None
+                noites = contratos.noites(inicio, fim)
 
                 faixa = ctk.CTkFrame(
                     master,
@@ -1693,27 +1695,6 @@ def _linha_cartao(
         font=fonte,
         anchor="w",
     ).pack(side="left", fill="x", expand=True)
-
-
-def _ocupacao_ativa_no_dia(unidade_id, dia):
-    """Devolve a ocupação Airbnb ativa da unidade que cobre 'dia',
-    ou None se a unidade estiver livre.
-
-    Sobreposição no mesmo critério da secção 4: inicio < fim_janela
-    E dia < fim, com fim_janela = dia + 1 dia. Não é uma pergunta
-    que a célula já responda — a célula só sabe o estado ("ocupado"),
-    não qual das reservas é a ativa. Como a unidade Airbnb é
-    indivisível, só pode haver uma ao mesmo tempo, mas o critério
-    continua a ser o de sobreposição (não uma igualdade de datas),
-    para nunca apanhar uma reserva adjacente por engano.
-    """
-    fim_janela = dia + datetime.timedelta(days=1)
-
-    for ocupacao in contratos.listar(unidade_id=unidade_id, tipo="airbnb"):
-        if ocupacao["data_inicio"] < fim_janela and dia < ocupacao["data_fim"]:
-            return ocupacao
-
-    return None
 
 
 def _proxima_disponibilidade_segura(unidade_id, dia):
