@@ -63,13 +63,13 @@ import matplotlib
 
 matplotlib.use("TkAgg")   # ANTES de qualquer outro import do matplotlib
 
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.figure import Figure
-from matplotlib.ticker import FuncFormatter, MaxNLocator
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg  # noqa: E402
+from matplotlib.figure import Figure  # noqa: E402
+from matplotlib.ticker import FuncFormatter, MaxNLocator  # noqa: E402
 
-import customtkinter as ctk
+import customtkinter as ctk  # noqa: E402
 
-from . import tema
+from . import tema  # noqa: E402
 
 
 def _cor_para_matplotlib(cor):
@@ -104,9 +104,8 @@ def _cor_para_matplotlib(cor):
 
 
 # Altura padrão dos gráficos, em pixéis. Só usada quando quem
-# instancia não dá outra — o `gui_dashboard.py` passa uma altura
-# explícita por cada gráfico, para os dois painéis ficarem do
-# mesmo tamanho lado a lado.
+# instancia não dá outra — a vista Financeiro do Dashboard
+# (`dashboard/gui_dash_financeiro.py`) passa uma altura explícita.
 ALTURA_PADRAO = 200
 
 
@@ -120,13 +119,13 @@ class Grafico(ctk.CTkFrame):
 
     O padrão de uso é:
 
-        self.grafico = GraficoOcupacao(self)
+        self.grafico = GraficoReceitaDespesas(self)
         self.grafico.pack(fill="both", expand=True)
         ...
         self.grafico.atualizar(
             rotulos=[...],
-            airbnb=[...],
-            mensal=[...],
+            receita=[...],
+            despesas=[...],
         )
 
     `atualizar` é o único método público que quem chama precisa de
@@ -193,8 +192,8 @@ class Grafico(ctk.CTkFrame):
         a decisão "tema fixo em claro por agora" deixou em aberto.
 
         Não guarda os dados do último `atualizar`: quem chama isto
-        deve ter uma forma de os voltar a passar (no
-        `gui_dashboard.py` é só recalcular, são 7 pontos). Evita
+        deve ter uma forma de os voltar a passar (na vista
+        Financeiro do Dashboard é só recalcular). Evita
         guardar estado que pode ficar desatualizado se os dados
         mudarem entretanto.
         """
@@ -279,9 +278,8 @@ class Grafico(ctk.CTkFrame):
 
         A assinatura é `*args, **kwargs` — não por preguiça, mas
         porque cada subclasse recebe um conjunto diferente de
-        argumentos por nome (`GraficoOcupacao` recebe
-        `rotulos`/`airbnb`/`mensal`; `GraficoRequisicoes` recebe
-        `estados`/`contagens`/`cores`). O Pylance precisa de ver
+        argumentos por nome (`GraficoReceitaDespesas` recebe
+        `rotulos`/`receita`/`despesas`). O Pylance precisa de ver
         que a base aceita "qualquer coisa" para não marcar as
         subclasses como incompatíveis — com só `**kwargs` na base,
         ele assume zero argumentos posicionais e avisa a vermelho
@@ -292,176 +290,6 @@ class Grafico(ctk.CTkFrame):
         raise NotImplementedError(
             "Cada subclasse de Grafico tem de redefinir _desenhar."
         )
-
-
-class GraficoOcupacao(Grafico):
-    """Ocupação diária dos últimos N dias — uma linha por regime.
-
-    Airbnb em azul, Mensal em verde. As duas linhas partilham o
-    mesmo eixo Y (0 a 100%), para a comparação ser visual e
-    direta. Os dias ficam no eixo X, com o dia da semana à frente
-    do dia do mês ("seg 15") — mais útil que só "15" ou só "seg":
-    o dia da semana ajuda a ver o padrão semanal, o dia do mês
-    identifica a data exata.
-    """
-
-    def _desenhar(self, rotulos, airbnb, mensal):
-        """Desenha as duas linhas.
-
-        `rotulos` são as etiquetas do eixo X (já formatadas pelo
-        chamador — este widget não sabe o que é um dia da semana),
-        `airbnb` e `mensal` são listas de floats entre 0 e 1 (já
-        calculados pelo chamador — este widget não sabe o que é
-        uma unidade ocupada). Separar as responsabilidades assim
-        mantém o gráfico genérico: se amanhã quiseres uma linha
-        "Outros", é só acrescentar um `plot` aqui.
-        """
-        x = list(range(len(rotulos)))
-
-        self.ax.plot(
-            x,
-            airbnb,
-            color=tema.AZUL_PRINCIPAL,
-            linewidth=2,
-            marker="o",
-            markersize=4,
-            label="Airbnb",
-            zorder=3,
-        )
-        self.ax.plot(
-            x,
-            mensal,
-            color=tema.VERDE,
-            linewidth=2,
-            marker="o",
-            markersize=4,
-            label="Mensal",
-            zorder=3,
-        )
-
-        # Eixo Y de 0 a 100%, com marcas em 0/25/50/75/100. Sem
-        # intervalo dinâmico, porque a pergunta que este gráfico
-        # responde é "está cheio ou vazio", e isso lê-se melhor
-        # com a escala sempre igual.
-        self.ax.set_ylim(0, 1)
-        self.ax.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
-        self.ax.set_yticklabels(["0%", "25%", "50%", "75%", "100%"])
-
-        self.ax.set_xticks(x)
-        self.ax.set_xticklabels(rotulos, fontsize=8)
-
-        # Legenda sem moldura, encostada ao canto. `frameon=False`
-        # tira-lhe a caixa que o matplotlib põe por omissão — não
-        # combina com o resto do estilo da aplicação.
-        self.ax.legend(
-            loc="upper left",
-            frameon=False,
-            fontsize=9,
-            labelcolor=tema.COR_TEXTO[0],
-            ncols=2,  # lado a lado, ocupa menos altura
-        )
-
-
-class GraficoRequisicoes(Grafico):
-    """Requisições por estado — barras horizontais.
-
-    Ordem das barras é a que o chamador passar (de cima para
-    baixo). No `gui_dashboard.py` a ordem é "pendente, enviada,
-    fechada, rejeitada" — do que exige ação para o que não
-    exige, que é a ordem em que faz sentido olhar para o gráfico.
-
-    Barras horizontais e não verticais: os nomes dos estados
-    ("pendente", "rejeitada") são compridos, e em barras
-    verticais ou ficavam de lado (a obrigar a rodar a cabeça) ou
-    cortados. Na horizontal, o nome fica ao lado da barra e lê-se
-    de imediato.
-
-    Cores: cada barra leva o par (fundo, texto) do seu estado,
-    passado pelo chamador em `cores`. O fundo da barra é a cor
-    principal, e o número no fim leva a cor de texto — a mesma
-    linguagem visual dos chips das tabelas de requisições e
-    devoluções (o `gui_est_comum.CORES_ESTADO`).
-    """
-
-    def _desenhar(self, estados, contagens, cores):
-        """Desenha as barras horizontais.
-
-        `estados` é a lista de nomes (já na ordem certa),
-        `contagens` a lista paralela de números, `cores` um
-        dicionário {estado: (cor_fundo, cor_texto)}.
-
-        As cores que chegam aqui vêm do `gui_est_comum.CORES_ESTADO`
-        — cada valor é `(fundo, texto)`, mas cada um desses dois
-        elementos pode ser:
-        - um par `(claro, escuro)` do `tema.py` (a maioria dos
-          casos), ou
-        - uma string simples (o `AZUL_PRINCIPAL` em "enviada", e
-          as cores de marca em geral).
-
-        O matplotlib quer sempre uma cor só, em string. É a função
-        `_cor_para_matplotlib` que normaliza — ver o docstring dela
-        para o porquê de não bastar um `[0]` cru.
-        """
-        y = list(range(len(estados)))
-
-        fundos = [
-            _cor_para_matplotlib(cores[estado][0]) for estado in estados
-        ]
-
-        barras = self.ax.barh(
-            y,
-            contagens,
-            color=fundos,
-            height=0.6,
-            zorder=3,
-        )
-
-        # Números no fim de cada barra — a cor do texto do estado.
-        # O `max(contagens) * 0.02` é a folga entre a barra e o
-        # número, proporcional ao maior valor, para não colar em
-        # barras curtas nem afastar demasiado em barras longas.
-        # Guardado numa variável local porque `contagens` pode
-        # ser vazia (o chamador já garante que não, mas evita
-        # rebentar num `max()` de lista vazia).
-        if contagens:
-            margem = max(contagens) * 0.02
-        else:
-            margem = 0
-
-        for barra, estado, valor in zip(barras, estados, contagens):
-            self.ax.text(
-                barra.get_width() + margem,
-                barra.get_y() + barra.get_height() / 2,
-                str(valor),
-                va="center",
-                ha="left",
-                fontsize=10,
-                color=_cor_para_matplotlib(cores[estado][1]),
-                fontweight="bold",
-            )
-
-        self.ax.set_yticks(y)
-        self.ax.set_yticklabels(estados, fontsize=9)
-
-        # Sem valores no eixo X — o número ao lado da barra já
-        # diz tudo, e os ticks do X só acrescentavam ruído.
-        self.ax.set_xticks([])
-
-        # Tira a linha do eixo X (a que fica em baixo do gráfico
-        # quando há barras horizontais): sem ela, o gráfico lê-se
-        # como uma lista de barras soltas, não como um eixo com
-        # valores.
-        self.ax.spines["bottom"].set_visible(False)
-
-        # Margem à direita para os números não encostarem à borda.
-        if contagens and max(contagens) > 0:
-            self.ax.set_xlim(0, max(contagens) * 1.15)
-
-        # Inverte o eixo Y para o primeiro da lista ficar em cima.
-        if len(estados) > 1:
-            self.ax.set_ylim(len(estados) - 0.5, -0.5)
-        else:
-            self.ax.set_ylim(0.5, -0.5)
 
 
 class GraficoReceitaDespesas(Grafico):

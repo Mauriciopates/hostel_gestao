@@ -212,17 +212,6 @@ def primeiro_dia_do_mes(d):
     return date(d.year, d.month, 1)
 
 
-def ultimo_dia_do_mes(d):
-    """Último dia do mês de `d`.
-
-    Usa o truque do `date.replace(day=28) + timedelta(days=4) - timedelta(days=...)`
-    em vez de importar `calendar.monthrange` só para isto — é mais
-    curto e faz o mesmo.
-    """
-    proximo_mes = d.replace(day=28) + timedelta(days=4)
-    return proximo_mes - timedelta(days=proximo_mes.day)
-
-
 def intervalo_do_atalho(atalho, hoje=None):
     """Converte um atalho de período no par `(data_inicio, data_fim)`
     que o `financeiro.py` espera.
@@ -311,7 +300,8 @@ def mapa_por_id(registo_lista):
     Chamado no início de cada relatório que precise:
       - unidades:   `mapa_por_id(unidades.listar(incluir_inativas=True))`
       - clientes:   `mapa_por_id(clientes.listar(incluir_inativos=True))`
-      - produtos:   `mapa_por_id(estoque.listar_produtos(incluir_inativos=True))`
+      - produtos:
+        `mapa_por_id(estoque.listar_produtos(incluir_inativos=True))`
       - responsáveis: `mapa_por_id(responsaveis.listar(incluir_inativos=True))`
     """
     return {r["id"]: r for r in registo_lista}

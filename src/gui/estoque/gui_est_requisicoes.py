@@ -72,11 +72,10 @@ CORREÇÃO 13/09/2026 — três bugs apanhados ao testar o ecrã:
     pelo `_AcoesRequisicaoFechadaModal` (só o autor pode reportar
     sobra). Sem ele, abrir o Gerir de uma requisição pendente
     rebentava com `AttributeError`.
-  * `_pode_reportar_devolucao(requisicao)` — usado pelo
-    `_AcoesRequisicaoFechadaModal` para decidir se mostra o botão
-    "Reportar sobra". Sem ele, abrir o Gerir de uma requisição
-    fechada rebentava com `AttributeError` (bug apanhado pelo
-    aluno, 13/09/2026).
+  * `_pode_reportar_devolucao(requisicao)` — REMOVIDO a
+    28/09/2026: desde a Fase 4 o `_AcoesRequisicaoFechadaModal`
+    decide sozinho (autor OU Admin/Master, e itens por devolver)
+    e já não o chamava.
 
   Os dois modais chamavam estes métodos à `tela_lista` desde o
   primeiro dia, mas nunca tinham sido escritos — só rebentaram
@@ -200,7 +199,9 @@ class ListaRequisicoes(ctk.CTkFrame):
             text_color=tema.AZUL_PRINCIPAL,
             hover_color=tema.COR_BORDA,
             command=lambda: controlador.mostrar_frame(
-                __import__("gui.estoque.gui_est_hub", fromlist=["EcraStock"]).EcraStock
+                __import__(
+                    "gui.estoque.gui_est_hub", fromlist=["EcraStock"]
+                ).EcraStock
             ),
         ).pack(side="left")
 
@@ -278,28 +279,6 @@ class ListaRequisicoes(ctk.CTkFrame):
             return False
 
         return ativo["id"] == requisicao["responsavel_id"]
-
-    def _pode_reportar_devolucao(self, requisicao):
-        """Diz se ainda faz sentido mostrar "Reportar sobra" a esta
-        requisição — só quando é o autor a olhar para ela E ainda há
-        itens por devolver.
-
-        A segunda condição usa `gui_est_comum.itens_disponiveis_devolucao`,
-        que é a mesma função que o `ReportarDevolucaoModal` usa para
-        montar a lista de produtos — as duas leem a mesma regra, por
-        isso nunca podem discordar.
-
-        Requisições que não estão fechadas devolvem False (a
-        devolução só nasce de uma requisição fechada), mas isso não
-        devia acontecer aqui — este modal só é aberto nesse estado.
-        """
-        if requisicao["estado"] != "fechada":
-            return False
-
-        if not self._e_o_autor(requisicao):
-            return False
-
-        return bool(_itens_disponiveis_devolucao(requisicao["id"]))
 
     def _recarregar(self):
         """Limpa e volta a desenhar a tabela de requisições.
@@ -729,9 +708,7 @@ class _AcoesRequisicaoFechadaModal(ctk.CTkToplevel):
         ).pack(pady=(0, 14))
 
         # FASE 4 — autor OU Admin/Master podem reportar sobra. Além
-        # disso, é preciso haver itens por devolver (a regra vive em
-        # `_pode_reportar_devolucao`, que já tem a verificação do
-        # autor — por isso passamos a decidir aqui, e não lá dentro).
+        # disso, é preciso haver itens por devolver.
         tipo_utilizador = sessao.tipo_utilizador_ativo()
         e_administrativo = tipo_utilizador in ("Admin", "Master")
         e_o_autor = tela_lista._e_o_autor(requisicao)
@@ -1221,8 +1198,8 @@ class ReportarDevolucaoModal(ctk.CTkToplevel):
     def _sem_itens(self):
         """Chega aqui só se a sobra for reportada por outra via
         (ex.: CLI) entre abrir a lista e clicar em Gerir — a
-        condição já foi checada em `_pode_reportar_devolucao` antes
-        de este popup poder abrir.
+        condição já foi checada no `_AcoesRequisicaoFechadaModal`
+        antes de este popup poder abrir.
         """
         ctk.CTkLabel(
             self,
@@ -2044,7 +2021,7 @@ class RolLavanderiaModal(ctk.CTkToplevel):
             return
 
         largura, altura = 760, 680
-        
+
         self.title("Rol de Lavanderia")
         self.geometry(f"{largura}x{altura}")
         self.resizable(False, False)
