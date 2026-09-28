@@ -564,7 +564,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         Se o preço praticado é inferior ao calculado: abre o
         `_AlterarValorCalculadoModal` como sub-confirmação. Só se o
         utilizador confirmar é que `contratos.registar_airbnb` é
-        chamado (o modal devolve o responsável e o motivo).
+        chamado (o modal devolve o responsável do desconto).
 
         Caso contrário: segue direto para
         `contratos.registar_airbnb`.
@@ -610,8 +610,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         # `_ConfirmacaoAirbnb`. Esse modal mostra a Zona 2 (Rol de
         # Lavanderia) e, se houver desconto, também a Zona 1. Só
         # quando o utilizador clicar "Confirmar" é que a reserva é
-        # gravada, já com o responsável/motivo do desconto (se
-        # aplicável).
+        # gravada, já com o responsável do desconto (se aplicável).
         _ConfirmacaoAirbnb(
             self,
             unidade=self.unidade_selecionada,
@@ -637,7 +636,6 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         data_fim,
         preco_praticado,
         responsavel_desconto_preco_id="",
-        motivo_preco="",
         check_in_tardio=False,
         hora_chegada="",
         multa_praticada=None,
@@ -647,7 +645,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
 
         Chamado pelo `_ConfirmacaoAirbnb` (via `ao_confirmar`) quando
         o utilizador clica "Confirmar". Os parâmetros do desconto
-        (`responsavel_desconto_preco_id`, `motivo_preco`) vêm do
+        (`responsavel_desconto_preco_id`) vêm do
         formulário da Zona 1 desse modal; se não houver desconto, o
         modal chama o método com os valores por omissão.
         """

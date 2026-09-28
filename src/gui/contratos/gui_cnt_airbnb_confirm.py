@@ -24,7 +24,9 @@ _colocar_no_topo = componentes.colocar_no_topo
 # - Zona 1 (condicional): só aparece quando o preço praticado é
 #   inferior ao calculado. Reaproveita o desenho do antigo
 #   `_AlterarValorCalculadoModal` (calculado / praticado / diferença
-#   + motivo + responsável obrigatório).
+#   + responsável obrigatório). O campo "Motivo" saiu a 28/09/2026:
+#   era pedido mas nunca gravado — a decisão 18 identifica o
+#   desconto pelo responsável que o autoriza, não por texto livre.
 #
 # - Zona 2 (sempre): Rol de Lavanderia pré-preenchido, só de leitura,
 #   com os produtos e quantidades calculados a partir dos lugares
@@ -187,8 +189,8 @@ class _ConfirmacaoAirbnb(ctk.CTkToplevel):
         ao calculado).
 
         Reaproveita o desenho do antigo `_AlterarValorCalculadoModal`:
-        cartão com calculado / praticado / diferença, mais o motivo
-        (opcional) e o responsável do desconto (obrigatório).
+        cartão com calculado / praticado / diferença, mais o
+        responsável do desconto (obrigatório).
         """
         ctk.CTkLabel(
             master,
@@ -230,22 +232,6 @@ class _ConfirmacaoAirbnb(ctk.CTkToplevel):
             cor_valor=tema.TEXTO_ERRO,
         )
 
-        # ---- Motivo (opcional) ----
-        ctk.CTkLabel(
-            corpo,
-            text="Motivo (opcional)",
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=11),
-            anchor="w",
-        ).pack(fill="x", pady=(12, 2))
-
-        self.campo_motivo = ctk.CTkEntry(
-            corpo,
-            corner_radius=tema.RAIO_CAMPO,
-            placeholder_text="ex.: desconto acordado com cliente habitual",
-        )
-        self.campo_motivo.pack(fill="x", pady=(0, 8))
-
         # ---- Responsável do desconto (obrigatório) ----
         ctk.CTkLabel(
             corpo,
@@ -253,7 +239,7 @@ class _ConfirmacaoAirbnb(ctk.CTkToplevel):
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=11),
             anchor="w",
-        ).pack(fill="x", pady=(4, 2))
+        ).pack(fill="x", pady=(12, 2))
 
         self.responsaveis_disponiveis = responsaveis.listar()
         nomes = ["— Escolher —"] + [
@@ -621,11 +607,8 @@ class _ConfirmacaoAirbnb(ctk.CTkToplevel):
                     "Escolhe o responsável que autoriza o desconto."
                 )
                 return
-
-            motivo = self.campo_motivo.get().strip()
         else:
             responsavel_id = ""
-            motivo = ""
 
         # Guarda referências antes de fechar — o `ao_confirmar` corre
         # já depois do `destroy()`, e o `self` continua válido em
@@ -636,7 +619,6 @@ class _ConfirmacaoAirbnb(ctk.CTkToplevel):
             "data_fim": self.data_fim,
             "preco_praticado": self.preco_praticado,
             "responsavel_desconto_preco_id": responsavel_id,
-            "motivo_preco": motivo,
             "check_in_tardio": self.check_in_tardio,
             "hora_chegada": self.hora_chegada,
             "multa_praticada": self.multa_praticada,

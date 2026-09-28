@@ -467,9 +467,11 @@ class EditarReservaAirbnbModal(ctk.CTkToplevel):
     """Popup de edição de uma reserva Airbnb — segue o modelo do
     `NovaReservaAirbnb` (cartões com grelha rótulo → campo), mas só
     com os campos que `contratos.atualizar_airbnb` aceita: Preço
-    praticado (e motivo + responsável do desconto), e — só quando a
-    reserva teve check-in tardio — Multa praticada (e motivo +
-    responsável do desconto da multa).
+    praticado (e responsável do desconto), e — só quando a reserva
+    teve check-in tardio — Multa praticada (e responsável do desconto
+    da multa). O campo "Motivo da diferença" saiu a 28/09/2026: era
+    pedido mas nunca gravado (a reserva Airbnb não tem onde o
+    guardar; a decisão 18 identifica o desconto pelo responsável).
 
     Este é o "Editar" para corrigir uma reserva já criada. Não
     confundir com o `_AlterarValorCalculadoModal`, que é a
@@ -542,13 +544,6 @@ class EditarReservaAirbnbModal(ctk.CTkToplevel):
             0, f"{self.airbnb['preco_praticado']:.2f}"
         )
         self.campo_preco_praticado.grid(row=1, column=1, sticky="ew", pady=6)
-
-        self._linha(corpo, 2, "Motivo da diferença")
-        self.campo_motivo_preco = ctk.CTkEntry(
-            corpo,
-            placeholder_text="opcional — só se o preço for diferente",
-        )
-        self.campo_motivo_preco.grid(row=2, column=1, sticky="ew", pady=6)
 
         self._linha(corpo, 3, "Responsável do desconto")
         self.combo_responsavel_preco = componentes.Seletor(
