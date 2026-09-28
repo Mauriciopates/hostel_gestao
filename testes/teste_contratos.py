@@ -48,15 +48,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from testes.apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest  # noqa: E402
 
-import clientes
-import config
-import contratos
-import propriedades
-import repositorio
-import responsaveis
-import unidades
+import clientes  # noqa: E402
+import config  # noqa: E402
+import configuracoes  # noqa: E402
+import contratos  # noqa: E402
+import propriedades  # noqa: E402
+import repositorio  # noqa: E402
+import responsaveis  # noqa: E402
+import unidades  # noqa: E402
 
 
 class BaseContratosTest(BaseMySQLTest):
@@ -1278,7 +1279,17 @@ class TesteSobreposicao(unittest.TestCase):
         )
 
 
-class TesteAvisosEncerramento(unittest.TestCase):
+class TesteAvisosEncerramento(BaseMySQLTest):
+    """`avisos_encerramento` lê a duração mínima e o aviso prévio das
+    Configurações. 28/09/2026: era um `unittest.TestCase` simples —
+    lia a base configurada (a REAL) e, sem a seed das configurações,
+    rebentava com "chave não existe". Passa a usar a base de teste
+    e a semear as configurações antes de cada teste.
+    """
+
+    def setUp(self):
+        super().setUp()
+        configuracoes.garantir_seed()
 
     def test_duracao_acima_do_minimo_nao_levanta_aviso(self):
         inicio = date.today() - timedelta(days=365)
