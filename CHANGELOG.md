@@ -3,6 +3,93 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [1.7.0] — 2026-09-28
+
+Regras de negócio nos módulos (branch `regras`, commit 4aad095). A GUI
+passa a só ler os campos, converter o texto, chamar o módulo e mostrar
+o resultado: nenhum ecrã chama funções privadas (`modulo._x`) nem faz
+cálculos de domínio. Base para a Fase 3 (Django reutiliza os módulos)
+e primeiro passo antes da 2.0.0.
+
+### Adicionado
+
+- **`financeiro.receita_por_tipo(inicio, fim)`** — receita do período
+  separada em mensal e Airbnb, pela mesma função central do motor (a
+  soma das duas é sempre a `receita` de `resultado`).
+
+- **`contratos.py`** — funções públicas que antes viviam nos ecrãs:
+  - `listar(..., data_inicio, data_fim)`: filtro por período (fim
+    exclusivo, contrato sem fim conta como em vigor; exige as duas
+    datas);
+  - `duracao_meses(ocupacao, ate=None)`, também usada por
+    `avisos_encerramento`;
+  - `encerramentos_fora_das_regras()`: contratos mensais encerrados
+    com duração abaixo do mínimo e/ou aviso prévio insuficiente;
+  - `situacao_lugar(lugar, ocupacoes_mensais, data)`: estado
+    livre / reservado / parcial / ocupado, ocupantes e próxima
+    reserva;
+  - `ocupantes_mensal(unidade_id, lugar_id=None)`: a contagem da
+    regra de capacidade, agora pública;
+  - `ocupacao_airbnb_no_dia(unidade_id, dia)` e `noites(inicio, fim)`;
+  - `resumo_airbnb(...)`: noites, preço calculado, preço por noite,
+    multa efetiva e total da nova reserva, sem gravar nada.
+
+- **`despesas.py`** — `DIAS_AVISO_PRAZO` (7), `dias_para_vencimento`
+  e `situacao_prazo` (sem prazo / vencida / hoje / próximo / longe).
+
+- **`validacoes.email_valido`** — o formato do email passa a ser
+  validado em `validar_cliente`, por isso a CLI aplica a mesma regra
+  que a GUI.
+
+- **Testes** — 22 novos: `TesteRegrasV17` (teste_contratos),
+  `TestePrazo` (teste_despesas), `TesteEmail` (teste_validacoes) e 4
+  de `receita_por_tipo` (teste_financeiro).
+
+### Alterado
+
+- **Relatórios** — "Resultado" usa `receita_por_tipo` (saem os
+  cálculos com 6 funções privadas do `financeiro`); "Ocupações",
+  "Contratos mensais" e "Reservas Airbnb" filtram o período no
+  `contratos.listar`; "Encerramentos" usa
+  `encerramentos_fora_das_regras` e `duracao_meses`.
+- **Planta de lugares** (`gui_unidades.py`) — estado de cada lugar
+  vem de `contratos.situacao_lugar`.
+- **Novo contrato mensal** — ocupantes por lugar vêm de
+  `contratos.ocupantes_mensal`.
+- **Calendário** e **confirmação da reserva** — reserva do dia e
+  número de noites vêm do `contratos.py`.
+- **Nova reserva Airbnb** — o resumo (noites, multa, total) vem de
+  `contratos.resumo_airbnb`; o ecrã só converte o texto da multa.
+- **Aprovações de despesas** — etiquetas de prazo a partir de
+  `despesas.situacao_prazo`.
+- **Clientes** — o erro de email inválido vem de
+  `clientes.criar`/`atualizar`.
+- `config.VERSAO`: 1.6.0 → 1.7.0.
+
+### Removido
+
+- Da GUI: `_ocupacao_toca_periodo` (gui_relat_contratos),
+  `_receita_mensal_do_periodo`/`_receita_airbnb_do_periodo`
+  (gui_relat_financeiro), `_email_valido`/`_PADRAO_EMAIL`
+  (gui_clientes), `_ocupantes_atuais`/`_proxima_reserva`/
+  `_estado_ocupacao` (gui_unidades), `_ocupacao_ativa_no_dia`
+  (gui_calendario) e `_DIAS_AVISO_PRAZO` (gui_desp_aprovacao).
+
+### Notas
+
+- Bateria completa no Windows: 1110 testes, OK
+  (`HOSTEL_SERVIDOR=local`). Com a VM como servidor ativo e sem
+  túnel, os testes falham na ligação (1 erro por classe) — correr
+  sempre com o servidor local.
+- `pyflakes`, `pycodestyle` (79 col.) e `pyright` limpos nos
+  ficheiros alterados.
+- Fica na GUI, por ser apresentação: cores e textos de cada estado,
+  contagens dos cartões do Dashboard, totais das tabelas, datas por
+  omissão e navegação do calendário.
+- Em aberto: "descrição obrigatória" das despesas só é exigida pela
+  GUI (o módulo aceita vazia).
+- Sem mudanças de esquema.
+
 ## [1.6.0] — 2026-09-28
 
 Versão de estabilização da Fase 2 (21/09 a 28/09/2026, 32 commits
