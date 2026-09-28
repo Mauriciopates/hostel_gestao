@@ -246,6 +246,11 @@ class LoginModal(ctk.CTkToplevel):
         # Aplicacao vai ser destruída.
         self.sair_pedido = False
 
+        # 28/09/2026 — True quando entrou com a password de fábrica.
+        # Lida pela `Aplicacao`, que obriga a trocá-la antes de
+        # desenhar o que quer que seja.
+        self.password_padrao = False
+
         self.title("Hostel Clean — Entrar")
         largura = 380
         altura = 400
@@ -397,6 +402,8 @@ class LoginModal(ctk.CTkToplevel):
             self.campo_password.delete(0, "end")
             self.campo_password.focus_set()
             return
+
+        self.password_padrao = utilizadores.usa_password_padrao(password)
 
         self.grab_release()
         self.destroy()
@@ -618,6 +625,118 @@ class TermoModal(ctk.CTkToplevel):
         self.destroy()
 
 
+class TrocarPasswordModal(ctk.CTkToplevel):
+    """Obriga a trocar a password de fábrica (28/09/2026).
+
+    Aparece a seguir ao login quando a password usada foi a
+    `config.PASSWORD_PADRAO` — a que a instalação e o "Começar do
+    zero" deixam ao Master, e que está escrita no código e no
+    manual. Bloqueante como o `TermoModal`: não fecha pelo "X"; ou
+    troca, ou sai.
+
+    A regra (política, "não pode ser a de fábrica") vive em
+    `utilizadores.alterar_password`; aqui só se recolhe e mostra o
+    erro. `self.trocada` é lido pela `Aplicacao` depois do
+    `wait_window`.
+    """
+
+    _LARGURA = 420
+
+    def __init__(self, master, responsavel):
+        super().__init__(master)
+        self.protocol("WM_DELETE_WINDOW", lambda: None)
+
+        self.trocada = False
+        self.responsavel = responsavel
+
+        self.title("Hostel Clean — Nova password")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(master)
+
+        corpo = componentes.Contentor(self)
+        corpo.pack(fill="both", expand=True, padx=24, pady=22)
+
+        componentes.Rotulo(corpo, "Defina uma password nova", "titulo").pack(
+            fill="x"
+        )
+        componentes.Rotulo(
+            corpo,
+            "Entrou com a password de fábrica. Por segurança, escolha "
+            "uma password só sua antes de continuar (mínimo de 8 "
+            "caracteres).",
+            "secundario",
+            wraplength=self._LARGURA - 50,
+            justify="left",
+        ).pack(fill="x", pady=(6, 16))
+
+        componentes.Rotulo(corpo, "Password nova", "secundario").pack(
+            fill="x"
+        )
+        self.campo_nova = componentes.CampoTexto(corpo, secreto=True)
+        self.campo_nova.pack(fill="x", pady=(2, 10))
+
+        componentes.Rotulo(
+            corpo, "Confirmar password nova", "secundario"
+        ).pack(fill="x")
+        self.campo_confirmar = componentes.CampoTexto(corpo, secreto=True)
+        self.campo_confirmar.pack(fill="x", pady=(2, 6))
+
+        self.erro = componentes.Rotulo(
+            corpo, "", "secundario", cor=tema.TEXTO_ERRO,
+            wraplength=self._LARGURA - 50, justify="left",
+        )
+        self.erro.pack(fill="x", pady=(0, 10))
+
+        rodape = componentes.Contentor(corpo)
+        rodape.pack(fill="x")
+        componentes.Botao(rodape, "Sair", self.destroy, "contorno").pack(
+            side="left"
+        )
+        componentes.Botao(
+            rodape, "Guardar e entrar", self._gravar, "primario"
+        ).pack(side="right")
+
+        self.campo_confirmar.bind("<Return>", lambda _e: self._gravar())
+
+        self.update_idletasks()
+        altura = round(self.winfo_reqheight() / componentes.escala(self))
+        componentes.centrar_no_ecra(self, self._LARGURA, altura)
+
+        self.after(
+            10,
+            lambda: (
+                self.lift(),
+                self.focus_force(),
+                self.grab_set(),
+                self.campo_nova.focus_set(),
+            ),
+        )
+
+    def _gravar(self):
+        nova = self.campo_nova.get()
+
+        if nova != self.campo_confirmar.get():
+            self.erro.configure(
+                text="A password nova e a confirmação não coincidem."
+            )
+            return
+
+        try:
+            utilizadores.alterar_password(
+                self.responsavel["id"],
+                config.PASSWORD_PADRAO,
+                nova,
+                self.responsavel,
+            )
+        except ValueError as erro:
+            self.erro.configure(text=str(erro))
+            return
+
+        self.trocada = True
+        self.destroy()
+
+
 class Aplicacao(ctk.CTk):
     """Janela principal da aplicação.
 
@@ -692,6 +811,14 @@ class Aplicacao(ctk.CTk):
                 "Termo não aceite — acesso recusado, responsavel_id=%s",
                 ativo["id"] if ativo else None,
             )
+            self.terminar_pedido = True
+            componentes.cancelar_agendamentos(self)
+            self.destroy()
+            return
+
+        # 28/09/2026 — password de fábrica: tem de ser trocada antes
+        # de entrar. Quem sai sem trocar não entra.
+        if popup_login.password_padrao and not self._trocar_password():
             self.terminar_pedido = True
             componentes.cancelar_agendamentos(self)
             self.destroy()
@@ -823,6 +950,19 @@ class Aplicacao(ctk.CTk):
         self.wait_window(popup)
 
         return popup.aceite
+
+    def _trocar_password(self):
+        """True se a password de fábrica foi trocada; False se a
+        pessoa saiu sem trocar."""
+        responsavel = sessao.obter_responsavel_ativo()
+
+        if responsavel is None:
+            return False
+
+        popup = TrocarPasswordModal(self, responsavel)
+        self.wait_window(popup)
+
+        return popup.trocada
 
     def mostrar_frame(self, classe_frame, **kwargs):
         """Troca o ecrã atual pelo indicado em classe_frame."""

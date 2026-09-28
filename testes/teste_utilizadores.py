@@ -47,11 +47,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from testes.apoio_BD import BaseMySQLTest
+from testes.apoio_BD import BaseMySQLTest  # noqa: E402
 
-import repositorio
-import responsaveis
-import utilizadores
+import config  # noqa: E402
+import repositorio  # noqa: E402
+import responsaveis  # noqa: E402
+import utilizadores  # noqa: E402
 
 
 # ---------------------------------------------------------------------
@@ -429,6 +430,44 @@ class TesteAlterarPassword(BaseMySQLTest):
 # ---------------------------------------------------------------------
 # 4. Verificar permissão
 # ---------------------------------------------------------------------
+
+
+class TestePasswordPadrao(BaseMySQLTest):
+    """Password de fábrica (28/09/2026): o login deteta-a para
+    obrigar a trocar, e ninguém pode voltar a escolhê-la."""
+
+    def test_deteta_a_password_de_fabrica(self):
+        self.assertTrue(
+            utilizadores.usa_password_padrao(config.PASSWORD_PADRAO)
+        )
+
+    def test_outra_password_nao_e_a_de_fabrica(self):
+        self.assertFalse(utilizadores.usa_password_padrao("outra12345"))
+        self.assertFalse(utilizadores.usa_password_padrao(""))
+        self.assertFalse(utilizadores.usa_password_padrao(None))
+
+    def test_trocar_da_password_de_fabrica_para_outra(self):
+        master = _criar_master()
+        _definir_credencial(
+            master, "mestre", autor=master,
+            password=config.PASSWORD_PADRAO,
+        )
+
+        utilizadores.alterar_password(
+            master["id"], config.PASSWORD_PADRAO, "minhanova123", master
+        )
+
+        _, motivo = utilizadores.autenticar("mestre", "minhanova123")
+        self.assertEqual(motivo, utilizadores.MOTIVO_OK)
+
+    def test_nao_pode_escolher_a_password_de_fabrica(self):
+        master = _criar_master()
+        _definir_credencial(master, "mestre", autor=master)
+
+        with self.assertRaises(ValueError):
+            utilizadores.alterar_password(
+                master["id"], "password123", config.PASSWORD_PADRAO, master
+            )
 
 
 class TesteVerificarPermissao(BaseMySQLTest):
@@ -859,6 +898,7 @@ class TesteAlterarUsername(BaseMySQLTest):
 
         registo, motivo = utilizadores.autenticar("diego.s", "password123")
         self.assertEqual(motivo, utilizadores.MOTIVO_OK)
+        assert registo is not None
         self.assertEqual(registo["id"], alvo["id"])
 
         _, motivo = utilizadores.autenticar("diego", "password123")

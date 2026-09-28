@@ -33,10 +33,12 @@ responsável ativo) e validam antes de agir.
 """
 
 import hashlib
+import hmac
 import logging
 import os
 from datetime import date, datetime
 
+import config
 import repositorio
 
 logger = logging.getLogger(__name__)
@@ -124,9 +126,11 @@ def _validar_password(password, hash_guardado):
     cobre o caso do responsável que ainda não tem credencial
     definida (password_hash = "").
 
-    Comparação em tempo constante (`hmac.compare_digest`, via o
-    próprio `==` do bytes) — não é essencial neste projeto, mas é
-    o hábito certo a manter para quando migrar para web.
+    Comparação em tempo constante (`hmac.compare_digest`) — um `==`
+    pára no primeiro byte diferente, e o tempo que demora dá pistas
+    sobre o hash. Não é essencial numa aplicação de secretária, mas
+    é o hábito certo para quando migrar para web. (Até 28/09/2026 o
+    comentário dizia isto mas o código usava `==`.)
     """
     if not hash_guardado or hash_guardado.count("$") != 3:
         return False
@@ -150,7 +154,22 @@ def _validar_password(password, hash_guardado):
         iteracoes,
     )
 
-    return hash_calculado == hash_esperado
+    return hmac.compare_digest(hash_calculado, hash_esperado)
+
+
+def usa_password_padrao(password):
+    """True se `password` é a password de fábrica
+    (`config.PASSWORD_PADRAO`).
+
+    A instalação (`bootstrap.py`) e o "Começar do zero"
+    (`sistema.py`) deixam o Master com esta password, que está
+    escrita no código e no manual. O login usa esta função para
+    obrigar a trocá-la no primeiro acesso (28/09/2026).
+    """
+    return hmac.compare_digest(
+        (password or "").encode("utf-8"),
+        config.PASSWORD_PADRAO.encode("utf-8"),
+    )
 
 
 def _validar_politica_password(password):
@@ -476,6 +495,13 @@ def alterar_password(responsavel_id, password_atual, password_nova, autor):
     autor = _validar_autor(autor, responsavel_id)
 
     _validar_politica_password(password_nova)
+
+    # A password de fábrica é pública (código e manual): trocar para
+    # ela seria o mesmo que não ter password.
+    if usa_password_padrao(password_nova):
+        raise ValueError(
+            "A password nova não pode ser a password de fábrica."
+        )
 
     alvo = repositorio.procurar_responsavel(responsavel_id)
 

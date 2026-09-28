@@ -2135,7 +2135,7 @@ class BlocoTermo(ctk.CTkFrame):
     def esta_aceite(self):
         """True se a caixa estiver marcada."""
         return bool(self.aceite.get())
-    
+
 # =====================================================================
 # Helpers visuais genéricos — partilhados por todos os ecrãs
 #
@@ -2440,6 +2440,7 @@ def formatar_valor(valor):
     texto = texto.replace(",", "X").replace(".", ",").replace("X", ".")
 
     return f"{texto} €"
+
 
 def cancelar_agendamentos(janela):
     """Cancela os `after(...)` pendentes antes de destruir a janela.
@@ -2964,3 +2965,19 @@ def fila_de_cartoes(master, colunas):
         fila.grid_columnconfigure(coluna, weight=1, uniform="cartoes")
 
     return fila
+
+
+class CampoTexto(ctk.CTkEntry):
+    """Campo de texto com o estilo da aplicação.
+
+    `secreto=True` esconde o que se escreve (passwords).
+    """
+
+    def __init__(self, master, secreto=False, **kwargs):
+        kwargs.setdefault("corner_radius", tema.RAIO_CAMPO)
+        kwargs.setdefault("height", 32)
+
+        if secreto:
+            kwargs.setdefault("show", "•")
+
+        super().__init__(master, **kwargs)
