@@ -472,7 +472,11 @@ class LoginModal(ctk.CTkToplevel):
         self.sair_pedido = True
         self.grab_release()
         componentes.cancelar_agendamentos(self)
-        self.master.destroy()
+        # v1.8.0: destruir DEPOIS de o clique terminar. Destruído aqui
+        # dentro, o Tk apagava o próprio botão "Sair" enquanto ainda
+        # corria o comando dele — "TclError: can't delete Tcl command"
+        # e a janela ficava em branco, pendurada.
+        self.master.after(0, self.master.destroy)
 
 
 class TermoModal(ctk.CTkToplevel):

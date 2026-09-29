@@ -149,10 +149,20 @@ def guardar(id_servidor, servidor, password=None):
 
 
 def remover(id_servidor):
+    """Remove um servidor da lista (e a password do cofre).
+
+    Só recusa o servidor EM USO NESTE ARRANQUE — que pode não ser o
+    gravado como ativo, quando se arranca com HOSTEL_SERVIDOR=... (é
+    assim que se sai de um servidor sem utilizadores). Se o removido
+    era o gravado como ativo, o ativo passa a ser o que está em uso.
+    """
     dados = carregar()
-    if dados.get("ativo") == id_servidor:
+    em_uso, _ = servidor_ativo()
+    if id_servidor == em_uso:
         raise ErroServidor("Não se pode remover o servidor que está em uso.")
     dados["servidores"].pop(id_servidor, None)
+    if dados.get("ativo") == id_servidor:
+        dados["ativo"] = em_uso
     _gravar(dados)
     try:
         _cofre().delete_password(SERVICO_COFRE, _chave_cofre(id_servidor))
