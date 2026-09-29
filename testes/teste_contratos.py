@@ -45,6 +45,7 @@ import unittest
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
@@ -1461,10 +1462,9 @@ class TesteRegrasV17(BaseContratosTest):
         )
         uid = self.unidade_airbnb["id"]
 
-        self.assertEqual(
-            contratos.ocupacao_airbnb_no_dia(uid, date(2026, 1, 14))["id"],
-            ocupacao["id"],
-        )
+        no_dia = contratos.ocupacao_airbnb_no_dia(uid, date(2026, 1, 14))
+        self.assertIsNotNone(no_dia)
+        self.assertEqual(cast(dict, no_dia)["id"], ocupacao["id"])
         # O dia de saída já está livre.
         self.assertIsNone(
             contratos.ocupacao_airbnb_no_dia(uid, date(2026, 1, 15))

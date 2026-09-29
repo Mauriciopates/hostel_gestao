@@ -112,13 +112,10 @@ def comecar_do_zero(autor, password):
     # o sistema vazio e sem Master — fica registada com o caminho do
     # backup a restaurar, e a exceção continua a subir.
     try:
-        # 2b. Reiniciar os contadores de IDs.
-        #     Sem isto, o Master criado a seguir seria RES-007 (ou o
-        #     número onde o contador estava), não RES-001. Tem de vir
-        #     ANTES de criar o Master: o `responsaveis.criar` chama o
-        #     `proximo_id("RES")` e lê o contador — se ainda estivesse
-        #     alto, não reiniciava nada.
-        _reiniciar_contadores()
+        # 2b. (v1.8.0) Já não há contadores para reiniciar: o
+        #     `proximo_id` calcula o número a partir do MAX(id) de
+        #     cada tabela, e o TRUNCATE do passo 2 deixou-as vazias —
+        #     o Master criado a seguir é RES-001 sem mais nada.
 
         # 3. Criar o Master padrão
         master = responsaveis.criar(
@@ -218,28 +215,3 @@ def _definir_credencial_inicial(responsavel_id):
             "password_alterada_em": agora,
         },
     )
-
-
-def _reiniciar_contadores():
-    """Zera o ficheiro de contadores de IDs.
-
-    Usada só pelo `comecar_do_zero`. Depois de o reset apagar todos
-    os registos, o próximo ID gerado por qualquer `proximo_id(...)`
-    deve voltar a ser `XXX-001` (ou `XXX-0001`, conforme o prefixo)
-    em vez de continuar a contar de onde estava.
-
-    Não há risco de colisão: o passo 2 (`apagar_tudo`) já limpou as
-    tabelas, por isso não existe nenhum registo antigo para colidir
-    com os IDs novos.
-
-    O ficheiro é escrito com `{}` — um dicionário vazio. O
-    `_carregar_contadores` do `repositorio.py` já trata o caso de
-    o ficheiro não existir ou estar vazio, devolvendo `{}` na mesma.
-    Por isso, escrever `{}` é equivalente a apagá-lo.
-    """
-    import json
-    from pathlib import Path
-
-    ficheiro = Path(config.DIR_DADOS) / "contadores.json"
-    ficheiro.write_text(json.dumps({}), encoding="utf-8")
-    logger.info("Contadores de ID reiniciados")

@@ -19,9 +19,9 @@ lugares), responsaveis, clientes, contratos (ocupacoes,
 ocupacoes_mensal, ocupacoes_airbnb), estoque (produtos, movimentos,
 requisicoes, itens_requisicao, devolucoes, itens_devolucao).
 
-`dados/contadores.json` continua ativo — `proximo_id()` ainda lê e
-grava ali (decisão 1: é uma operação atómica sobre um ficheiro
-próprio, não sobre a estrutura de dados que foi retirada).
+v1.8.0 (decisão D4): o `dados/contadores.json` deixou de existir —
+`proximo_id()` calcula o próximo número a partir do MAX(id) da
+tabela de cada prefixo (ver `_base._TABELA_POR_PREFIXO`).
 
 `criar_backup()`/`limpar_backups_antigos()` passaram a fazer dump
 da base MySQL via `mysqldump` (antes copiavam `dados.json`, que já
@@ -212,6 +212,11 @@ from .rep_configuracoes import (
     listar_configuracoes,
     procurar_configuracao,
 )
+from .rep_migracoes import (
+    aplicar_migracao,
+    garantir_tabela_migracoes,
+    listar_migracoes_aplicadas,
+)
 from .rep_termos import (
     contar_avisos_por_versao,
     listar_avisos,
@@ -233,6 +238,9 @@ __all__ = [
     "obter_conexao",
     "proximo_id",
     "subprocess",
+    "aplicar_migracao",
+    "garantir_tabela_migracoes",
+    "listar_migracoes_aplicadas",
     "atualizar_lugar",
     "atualizar_propriedade",
     "atualizar_quarto",

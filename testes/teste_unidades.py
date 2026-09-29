@@ -245,7 +245,7 @@ def criar_ocupacao_mensal_com_fim_marcado(unidade_id, data_inicio, data_fim):
     """
     cliente = criar_cliente_mensal()
     ocupacao = {
-        "id": repositorio.proximo_id("OCU"),
+        "id": repositorio.proximo_id("CNT"),
         "unidade_id": unidade_id,
         "cliente_id": cliente["id"],
         "tipo": "mensal",
@@ -773,6 +773,8 @@ class TesteCriarLugar(BaseMySQLTest):
         self.assertEqual(
             inferior["beliche_grupo_id"], superior["beliche_grupo_id"]
         )
+        # v1.8.0: o grupo é o próprio id da cama inferior.
+        self.assertEqual(inferior["beliche_grupo_id"], inferior["id"])
         self.assertEqual(inferior["capacidade"], 1)
         self.assertEqual(superior["capacidade"], 1)
 
@@ -1244,7 +1246,7 @@ class TesteQuartoPrivativoOcupado(BaseMySQLTest):
 
         cliente = criar_cliente_airbnb()
         ocupacao = {
-            "id": repositorio.proximo_id("OCU"),
+            "id": repositorio.proximo_id("RSV"),
             "unidade_id": self.unidade_id,
             "cliente_id": cliente["id"],
             "tipo": tipo,

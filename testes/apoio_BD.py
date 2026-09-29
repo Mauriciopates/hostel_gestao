@@ -12,12 +12,12 @@ do aluno (a apontada por DB_NAME no .env, normalmente "hostel_gestao",
 com os dados verdadeiros do hostel) de duas formas:
 
 1. Antes de cada teste, os caminhos persistentes (`config.DIR_DADOS`,
-   `config.DIR_BACKUPS`, ...) são redirecionados para uma pasta
-   temporária, para `repositorio.proximo_id()` — que continua a
-   gravar num ficheiro, decisão 1 — nunca tocar no `dados/contadores.json`
-   real. Cada teste começa, por isso, com os contadores a zero
-   (PRO-001, CLI-001, etc.), tal como acontecia nos testes antigos
-   em memória.
+   `config.DIR_BACKUPS`, `DIR_CONTRATOS`, ...) são redirecionados para
+   uma pasta temporária, para os testes nunca escreverem PDFs,
+   backups ou logs nas pastas reais. Os IDs (v1.8.0) já não dependem
+   de ficheiro nenhum: o `repositorio.proximo_id()` calcula-os a
+   partir do MAX(id) de cada tabela, por isso, com as tabelas vazias
+   pelo TRUNCATE, cada teste começa em PRO-001, CLI-001, etc.
 
 2. O `config.DB_NAME` é substituído por uma base de dados SEPARADA,
    só para testes — por omissão "hostel_gestao_teste", ou o nome
@@ -647,7 +647,8 @@ class BaseMySQLTest(unittest.TestCase):
 
     Uma subclasse que define o seu próprio setUp() tem de chamar
     super().setUp() PRIMEIRO, antes de criar qualquer fixture — senão
-    a base de dados de teste e os contadores ainda não estão prontos.
+    a base de dados de teste e as pastas temporárias ainda não estão
+    prontas.
     """
 
     @classmethod
@@ -675,10 +676,10 @@ class BaseMySQLTest(unittest.TestCase):
 
         self._limpar_tabelas()
 
-        # 2. Contadores de identificadores (repositorio.proximo_id):
-        # pasta temporária, mesma convenção de
-        # teste_repositorio.BaseRepositorio — nunca tocar no
-        # dados/contadores.json real.
+        # 2. Pastas persistentes numa pasta temporária (PDFs,
+        # backups, logs), mesma convenção de
+        # teste_repositorio.BaseRepositorio. Os IDs já não usam
+        # ficheiro (v1.8.0): vêm do MAX(id) das tabelas limpas acima.
         #
         # A partir da v1.6.0, os caminhos vivem em `config.DIR_DADOS`
         # e `config.DIR_BACKUPS` (a `repositorio.py` deixou de os

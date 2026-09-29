@@ -98,10 +98,10 @@ _TIPOS_GESTAO_CATEGORIAS = ("Master",)
 # Estados possíveis de uma despesa. Os três do ENUM na base de dados.
 _ESTADOS_DESPESA = ("pendente", "paga", "cancelada")
 
-# Nome da categoria obrigatória, semeada na migração SQL (Parte C.3
-# do handoff). É usada automaticamente pela VIA 2. Procurada pelo
-# nome, nunca pelo ID — o ID (CAT000001) é só o valor do seed, não é
-# contrato.
+# Nome da categoria obrigatória, semeada pela migração
+# "0001_categoria_compra_de_stock" (`migracoes.py`, v1.8.0). É usada
+# automaticamente pela VIA 2. Procurada pelo nome, nunca pelo ID — o
+# ID depende da base (CAT-001 numa base nova), não é contrato.
 _NOME_CATEGORIA_COMPRA_STOCK = "Compra de Stock"
 
 

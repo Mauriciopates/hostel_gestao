@@ -1,13 +1,13 @@
-"""Núcleo da camada de persistência: pastas, contadores de IDs,
+"""Núcleo da camada de persistência: pastas, identificadores,
 backups diários e a ligação ao MySQL (`obter_conexao`).
 
 Todos os outros ficheiros do pacote `repositorio` importam daqui."""
 
-import json
 import logging
 import os
 import subprocess
 from datetime import date, timedelta
+from typing import cast
 
 import mysql.connector
 
@@ -30,18 +30,6 @@ def _garantir_pastas():
     seguro repetir sempre que se vai tocar em disco.
     """
     config.garantir_diretorios()
-
-
-def _ficheiro_contadores():
-    """Caminho do ficheiro de contadores, calculado a cada chamada.
-
-    Não é uma constante de módulo de propósito: se
-    `config.garantir_diretorios()` cair no caminho de recurso (ex.
-    sem permissão de escrita em C:\\), `config.DIR_DADOS` muda de
-    valor — uma constante calculada uma vez à importação deste
-    módulo ficaria presa ao caminho antigo.
-    """
-    return config.DIR_DADOS / "contadores.json"
 
 
 def criar_backup():
@@ -138,73 +126,81 @@ def limpar_backups_antigos(dias=None):
 # não pode ser menor que o limite, o sistema ignora e não trava a execução
 
 
-def _carregar_contadores():
-    """Lê o ficheiro dos contadores de identificadores.
-
-    Devolve um dicionário de prefixo para último número atribuído. Se o
-    ficheiro não existir, devolve um dicionário vazio.
-    """
-    _garantir_pastas()
-    ficheiro = _ficheiro_contadores()
-
-    if not ficheiro.exists():
-        return {}
-
-    with open(ficheiro, encoding="utf-8") as f:
-        return json.load(f)
-
-
-def _gravar_contadores(contadores):
-    """Escreve o ficheiro dos contadores, com a mesma proteção do gravar.
-
-      Exemplo de conteúdo do ficheiro:Json
-
-      {
-    "UNI": 22,
-    "CLI": 14,
-    "PRO": 7
-      }
-
-    Pelo que entendi esse arquivo é usado para manter o controle dos últimos
-    identificadores usados para diferentes entidades, como unidades,
-    clientes e produtos. Isso ajuda a garantir que cada nova entidade
-    receba um identificador único e sequencial.
-
-    """
-    _garantir_pastas()
-    ficheiro = _ficheiro_contadores()
-    temporario = ficheiro.with_suffix(".tmp")
-
-    try:
-        with open(temporario, "w", encoding="utf-8") as f:
-            json.dump(contadores, f, ensure_ascii=False, indent=2)
-
-        temporario.replace(ficheiro)
-    except OSError:
-        logger.exception("Falha ao gravar contadores de ID")
-        raise
+# Identificadores (v1.8.0 — decisão D4, sem `contadores.json`)
+#
+# Cada prefixo pertence a uma tabela. O próximo número é calculado a
+# partir do maior já gravado nessa tabela (regra "calcular, não
+# guardar"): um registo semeado por SQL ou por uma migração fica
+# contado sem mais nada — era por não o estar que a categoria
+# CAT-001 e os itens ITD-001..003 davam chave duplicada.
+# CNT e RSV partilham a tabela `ocupacoes`, por isso o MAX é sempre
+# filtrado pelo prefixo.
+_TABELA_POR_PREFIXO = {
+    "PRO": "propriedades",
+    "UNI": "unidades",
+    "QRT": "quartos",
+    "LUG": "lugares",
+    "ATR": "responsavel_unidade",
+    "RES": "responsaveis",
+    "CLI": "clientes",
+    "CNT": "ocupacoes",
+    "RSV": "ocupacoes",
+    "PRD": "produtos",
+    "MOV": "movimentos",
+    "REQ": "requisicoes",
+    "ITR": "itens_requisicao",
+    "DEV": "devolucoes",
+    "ITD": "itens_devolucao",
+    "DSP": "despesas",
+    "IDP": "itens_despesa",
+    "CAT": "categorias_despesa",
+    "FOR": "fornecedores",
+    "CFH": "configuracoes_historico",
+}
 
 
 def proximo_id(prefixo):
-    """Devolve o próximo identificador para o prefixo indicado.
+    """Devolve o próximo identificador livre para o prefixo indicado.
 
-    Formato prefixo-sequencial com três dígitos: UNI-001, CLI-014
-    (decisão 2).
-    O contador é gravado antes de o identificador ser devolvido.
+    Formato prefixo-sequencial com pelo menos três dígitos: UNI-001,
+    CLI-014, PRO-1000 (decisão 2).
 
-    Aqui ele busca o que foi gravado anteriormente exemplo: UNI-22
-    CLI-14, PRO-7 e incrementa o número para o próximo id. mesmo que
-    excluida se ja existiu UNI-22, o próximo id será UNI-23, garantindo que não
-    há duplicidade de identificadores. Isso é importante para manter a
-    integridade dos dados e evitar conflitos de identificação.
+    O número é o maior já gravado na tabela do prefixo, mais um. NÃO
+    reserva nada: duas chamadas seguidas sem gravar entre elas
+    devolvem o mesmo ID — por isso cada ID é gravado logo a seguir a
+    ser gerado (é o que todos os módulos já fazem). O MAX é numérico
+    (CAST), para o PRO-1000 não ficar antes do PRO-999, como ficaria
+    numa comparação de texto.
 
+    Como não há DELETE no sistema, um número só volta a ficar livre
+    depois do "Começar do zero" (TRUNCATE), que é o pretendido.
 
+    Levanta ValueError se o prefixo não pertencer a nenhuma tabela.
     """
+    tabela = _TABELA_POR_PREFIXO.get(prefixo)
 
-    contadores = _carregar_contadores()
-    numero = contadores.get(prefixo, 0) + 1
-    contadores[prefixo] = numero
-    _gravar_contadores(contadores)
+    if tabela is None:
+        raise ValueError(
+            f"Prefixo de identificador desconhecido: {prefixo!r}."
+        )
+
+    # SUBSTRING do MySQL conta a partir de 1: "UNI-001" → o número
+    # começa na posição len("UNI") + 2 = 5.
+    inicio_numero = len(prefixo) + 2
+
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(
+            f"SELECT MAX(CAST(SUBSTRING(id, %s) AS UNSIGNED)) "
+            f"FROM {tabela} WHERE id LIKE %s",
+            (inicio_numero, f"{prefixo}-%"),
+        )
+        ultimo = cast(tuple, cursor.fetchone())[0]
+    finally:
+        conexao.close()
+
+    numero = int(cast(int, ultimo) or 0) + 1
 
     return f"{prefixo}-{numero:03d}"
 
