@@ -19,12 +19,14 @@ janela. Este ficheiro deteta isso num `while` e cria uma nova
 """
 
 import logging
+import tkinter
 
 import config
 import configuracoes
+import migracoes
 import registo_logs
 import repositorio
-from gui import gui_servidores
+from gui import componentes, gui_servidores
 from gui.app import Aplicacao
 
 logger = logging.getLogger(__name__)
@@ -68,6 +70,13 @@ def main():
     repositorio.criar_backup()
     repositorio.limpar_backups_antigos()
 
+    # MIGRAÇÕES (v1.8.0): depois do backup do dia (a cópia apanha a
+    # base antes de qualquer mudança) e antes do seed e do login. Se
+    # uma falhar, a aplicação não abre — abrir com a base a meio do
+    # caminho seria pior (decisão 2 do passo C).
+    if not _aplicar_migracoes():
+        return
+
     configuracoes.garantir_seed()
 
     while True:
@@ -92,6 +101,31 @@ def main():
         del app
 
     logger.info("Aplicação terminada")
+
+
+def _aplicar_migracoes():
+    """Aplica as migrações em falta. Devolve False se alguma falhou
+    (depois de avisar o utilizador), True caso contrário.
+
+    Ainda não existe nenhuma janela nesta altura: cria-se uma raiz
+    Tk escondida só para o popup de erro não aparecer com uma janela
+    vazia atrás.
+    """
+    try:
+        migracoes.aplicar_pendentes()
+    except ValueError as erro:
+        raiz = tkinter.Tk()
+        raiz.withdraw()
+        componentes.mostrar_erro(
+            f"{erro}\n\nA aplicação vai fechar. Os detalhes ficaram no "
+            f"log e a cópia de segurança de hoje foi feita antes da "
+            f"atualização.",
+            titulo="Atualização da base de dados",
+        )
+        raiz.destroy()
+        return False
+
+    return True
 
 
 if __name__ == "__main__":

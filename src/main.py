@@ -11,6 +11,7 @@ import sys
 import cli
 import config
 import configuracoes
+import migracoes
 import registo_logs
 import repositorio
 import servidores
@@ -73,6 +74,13 @@ def main():
 
     repositorio.criar_backup()
     repositorio.limpar_backups_antigos()
+
+    # Migrações (v1.8.0): mesma ordem e mesma regra do main_gui.py —
+    # depois do backup do dia, antes do seed; se falhar, não arranca.
+    try:
+        migracoes.aplicar_pendentes()
+    except ValueError as erro:
+        sys.exit(f"{erro}\nOs detalhes ficaram no log.")
 
     # Valores por omissão das Configurações — o GUI faz o mesmo no
     # arranque; sem eles, uma base nova não tem as chaves que o
