@@ -6,8 +6,11 @@ aqui só se cria a tabela de controlo, se lê o que já foi aplicado e
 se executa uma migração.
 
 Cada base de dados (Localhost, VM, testes) tem a sua própria tabela
-`migracoes_aplicadas`, criada pelo próprio código na primeira vez —
-não há nenhum CREATE TABLE para correr à mão.
+`migracoes_aplicadas`. Desde o INST-03 ela faz parte do esquema
+oficial (`src/bd/esquema.sql`, grupo Sistema) — uma base nova já nasce
+com ela. O CREATE TABLE IF NOT EXISTS abaixo fica só como rede de
+segurança para bases criadas antes da v1.8.0, e TEM de ser igual à
+definição do esquema.
 """
 
 import logging

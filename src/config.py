@@ -113,6 +113,17 @@ DIR_CONTRATOS = DIR_BASE / "contratos"
 DIR_RELATORIOS = DIR_BASE / "relatorios"
 DIR_LOGS = DIR_BASE / "logs"
 
+# --- Esquema oficial da base de dados (v1.8.0, INST-03) --------------
+# Fonte única do esquema (decisão D7), dentro do `src/` para ir no
+# executável. No PyInstaller, os ficheiros de dados ficam em
+# `sys._MEIPASS` (a pasta `_internal` do modo --onedir) — o `bd/` tem
+# de ser declarado nos "datas" do .spec (INST-04). A correr do código,
+# fica ao lado deste config.py.
+_PASTA_CODIGO = Path(
+    getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)
+)
+FICHEIRO_ESQUEMA = _PASTA_CODIGO / "bd" / "esquema.sql"
+
 
 def garantir_diretorios():
     """Cria a árvore de diretorias persistentes, se ainda não existir.

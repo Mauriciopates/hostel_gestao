@@ -1,0 +1,14 @@
+ESQUEMA OFICIAL DA BASE DE DADOS
+================================
+
+A partir da v1.8.0 (INST-03), o esquema oficial vive num so ficheiro:
+
+    src/bd/esquema.sql
+
+E lido pela aplicacao (criar uma base nova), pelos testes
+(testes/apoio_BD.py) e vai dentro do executavel. Os ficheiros desta
+pasta (Modelo_de_dados_esquema_v.1.5.6.sql, migracao_*.sql) ficam
+como historico e NAO sao atualizados.
+
+Mudancas de esquema: sempre uma migracao nova em src/migracoes.py,
+e o src/bd/esquema.sql atualizado no mesmo commit.
