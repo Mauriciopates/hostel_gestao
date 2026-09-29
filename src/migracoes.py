@@ -28,13 +28,82 @@ passo C): já é idempotente e segue o mapa `_CHAVES`.
 import logging
 import re
 
+import migracoes_textos
 import repositorio
 
 logger = logging.getLogger(__name__)
 
 
-# Lista oficial, por ordem. Os seeds de sistema entram no passo D.
-MIGRACOES = []
+# --- 0001: categoria "Compra de Stock" -------------------------------
+# Obrigatória para a VIA 2 das despesas (o `despesas.py` procura-a pelo
+# NOME). Só é criada se ainda não existir nenhuma categoria com esse
+# nome — numa base antiga (Localhost: CAT-001) não faz nada.
+# O ID não é fixo: é o seguinte ao maior CAT-NNN da tabela, pela mesma
+# regra do `repositorio.proximo_id` (MAX numérico, três dígitos no
+# mínimo). A tabela derivada `t` calcula tudo numa só leitura:
+#   n      → próximo número livre
+#   existe → quantas categorias já se chamam "Compra de Stock"
+_SQL_CATEGORIA_COMPRA_DE_STOCK = (
+    "INSERT INTO categorias_despesa (id, nome, ativo) "
+    "SELECT CONCAT('CAT-', LPAD(t.n, GREATEST(3, CHAR_LENGTH(t.n)), '0')), "
+    "'Compra de Stock', 1 "
+    "FROM ("
+    "SELECT COALESCE(MAX(CASE WHEN id LIKE 'CAT-%' "
+    "THEN CAST(SUBSTRING(id, 5) AS UNSIGNED) END), 0) + 1 AS n, "
+    "COALESCE(SUM(nome = 'Compra de Stock'), 0) AS existe "
+    "FROM categorias_despesa"
+    ") AS t "
+    "WHERE t.existe = 0"
+)
+
+
+# --- 0002: textos legais de demonstração (versão 0.1) -----------------
+# Sem uma versão em vigor da confidencialidade, ninguém entra numa base
+# nova (`termos.bloqueia`). Publica a versão 0.1 — fictícia, ver
+# `migracoes_textos.py` — de cada documento que ainda NÃO tenha
+# nenhuma versão. Numa base que já tem textos (Localhost, VM) não faz
+# nada: aí os textos mudam-se em Configurações → "Publicar versão nova".
+
+
+def _literal_sql(texto):
+    """Escreve um texto como literal SQL entre plicas.
+
+    Só para textos fixos do código (nunca dados de utilizadores): as
+    migrações correm sem parâmetros. Duplica as plicas e as barras.
+    """
+    return "'" + texto.replace("\\", "\\\\").replace("'", "''") + "'"
+
+
+def _sql_publicar_texto_demo(tipo, texto):
+    """INSERT da versão 0.1 do documento, só se não houver nenhuma."""
+    return (
+        "INSERT INTO textos_legais "
+        "(tipo, versao, texto, publicado_em, em_vigor) "
+        f"SELECT '{tipo}', '0.1', {_literal_sql(texto)}, CURDATE(), 1 "
+        "FROM DUAL WHERE NOT EXISTS "
+        f"(SELECT 1 FROM textos_legais WHERE tipo = '{tipo}')"
+    )
+
+
+# Lista oficial, por ordem. Só cresce — nunca alterar uma já publicada.
+MIGRACOES = [
+    ("0001_categoria_compra_de_stock", [_SQL_CATEGORIA_COMPRA_DE_STOCK]),
+    (
+        "0002_textos_legais_demo",
+        [
+            _sql_publicar_texto_demo(
+                "confidencialidade", migracoes_textos.CONFIDENCIALIDADE
+            ),
+            _sql_publicar_texto_demo(
+                "privacidade_colaborador",
+                migracoes_textos.PRIVACIDADE_COLABORADOR,
+            ),
+            _sql_publicar_texto_demo(
+                "privacidade_hospede", migracoes_textos.PRIVACIDADE_HOSPEDE
+            ),
+        ],
+    ),
+]
 
 _FORMATO_NOME = re.compile(r"^\d{4}_[a-z0-9_]+$")
 

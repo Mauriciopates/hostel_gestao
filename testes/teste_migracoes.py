@@ -183,6 +183,132 @@ class TesteFalha(BaseMigracoesTest):
         self.assertEqual(["A", "B"], _nomes_em_teste())
 
 
+def _categorias():
+    """Devolve [(id, nome), ...] das categorias, por id."""
+    conexao = repositorio.obter_conexao()
+    try:
+        cursor = conexao.cursor()
+        cursor.execute("SELECT id, nome FROM categorias_despesa ORDER BY id")
+        return [(str(a), str(b)) for a, b in cursor.fetchall()]
+    finally:
+        conexao.close()
+
+
+class TesteSeedCompraDeStock(BaseMigracoesTest):
+    """Migração 0001 — a categoria "Compra de Stock" (passo D).
+
+    Corre só essa migração da lista oficial, numa base de teste com as
+    tabelas vazias (TRUNCATE do apoio_BD) — cada teste prepara o caso
+    que quer à mão.
+    """
+
+    _NOME = "0001_categoria_compra_de_stock"
+
+    def _aplicar(self):
+        lista = [m for m in migracoes.MIGRACOES if m[0] == self._NOME]
+        return migracoes.aplicar_pendentes(lista)
+
+    def teste_base_nova_cria_cat_001(self):
+        self.assertEqual([self._NOME], self._aplicar())
+        self.assertEqual([("CAT-001", "Compra de Stock")], _categorias())
+
+    def teste_base_antiga_ja_com_a_categoria_nao_duplica(self):
+        """Caso do Localhost: a categoria já existe (aqui CAT-005)."""
+        _executar(
+            "INSERT INTO categorias_despesa (id, nome, ativo) "
+            "VALUES ('CAT-005', 'Compra de Stock', 1)"
+        )
+
+        self._aplicar()
+
+        self.assertEqual([("CAT-005", "Compra de Stock")], _categorias())
+
+    def teste_id_ocupado_usa_o_seguinte(self):
+        """Se o CAT-001 já é outra categoria, a nova fica com o
+        seguinte — nunca um ID fixo."""
+        _executar(
+            "INSERT INTO categorias_despesa (id, nome, ativo) "
+            "VALUES ('CAT-001', 'Consumos Mensais', 1)"
+        )
+
+        self._aplicar()
+
+        self.assertEqual(
+            [("CAT-001", "Consumos Mensais"), ("CAT-002", "Compra de Stock")],
+            _categorias(),
+        )
+
+    def teste_proximo_id_continua_depois_do_seed(self):
+        """O `proximo_id` conta a categoria semeada (era o bug)."""
+        self._aplicar()
+
+        self.assertEqual("CAT-002", repositorio.proximo_id("CAT"))
+
+    def teste_segunda_vez_nao_faz_nada(self):
+        self._aplicar()
+
+        self.assertEqual([], self._aplicar())
+        self.assertEqual(1, len(_categorias()))
+
+
+class TesteTextosLegaisDemo(BaseMigracoesTest):
+    """Migração 0002 — versão 0.1 fictícia dos três documentos."""
+
+    _NOME = "0002_textos_legais_demo"
+    _TIPOS = ("confidencialidade", "privacidade_colaborador",
+              "privacidade_hospede")
+
+    def _aplicar(self):
+        lista = [m for m in migracoes.MIGRACOES if m[0] == self._NOME]
+        return migracoes.aplicar_pendentes(lista)
+
+    def teste_base_nova_publica_os_tres_em_vigor(self):
+        self._aplicar()
+
+        for tipo in self._TIPOS:
+            with self.subTest(tipo=tipo):
+                texto = repositorio.obter_texto_em_vigor(tipo)
+                self.assertIsNotNone(texto)
+                self.assertEqual("0.1", texto["versao"])
+                self.assertIn("DEMONSTRAÇÃO", texto["texto"])
+                self.assertIn("Gato Tripeiro", texto["texto"])
+
+    def teste_texto_gravado_igual_ao_do_codigo(self):
+        """Acentos, «», — e quebras de linha chegam intactos."""
+        import migracoes_textos
+
+        self._aplicar()
+
+        texto = repositorio.obter_texto_em_vigor("confidencialidade")
+        self.assertEqual(
+            migracoes_textos.CONFIDENCIALIDADE, texto["texto"]
+        )
+
+    def teste_tipo_que_ja_tem_versao_nao_e_tocado(self):
+        """Base antiga: a confidencialidade já tem a 1.0 — fica igual;
+        os outros dois documentos recebem a 0.1."""
+        _executar(
+            "INSERT INTO textos_legais "
+            "(tipo, versao, texto, publicado_em, em_vigor) VALUES "
+            "('confidencialidade', '1.0', 'Texto real', CURDATE(), 1)"
+        )
+
+        self._aplicar()
+
+        conf = repositorio.obter_texto_em_vigor("confidencialidade")
+        self.assertEqual("1.0", conf["versao"])
+        self.assertEqual("Texto real", conf["texto"])
+        self.assertEqual(
+            "0.1",
+            repositorio.obter_texto_em_vigor("privacidade_hospede")["versao"],
+        )
+
+    def teste_segunda_vez_nao_faz_nada(self):
+        self._aplicar()
+
+        self.assertEqual([], self._aplicar())
+
+
 class TesteValidarLista(unittest.TestCase):
     """Validação da lista — não precisa de base de dados."""
 
