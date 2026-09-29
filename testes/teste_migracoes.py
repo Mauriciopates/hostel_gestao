@@ -15,6 +15,7 @@ nunca correu migrações.
 import sys
 import unittest
 from pathlib import Path
+from typing import cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
@@ -55,7 +56,8 @@ def _nomes_em_teste():
     try:
         cursor = conexao.cursor()
         cursor.execute("SELECT nome FROM migracao_teste ORDER BY nome")
-        return [str(linha[0]) for linha in cursor.fetchall()]
+        linhas = cast(list[tuple], cursor.fetchall())
+        return [str(linha[0]) for linha in linhas]
     finally:
         conexao.close()
 
@@ -189,7 +191,8 @@ def _categorias():
     try:
         cursor = conexao.cursor()
         cursor.execute("SELECT id, nome FROM categorias_despesa ORDER BY id")
-        return [(str(a), str(b)) for a, b in cursor.fetchall()]
+        linhas = cast(list[tuple], cursor.fetchall())
+        return [(str(a), str(b)) for a, b in linhas]
     finally:
         conexao.close()
 

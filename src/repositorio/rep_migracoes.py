@@ -12,6 +12,7 @@ não há nenhum CREATE TABLE para correr à mão.
 
 import logging
 from datetime import datetime
+from typing import cast
 
 from ._base import obter_conexao
 
@@ -48,7 +49,8 @@ def listar_migracoes_aplicadas():
     try:
         cursor = conexao.cursor()
         cursor.execute("SELECT nome FROM migracoes_aplicadas")
-        return {str(linha[0]) for linha in cursor.fetchall()}
+        linhas = cast(list[tuple], cursor.fetchall())
+        return {str(linha[0]) for linha in linhas}
     finally:
         conexao.close()
 
