@@ -101,11 +101,10 @@ def apagar_tudo():
     TRUNCATE (em vez de DELETE) porque é mais rápido e ignora as
     FKs quando as verificações estão desligadas.
 
-    IMPORTANTE: o ficheiro `dados/contadores.json` NÃO é apagado.
-    Os contadores continuam a existir — o próximo ID gerado é o
-    mesmo que seria sem reset. Isto é deliberado: impede que dois
-    registos históricos (guardados em backups) colidam com novos
-    registos por reutilização de IDs.
+    IDs (v1.8.0): com as tabelas vazias, o `proximo_id` volta a
+    começar em 001 em todos os prefixos — calcula o número a partir
+    do MAX(id), já não há ficheiro de contadores. Os registos antigos
+    só existem no backup feito antes do reset.
     """
     tabelas = [
         "ocupacoes_mensal",

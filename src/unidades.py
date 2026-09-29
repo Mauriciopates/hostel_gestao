@@ -712,13 +712,21 @@ def criar_beliche(quarto_id, nome_superior, nome_inferior):
             "As duas camas do beliche não podem ter o mesmo nome."
         )
 
+    # v1.8.0: o id da cama inferior é gerado aqui e usado também como
+    # beliche_grupo_id, como esta docstring já dizia. Antes gerava-se
+    # um LUG só para o grupo e outro para a cama — o do grupo nunca
+    # chegava a ser um lugar (com o MAX(id) de `proximo_id` os dois
+    # sairiam iguais por acaso, sem ser essa a intenção).
+    id_inferior = repositorio.proximo_id(PREFIXO_LUGAR)
+
     inferior = _criar_lugar(
         quarto_id,
         nome_inferior,
         "beliche",
         CAPACIDADE_CAMA_BELICHE,
         posicao_beliche="inferior",
-        beliche_grupo_id=repositorio.proximo_id(PREFIXO_LUGAR),
+        beliche_grupo_id=id_inferior,
+        id_lugar=id_inferior,
     )
 
     superior = _criar_lugar(

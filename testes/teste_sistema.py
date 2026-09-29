@@ -8,13 +8,13 @@ com as tabelas vazias e os contadores reiniciados.
 
 ÂMBITO: só a função pública
 `sistema.comecar_do_zero(autor, password, PASSWORD_TESTE)`. As três
-funções privadas (`_validar_autor_master`, `_reiniciar_contadores`,
+funções privadas (`_validar_autor_master`,
 `_definir_credencial_inicial`) NÃO são testadas isoladamente — os seus
 efeitos são observáveis pela própria `comecar_do_zero`:
 
   - `_validar_autor_master`     → comportamento dos testes de autor.
-  - `_reiniciar_contadores`     → primeira propriedade depois do reset
-                                  é PRO-001.
+  - IDs depois do reset (v1.8.0: MAX(id), sem `_reiniciar_contadores`)
+                                → primeira propriedade é PRO-001.
   - `_definir_credencial_inicial` → autenticar com as credenciais
                                     padrão devolve MOTIVO_OK.
 
@@ -443,8 +443,8 @@ class TesteCredencialInicial(BaseMySQLTest):
 
 
 class TesteContadores(BaseMySQLTest):
-    """Depois do reset, o próximo ID de cada prefixo é o 001 — os
-    contadores voltaram a zero."""
+    """Depois do reset, o próximo ID de cada prefixo é o 001 — com as
+    tabelas vazias, o MAX(id) do `proximo_id` volta a zero (v1.8.0)."""
 
     def test_proxima_propriedade_e_pro_001(self):
         # Criar uma propriedade ANTES, para o contador avançar.

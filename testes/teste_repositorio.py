@@ -2,8 +2,8 @@
 
 Cobre só o que continua a existir em repositorio.py fora das funções
 por entidade (essas têm teste próprio em cada teste_<entidade>.py,
-via apoio_BD.py): os contadores de identificador (contadores.json) e
-as cópias de segurança. A antiga TestePersistencia (carregar/gravar/
+via apoio_BD.py): o gerador de identificadores (`proximo_id`) e as
+cópias de segurança. A antiga TestePersistencia (carregar/gravar/
 _estrutura_vazia, conversão de Decimal e date, gravação atómica,
 recusa de versão posterior) foi removida nesta sessão — essas
 funções saíram de repositorio.py por já não terem nenhum consumidor,
@@ -20,12 +20,16 @@ essa pasta e repostas no fim, para os testes nunca tocarem nos dados
 reais de `dados/` e `backups/`.
 
 NOTA (Fase 1, v1.4.0 — pastas persistentes): o `repositorio.py` deixou
-de expor `PASTA_DADOS`/`PASTA_BACKUPS`/`FICHEIRO_CONTADORES` como
-constantes próprias — os caminhos vivem em `config.DIR_DADOS`,
-`config.DIR_BACKUPS` e `_ficheiro_contadores()` (calculado a cada
-chamada). Por isso o `setUp` deste ficheiro redireciona `config.DIR_*`,
+de expor `PASTA_DADOS`/`PASTA_BACKUPS` como constantes próprias — os
+caminhos vivem em `config.DIR_DADOS` e `config.DIR_BACKUPS`. Por isso
+o `setUp` deste ficheiro redireciona `config.DIR_*`,
 não `repositorio.PASTA_*` — mesma convenção já usada pelo
 `apoio_BD.BaseMySQLTest`.
+
+v1.8.0 (decisão D4): o `contadores.json` deixou de existir. O
+`proximo_id` calcula o número a partir do MAX(id) da tabela, por isso
+os seus testes passaram a usar a base de teste (`BaseMySQLTest`) e a
+gravar propriedades entre chamadas.
 """
 
 import shutil
@@ -40,6 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 import config  # noqa: E402
 import repositorio  # noqa: E402
+from testes.apoio_BD import BaseMySQLTest  # noqa: E402
 
 
 class BaseRepositorio(unittest.TestCase):
@@ -67,46 +72,81 @@ class BaseRepositorio(unittest.TestCase):
         shutil.rmtree(self.pasta, ignore_errors=True)
 
 
-class TesteContadores(BaseRepositorio):
-    """Atribuição de identificadores sequenciais (decisão 2)."""
+def _gravar_propriedade(id_propriedade):
+    """Grava uma propriedade mínima com o id indicado, direto no
+    repositório — o que se testa aqui é o `proximo_id`, não o
+    `propriedades.criar`."""
+    repositorio.inserir_propriedade(
+        {
+            "id": id_propriedade,
+            "nome": f"Teste {id_propriedade}",
+            "morada": "",
+            "iban": "",
+            "ativo": True,
+        }
+    )
+
+
+class TesteProximoId(BaseMySQLTest):
+    """Identificadores calculados a partir do MAX(id) da tabela
+    (v1.8.0, decisão D4). Cada teste começa com as tabelas vazias."""
 
     def teste_primeiro_id_de_um_prefixo(self):
-        """Sem contador gravado, o primeiro identificador é o 001."""
-        self.assertEqual("UNI-001", repositorio.proximo_id("UNI"))
+        """Tabela vazia: o primeiro identificador é o 001."""
+        self.assertEqual("PRO-001", repositorio.proximo_id("PRO"))
 
-    def teste_ids_consecutivos(self):
-        """Cada chamada devolve o número seguinte."""
-        repositorio.proximo_id("UNI")
-        repositorio.proximo_id("UNI")
-        self.assertEqual("UNI-003", repositorio.proximo_id("UNI"))
+    def teste_nao_reserva_numeros(self):
+        """Sem gravar nada entre as chamadas, o ID repete-se."""
+        primeiro = repositorio.proximo_id("PRO")
 
-    def teste_prefixos_independentes(self):
-        """Cada prefixo tem o seu próprio contador."""
-        repositorio.proximo_id("UNI")
-        repositorio.proximo_id("UNI")
-        self.assertEqual("CLI-001", repositorio.proximo_id("CLI"))
+        self.assertEqual(primeiro, repositorio.proximo_id("PRO"))
 
-    def teste_contador_nao_recua(self):
-        """O contador é lido do ficheiro, nunca da contagem de registos.
+    def teste_depois_de_gravar_devolve_o_seguinte(self):
+        """Cada ID gravado faz avançar o seguinte."""
+        _gravar_propriedade(repositorio.proximo_id("PRO"))
+        _gravar_propriedade(repositorio.proximo_id("PRO"))
 
-        É o erro do protótipo descartado: eliminar registos fazia o
-        contador reiniciar e reatribuir identificadores já usados.
-        `contadores.json` é independente de qualquer estrutura de
-        registos (hoje, das próprias tabelas MySQL) — chamar
-        proximo_id() várias vezes seguidas já prova isto sozinho, sem
-        precisar de simular nenhuma eliminação.
-        """
-        for _ in range(5):
-            repositorio.proximo_id("UNI")
+        self.assertEqual("PRO-003", repositorio.proximo_id("PRO"))
 
-        self.assertEqual("UNI-006", repositorio.proximo_id("UNI"))
+    def teste_registo_semeado_fora_do_gerador_conta(self):
+        """Um registo gravado por SQL/migração (sem passar pelo
+        gerador) é contado — era o caso da CAT-001 e dos ITD, que
+        davam chave duplicada com o antigo contadores.json."""
+        _gravar_propriedade("PRO-007")
+
+        self.assertEqual("PRO-008", repositorio.proximo_id("PRO"))
+
+    def teste_comparacao_numerica_e_nao_de_texto(self):
+        """Depois do 999 vem o 1000 (numa comparação de texto,
+        "PRO-1000" ficaria antes de "PRO-999")."""
+        _gravar_propriedade("PRO-999")
+        _gravar_propriedade("PRO-1000")
+
+        self.assertEqual("PRO-1001", repositorio.proximo_id("PRO"))
 
     def teste_formato_com_tres_digitos(self):
         """O número é preenchido com zeros até três dígitos."""
-        for _ in range(9):
-            repositorio.proximo_id("UNI")
+        _gravar_propriedade("PRO-009")
 
-        self.assertEqual("UNI-010", repositorio.proximo_id("UNI"))
+        self.assertEqual("PRO-010", repositorio.proximo_id("PRO"))
+
+    def teste_prefixos_independentes(self):
+        """Cada prefixo conta só na sua tabela."""
+        _gravar_propriedade("PRO-005")
+
+        self.assertEqual("CLI-001", repositorio.proximo_id("CLI"))
+
+    def teste_ignora_ids_noutro_formato(self):
+        """IDs sem o hífen (ex. o antigo seed CAT000001) não entram
+        no MAX — só contam os `<prefixo>-<número>`."""
+        _gravar_propriedade("PRO000009")
+
+        self.assertEqual("PRO-001", repositorio.proximo_id("PRO"))
+
+    def teste_prefixo_desconhecido_recusa(self):
+        """Um prefixo sem tabela associada levanta ValueError."""
+        with self.assertRaises(ValueError):
+            repositorio.proximo_id("OCU")
 
 
 class TesteBackups(BaseRepositorio):
