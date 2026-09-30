@@ -60,8 +60,6 @@ from types import TracebackType
 
 import customtkinter as ctk
 
-from pathlib import Path
-
 import config
 import termos
 import utilizadores
@@ -83,8 +81,9 @@ from .sessao import tipo_utilizador_ativo  # <<< NOVO >>> — filtro de itens
 
 logger = logging.getLogger(__name__)
 
-_PASTA_IMG = Path(__file__).resolve().parent.parent.parent / "img"
-_ICONE_JANELA = _PASTA_IMG / "ico_hostel.png"
+# O `iconbitmap` do Windows só aceita `.ico` (com o `.png` falhava em
+# silêncio, dentro do try). O mesmo `.ico` é o ícone do executável.
+_ICONE_JANELA = config.PASTA_IMG / "ico_hostel.ico"
 
 
 # Perfis que veem cada item da sidebar (26/09/2026). A barreira

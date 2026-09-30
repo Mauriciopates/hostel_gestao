@@ -443,12 +443,19 @@ def reiniciar_aplicacao():
 
     Os túneis desta fecham-se ANTES: se ficassem abertos, a nova
     reaproveitava-os e perdia-os logo a seguir, quando esta terminasse.
+
+    No executável (PyInstaller) o `sys.executable` já É o programa e
+    o `sys.argv[0]` também — repetir o argv[0] passava o próprio .exe
+    como argumento. A correr do código, `sys.executable` é o python e
+    o `sys.argv[0]` o script (src/main_gui.py), que é preciso passar.
     """
     fechar_tuneis()
     ambiente = {k: v for k, v in os.environ.items() if k != VARIAVEL_FORCAR}
-    subprocess.Popen(
-        [sys.executable] + sys.argv, env=ambiente, cwd=os.getcwd()
-    )
+    if getattr(sys, "frozen", False):
+        comando = [sys.executable] + sys.argv[1:]
+    else:
+        comando = [sys.executable] + sys.argv
+    subprocess.Popen(comando, env=ambiente, cwd=os.getcwd())
 
 
 # =====================================================================

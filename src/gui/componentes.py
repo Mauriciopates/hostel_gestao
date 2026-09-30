@@ -7,7 +7,6 @@ import sys
 import tkinter
 import unicodedata
 from ctypes import wintypes
-from pathlib import Path
 from tkinter import messagebox
 
 import customtkinter as ctk
@@ -20,23 +19,16 @@ from . import sessao
 # =====================================================================
 # Caminhos das imagens
 #
-# O `img/` está na raiz do projeto, e este ficheiro está em
-# `src/gui/`. O caminho é `../../img/`, mas não é escrito à mão —
-# calcula-se a partir de `__file__`, que é o caminho DESTE ficheiro
-# (independente de onde o `python` foi corrido).
+# O caminho do `img/` vem de `config.PASTA_IMG` (v1.8.0), que sabe
+# onde ele está a correr do código E no executável (PyInstaller).
 #
-# Porquê: se um dia corres a aplicação da raiz, de `src/` ou de
-# `src/gui/`, o `__file__` é sempre o mesmo. Um caminho relativo
-# simples (`"../../img/x.png"`) funcionava só de um sítio — o resto
-# dava `FileNotFoundError` ou, pior, ficava silenciosamente com um
-# retângulo vazio.
-#
-# `.resolve()` normaliza o caminho antes de o usar: resolve `..`,
-# symlinks e caminhos relativos, para o `Image.open(...)` receber
-# sempre um caminho absoluto.
+# Histórico: antes calculava-se aqui `../../img/` a partir do
+# `__file__` deste ficheiro — resolvia o problema de correr a app de
+# pastas diferentes, mas no executável apontava para fora do
+# `_internal` e o logótipo desaparecia.
 # =====================================================================
 
-_PASTA_IMG = Path(__file__).resolve().parent.parent.parent / "img"
+_PASTA_IMG = config.PASTA_IMG
 
 _LOGO_SIDEBAR = _PASTA_IMG / "ico_hostel_transparente.png"
 

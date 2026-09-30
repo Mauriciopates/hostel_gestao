@@ -124,6 +124,18 @@ _PASTA_CODIGO = Path(
 )
 FICHEIRO_ESQUEMA = _PASTA_CODIGO / "bd" / "esquema.sql"
 
+# --- Imagens (v1.8.0, INST-04) --------------------------------------
+# Fonte única do caminho do `img/` (logótipo, ícone). A correr do
+# código, o `img/` está na raiz do repositório, ao lado do `src/`. No
+# executável (PyInstaller --onedir), o .spec copia-o para dentro do
+# `_internal` (sys._MEIPASS). Antes, cada módulo calculava
+# `Path(__file__).parent.parent.parent / "img"` — no executável isso
+# aponta para FORA do `_internal` e as imagens desapareciam.
+if getattr(sys, "frozen", False):
+    PASTA_IMG = _PASTA_CODIGO / "img"
+else:
+    PASTA_IMG = _PASTA_CODIGO.parent / "img"
+
 
 def garantir_diretorios():
     """Cria a árvore de diretorias persistentes, se ainda não existir.

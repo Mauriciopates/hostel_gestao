@@ -25,7 +25,6 @@ porque o valor `50,00 €` tinha o símbolo de euro).
 """
 
 from datetime import date, datetime
-from pathlib import Path
 
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
@@ -47,10 +46,11 @@ _NOVA_LINHA = {"new_x": XPos.LMARGIN, "new_y": YPos.NEXT}
 # sítio de onde a aplicação é corrida. O `resolve()` normaliza o
 # caminho antes de o usar.
 #
-# Este `pdf.py` está em `src/impressao/`. O `img/` está na raiz do
-# projeto. Logo: `../../img/`.
+# Desde a v1.8.0 o caminho vem de `config.PASTA_IMG` — o
+# `../../img/` a partir do `__file__` falhava no executável
+# (PyInstaller), onde o `img/` fica dentro do `_internal`.
 
-_PASTA_IMG = Path(__file__).resolve().parent.parent.parent / "img"
+_PASTA_IMG = config.PASTA_IMG
 _LOGO_PDF = _PASTA_IMG / "ico_hostel_transparente.png"
 
 
