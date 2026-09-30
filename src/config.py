@@ -97,6 +97,14 @@ NOME_MASTER_PADRAO = "Admin"
 UTILIZADOR_PADRAO = "admin"
 PASSWORD_PADRAO = "adm12345678"
 
+# --- Bloqueio do login por tentativas falhadas (v1.8.0) -------------
+# 3 falhas seguidas bloqueiam 30 s; cada falha a seguir dobra a espera
+# (60, 120, 240 s...) até ao máximo de 5 min. Um login certo limpa a
+# contagem. Regra em `utilizadores.duracao_bloqueio`.
+LOGIN_FALHAS_ANTES_BLOQUEIO = 3
+LOGIN_BLOQUEIO_INICIAL_S = 30
+LOGIN_BLOQUEIO_MAXIMO_S = 300
+
 # --- Diretoria base de dados persistentes (Fase 1, v1.4.0) ------------------
 # Fica FORA da pasta de instalação/repositório: evita erros de permissão
 # de escrita quando o sistema corre como executável PyInstaller (nunca se

@@ -49,6 +49,9 @@ _MENSAGENS_LOGIN = {
         "Admin define-a no GUI (Responsáveis)."
     ),
     utilizadores.MOTIVO_INATIVO: "Este responsável está desativado.",
+    utilizadores.MOTIVO_BLOQUEADO: (
+        "Demasiadas tentativas falhadas — aguarde e tente de novo."
+    ),
 }
 
 # Tentativas de login antes de o CLI terminar.

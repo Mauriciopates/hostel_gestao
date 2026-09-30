@@ -65,6 +65,7 @@ import mysql.connector  # noqa: E402
 
 import config  # noqa: E402
 import repositorio  # noqa: E402
+import utilizadores  # noqa: E402
 
 # Logs durante os testes (v1.6.0, 23/09/2026).
 #
@@ -294,6 +295,11 @@ class BaseMySQLTest(unittest.TestCase):
         _garantir_esquema_atualizado()
 
         self._limpar_tabelas()
+
+        # 1c. Bloqueio do login (v1.8.0): as falhas contam-se num
+        # dicionário do módulo `utilizadores`, que passaria de um
+        # teste para o seguinte (e "ana" é usada em muitos).
+        utilizadores.limpar_tentativas()
 
         # 2. Pastas persistentes numa pasta temporária (PDFs,
         # backups, logs), mesma convenção de
