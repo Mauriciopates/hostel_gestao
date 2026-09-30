@@ -2473,9 +2473,18 @@ def cancelar_agendamentos(janela):
         return 0
 
     for identificador in pendentes:
+        # v1.8.0: só DESMARCA — não apaga o comando Tcl. O
+        # `after_cancel` do tkinter apagava-o, mas só o tirava da
+        # lista do widget que chamou (`janela`). Um `after` marcado
+        # por OUTRO widget (o CTkButton marca a animação do clique
+        # nele próprio, 100 ms depois) ficava na lista desse botão,
+        # e o `destroy` tentava apagá-lo outra vez →
+        # "TclError: can't delete Tcl command" e janela em branco
+        # (visto no "Sair" do login). O comando é apagado pelo
+        # `destroy` do widget dono, como qualquer outro.
         try:
-            janela.after_cancel(identificador)
-        except (tkinter.TclError, ValueError):
+            janela.tk.call("after", "cancel", identificador)
+        except tkinter.TclError:
             pass
 
     return len(pendentes)
