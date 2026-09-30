@@ -26,6 +26,7 @@ import contratos
 import estoque
 import propriedades
 import responsaveis
+import termos
 import unidades
 import utilizadores
 import validacoes
@@ -3278,6 +3279,18 @@ def iniciar_sessao():
         registo, motivo = utilizadores.autenticar(username, password)
 
         if registo is not None:
+            # v1.8.0 — mesma ordem do GUI (decisão D9): password de
+            # fábrica trocada primeiro, depois o termo. Recusar
+            # qualquer um dos dois é não entrar.
+            if utilizadores.usa_password_padrao(
+                password
+            ) and not _trocar_password_de_fabrica(registo):
+                return False
+
+            if not _aceitar_termo(registo):
+                print("Sem aceitar o termo não é possível entrar.")
+                return False
+
             _autor = registo
             print(
                 f"Sessão iniciada: {registo['nome']} "
@@ -3292,6 +3305,80 @@ def iniciar_sessao():
 
     print("Demasiadas tentativas falhadas.")
     return False
+
+
+def _trocar_password_de_fabrica(registo):
+    """Obriga a trocar a password de fábrica (mesma regra do
+    `TrocarPasswordModal` do GUI). Devolve False se a pessoa desistir
+    (Enter em branco na password nova)."""
+    print(
+        "\nEsta é a password de fábrica. Tem de a trocar antes de "
+        "entrar (Enter em branco para sair)."
+    )
+
+    while True:
+        nova = getpass.getpass("Password nova: ")
+        if not nova:
+            return False
+
+        if nova != getpass.getpass("Repita a password nova: "):
+            print("As duas passwords não coincidem.")
+            continue
+
+        try:
+            utilizadores.alterar_password(
+                registo["id"], config.PASSWORD_PADRAO, nova, registo
+            )
+        except ValueError as erro:
+            print(erro)
+            continue
+
+        print("Password alterada.")
+        return True
+
+
+def _aceitar_termo(registo):
+    """Mostra o termo de confidencialidade em vigor e regista a
+    aceitação (mesma regra do `TermoModal` do GUI, D10).
+
+    Devolve True se não for preciso aceitar ou se a pessoa aceitar.
+    Sem nenhuma versão publicada, entra (falha de configuração, não
+    do utilizador — igual ao GUI).
+    """
+    try:
+        estado = termos.verificar(
+            termos.TITULAR_RESPONSAVEL, registo["id"],
+            termos.CONFIDENCIALIDADE,
+        )
+    except ValueError:
+        return True
+
+    if not estado["precisa_aceitar"]:
+        return True
+
+    texto = estado["texto"]
+    print(
+        f"\n--- {termos.rotulo(termos.CONFIDENCIALIDADE)} "
+        f"(versão {texto['versao']}) ---\n"
+    )
+    print(texto["texto"])
+    print()
+
+    if not confirmar("Li e aceito o termo"):
+        return False
+
+    try:
+        termos.registar(
+            termos.TITULAR_RESPONSAVEL,
+            registo["id"],
+            termos.CONFIDENCIALIDADE,
+            registado_por_id=registo["id"],
+        )
+    except ValueError as erro:
+        print(erro)
+        return False
+
+    return True
 
 
 def menu_principal():
