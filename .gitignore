@@ -23,3 +23,7 @@ testes/teste_logs/
 Thumbs.db
 # Lista de servidores de base de dados (local de cada PC)
 servidores.json
+
+# Executável (PyInstaller) — reconstrói-se a partir do .spec
+build/
+dist/
