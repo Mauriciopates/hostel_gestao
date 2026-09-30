@@ -26,6 +26,7 @@ import configuracoes
 import migracoes
 import registo_logs
 import repositorio
+import sistema
 from gui import componentes, gui_servidores
 from gui.app import Aplicacao
 
@@ -79,6 +80,12 @@ def main():
 
     configuracoes.garantir_seed()
 
+    # INSTALAÇÃO (v1.8.0, INST-01): numa base sem nenhum responsável,
+    # cria o Master de fábrica — sem isto, uma instalação nova não
+    # deixava ninguém entrar. Numa base em uso não faz nada.
+    if sistema.garantir_master_inicial() is not None:
+        _avisar_master_criado()
+
     while True:
         app = Aplicacao()
 
@@ -101,6 +108,24 @@ def main():
         del app
 
     logger.info("Aplicação terminada")
+
+
+def _avisar_master_criado():
+    """Popup da primeira utilização, com as credenciais de fábrica.
+
+    Ainda não há janela: raiz Tk escondida, como em _aplicar_migracoes.
+    """
+    raiz = tkinter.Tk()
+    raiz.withdraw()
+    componentes.mostrar_sucesso(
+        f"Primeira utilização desta base de dados: foi criado o "
+        f"utilizador Master.\n\n"
+        f"Utilizador: {config.UTILIZADOR_PADRAO}\n"
+        f"Password: {config.PASSWORD_PADRAO}\n\n"
+        f"No primeiro acesso vai ser pedido que troque a password.",
+        titulo="Instalação",
+    )
+    raiz.destroy()
 
 
 def _aplicar_migracoes():

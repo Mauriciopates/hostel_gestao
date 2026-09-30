@@ -660,5 +660,66 @@ class TestePasswordDoAutor(BaseMySQLTest):
         self.assertIn("Reset concluído", texto)
 
 
+# =====================================================================
+# 8. Master inicial numa base nova (v1.8.0, INST-01)
+# =====================================================================
+
+
+class TesteMasterInicial(BaseMySQLTest):
+    """`garantir_master_inicial` — só cria o Master numa base SEM
+    nenhum responsável (cada teste começa com as tabelas vazias)."""
+
+    def test_base_vazia_cria_o_master_padrao(self):
+        master = sistema.garantir_master_inicial()
+
+        self.assertIsNotNone(master)
+        assert master is not None
+        self.assertEqual("RES-001", master["id"])
+        self.assertEqual("Master", master["tipo_utilizador"])
+        self.assertEqual(config.NOME_MASTER_PADRAO, master["nome"])
+
+    def test_master_criado_entra_com_as_credenciais_de_fabrica(self):
+        sistema.garantir_master_inicial()
+
+        registo, motivo = utilizadores.autenticar(
+            config.UTILIZADOR_PADRAO, config.PASSWORD_PADRAO
+        )
+
+        self.assertEqual(utilizadores.MOTIVO_OK, motivo)
+        self.assertIsNotNone(registo)
+        # A password é a de fábrica → o login obriga a trocá-la.
+        self.assertTrue(
+            utilizadores.usa_password_padrao(config.PASSWORD_PADRAO)
+        )
+
+    def test_segunda_vez_nao_cria_outro(self):
+        sistema.garantir_master_inicial()
+
+        self.assertIsNone(sistema.garantir_master_inicial())
+        self.assertEqual(
+            1, len(responsaveis.listar(incluir_inativos=True))
+        )
+
+    def test_base_com_responsaveis_nao_cria(self):
+        """Base em uso (aqui só com um Staff): nunca aparece um
+        "admin" que ninguém pediu."""
+        _criar_staff("Já existia")
+
+        self.assertIsNone(sistema.garantir_master_inicial())
+        self.assertEqual(
+            1, len(responsaveis.listar(incluir_inativos=True))
+        )
+
+    def test_conta_tambem_os_desativados(self):
+        """Uma base só com responsáveis desativados já teve utilizadores
+        — não é uma instalação nova."""
+        staff = _criar_staff("Saiu")
+        # Direto no repositório: o que interessa é a base ficar só com
+        # um responsável inativo, não as regras de quem pode desativar.
+        repositorio.atualizar_responsavel(staff["id"], {"ativo": False})
+
+        self.assertIsNone(sistema.garantir_master_inicial())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

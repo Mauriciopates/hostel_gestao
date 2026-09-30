@@ -117,22 +117,9 @@ def comecar_do_zero(autor, password):
         #     cada tabela, e o TRUNCATE do passo 2 deixou-as vazias —
         #     o Master criado a seguir é RES-001 sem mais nada.
 
-        # 3. Criar o Master padrão
-        master = responsaveis.criar(
-            nome=config.NOME_MASTER_PADRAO,
-            contacto="",
-            tipo_utilizador="Master",
-            autor=None,  # não há autor — o sistema está a nascer de novo
-        )
-
-        # 4. Definir a credencial — por escrita direta.
-        #
-        #    `utilizadores.definir_credencial` exige um `autor` ativo, e
-        #    aqui o sistema está literalmente a nascer de novo: não há
-        #    sessão antes do reset. Por isso replicamos aqui o que o
-        #    `bootstrap.py` já faz no `_definir_credencial_direto` —
-        #    hash + escrita direta na BD, sem validação de permissão.
-        _definir_credencial_inicial(master["id"])
+        # 3 e 4. Criar o Master padrão e a sua credencial — a mesma
+        #    função da instalação (v1.8.0, INST-01).
+        master = criar_master_padrao()
     except Exception:
         logger.critical(
             "Reset incompleto — dados apagados mas o Master padrão não "
@@ -145,6 +132,59 @@ def comecar_do_zero(autor, password):
     logger.warning("Reset concluído — novo Master id=%s", master["id"])
 
     # Devolver o Master para quem chamou (a GUI faz logoff)
+    return master
+
+
+# =====================================================================
+# MASTER PADRÃO — instalação (INST-01) e "Começar do zero"
+# =====================================================================
+
+
+def criar_master_padrao():
+    """Cria o responsável Master de fábrica e a sua credencial.
+
+    Nome, utilizador e password vêm do `config` (NOME_MASTER_PADRAO,
+    UTILIZADOR_PADRAO, PASSWORD_PADRAO). A password de fábrica tem de
+    ser trocada no primeiro acesso (`utilizadores.usa_password_padrao`
+    + TrocarPasswordModal) — por isso pode estar no código e no manual.
+
+    Sem validação de autor: só é chamada quando o sistema está a nascer
+    (base nova, ou logo a seguir ao reset). Devolve o responsável.
+    """
+    master = responsaveis.criar(
+        nome=config.NOME_MASTER_PADRAO,
+        contacto="",
+        tipo_utilizador="Master",
+        autor=None,  # não há autor — o sistema está a nascer
+    )
+
+    # `utilizadores.definir_credencial` exige um autor ativo, que aqui
+    # não existe — por isso a credencial é escrita diretamente.
+    _definir_credencial_inicial(master["id"])
+
+    return master
+
+
+def garantir_master_inicial():
+    """Cria o Master padrão se a base não tiver NENHUM responsável.
+
+    Chamada em cada arranque (main_gui.py e main.py), depois das
+    migrações e antes do login (v1.8.0, INST-01). Numa base nova é o
+    que deixa alguém entrar; numa base em uso não faz nada — conta
+    também os responsáveis desativados, para nunca criar um "admin"
+    numa base que já teve utilizadores.
+
+    Devolve o Master criado, ou None se não foi preciso.
+    """
+    if responsaveis.listar(incluir_inativos=True):
+        return None
+
+    master = criar_master_padrao()
+    logger.warning(
+        "Base sem responsáveis — criado o Master padrão id=%s (%s)",
+        master["id"],
+        config.UTILIZADOR_PADRAO,
+    )
     return master
 
 
