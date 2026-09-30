@@ -38,7 +38,11 @@ class BaseLoginCliTest(BaseMySQLTest):
 
     def setUp(self):
         super().setUp()
-        self.master = sistema.garantir_master_inicial()
+        master = sistema.garantir_master_inicial()
+        # Base de teste vazia → o Master é sempre criado. O assert
+        # também diz ao pyright que daqui para a frente não é None.
+        assert master is not None
+        self.master = master
         # A sessão da CLI é um global do módulo — começa sempre vazia.
         cli._autor = None
 
