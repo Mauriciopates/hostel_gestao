@@ -74,7 +74,9 @@ a = Analysis(
     hookspath=[],
     runtime_hooks=[],
     # Ferramentas de desenvolvimento que nunca devem ir para o cliente.
-    excludes=["unittest", "pyright", "pyflakes", "pycodestyle"],
+    # O `unittest` NÃO pode sair: o matplotlib (via numpy/pyparsing)
+    # importa-o ao arrancar — excluí-lo parte o executável.
+    excludes=["pyright", "pyflakes", "pycodestyle"],
     noarchive=False,
 )
 
