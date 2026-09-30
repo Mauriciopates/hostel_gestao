@@ -472,7 +472,11 @@ class LoginModal(ctk.CTkToplevel):
         self.sair_pedido = True
         self.grab_release()
         componentes.cancelar_agendamentos(self)
-        self.master.destroy()
+        # v1.8.0: destruir DEPOIS de o clique terminar. Destruído aqui
+        # dentro, o Tk apagava o próprio botão "Sair" enquanto ainda
+        # corria o comando dele — "TclError: can't delete Tcl command"
+        # e a janela ficava em branco, pendurada.
+        self.master.after(0, self.master.destroy)
 
 
 class TermoModal(ctk.CTkToplevel):
@@ -802,6 +806,19 @@ class Aplicacao(ctk.CTk):
             self.terminar_pedido = True
             return
 
+        # ORDEM (v1.8.0, decisão D9): login → troca da password de
+        # fábrica → termo. A conta fica segura ANTES de se registar a
+        # aceitação, que fica assim ligada a uma credencial que só a
+        # própria pessoa conhece.
+
+        # 28/09/2026 — password de fábrica: tem de ser trocada antes
+        # de entrar. Quem sai sem trocar não entra.
+        if popup_login.password_padrao and not self._trocar_password():
+            self.terminar_pedido = True
+            componentes.cancelar_agendamentos(self)
+            self.destroy()
+            return
+
         # v1.6.0 — o termo. Corre DEPOIS do login (é preciso saber
         # quem é) e ANTES de desenhar seja o que for. Quem já
         # aceitou a versão em vigor nem dá por isto.
@@ -811,14 +828,6 @@ class Aplicacao(ctk.CTk):
                 "Termo não aceite — acesso recusado, responsavel_id=%s",
                 ativo["id"] if ativo else None,
             )
-            self.terminar_pedido = True
-            componentes.cancelar_agendamentos(self)
-            self.destroy()
-            return
-
-        # 28/09/2026 — password de fábrica: tem de ser trocada antes
-        # de entrar. Quem sai sem trocar não entra.
-        if popup_login.password_padrao and not self._trocar_password():
             self.terminar_pedido = True
             componentes.cancelar_agendamentos(self)
             self.destroy()

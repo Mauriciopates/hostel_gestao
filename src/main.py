@@ -14,6 +14,7 @@ import configuracoes
 import migracoes
 import registo_logs
 import repositorio
+import sistema
 import servidores
 
 logger = logging.getLogger(__name__)
@@ -86,6 +87,15 @@ def main():
     # arranque; sem eles, uma base nova não tem as chaves que o
     # negócio lê.
     configuracoes.garantir_seed()
+
+    # Instalação (v1.8.0, INST-01): mesma regra do main_gui.py.
+    if sistema.garantir_master_inicial() is not None:
+        print(
+            "Primeira utilização desta base de dados: foi criado o "
+            f"utilizador Master '{config.UTILIZADOR_PADRAO}' com a "
+            f"password de fábrica '{config.PASSWORD_PADRAO}'. Troque-a "
+            "no primeiro acesso."
+        )
 
     cli.menu_principal()
 

@@ -19,16 +19,24 @@ dados, sem abrir ficheiros (a lógica está no servidores.py):
 
 5. `garantir_ligacao()` — chamado pelo main_gui.py antes de tudo.
 
+INSTALAÇÃO ASSISTIDA (v1.8.0, INST-02): o "Testar" do formulário, o
+"Testar"/"Usar" do seletor e o arranque já não se ficam por "liga / não
+liga". Se a ligação funciona mas a base de dados não existe, está vazia
+ou incompleta, perguntam se querem criá-la/completá-la
+(`_diagnosticar_e_oferecer`, lógica em `instalacao.py`).
+
 Vive à parte pela mesma razão que o gui_documentos_legais: o
 gui_configuracoes.py já passa das mil linhas.
 """
 
 import logging
+import tkinter
 from typing import TYPE_CHECKING
 
 import customtkinter as ctk
 
 import config
+import instalacao
 import servidores
 from . import componentes
 from . import tema
@@ -279,7 +287,7 @@ class _Formulario:
             text="A testar…", text_color=tema.COR_TEXTO_SECUNDARIO
         )
         self.update_idletasks()
-        ok, texto = servidores.testar(servidor, password)
+        ok, texto = _diagnosticar_e_oferecer(servidor, password)
         self._mostrar(texto, ok)
         return ok
 
@@ -453,7 +461,9 @@ def _linha_servidor(master, id_servidor, servidor):
 def _testar(master, id_servidor, resultado):
     resultado.configure(text="A testar…", text_color=tema.COR_TEXTO_SECUNDARIO)
     master.update_idletasks()
-    ok, texto = servidores.testar_id(id_servidor)
+    ok, texto = _diagnosticar_e_oferecer(
+        servidores.obter(id_servidor), servidores.obter_password(id_servidor)
+    )
     resultado.configure(
         text=("✓ " if ok else "✗ ") + texto,
         text_color=tema.TEXTO_LIVRE if ok else tema.TEXTO_ERRO)
@@ -577,6 +587,45 @@ class JanelaFalhaLigacao(ctk.CTk):
         self.destroy()
 
 
+def _diagnosticar_e_oferecer(servidor, password):
+    """Testa o servidor e, se a base se resolve criando-a ou
+    completando-a, pergunta e prepara-a (INST-02).
+
+    Devolve (ok, texto) — ok só é True com a base PRONTA. Se o
+    utilizador disser que não, ou se a preparação falhar, devolve
+    False com o texto do diagnóstico (ou do erro).
+    """
+    estado, texto, _ = instalacao.diagnosticar(servidor, password)
+
+    if estado == instalacao.PRONTA:
+        return True, texto
+    if not instalacao.pode_preparar(estado):
+        return False, texto
+
+    titulo = "Preparar a base de dados"
+    if not componentes.confirmar(
+        instalacao.pergunta(estado, servidor), titulo=titulo
+    ):
+        return False, texto
+
+    try:
+        instalacao.preparar(servidor, password)
+    except ValueError as erro:
+        componentes.mostrar_erro(str(erro), titulo=titulo)
+        return False, str(erro)
+
+    estado, texto, _ = instalacao.diagnosticar(servidor, password)
+    if estado == instalacao.PRONTA:
+        componentes.mostrar_sucesso(
+            f"Base de dados '{servidor['base']}' pronta.\n\n"
+            f"Os dados iniciais (categorias, textos legais) são "
+            f"criados automaticamente quando a aplicação arrancar "
+            f"com esta base.",
+            titulo=titulo,
+        )
+    return estado == instalacao.PRONTA, texto
+
+
 def garantir_ligacao():
     """Chamado pelo main_gui.py antes do backup, do seed e do login.
 
@@ -595,7 +644,16 @@ def garantir_ligacao():
                 servidores.reiniciar_aplicacao()
             return False
 
-        ok, texto = servidores.testar_id(id_servidor)
+        # Ainda não há janela nenhuma: os popups de "criar a base?"
+        # precisam de uma raiz Tk, escondida para não aparecer vazia.
+        raiz = tkinter.Tk()
+        raiz.withdraw()
+        try:
+            ok, texto = _diagnosticar_e_oferecer(
+                servidor, servidores.obter_password(id_servidor)
+            )
+        finally:
+            raiz.destroy()
         if ok:
             logger.info("Servidor '%s': %s", id_servidor, texto)
             return True

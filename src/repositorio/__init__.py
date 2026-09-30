@@ -212,6 +212,13 @@ from .rep_configuracoes import (
     listar_configuracoes,
     procurar_configuracao,
 )
+from .rep_esquema import (
+    criar_tabelas,
+    estado_base,
+    instrucoes_esquema,
+    preparar_base,
+    tabelas_do_esquema,
+)
 from .rep_migracoes import (
     aplicar_migracao,
     garantir_tabela_migracoes,
@@ -238,6 +245,11 @@ __all__ = [
     "obter_conexao",
     "proximo_id",
     "subprocess",
+    "criar_tabelas",
+    "estado_base",
+    "preparar_base",
+    "instrucoes_esquema",
+    "tabelas_do_esquema",
     "aplicar_migracao",
     "garantir_tabela_migracoes",
     "listar_migracoes_aplicadas",
