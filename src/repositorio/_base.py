@@ -228,4 +228,8 @@ def obter_conexao():
         user=config.DB_USER,
         password=config.DB_PASSWORD,
         database=config.DB_NAME,
+        # Python puro: os plugins de autenticação vêm no código; a
+        # extensão em C procura DLLs que o PyInstaller não copia
+        # (erro 2059 no .exe). Ver rep_esquema._ligar_sem_base.
+        use_pure=True,
     )

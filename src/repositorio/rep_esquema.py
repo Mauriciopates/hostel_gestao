@@ -86,7 +86,14 @@ _NOME_BASE_VALIDO = re.compile(r"^[A-Za-z0-9_]+$")
 
 def _ligar_sem_base(credenciais):
     dados = {k: v for k, v in credenciais.items() if k != "database"}
-    return mysql.connector.connect(**dados, connection_timeout=5)
+    # use_pure=True (v1.8.0): o conector em Python puro traz os plugins
+    # de autenticação (mysql_native_password, caching_sha2_password)
+    # no próprio código. A extensão em C procura-os em DLLs que o
+    # PyInstaller não copia — no .exe dava o erro 2059 "Authentication
+    # plugin 'mysql_native_password' cannot be loaded" (ligação à VM).
+    return mysql.connector.connect(
+        **dados, connection_timeout=5, use_pure=True
+    )
 
 
 def estado_base(credenciais):

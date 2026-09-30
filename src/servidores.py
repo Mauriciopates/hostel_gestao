@@ -412,8 +412,15 @@ def testar(servidor, password):
 
     try:
         abrir_tunel(servidor)
+        # use_pure=True (v1.8.0): o conector em Python puro traz os plugins
+        # de autenticação (mysql_native_password, caching_sha2_password)
+        # no próprio código. A extensão em C procura-os em DLLs que o
+        # PyInstaller não copia — no .exe dava o erro 2059 "Authentication
+        # plugin 'mysql_native_password' cannot be loaded" (ligação à VM).
         conexao = mysql.connector.connect(
-            **credenciais(servidor, password), connection_timeout=5
+            **credenciais(servidor, password),
+            connection_timeout=5,
+            use_pure=True,
         )
         try:
             cursor = conexao.cursor()
