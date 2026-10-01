@@ -44,6 +44,7 @@ import unittest
 from decimal import Decimal
 from typing import Any
 from pathlib import Path
+from unittest.mock import patch
 
 _SRC = Path(__file__).resolve().parent.parent / "src"
 if str(_SRC) not in sys.path:
@@ -147,6 +148,25 @@ class TesteHelpersPuros(unittest.TestCase):
 # ---------------------------------------------------------------------
 
 
+class _menu_nativo_simulado:
+    """Troca o menu nativo do CTkOptionMenu (e a vigilância que o
+    Seletor agenda a seguir) por mocks, durante um `with`. Devolve o
+    mock do menu, para o teste confirmar que foi chamado."""
+
+    def __enter__(self):
+        from gui.componentes import Seletor
+
+        self._menu = patch.object(ctk.CTkOptionMenu, "_open_dropdown_menu")
+        self._vigia = patch.object(Seletor, "_vigiar_menu_nativo")
+        self._vigia.start()
+        return self._menu.start()
+
+    def __exit__(self, *erro):
+        self._menu.stop()
+        self._vigia.stop()
+        return False
+
+
 class TesteSeletor(unittest.TestCase):
     """`componentes.Seletor` — herda de `CTkOptionMenu` e troca o
     menu nativo por um painel com scroll e pesquisa quando a lista
@@ -189,12 +209,19 @@ class TesteSeletor(unittest.TestCase):
         s = self._criar_seletor(["A", "B", "C"])
 
         # Chama diretamente — não há clique que chegue ao _open_dropdown_menu
-        # sem abrir um menu real de sistema operativo (que bloqueia o
-        # teste). Isto NÃO é handler de evento; é o método que decide.
-        # A regra do PASSO 9 é sobre handlers de eventos, não sobre
-        # métodos internos de coordenação.
-        s._open_dropdown_menu()
+        # sem abrir um menu real de sistema operativo. Isto NÃO é handler
+        # de evento; é o método que decide. A regra do PASSO 9 é sobre
+        # handlers de eventos, não sobre métodos internos de coordenação.
+        #
+        # v1.8.0: o menu nativo é SUBSTITUÍDO por um mock. No Windows o
+        # menu real é modal — ficava aberto no ecrã (A / B / C) e a
+        # bateria parava até alguém carregar numa tecla. O que se testa
+        # é a DECISÃO (chamar o nativo, não criar painel), não o menu do
+        # sistema operativo.
+        with _menu_nativo_simulado() as nativo:
+            s._open_dropdown_menu()
 
+        nativo.assert_called_once()
         # Sem painel próprio.
         self.assertIsNone(s._painel)
 
@@ -212,7 +239,9 @@ class TesteSeletor(unittest.TestCase):
     def test_lista_no_limite_usa_menu_nativo(self):
         """O limite é "menor ou igual" → menu nativo."""
         s = self._criar_seletor(["A", "B", "C"], limite=3)
-        s._open_dropdown_menu()
+        with _menu_nativo_simulado() as nativo:
+            s._open_dropdown_menu()
+        nativo.assert_called_once()
         self.assertIsNone(s._painel)
 
     def test_lista_um_acima_do_limite_abre_painel(self):

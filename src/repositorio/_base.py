@@ -75,13 +75,17 @@ def criar_backup():
         with open(destino, "w", encoding="utf-8") as f:
             subprocess.run(
                 comando,
+                stdin=subprocess.DEVNULL,
                 stdout=f,
                 stderr=subprocess.PIPE,
                 env=ambiente,
                 check=True,
                 text=True,
+                # Sem janela preta de consola no executável (v1.8.0);
+                # fora do Windows a constante não existe → 0.
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, OSError):
         logger.warning(
             "Falha ao criar backup diário — mysqldump indisponível ou "
             "credenciais inválidas"
@@ -224,4 +228,8 @@ def obter_conexao():
         user=config.DB_USER,
         password=config.DB_PASSWORD,
         database=config.DB_NAME,
+        # Python puro: os plugins de autenticação vêm no código; a
+        # extensão em C procura DLLs que o PyInstaller não copia
+        # (erro 2059 no .exe). Ver rep_esquema._ligar_sem_base.
+        use_pure=True,
     )

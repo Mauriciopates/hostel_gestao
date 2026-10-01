@@ -35,7 +35,9 @@ responsável ativo) e validam antes de agir.
 import hashlib
 import hmac
 import logging
+import math
 import os
+import time
 from datetime import date, datetime
 
 import config
@@ -80,6 +82,21 @@ MOTIVO_NAO_ENCONTRADO = "nao_encontrado"
 MOTIVO_SEM_CREDENCIAL = "sem_credencial"
 MOTIVO_PASSWORD_ERRADA = "password_errada"
 MOTIVO_INATIVO = "inativo"
+MOTIVO_BLOQUEADO = "bloqueado"
+
+# Bloqueio por tentativas falhadas (v1.8.0). Contagem EM MEMÓRIA
+# (decisão do aluno, 30/09/2026): só dura enquanto a aplicação está
+# aberta — fechar e reabrir limpa-a. Limitação aceite: a barreira
+# contra ataques diretos à base é a do próprio MySQL
+# (FAILED_LOGIN_ATTEMPTS, no INST-05).
+# Chave: username em minúsculas e sem espaços; valor:
+# {"falhas": falhas seguidas, "ate": fim do bloqueio}.
+_tentativas = {}
+
+# Relógio do bloqueio. `time.monotonic` nunca anda para trás (a hora
+# do sistema pode ser mudada à mão para "saltar" o bloqueio). Fica
+# numa variável para os testes o poderem substituir.
+_relogio = time.monotonic
 
 
 # ---------------------------------------------------------------------
@@ -268,10 +285,17 @@ def autenticar(username, password):
     Nunca levanta erro — é o LoginModal que decide o que mostrar
     ao utilizador, a partir do motivo.
 
-    Regista o sucesso em `ultimo_login` (data e hora). Não
-    regista tentativas falhadas — a decisão de 17/09/2026 foi
-    deixar essa política para a Fase 3 (web), onde o Django traz
-    o rate-limit nativo.
+    Regista o sucesso em `ultimo_login` (data e hora).
+
+    BLOQUEIO (v1.8.0, revê a decisão de 17/09/2026 que o deixava
+    para a Fase 3): cada falha com os dois campos preenchidos conta
+    para o username escrito — exista ele ou não, para o bloqueio não
+    revelar que utilizadores existem. Ao fim de
+    `config.LOGIN_FALHAS_ANTES_BLOQUEIO` falhas seguidas, esse
+    username fica bloqueado (`duracao_bloqueio`). Durante o bloqueio
+    devolve `MOTIVO_BLOQUEADO` SEM validar a password — senão o
+    bloqueio não travava nada. Um login certo limpa a contagem.
+    Campos vazios não contam (Enter sem querer).
 
     O motivo `sem_credencial` distingue dois casos que parecem
     um só: o responsável existe na base mas `username` ainda é
@@ -292,12 +316,19 @@ def autenticar(username, password):
         )
         return None, MOTIVO_NAO_ENCONTRADO
 
+    if segundos_bloqueio(username) > 0:
+        logger.warning(
+            "Falha de autenticação — motivo=%s", MOTIVO_BLOQUEADO
+        )
+        return None, MOTIVO_BLOQUEADO
+
     responsavel = repositorio.procurar_responsavel_por_username(username)
 
     if responsavel is None:
         logger.warning(
             "Falha de autenticação — motivo=%s", MOTIVO_NAO_ENCONTRADO
         )
+        _registar_falha(username)
         return None, MOTIVO_NAO_ENCONTRADO
 
     if not responsavel["password_hash"]:
@@ -306,6 +337,7 @@ def autenticar(username, password):
             MOTIVO_SEM_CREDENCIAL,
             responsavel["id"],
         )
+        _registar_falha(username)
         return None, MOTIVO_SEM_CREDENCIAL
 
     if not responsavel["ativo"]:
@@ -314,6 +346,7 @@ def autenticar(username, password):
             MOTIVO_INATIVO,
             responsavel["id"],
         )
+        _registar_falha(username)
         return None, MOTIVO_INATIVO
 
     if not _validar_password(password, responsavel["password_hash"]):
@@ -322,6 +355,7 @@ def autenticar(username, password):
             MOTIVO_PASSWORD_ERRADA,
             responsavel["id"],
         )
+        _registar_falha(username)
         return None, MOTIVO_PASSWORD_ERRADA
 
     # Sucesso — regista o último acesso. `datetime.now()` porque a
@@ -332,11 +366,72 @@ def autenticar(username, password):
         responsavel["id"], {"ultimo_login": agora}
     )
     responsavel["ultimo_login"] = agora
+    _tentativas.pop(_chave(username), None)
 
     logger.info(
         "Autenticação bem-sucedida — responsavel_id=%s", responsavel["id"]
     )
     return responsavel, MOTIVO_OK
+
+
+# ---------------------------------------------------------------------
+# Bloqueio por tentativas falhadas (v1.8.0)
+# ---------------------------------------------------------------------
+
+
+def _chave(username):
+    """'  Ana ' e 'ana' são o mesmo utilizador para o bloqueio."""
+    return (username or "").strip().lower()
+
+
+def duracao_bloqueio(falhas):
+    """Segundos de bloqueio ao fim de `falhas` falhas seguidas.
+
+    Função pura (só contas). Antes do limite: 0. No limite:
+    `LOGIN_BLOQUEIO_INICIAL_S`; cada falha a mais dobra, até
+    `LOGIN_BLOQUEIO_MAXIMO_S`. Com os valores de fábrica:
+    3 → 30 s, 4 → 60 s, 5 → 120 s, 6 → 240 s, 7 ou mais → 300 s.
+    """
+    limite = config.LOGIN_FALHAS_ANTES_BLOQUEIO
+    if falhas < limite:
+        return 0
+    segundos = config.LOGIN_BLOQUEIO_INICIAL_S * 2 ** (falhas - limite)
+    return min(segundos, config.LOGIN_BLOQUEIO_MAXIMO_S)
+
+
+def segundos_bloqueio(username):
+    """Segundos que faltam para `username` poder tentar outra vez.
+
+    0 = pode tentar já. Arredonda para cima (faltam 0,2 s → 1), para
+    o ecrã nunca mostrar "Aguarde 0 s" com o botão ainda parado.
+    """
+    estado = _tentativas.get(_chave(username))
+    if estado is None:
+        return 0
+    return max(0, math.ceil(estado["ate"] - _relogio()))
+
+
+def _registar_falha(username):
+    """Conta mais uma falha e, se passou o limite, bloqueia."""
+    estado = _tentativas.setdefault(
+        _chave(username), {"falhas": 0, "ate": 0.0}
+    )
+    estado["falhas"] += 1
+    duracao = duracao_bloqueio(estado["falhas"])
+    if duracao:
+        estado["ate"] = _relogio() + duracao
+        # Sem o username, pela mesma razão das outras falhas.
+        logger.warning(
+            "Login bloqueado %s s após %s falhas seguidas",
+            duracao,
+            estado["falhas"],
+        )
+
+
+def limpar_tentativas():
+    """Esquece todas as falhas. Usado pelos testes: o dicionário vive
+    no módulo e passaria de um teste para o seguinte."""
+    _tentativas.clear()
 
 
 def verificar_password(responsavel_id, password):

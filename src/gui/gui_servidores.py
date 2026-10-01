@@ -271,6 +271,10 @@ class _Formulario:
     # -- ações ---------------------------------------------------------
 
     def _mostrar(self, texto, ok):
+        # O teste pode acabar depois de a janela ter sido fechada
+        # (ex.: a app saiu durante o popup "criar tabelas?").
+        if not self.resultado.winfo_exists():
+            return
         self.resultado.configure(
             text=("✓ " if ok else "✗ ") + texto,
             text_color=tema.TEXTO_LIVRE if ok else tema.TEXTO_ERRO)

@@ -989,5 +989,129 @@ class TesteResponsaveisVisiveis(BaseMySQLTest):
         self.assertEqual(self._ids(None), set())
 
 
+# ---------------------------------------------------------------------
+# Bloqueio do login por tentativas falhadas (v1.8.0, 30/09/2026)
+# ---------------------------------------------------------------------
+
+
+class TesteDuracaoBloqueio(unittest.TestCase):
+    """A regra pura — sem base de dados. Valores de fábrica do config:
+    3 falhas → 30 s, a dobrar, máximo 300 s."""
+
+    def test_antes_do_limite_nao_bloqueia(self):
+        for falhas in (0, 1, 2):
+            self.assertEqual(utilizadores.duracao_bloqueio(falhas), 0)
+
+    def test_no_limite_e_a_dobrar(self):
+        esperado = {3: 30, 4: 60, 5: 120, 6: 240}
+        for falhas, segundos in esperado.items():
+            self.assertEqual(
+                utilizadores.duracao_bloqueio(falhas), segundos
+            )
+
+    def test_nunca_passa_do_maximo(self):
+        self.assertEqual(utilizadores.duracao_bloqueio(7), 300)
+        self.assertEqual(utilizadores.duracao_bloqueio(50), 300)
+
+
+class TesteBloqueioLogin(BaseMySQLTest):
+    """O `autenticar` com o bloqueio. O relógio do módulo é
+    substituído (`_relogio`) para o tempo "passar" sem esperar."""
+
+    def setUp(self):
+        super().setUp()
+        self.agora = 1000.0
+        self._relogio_original = utilizadores._relogio
+        utilizadores._relogio = lambda: self.agora
+        master = _criar_master()
+        self.alvo = _criar_staff("Ana")
+        _definir_credencial(self.alvo, "ana", autor=master)
+
+    def tearDown(self):
+        utilizadores._relogio = self._relogio_original
+        super().tearDown()
+
+    def _falhar(self, vezes, username="ana"):
+        for _ in range(vezes):
+            utilizadores.autenticar(username, "errada_123")
+
+    def test_duas_falhas_ainda_deixam_entrar(self):
+        self._falhar(2)
+        registo, motivo = utilizadores.autenticar("ana", "password123")
+        self.assertEqual(motivo, utilizadores.MOTIVO_OK)
+        self.assertIsNotNone(registo)
+
+    def test_terceira_falha_bloqueia_30_segundos(self):
+        self._falhar(3)
+        self.assertEqual(utilizadores.segundos_bloqueio("ana"), 30)
+
+    def test_bloqueado_recusa_ate_a_password_certa(self):
+        """Durante o bloqueio a password nem é validada."""
+        self._falhar(3)
+        registo, motivo = utilizadores.autenticar("ana", "password123")
+        self.assertIsNone(registo)
+        self.assertEqual(motivo, utilizadores.MOTIVO_BLOQUEADO)
+
+    def test_passado_o_tempo_volta_a_entrar(self):
+        self._falhar(3)
+        self.agora += 30
+        self.assertEqual(utilizadores.segundos_bloqueio("ana"), 0)
+        _, motivo = utilizadores.autenticar("ana", "password123")
+        self.assertEqual(motivo, utilizadores.MOTIVO_OK)
+
+    def test_contagem_arredonda_para_cima(self):
+        self._falhar(3)
+        self.agora += 29.5
+        self.assertEqual(utilizadores.segundos_bloqueio("ana"), 1)
+
+    def test_falha_depois_do_bloqueio_dobra_a_espera(self):
+        self._falhar(3)
+        self.agora += 30
+        self._falhar(1)
+        self.assertEqual(utilizadores.segundos_bloqueio("ana"), 60)
+
+    def test_tentativa_durante_bloqueio_nao_aumenta_a_espera(self):
+        self._falhar(3)
+        self._falhar(5)
+        self.assertEqual(utilizadores.segundos_bloqueio("ana"), 30)
+
+    def test_login_certo_limpa_a_contagem(self):
+        self._falhar(2)
+        utilizadores.autenticar("ana", "password123")
+        self._falhar(2)
+        self.assertEqual(utilizadores.segundos_bloqueio("ana"), 0)
+
+    def test_maiusculas_e_espacos_contam_para_o_mesmo(self):
+        utilizadores.autenticar("ANA", "errada_123")
+        utilizadores.autenticar("  ana ", "errada_123")
+        utilizadores.autenticar("Ana", "errada_123")
+        self.assertEqual(utilizadores.segundos_bloqueio("ana"), 30)
+
+    def test_username_inexistente_tambem_bloqueia(self):
+        """Senão o bloqueio revelava quais utilizadores existem."""
+        self._falhar(3, username="ninguem")
+        _, motivo = utilizadores.autenticar("ninguem", "x_qualquer")
+        self.assertEqual(motivo, utilizadores.MOTIVO_BLOQUEADO)
+
+    def test_campos_vazios_nao_contam(self):
+        for _ in range(5):
+            utilizadores.autenticar("ana", "")
+        self.assertEqual(utilizadores.segundos_bloqueio("ana"), 0)
+
+    def test_bloqueio_de_um_nao_afeta_outro(self):
+        self._falhar(3, username="outro")
+        _, motivo = utilizadores.autenticar("ana", "password123")
+        self.assertEqual(motivo, utilizadores.MOTIVO_OK)
+
+    def test_log_do_bloqueio_nao_tem_o_username(self):
+        with self.assertLogs("utilizadores", level="WARNING") as registo:
+            self._falhar(3)
+            utilizadores.autenticar("ana", "password123")
+        texto = "\n".join(registo.output)
+        self.assertIn("bloqueado", texto)
+        self.assertNotIn("'ana'", texto)
+        self.assertNotIn("password123", texto)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

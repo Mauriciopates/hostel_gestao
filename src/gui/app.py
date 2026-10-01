@@ -60,8 +60,6 @@ from types import TracebackType
 
 import customtkinter as ctk
 
-from pathlib import Path
-
 import config
 import termos
 import utilizadores
@@ -83,8 +81,13 @@ from .sessao import tipo_utilizador_ativo  # <<< NOVO >>> — filtro de itens
 
 logger = logging.getLogger(__name__)
 
-_PASTA_IMG = Path(__file__).resolve().parent.parent.parent / "img"
-_ICONE_JANELA = _PASTA_IMG / "ico_hostel.png"
+# O `iconbitmap` do Windows só aceita `.ico` (com o `.png` falhava em
+# silêncio, dentro do try). O mesmo `.ico` é o ícone do executável.
+_ICONE_JANELA = config.PASTA_IMG / "ico_hostel.ico"
+
+# Nome na barra de título de todas as janelas, com a versão logo a
+# seguir (v1.8.0) — vê-se sempre, mesmo quando o rodapé fica cortado.
+_NOME_APP = f"Hostel Clean v{config.VERSAO}"
 
 
 # Perfis que veem cada item da sidebar (26/09/2026). A barreira
@@ -251,7 +254,11 @@ class LoginModal(ctk.CTkToplevel):
         # desenhar o que quer que seja.
         self.password_padrao = False
 
-        self.title("Hostel Clean — Entrar")
+        # v1.8.0 — id do `after` da contagem do bloqueio; None = sem
+        # bloqueio a decorrer.
+        self._contagem_id = None
+
+        self.title(f"{_NOME_APP} — Entrar")
         largura = 380
         altura = 400
         self.geometry(f"{largura}x{altura}")
@@ -350,14 +357,9 @@ class LoginModal(ctk.CTkToplevel):
             hover_color=tema.COR_BORDA,
             command=self._sair,
         )
-        self.botao_sair.pack(fill="x", padx=24, pady=(0, 8))
-
-        ctk.CTkLabel(
-            self,
-            text=f"v{config.VERSAO}",
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=10),
-        ).pack(pady=(0, 16))
+        # A versão passou para a barra de título (_NOME_APP): aqui em
+        # baixo ficava cortada pela altura da janela.
+        self.botao_sair.pack(fill="x", padx=24, pady=(0, 16))
 
         self.campo_username.focus_set()
 
@@ -370,6 +372,11 @@ class LoginModal(ctk.CTkToplevel):
 
     def _entrar(self):
         """Inicia a validação com feedback visual."""
+        # Durante o bloqueio o botão está desativado, mas o Enter
+        # continua ligado aos campos — este `if` trava-o também.
+        if self._contagem_id is not None:
+            return
+
         username = self.campo_username.get().strip()
         password = self.campo_password.get()
 
@@ -384,10 +391,15 @@ class LoginModal(ctk.CTkToplevel):
         self._restaurar_interface()
 
         if registo is None:
+            self.campo_password.delete(0, "end")
+            # v1.8.0 — esta falha pode ter sido a que ativou o
+            # bloqueio: nesse caso mostra logo a contagem.
+            if utilizadores.segundos_bloqueio(username) > 0:
+                self._contar_bloqueio(username)
+                return
             self.erro.configure(
                 text=_MENSAGENS_ERRO.get(motivo, "Credenciais inválidas.")
             )
-            self.campo_password.delete(0, "end")
             self.campo_password.focus_set()
             return
 
@@ -455,6 +467,33 @@ class LoginModal(ctk.CTkToplevel):
             self.after_cancel(self._animacao_id)
             self._animacao_id = None
 
+    # -- bloqueio por tentativas falhadas (v1.8.0) -------------------
+
+    def _contar_bloqueio(self, username):
+        """Contagem decrescente, de segundo a segundo.
+
+        Quem sabe quanto falta é o módulo
+        (`utilizadores.segundos_bloqueio`) — o ecrã só pergunta e
+        mostra. Enquanto dura, o "Entrar" fica desativado; o
+        "Sair" continua a funcionar. No fim, limpa a mensagem e
+        devolve o foco à password.
+        """
+        segundos = utilizadores.segundos_bloqueio(username)
+        if segundos <= 0:
+            self._contagem_id = None
+            self.botao_entrar.configure(state="normal")
+            self.erro.configure(text="")
+            self.campo_password.focus_set()
+            return
+
+        self.botao_entrar.configure(state="disabled")
+        self.erro.configure(
+            text=f"Demasiadas tentativas. Aguarde {segundos} s."
+        )
+        self._contagem_id = self.after(
+            1000, lambda: self._contar_bloqueio(username)
+        )
+
     # -- saída -------------------------------------------------------
 
     def _sair(self):
@@ -470,6 +509,9 @@ class LoginModal(ctk.CTkToplevel):
         variável Python pura, não depende do Tk.
         """
         self.sair_pedido = True
+        if self._contagem_id is not None:
+            self.after_cancel(self._contagem_id)
+            self._contagem_id = None
         self.grab_release()
         componentes.cancelar_agendamentos(self)
         # v1.8.0: destruir DEPOIS de o clique terminar. Destruído aqui
@@ -506,7 +548,7 @@ class TermoModal(ctk.CTkToplevel):
         self.aceite = False
         self.responsavel = responsavel
 
-        self.title("Hostel Clean — Termo de uso")
+        self.title(f"{_NOME_APP} — Termo de uso")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
         self.transient(master)
@@ -653,7 +695,7 @@ class TrocarPasswordModal(ctk.CTkToplevel):
         self.trocada = False
         self.responsavel = responsavel
 
-        self.title("Hostel Clean — Nova password")
+        self.title(f"{_NOME_APP} — Nova password")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
         self.transient(master)
@@ -777,7 +819,7 @@ class Aplicacao(ctk.CTk):
         # arrancar o loop.
         self.terminar_pedido = False
 
-        self.title("Hostel Clean — Gestão de Alojamento")
+        self.title(f"{_NOME_APP} — Gestão de Alojamento")
 
         try:
             self.iconbitmap(str(_ICONE_JANELA))
