@@ -3,6 +3,121 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [1.8.0] — 2026-10-01
+
+Migrações, instalação assistida e empacotamento (branches `migracoes`,
+`instalacao` e `empacotamento`, decisões D1–D14). A aplicação passa a
+instalar-se sozinha numa base vazia, a evoluir o esquema por migrações
+numeradas e a ser entregue como executável Windows; o servidor de base
+de dados passa a montar-se com um só script numa VM Ubuntu.
+
+### Adicionado
+
+- **Sistema de migrações** — `src/migracoes.py` (lista ordenada,
+  `validar_lista`, `aplicar_pendentes`) e
+  `src/repositorio/rep_migracoes.py`; tabela `migracoes_aplicadas`
+  (id, nome, aplicada_em), que faz parte do esquema oficial. Cada
+  migração só é registada depois de todas as instruções correrem
+  (rollback em caso de falha); uma falha impede a app de abrir.
+  Arranque GUI e CLI: ligação → backup → migrações → seeds → Master
+  inicial → login.
+  - `0001_categoria_compra_de_stock` — cria a categoria se não
+    existir, com o ID seguinte ao maior CAT-NNN.
+  - `0002_textos_legais_demo` — versão 0.1 fictícia dos três textos
+    legais, só para tipos sem nenhuma versão (`src/migracoes_textos.py`).
+
+- **Esquema oficial numa só fonte** (INST-03) — `src/bd/esquema.sql`
+  (26 tabelas, só `CREATE TABLE IF NOT EXISTS`, tudo em
+  `utf8mb4_unicode_ci`), lido pela app e pelos testes
+  (`config.FICHEIRO_ESQUEMA`, `repositorio/rep_esquema.py`). Regra:
+  mudança de esquema = migração nova + `esquema.sql` no mesmo commit.
+
+- **Preparação da base** (INST-02) — `src/instalacao.py`:
+  diagnóstico ERRO / SEM_BASE / VAZIA / INCOMPLETA / ALHEIA / PRONTA.
+  Base vazia ou incompleta → a app oferece criar as tabelas; base
+  com tabelas alheias é recusada; sem permissão de CREATE DATABASE,
+  mensagem a pedir a criação manual (a app nunca pede o root).
+  Integrado no Testar/Usar do seletor de servidores e no arranque.
+
+- **Master de fábrica** (INST-01) — `sistema.garantir_master_inicial`
+  cria o utilizador `admin` só se a base não tiver nenhum
+  responsável; popup "Instalação" com as credenciais (CLI: mensagem
+  no terminal). Ordem do 1.º arranque: login → troca obrigatória da
+  password de fábrica → aceitação do termo de uso. A CLI passa a
+  pedir a troca da password e a aceitação do termo
+  (`testes/teste_cli_login.py`).
+
+- **Bloqueio do login** — 3 falhas seguidas bloqueiam 30 s, a dobrar
+  até 300 s (contagem em memória, por username, exista ou não).
+  `config.LOGIN_FALHAS_ANTES_BLOQUEIO`, `LOGIN_BLOQUEIO_INICIAL_S`,
+  `LOGIN_BLOQUEIO_MAXIMO_S`; contagem decrescente no LoginModal.
+
+- **Executável Windows** (INST-04) — `HostelGestao.spec` (PyInstaller
+  `--onedir`, comentado), `img/ico_hostel.ico`, `config.PASTA_IMG`
+  (funciona no `.exe` e no código). Build:
+  `pyinstaller HostelGestao.spec --clean --noconfirm` →
+  `dist/HostelGestao/`.
+
+- **Servidor de base de dados na VM** (INST-05) —
+  `vm/instalar_vm.sh`: num Ubuntu 26.04 limpo instala Docker e
+  MySQL 8.4 LTS em `127.0.0.1:6213`, cria a base `hostel_gestao` e o
+  utilizador `hostel_app` com permissões mínimas e
+  `FAILED_LOGIN_ATTEMPTS 3 PASSWORD_LOCK_TIME 1`; passwords
+  aleatórias em `/opt/hostel/.env` (600); idempotente.
+  `vm/configurar_ip_fixo.sh`: IP fixo `192.168.56.11` na placa
+  Host-Only. `.gitattributes` força fins de linha LF nos `.sh`.
+
+- **Manual de instalação da VM** —
+  `docs/4_manual/Manual_Instalacao_VM_v1.8.0.docx`, validado com uma
+  instalação do zero: preparar o Windows (Hyper-V / Segurança
+  baseada em virtualização), 8 passos com capturas, problemas
+  conhecidos, portas e segurança.
+
+- Versão na barra de título de todas as janelas.
+
+### Alterado
+
+- **IDs calculados, não guardados** — `proximo_id` por `MAX(id)` da
+  tabela de cada prefixo (20 prefixos); `contadores.json` deixa de
+  existir e `sistema._reiniciar_contadores` foi removida. Corrige o
+  bug do contador dessincronizado (CAT e ITD com chave duplicada).
+- Ligações MySQL com `use_pure=True` (no `.exe` a extensão C falhava
+  com o erro 2059 ao ligar à VM).
+- `mysqldump` sem janela de consola e com `stdin` fechado; se não
+  existir, a app avisa em vez de falhar.
+- `testes/apoio_BD.py` lê o `esquema.sql` (sai a cópia manual do
+  esquema, que não tinha 4 índices).
+- `config.VERSAO`: 1.7.0 → 1.8.0.
+
+### Corrigido
+
+- Base nova sem utilizadores: ninguém conseguia entrar.
+- "Sair" do login: `TclError` e janela em branco (`after(0, destroy)`
+  e `cancelar_agendamentos` só desmarca o `after`).
+- `servidores.remover` recusava o servidor gravado como ativo mesmo
+  com outro forçado por `HOSTEL_SERVIDOR`.
+- Ícone da janela nunca aparecia no Windows (agora `.ico`).
+- `.exe`: "No module named 'unittest'" (o `excludes` não pode tirar
+  o `unittest`, que o matplotlib usa).
+- Seletor de servidores: `TclError` ao fechar a app durante o teste
+  da ligação.
+- Testes do seletor abriam o menu nativo do Windows e paravam a
+  bateria (agora com mock).
+
+### Notas
+
+- Bateria completa no Windows: 1181 testes, OK
+  (`HOSTEL_SERVIDOR=local`).
+- `pyflakes`, `pycodestyle` (79 col.) e `pyright` limpos.
+- O VirtualBox precisa da virtualização do processador livre: com a
+  Segurança baseada em virtualização do Windows ativa, a VM corre em
+  modo lento (secção 5 do manual).
+- Entrega: pasta `C:\HostelGestao_instalacao\` em `.zip` com
+  `HostelGestao\`, `vm\` e `docs\` (decisão D14). Pré-requisitos no
+  PC: servidor MySQL acessível e `mysqldump`.
+- Por fazer: acrescentar `migracoes_aplicadas` ao Modelo de Dados
+  (.docx/.drawio).
+
 ## [1.7.0] — 2026-09-28
 
 Regras de negócio nos módulos (branch `regras`, commit 4aad095). A GUI
