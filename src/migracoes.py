@@ -153,10 +153,22 @@ def aplicar_pendentes(migracoes=None):
     Se uma migração falhar, pára aí (as seguintes não correm) e
     levanta ValueError com o nome da migração e o erro original —
     quem chama decide não abrir a aplicação (decisão 2 do passo C).
+
+    CONCORRÊNCIA (v1.8.1): tudo corre dentro do bloqueio de migrações
+    da base (`repositorio.bloqueio_migracoes`). Um segundo arranque ao
+    mesmo tempo espera pelo primeiro e só depois lê o que já foi
+    aplicado — nunca corre a mesma migração duas vezes.
     """
     lista = MIGRACOES if migracoes is None else migracoes
     validar_lista(lista)
 
+    with repositorio.bloqueio_migracoes():
+        return _aplicar_em_falta(lista)
+
+
+def _aplicar_em_falta(lista):
+    """Corre as migrações da lista que ainda não estão registadas.
+    Chamada só com o bloqueio de migrações na mão."""
     repositorio.garantir_tabela_migracoes()
     aplicadas = repositorio.listar_migracoes_aplicadas()
 

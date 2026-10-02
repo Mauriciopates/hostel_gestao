@@ -11,15 +11,33 @@ oficial (`src/bd/esquema.sql`, grupo Sistema) — uma base nova já nasce
 com ela. O CREATE TABLE IF NOT EXISTS abaixo fica só como rede de
 segurança para bases criadas antes da v1.8.0, e TEM de ser igual à
 definição do esquema.
+
+BLOQUEIO (v1.8.1): `bloqueio_migracoes` usa o GET_LOCK do próprio MySQL
+para que só UM arranque de cada vez aplique migrações nesta base. Sem
+ele, duas cópias da aplicação a arrancar ao mesmo tempo (dois cliques,
+ou dois PCs depois de uma atualização) liam as duas "falta a 0002",
+corriam-na as duas e a segunda rebentava no registo com "Duplicate
+entry" (teste de instalação de 02/10/2026).
 """
 
 import logging
+from contextlib import contextmanager
 from datetime import datetime
 from typing import cast
 
 from ._base import obter_conexao
 
 logger = logging.getLogger(__name__)
+
+# Segundos que um arranque espera pelo outro antes de desistir. Uma
+# base nova aplica todas as migrações em poucos segundos; 60 s chega
+# com folga mesmo numa VM lenta.
+ESPERA_BLOQUEIO_S = 60
+
+# O nome do bloqueio inclui a base: duas bases no mesmo servidor
+# (hostel_gestao e hostel_gestao_teste) não se bloqueiam uma à outra.
+# O MySQL aceita no máximo 64 caracteres no nome — daí o LEFT.
+_SQL_NOME_BLOQUEIO = "LEFT(CONCAT('hostel_migracoes.', DATABASE()), 64)"
 
 
 _SQL_TABELA_MIGRACOES = (
@@ -32,6 +50,43 @@ _SQL_TABELA_MIGRACOES = (
     ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 "
     "COLLATE=utf8mb4_unicode_ci"
 )
+
+
+@contextmanager
+def bloqueio_migracoes(espera_s=ESPERA_BLOQUEIO_S):
+    """Garante que só este arranque aplica migrações enquanto o bloco
+    `with` durar.
+
+    GET_LOCK é um bloqueio com nome, guardado pelo servidor MySQL e
+    preso à LIGAÇÃO: por isso a ligação fica aberta durante todo o
+    bloco, e fechá-la (mesmo se a aplicação rebentar) liberta-o. Não
+    precisa de privilégios especiais.
+
+    Se outro arranque tiver o bloqueio, espera até `espera_s`
+    segundos — quando entra, as migrações que o outro aplicou já
+    estão registadas e não se repetem. Se o tempo acabar, lança
+    ValueError (a aplicação mostra o erro e não abre).
+    """
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(
+            f"SELECT GET_LOCK({_SQL_NOME_BLOQUEIO}, %s)", (espera_s,)
+        )
+        obtido = cast(tuple, cursor.fetchone())[0]
+        if obtido != 1:
+            raise ValueError(
+                f"Outro arranque da aplicação está a atualizar a base "
+                f"de dados há mais de {espera_s} segundos. Feche as "
+                f"outras janelas do Hostel Gestão e tente de novo."
+            )
+        try:
+            yield
+        finally:
+            cursor.execute(f"SELECT RELEASE_LOCK({_SQL_NOME_BLOQUEIO})")
+            cursor.fetchall()
+    finally:
+        conexao.close()
 
 
 def garantir_tabela_migracoes():

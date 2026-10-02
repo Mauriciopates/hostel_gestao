@@ -13,6 +13,7 @@ nunca correu migrações.
 """
 
 import sys
+import threading
 import unittest
 from pathlib import Path
 from typing import cast
@@ -195,6 +196,73 @@ def _categorias():
         return [(str(a), str(b)) for a, b in linhas]
     finally:
         conexao.close()
+
+
+class TesteBloqueio(BaseMigracoesTest):
+    """v1.8.1 — dois arranques ao mesmo tempo não aplicam a mesma
+    migração duas vezes (teste de instalação de 02/10/2026: o segundo
+    rebentava com "Duplicate entry ... uq_migracoes_nome")."""
+
+    def teste_dois_arranques_ao_mesmo_tempo(self):
+        # A 0002 demora 1 s (DO SLEEP): sem o bloqueio, os dois
+        # arranques liam "falta a 0002" e o segundo falhava no registo.
+        lista = [
+            ("0001_criar_tabela", [_CRIAR_TABELA_TESTE]),
+            ("0002_lenta", ["DO SLEEP(1)", _INSERIR_A]),
+        ]
+        resultados, erros = [], []
+
+        def arrancar():
+            try:
+                resultados.append(migracoes.aplicar_pendentes(lista))
+            except Exception as erro:  # o teste mostra qual foi
+                erros.append(erro)
+
+        fios = [threading.Thread(target=arrancar) for _ in range(2)]
+        for fio in fios:
+            fio.start()
+        for fio in fios:
+            fio.join(timeout=30)
+
+        self.assertEqual([], erros)
+        # Um aplicou as duas; o outro esperou e já não tinha nada.
+        self.assertCountEqual(
+            [["0001_criar_tabela", "0002_lenta"], []], resultados
+        )
+        self.assertEqual(["A"], _nomes_em_teste())
+
+    def teste_bloqueio_ocupado_demasiado_tempo_recusa(self):
+        # Outra "cópia" segura o bloqueio; esta desiste ao fim de 1 s.
+        with repositorio.bloqueio_migracoes():
+            erro = []
+
+            def tentar():
+                try:
+                    with repositorio.bloqueio_migracoes(espera_s=1):
+                        pass
+                except ValueError as e:
+                    erro.append(e)
+
+            fio = threading.Thread(target=tentar)
+            fio.start()
+            fio.join(timeout=10)
+
+        self.assertEqual(1, len(erro))
+        self.assertIn("Outro arranque", str(erro[0]))
+
+    def teste_bloqueio_largado_no_fim(self):
+        migracoes.aplicar_pendentes([])
+        # Se tivesse ficado preso, esta espera de 1 s falhava.
+        with repositorio.bloqueio_migracoes(espera_s=1):
+            pass
+
+    def teste_bloqueio_largado_mesmo_se_a_migracao_falha(self):
+        with self.assertRaises(ValueError):
+            migracoes.aplicar_pendentes(
+                [("0001_partida", ["ISTO NAO E SQL"])]
+            )
+        with repositorio.bloqueio_migracoes(espera_s=1):
+            pass
 
 
 class TesteSeedCompraDeStock(BaseMigracoesTest):

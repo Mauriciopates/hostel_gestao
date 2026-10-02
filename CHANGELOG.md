@@ -3,6 +3,45 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [1.8.1] — 2026-10-02
+
+Correção apanhada no teste de instalação numa máquina Windows limpa
+(INST-06, manual de instalação do sistema). O 1.º arranque do dia
+demorou ~25 s sem mostrar nada (cópia de segurança), foi dado um
+segundo duplo clique e as duas cópias da aplicação aplicaram as
+migrações ao mesmo tempo: uma falhou com "Duplicate entry
+'0002_textos_legais_demo'" e, ao fechar, levou o túnel SSH que a outra
+usava — o login seguinte deu "erro inesperado" (2003 Can't connect).
+
+### Corrigido
+
+- **Uma só cópia da aplicação** — `src/instancia.py` (novo): trinco
+  com nome pedido no início do `main_gui.py`, antes do túnel e da
+  base. No Windows é um mutex do sistema (`CreateMutexW`, espaço
+  `Local\` da sessão), largado sozinho quando o processo termina. A
+  segunda cópia mostra "O Hostel Gestão já está aberto neste
+  computador" e fecha. No reinício pedido pela própria aplicação
+  (mudar de servidor, 1.ª configuração), `servidores.reiniciar_aplicacao`
+  larga o trinco e passa `HOSTEL_REINICIO=1` à cópia nova, que espera
+  até 15 s em vez de se recusar.
+- **Migrações protegidas contra arranques simultâneos** —
+  `repositorio.bloqueio_migracoes` (GET_LOCK do MySQL, por base, preso
+  à ligação; espera até 60 s). `migracoes.aplicar_pendentes` corre
+  tudo dentro do bloqueio: um segundo arranque (outro clique ou outro
+  PC) espera e já encontra as migrações registadas. Protege também a
+  CLI.
+
+### Testes
+
+- `testes/teste_instancia.py` (novo, 10): segunda cópia recusada
+  (processo à parte), trinco largado ao libertar e quando o processo
+  termina, espera do reinício, espera esgotada.
+- `teste_migracoes.TesteBloqueio` (4): dois arranques em paralelo com
+  uma migração lenta — sem erros e a migração aplicada uma só vez
+  (sem o bloqueio, este teste falha com o "Duplicate entry");
+  bloqueio ocupado demasiado tempo recusa; bloqueio largado no fim e
+  depois de uma falha.
+
 ## [1.8.0] — 2026-10-01
 
 Migrações, instalação assistida e empacotamento (branches `migracoes`,

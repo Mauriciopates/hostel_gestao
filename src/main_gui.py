@@ -23,6 +23,7 @@ import tkinter
 
 import config
 import configuracoes
+import instancia
 import migracoes
 import registo_logs
 import repositorio
@@ -60,6 +61,14 @@ def main():
     """
     config.garantir_diretorios()
     registo_logs.configurar("gui")
+
+    # CÓPIA ÚNICA (v1.8.1): antes de tudo o resto — de abrir o túnel e
+    # de tocar na base. Uma segunda cópia avisa e fecha. Num reinício
+    # pedido pela própria aplicação espera que a anterior feche.
+    if not instancia.adquirir(instancia.espera_pedida()):
+        logger.warning("Já há uma cópia da aplicação aberta — esta fecha")
+        _avisar_ja_aberta()
+        return
 
     # SERVIDOR (26/09/2026): antes de tudo o resto, abre o túnel SSH da
     # VM (se o servidor ativo o usar) e confirma que o MySQL responde.
@@ -108,6 +117,21 @@ def main():
         del app
 
     logger.info("Aplicação terminada")
+
+
+def _avisar_ja_aberta():
+    """Popup da segunda cópia. Ainda não há janela: raiz Tk escondida,
+    como em _aplicar_migracoes."""
+    raiz = tkinter.Tk()
+    raiz.withdraw()
+    componentes.mostrar_erro(
+        "O Hostel Gestão já está aberto neste computador.\n\n"
+        "Procure a janela na barra de tarefas. Se acabou de o abrir, "
+        "aguarde: o primeiro arranque do dia faz a cópia de segurança "
+        "e pode demorar até um minuto.",
+        titulo="Hostel Gestão",
+    )
+    raiz.destroy()
 
 
 def _avisar_master_criado():

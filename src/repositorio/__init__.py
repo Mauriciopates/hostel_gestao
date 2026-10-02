@@ -221,6 +221,7 @@ from .rep_esquema import (
 )
 from .rep_migracoes import (
     aplicar_migracao,
+    bloqueio_migracoes,
     garantir_tabela_migracoes,
     listar_migracoes_aplicadas,
 )
@@ -251,6 +252,7 @@ __all__ = [
     "instrucoes_esquema",
     "tabelas_do_esquema",
     "aplicar_migracao",
+    "bloqueio_migracoes",
     "garantir_tabela_migracoes",
     "listar_migracoes_aplicadas",
     "atualizar_lugar",

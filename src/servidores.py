@@ -44,6 +44,8 @@ import time
 import unicodedata
 from pathlib import Path
 
+import instancia
+
 logger = logging.getLogger(__name__)
 
 RAIZ_PROJETO = Path(__file__).resolve().parent.parent
@@ -458,6 +460,10 @@ def reiniciar_aplicacao():
     """
     fechar_tuneis()
     ambiente = {k: v for k, v in os.environ.items() if k != VARIAVEL_FORCAR}
+    # Cópia única (v1.8.1): esta cópia larga o trinco e a nova, avisada
+    # pela variável, espera por ele em vez de se recusar.
+    instancia.libertar()
+    ambiente[instancia.VARIAVEL_REINICIO] = "1"
     if getattr(sys, "frozen", False):
         comando = [sys.executable] + sys.argv[1:]
     else:

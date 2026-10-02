@@ -140,6 +140,31 @@ relatorios/ ficheiros de armazenamento dos relatórios emitidos
 
 ---
 
+## Criação do Pacote de instalação
+
+Onde esta o projeto — Git Bash, na raiz do projeto (~/hostel_gestao)
+
+1. Confirmar que estás na versão certa (branch main, já com a tag v1.8.0):
+
+git status
+git log --oneline -1
+
+2. Gerar o executável (demora uns minutos):
+
+source .venv/Scripts/activate
+pyinstaller HostelGestao.spec --clean --noconfirm
+
+3. Montar o pacote:
+
+bash montar_pacote.sh
+
+No fim aparece "Pacote pronto." e ficam criados:
+
+C:\HostelGestao_instalacao\, com HostelGestao\, vm\, docs\ e LEIA-ME.txt
+C:\HostelGestao_instalacao_v1.8.0.zip, que é o ficheiro a levar para o sin-11-teste
+
+
+
 ## Decisões de arquitetura
 
 As 17 decisões que sustentam o desenho estão documentadas em
