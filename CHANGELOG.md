@@ -3,6 +3,43 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [1.8.2] — 2026-10-03
+
+Correções apanhadas no teste do manual de instalação numa máquina
+Windows de teste (F3 e F4, 03/10/2026).
+
+### Corrigido
+
+- **Planta de Lugares fechava-se sozinha ao abrir pelo ID da unidade**
+  (F3.4) — o `ChipId` (`gui/componentes.py`) reagia ao premir o botão
+  do rato. A ação fechava o popup das unidades e o "soltar" do mesmo
+  clique ia parar ao widget que ficava por baixo (um botão da barra
+  lateral), que trocava de ecrã e destruía a Planta ainda a nascer:
+  `TclError: bad window path name ...plantalugaresmodal` e avisos de
+  "erro inesperado" em Contratos Mensais / Calendário. O `ChipId`
+  passa a reagir ao `<ButtonRelease-1>`, como o `CTkButton`, e só se
+  o rato ainda estiver em cima do crachá. Vale para os 3 sítios onde
+  o crachá é usado.
+- **Túnel SSH caído a meio da sessão** (F4) — o processo `ssh` podia
+  morrer (VM sem resposta, PC suspenso) sem a aplicação dar conta; a
+  operação seguinte (guardar cliente mensal / Airbnb) falhava com
+  `2003 Can't connect to MySQL server on '127.0.0.1:3307'`.
+  - `servidores.garantir_tunel()` (novo): antes de cada ligação
+    confirma que o `ssh` aberto pela aplicação continua vivo; se caiu,
+    regista no log o código e a mensagem do ssh e reabre o túnel.
+  - `repositorio._base.obter_conexao()` chama `garantir_tunel()`.
+  - `servidores.e_falha_de_ligacao()` (novo) + `gui/app.py`: uma
+    falha de ligação (ErroServidor, MySQL 2003/2005/2006/2013/2055)
+    mostra "Perdeu-se a ligação ao servidor da base de dados" em vez
+    do aviso genérico de "erro inesperado".
+
+### Notas
+
+- O túnel só funciona com uma chave SSH **sem passphrase** (o `ssh`
+  corre com `BatchMode=yes` e não pode perguntar nada). Num PC onde a
+  chave principal tem passphrase, usar uma chave própria da aplicação
+  indicada no `~/.ssh/config` (`IdentityFile`, `IdentitiesOnly yes`).
+
 ## [1.8.1] — 2026-10-02
 
 Correção apanhada no teste de instalação numa máquina Windows limpa
