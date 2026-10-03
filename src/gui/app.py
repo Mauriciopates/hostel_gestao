@@ -61,6 +61,7 @@ from types import TracebackType
 import customtkinter as ctk
 
 import config
+import servidores
 import termos
 import utilizadores
 from . import tema
@@ -952,14 +953,27 @@ class Aplicacao(ctk.CTk):
         except tkinter.TclError:
             return
 
-        self._popup_erro_aberto = True
-        try:
-            componentes.mostrar_erro(
+        # Ligação perdida não é um bug: a pessoa só precisa de saber
+        # que pode tentar outra vez (o túnel já foi reaberto, se deu)
+        # ou que tem de verificar o servidor (v1.8.2).
+        if servidores.e_falha_de_ligacao(val):
+            mensagem = (
+                "Perdeu-se a ligação ao servidor da base de dados e a "
+                "operação não foi concluída.\n\nTente outra vez. Se "
+                "o aviso se repetir, confirme que o servidor está "
+                "ligado e reinicie a aplicação."
+            )
+        else:
+            mensagem = (
                 "Ocorreu um erro inesperado e a operação não foi "
                 "concluída.\n\nO erro ficou registado no ficheiro de "
                 "log. Se voltar a acontecer, avise quem mantém o "
                 "sistema."
             )
+
+        self._popup_erro_aberto = True
+        try:
+            componentes.mostrar_erro(mensagem)
         except Exception:
             logger.exception("Falha ao mostrar o aviso de erro inesperado")
         finally:

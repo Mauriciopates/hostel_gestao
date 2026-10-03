@@ -358,6 +358,69 @@ def abrir_tunel(servidor):
     )
 
 
+def garantir_tunel(servidor):
+    """Confirma, antes de cada ligação ao MySQL, que o túnel continua
+    vivo — e reabre-o se tiver caído (v1.8.2).
+
+    Porque existe: o `ssh` pode morrer a meio da sessão (a VM deixou de
+    responder, o PC suspendeu, a rede caiu) e a aplicação só dava conta
+    no clique seguinte, com "Can't connect to MySQL server on
+    127.0.0.1:3307" (erro 2003) — teste F4 de 03/10/2026.
+
+    É barato: na maior parte das vezes é só um `poll()` ao processo.
+    Sem túnel (ligação direta) ou sem servidor, não faz nada. Se a
+    reabertura falhar, lança ErroServidor com a explicação de sempre.
+    """
+    if not servidor:
+        return
+    tunel = servidor.get("tunel")
+    if not tunel:
+        return
+
+    porta = tunel["porta_local"]
+    processo = _tuneis.get(porta)
+    if processo is not None and processo.poll() is None:
+        return  # o nosso ssh continua vivo
+
+    if processo is not None:
+        _tuneis.pop(porta, None)
+        saida = b""
+        try:
+            saida = processo.stderr.read() if processo.stderr else b""
+        except (OSError, ValueError):
+            pass
+        logger.warning(
+            "Túnel na porta %s caiu (código %s) — a reabrir. "
+            "Mensagem do ssh: %s",
+            porta,
+            processo.returncode,
+            saida.decode(errors="replace").strip() or "(nenhuma)",
+        )
+
+    # abrir_tunel reaproveita a porta se outro processo já a servir
+    # (outra cópia da aplicação, ou um túnel aberto à mão).
+    abrir_tunel(servidor)
+
+
+def e_falha_de_ligacao(erro):
+    """True se o erro é "perdi a ligação ao servidor" e não um bug.
+
+    Usado pelo aviso de erro da interface para dar uma mensagem que a
+    pessoa percebe. 2003/2005: não chegou ao MySQL; 2006/2013/2055:
+    a ligação caiu a meio.
+    """
+    if isinstance(erro, ErroServidor):
+        return True
+    try:
+        import mysql.connector
+    except ImportError:
+        return False
+    return (
+        isinstance(erro, mysql.connector.Error)
+        and getattr(erro, "errno", None) in (2003, 2005, 2006, 2013, 2055)
+    )
+
+
 def _explicar_erro_ssh(erro, tunel):
     texto = erro.lower()
     if "timed out" in texto or "no route" in texto or "unreachable" in texto:

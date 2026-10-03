@@ -12,6 +12,7 @@ from typing import cast
 import mysql.connector
 
 import config
+import servidores
 
 logger = logging.getLogger(__name__)
 
@@ -221,7 +222,12 @@ def proximo_id(prefixo):
 def obter_conexao():
     """Abre uma ligação nova ao servidor MySQL, com as credenciais do
     config (lidas do .env — nunca escritas aqui nem no código-fonte).
+
+    Antes de ligar confirma que o túnel SSH (se o servidor usar um)
+    continua aberto e reabre-o se tiver caído — ver
+    `servidores.garantir_tunel` (v1.8.2).
     """
+    servidores.garantir_tunel(config.SERVIDOR)
     return mysql.connector.connect(
         host=config.DB_HOST,
         port=config.DB_PORT,

@@ -2512,7 +2512,16 @@ class ChipId(ctk.CTkLabel):
 
     Com `ao_clicar` (função sem argumentos) fica com cursor de mão e
     reage ao clique simples; sem ele é só o crachá, com o aspeto de
-    sempre. `inativo` só muda a cor do texto — quem não quer o
+    sempre.
+
+    O clique conta ao SOLTAR o botão, como no CTkButton (v1.8.2). Antes
+    contava ao premir: quando a ação fechava a janela onde está o
+    crachá (o ID da unidade fecha o popup das unidades e abre a
+    Planta), o "soltar" ia parar ao widget que ficava por baixo — um
+    botão da barra lateral, que trocava de ecrã e destruía a Planta
+    ainda a nascer ("bad window path name" no log, teste F3).
+
+    `inativo` só muda a cor do texto — quem não quer o
     clique num registo inativo passa `ao_clicar=None`.
 
     `cor_fundo` só existe para as unidades inativas, que usam o
@@ -2544,8 +2553,22 @@ class ChipId(ctk.CTkLabel):
             cursor="hand2" if clicavel else "",
         )
         self.clicavel = clicavel
+        self._ao_clicar = ao_clicar
         if ao_clicar is not None:
-            self.bind("<Button-1>", lambda evento, f=ao_clicar: f())
+            self.bind("<ButtonRelease-1>", self._ao_soltar)
+
+    def _ao_soltar(self, evento):
+        """Só conta se o rato ainda estiver em cima do crachá — quem
+        prime e arrasta para fora desiste do clique, como num botão.
+        """
+        alvo = self.winfo_containing(evento.x_root, evento.y_root)
+        caminho = str(self)
+        if alvo is None or not (
+            str(alvo) == caminho or str(alvo).startswith(caminho + ".")
+        ):
+            return
+        if self._ao_clicar is not None:
+            self._ao_clicar()
 
 
 class _ModalVinculo(ctk.CTkToplevel):
