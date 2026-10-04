@@ -1,6 +1,8 @@
 """Ecrã "Despesas" (`ListaDespesas`) e os modais abertos a partir
 da lista: escolha de via, editar e detalhe."""
 
+import tkinter.font as tkfont
+
 import customtkinter as ctk
 
 import despesas
@@ -35,17 +37,26 @@ _OPCAO_TODAS_UNIDADES = "Todas as unidades"
 # Larguras fixas das colunas da tabela de despesas (mesma
 # disciplina dos outros módulos: uma constante por coluna,
 # lida tanto pelo cabeçalho como pelas linhas).
-_LARGURA_ID = 90
-_LARGURA_DESCRICAO = 260
-_LARGURA_CATEGORIA = 130
-_LARGURA_VALOR = 110
-_LARGURA_LANCAMENTO = 110
-_LARGURA_VENCIMENTO = 110
-_LARGURA_ESTADO = 130
-_LARGURA_ACOES = 90
+#
+# v1.8.2 (04/10/2026): as larguras antigas somavam ~1060 px e a
+# área da tabela, com a janela no tamanho mínimo (950 px menos a
+# barra lateral), só tem ~730 — as colunas Estado e Ações ficavam
+# fora do ecrã e o "Gerir" não se via (teste F9 do manual). Agora
+# somam ~720; a Descrição continua a crescer (peso 3) quando há
+# espaço, e textos compridos são cortados com "…" (o texto inteiro
+# vê-se no detalhe, clicando no ID).
+_LARGURA_ID = 84
+_LARGURA_DESCRICAO = 130
+_LARGURA_CATEGORIA = 90
+_LARGURA_VALOR = 76
+_LARGURA_LANCAMENTO = 80
+_LARGURA_VENCIMENTO = 80
+_LARGURA_ESTADO = 88
+_LARGURA_ACOES = 80
+_LARGURA_CHIP_ESTADO = 72
 
 _COLUNAS_DESPESA = (
-    componentes.Coluna("ID", minimo=_LARGURA_ID + 24, espaco=8),
+    componentes.Coluna("ID", minimo=_LARGURA_ID + 10, espaco=8),
     componentes.Coluna("DESCRIÇÃO", peso=3, minimo=_LARGURA_DESCRICAO),
     componentes.Coluna("CATEGORIA", peso=1, minimo=_LARGURA_CATEGORIA),
     componentes.Coluna(
@@ -98,6 +109,12 @@ class ListaDespesas(ctk.CTkFrame):
         # Referências vivas aos dados, preenchidas em _recarregar.
         self._categorias = []
         self._unidades = []
+
+        # Fontes reais para medir texto (`componentes.truncar_texto`)
+        # — criadas uma vez, não por linha (mesmo padrão das
+        # Propriedades).
+        self._fonte_descricao = tkfont.Font(size=12)
+        self._fonte_categoria = tkfont.Font(size=11)
 
         componentes.Cabecalho(self, titulo="Despesas").pack(fill="x")
 
@@ -271,7 +288,13 @@ class ListaDespesas(ctk.CTkFrame):
         )
 
         # Descrição (corta com "…" se for longa)
-        texto_desc = d["descricao"] or "(sem descrição)"
+        # v1.8.2: até 2 linhas (quebra na largura da coluna) e só
+        # depois corta com "…" — cabe na altura da linha da tabela.
+        texto_desc = componentes.truncar_texto(
+            self._fonte_descricao,
+            d["descricao"] or "(sem descrição)",
+            2 * _LARGURA_DESCRICAO - 20,
+        )
         self.tabela.colocar(
             linha,
             1,
@@ -281,13 +304,19 @@ class ListaDespesas(ctk.CTkFrame):
                 text_color=tema.COR_TEXTO,
                 font=ctk.CTkFont(size=12),
                 width=_LARGURA_DESCRICAO,
+                wraplength=_LARGURA_DESCRICAO,
+                justify="left",
                 anchor="w",
             ),
         )
 
         # Categoria (por nome, via lookup)
         categoria = cat_por_id.get(d["categoria_id"])
-        nome_cat = categoria["nome"] if categoria else "—"
+        nome_cat = componentes.truncar_texto(
+            self._fonte_categoria,
+            categoria["nome"] if categoria else "—",
+            _LARGURA_CATEGORIA,
+        )
         self.tabela.colocar(
             linha,
             2,
@@ -354,7 +383,7 @@ class ListaDespesas(ctk.CTkFrame):
             fg_color=self._cor_fundo_estado(d["estado"]),
             corner_radius=8,
             font=ctk.CTkFont(size=10, weight="bold"),
-            width=80,
+            width=_LARGURA_CHIP_ESTADO,
             height=22,
         ).pack(side="left")
 
@@ -374,7 +403,7 @@ class ListaDespesas(ctk.CTkFrame):
             ctk.CTkButton(
                 acoes,
                 text="Gerir",
-                width=76,
+                width=_LARGURA_ACOES - 6,
                 height=26,
                 corner_radius=tema.RAIO_BOTAO,
                 fg_color="transparent",

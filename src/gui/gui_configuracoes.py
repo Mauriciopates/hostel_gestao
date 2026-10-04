@@ -32,6 +32,18 @@ ALTERAÇÃO 20/09/2026 — secção "Caução" temporariamente bloqueada:
   `"financeiro.multiplicador_caucao"` e
   `"financeiro.multiplicador_maximo_caucao"` do conjunto
   `_SECOES_BLOQUEADAS` e apagar o método `_aviso_em_desenvolvimento`.
+
+ALTERAÇÃO 04/10/2026 (v1.8.2) — separador "Financeiro" inteiro em
+desenvolvimento:
+
+- Caução, Época alta e Documentos gerados ainda não têm efeito no
+  resto do sistema, por isso o separador inteiro fica bloqueado
+  (`_TABS_BLOQUEADAS`): uma só faixa amarela no topo e todos os
+  controlos desativados.
+- Os controlos desativados passam a ficar CINZENTOS. Antes só
+  ficavam `disabled`, e o CustomTkinter mantém o fundo azul dos
+  botões e dos seletores — no ecrã pareciam ativos (teste F12).
+- Para reativar: tirar "financeiro" de `_TABS_BLOQUEADAS`.
 """
 
 import logging
@@ -149,6 +161,13 @@ _TABS = (
 
 _SECOES_BLOQUEADAS = {
     "Caução",
+}
+
+# Separadores inteiros em desenvolvimento (pelo "id" do `_TABS`).
+# Todas as secções do separador ficam bloqueadas e aparece uma só
+# faixa amarela no topo, em vez de uma por secção.
+_TABS_BLOQUEADAS = {
+    "financeiro",
 }
 
 
@@ -307,6 +326,10 @@ class Configuracoes(ctk.CTkFrame):
         area = ctk.CTkScrollableFrame(frame_tab, fg_color="transparent")
         area.pack(fill="both", expand=True, padx=4, pady=4)
 
+        tab_bloqueada = tab_def["id"] in _TABS_BLOQUEADAS
+        if tab_bloqueada:
+            self._aviso_em_desenvolvimento(area, separador=True)
+
         # Aviso para Admin na tab Financeiro
         if (
             tab_def["id"] == "financeiro"
@@ -316,7 +339,7 @@ class Configuracoes(ctk.CTkFrame):
 
         # Secções
         for secao in tab_def["secoes"]:
-            self._desenhar_secao(area, secao)
+            self._desenhar_secao(area, secao, tab_bloqueada=tab_bloqueada)
 
         # Guarda a referência do frame no dicionário
         self._tabs_ui[tab_def["id"]]["frame"] = frame_tab
@@ -343,22 +366,24 @@ class Configuracoes(ctk.CTkFrame):
             wraplength=760,
         ).pack(fill="x", padx=14, pady=10)
 
-    def _desenhar_secao(self, master, secao):
+    def _desenhar_secao(self, master, secao, tab_bloqueada=False):
         """Desenha uma secção — título cinza em maiúsculas + cartão
         com as opções.
 
         Se a secção estiver em `_SECOES_BLOQUEADAS`, aparece um
         aviso amarelo antes do título e os controlos das chaves
-        ficam disabled.
+        ficam disabled. Com `tab_bloqueada` (separador inteiro em
+        `_TABS_BLOQUEADAS`) os controlos também ficam disabled, mas
+        sem aviso próprio — o do topo do separador chega.
         """
-        bloqueada = secao["titulo"] in _SECOES_BLOQUEADAS
+        bloqueada = tab_bloqueada or secao["titulo"] in _SECOES_BLOQUEADAS
 
         bloco = ctk.CTkFrame(master, fg_color="transparent")
         bloco.pack(fill="x", pady=(0, 20))
 
         # Aviso amarelo por cima do título, quando a secção está
         # bloqueada (em desenvolvimento).
-        if bloqueada:
+        if bloqueada and not tab_bloqueada:
             self._aviso_em_desenvolvimento(bloco)
 
         # Título da secção
@@ -397,12 +422,14 @@ class Configuracoes(ctk.CTkFrame):
             # Desenha a linha, passando se a secção está bloqueada
             self._desenhar_linha(cartao, definicao, bloqueada=bloqueada)
 
-    def _aviso_em_desenvolvimento(self, master):
-        """Faixa amarela a avisar que a secção está em desenvolvimento.
+    def _aviso_em_desenvolvimento(self, master, separador=False):
+        """Faixa amarela a avisar que a secção (ou, com `separador`,
+        o separador inteiro) está em desenvolvimento.
 
         Desenhada por cima do título da secção — dá uma pausa antes
         de o utilizador chegar aos controlos bloqueados.
         """
+        alvo = "deste separador" if separador else "desta secção"
         aviso = ctk.CTkFrame(
             master,
             fg_color=tema.AMARELO_AVISO,
@@ -413,8 +440,8 @@ class Configuracoes(ctk.CTkFrame):
         ctk.CTkLabel(
             aviso,
             text=(
-                "⚠  Em desenvolvimento — as opções desta secção "
-                "estão temporariamente bloqueadas."
+                f"⚠  Em desenvolvimento — as opções {alvo} estão "
+                "temporariamente bloqueadas."
             ),
             text_color=tema.TEXTO_AVISO,
             font=ctk.CTkFont(size=11, weight="bold"),
@@ -497,7 +524,9 @@ class Configuracoes(ctk.CTkFrame):
         desativa todos os widgets interativos que encontrar.
         """
         if isinstance(controlo, ctk.CTkSwitch):
-            controlo.configure(state="disabled")
+            controlo.configure(
+                state="disabled", progress_color=tema.CINZA_INDISPONIVEL
+            )
             return
 
         # Frame que contém outros widgets — percorre os filhos
@@ -516,17 +545,31 @@ class Configuracoes(ctk.CTkFrame):
         # Cada tipo interativo tem o seu `configure(state=...)`.
         # Apanhamos as exceções individualmente — `CTkLabel` e
         # `CTkFrame` não aceitam `state`, e não queremos rebentar.
+        #
+        # v1.8.2: além do `state`, as cores passam a cinzento. Um
+        # CTkButton ou CTkOptionMenu `disabled` mantém o fundo azul e
+        # parecia ativo no ecrã.
         try:
-            if isinstance(
-                widget,
-                (
-                    ctk.CTkEntry,
-                    ctk.CTkButton,
-                    ctk.CTkOptionMenu,
-                    ctk.CTkSwitch,
-                    ctk.CTkTextbox,
-                ),
-            ):
+            if isinstance(widget, ctk.CTkButton):
+                widget.configure(
+                    state="disabled",
+                    fg_color=tema.CINZA_INDISPONIVEL,
+                    text_color_disabled=tema.TEXTO_INDISPONIVEL,
+                )
+            elif isinstance(widget, ctk.CTkOptionMenu):
+                widget.configure(
+                    state="disabled",
+                    fg_color=tema.CINZA_INDISPONIVEL,
+                    button_color=tema.CINZA_INDISPONIVEL,
+                    text_color_disabled=tema.TEXTO_INDISPONIVEL,
+                )
+            elif isinstance(widget, ctk.CTkEntry):
+                widget.configure(
+                    state="disabled",
+                    fg_color=tema.CINZA_INDISPONIVEL,
+                    text_color=tema.TEXTO_INDISPONIVEL,
+                )
+            elif isinstance(widget, (ctk.CTkSwitch, ctk.CTkTextbox)):
                 widget.configure(state="disabled")
         except Exception:
             # Se algum widget específico não aceitar `state` por
