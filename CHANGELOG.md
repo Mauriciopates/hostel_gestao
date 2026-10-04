@@ -3,6 +3,36 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [1.8.3] — 2026-10-04
+
+Correções apanhadas no teste do manual de instalação (F9 e F12).
+
+### Corrigido
+
+- **Tabela de Despesas saía do ecrã** (F9) — as larguras mínimas das
+  colunas somavam ~1060 px e a área da tabela, com a janela no
+  tamanho mínimo, só tem ~730: as colunas Estado e Ações (botão
+  "Gerir") ficavam de fora. `gui/despesas/gui_desp_lista.py`: larguras
+  revistas (somam ~720); a Descrição continua a crescer (peso 3),
+  quebra em 2 linhas e só depois corta com "…"
+  (`componentes.truncar_texto`); a Categoria corta com "…". O texto
+  inteiro vê-se no detalhe (clique no ID).
+- **Separador Financeiro das Configurações parecia ativo** (F12) —
+  Caução, Época alta e Pasta dos relatórios ainda não têm efeito no
+  resto do sistema. `gui/gui_configuracoes.py`:
+  - `_TABS_BLOQUEADAS` (novo): o separador "financeiro" inteiro fica
+    bloqueado, com uma só faixa amarela "Em desenvolvimento" no topo.
+  - Controlos desativados passam a cinzento (`CINZA_INDISPONIVEL` /
+    `TEXTO_INDISPONIVEL`). Antes só ficavam `disabled` e o
+    CustomTkinter mantinha o fundo azul dos botões e seletores —
+    pareciam ativos. Vale para qualquer secção bloqueada.
+  - Para reativar: tirar "financeiro" de `_TABS_BLOQUEADAS`.
+
+### Notas
+
+- Com o separador bloqueado, a pasta dos relatórios não se muda pelo
+  ecrã; os relatórios continuam a ir para a pasta já gravada.
+
 ## [1.8.2] — 2026-10-03
 
 Correções apanhadas no teste do manual de instalação numa máquina
