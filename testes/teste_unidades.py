@@ -1316,5 +1316,116 @@ class TesteQuartoPrivativoOcupado(BaseMySQLTest):
         )
 
 
+class TesteSemanaDeTodas(BaseMySQLTest):
+    """`semana_de_todas` (v1.8.4) lê a semana de todas as unidades de
+    um regime de uma vez. Tem de dar EXATAMENTE os mesmos estados que
+    `estados_da_semana` unidade a unidade — só muda a forma de ler.
+    """
+
+    INICIO = date(2026, 9, 7)  # segunda-feira
+
+    def _comparar_com_uma_a_uma(self, tipo):
+        semana = unidades.semana_de_todas(tipo, self.INICIO)
+
+        for uni in semana["unidades"]:
+            self.assertEqual(
+                semana["estados"][uni["id"]],
+                unidades.estados_da_semana(uni["id"], self.INICIO),
+                f"Estados diferentes para {uni['id']}",
+            )
+
+        return semana
+
+    def test_airbnb_igual_a_estados_da_semana(self):
+        propriedade = criar_propriedade()
+        livre = criar_unidade_airbnb(propriedade["id"])
+        reservada = criar_unidade_airbnb(propriedade["id"])
+        em_obras = criar_unidade_airbnb(propriedade["id"])
+        criar_ocupacao(
+            reservada["id"], "airbnb", date(2026, 9, 8), date(2026, 9, 11)
+        )
+        unidades.marcar_manutencao(em_obras["id"])
+
+        semana = self._comparar_com_uma_a_uma("airbnb")
+
+        ids = [uni["id"] for uni in semana["unidades"]]
+        self.assertEqual(
+            sorted(ids), sorted([livre["id"], reservada["id"], em_obras["id"]])
+        )
+        self.assertTrue(
+            all(
+                dia["estado"] == "manutencao"
+                for dia in semana["estados"][em_obras["id"]]
+            )
+        )
+
+    def test_mensal_igual_a_estados_da_semana(self):
+        propriedade = criar_propriedade()
+        cheia = criar_unidade_mensal(propriedade["id"])
+        sem_lugares = criar_unidade_mensal(propriedade["id"])
+        com_quarto_inativo = criar_unidade_mensal(propriedade["id"])
+        dar_lugares(cheia["id"], [1, 1])
+        dar_lugares(com_quarto_inativo["id"], [1])
+        quarto_inativo = unidades.criar_quarto(
+            com_quarto_inativo["id"], "Quarto fechado"
+        )
+        unidades.criar_lugar(quarto_inativo["id"], "Lugar X", "solteiro")
+        unidades.desativar_quarto(quarto_inativo["id"])
+        criar_ocupacao(cheia["id"], "mensal", date(2026, 9, 1))
+        criar_ocupacao_mensal_com_fim_marcado(
+            cheia["id"], date(2026, 9, 1), date(2026, 9, 10)
+        )
+
+        semana = self._comparar_com_uma_a_uma("mensal")
+
+        self.assertEqual(
+            semana["estados"][sem_lugares["id"]][0]["capacidade"], 0
+        )
+        self.assertEqual(
+            semana["estados"][com_quarto_inativo["id"]][0]["capacidade"], 1
+        )
+
+    def test_so_traz_o_regime_pedido_e_unidades_ativas(self):
+        propriedade = criar_propriedade()
+        mensal = criar_unidade_mensal(propriedade["id"])
+        airbnb = criar_unidade_airbnb(propriedade["id"])
+        inativa = criar_unidade_airbnb(propriedade["id"])
+        unidades.desativar(inativa["id"])
+
+        ids_airbnb = [
+            uni["id"]
+            for uni in unidades.semana_de_todas("airbnb", self.INICIO)[
+                "unidades"
+            ]
+        ]
+        ids_mensal = [
+            uni["id"]
+            for uni in unidades.semana_de_todas("mensal", self.INICIO)[
+                "unidades"
+            ]
+        ]
+
+        self.assertEqual(ids_airbnb, [airbnb["id"]])
+        self.assertEqual(ids_mensal, [mensal["id"]])
+
+    def test_unidades_trazem_o_nome_da_propriedade(self):
+        propriedade = criar_propriedade()
+        criar_unidade_airbnb(propriedade["id"])
+
+        semana = unidades.semana_de_todas("airbnb", self.INICIO)
+
+        self.assertEqual(
+            semana["unidades"][0]["propriedade_nome"], propriedade["nome"]
+        )
+
+    def test_sete_dias_por_unidade(self):
+        propriedade = criar_propriedade()
+        unidade = criar_unidade_airbnb(propriedade["id"])
+
+        semana = unidades.semana_de_todas("airbnb", self.INICIO)
+
+        self.assertEqual(len(semana["estados"][unidade["id"]]), 7)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -95,6 +95,23 @@ recarregamento, ~210 são as leituras. Baixar isso implica mudar o
 `repositorio` para reutilizar ligações, decisão parqueada para
 depois de a v1.4.0 fechar.
 
+v1.8.4 (05/10/2026) — CALENDÁRIO COM O MySQL NA VM. Com a base
+atrás do túnel SSH, cada ligação passou a custar ~100-200ms (contra
+~9ms no MySQL local), e o popup abria VAZIO e só se preenchia
+segundos depois (teste do aluno). Três alterações:
+
+1. `unidades.semana_de_todas(tipo, inicio)` lê a semana de todas as
+   unidades em 2 queries (Airbnb) ou 4 (mensal), em vez de 2 a 3+N
+   por unidade. Os cartões do ecrã de entrada (`_resumo`) usam a
+   mesma função.
+2. A leitura corre numa thread (`componentes.carregar_em_segundo_
+   plano`), com a janelinha "A carregar…" e uma barra a correr
+   (opção 1 do mockup, escolhida pelo aluno). O ecrã não congela.
+3. O popup da semana só é criado DEPOIS de os dados chegarem e
+   desenha a grelha antes de aparecer — nunca se vê vazio. Mudar de
+   filtro já não relê a base (filtra a semana já lida); só mudar de
+   semana relê.
+
 Imports mantidos: `clientes` e `contratos` são usados pelo
 `DetalheDiaModal` para ler o hóspede da reserva e o detalhe
 Airbnb. `responsaveis` NÃO é preciso — o nome do hóspede vem do
@@ -233,7 +250,6 @@ _OPCOES_DISPONIBILIDADE = ("Todas as unidades", "Só com disponibilidade")
 # linhas para mostrar. Reticências em três pontos ASCII e não no
 # glifo "…", pela mesma razão das setas da navegação: no Windows o
 # glifo Unicode saía como quadrado (tofu).
-_TEXTO_A_CARREGAR = "A carregar calendário..."
 _TEXTO_SEM_UNIDADES = "Nenhuma unidade a mostrar com estes filtros."
 
 # Último filtro escolhido em cada regime, para o calendário reabrir
@@ -355,15 +371,15 @@ class Calendario(ctk.CTkFrame):
         ocupadas hoje. Unidades que rebentem o cálculo (ex. apagadas
         entretanto) são saltadas em vez de derrubarem o ecrã.
         """
-        lista = unidades.listar(tipo=tipo)
+        # v1.8.4: uma leitura para o regime inteiro (ver
+        # `unidades.semana_de_todas`); o índice 0 é o dia 'data'.
+        semana = unidades.semana_de_todas(tipo, data)
+        lista = semana["unidades"]
         ocupados = 0
         capacidade = 0
 
         for uni in lista:
-            try:
-                detalhe = unidades.estado_detalhe(uni["id"], data)
-            except ValueError:
-                continue
+            detalhe = semana["estados"][uni["id"]][0]
 
             if tipo == "mensal":
                 if detalhe["capacidade"] is not None:
@@ -423,7 +439,38 @@ class Calendario(ctk.CTkFrame):
         _tornar_clicavel(cartao, lambda: self._abrir_semana(tipo))
 
     def _abrir_semana(self, tipo):
-        CalendarioSemanaModal(self, tipo)
+        """Lê a semana em segundo plano (com a janelinha "A
+        carregar…") e só depois abre o popup, já preenchido.
+
+        `_a_abrir` ignora cliques repetidos enquanto a leitura corre
+        — sem isto, dois cliques rápidos abriam dois popups.
+        """
+        if getattr(self, "_a_abrir", False):
+            return
+
+        self._a_abrir = True
+        inicio = _segunda_feira(datetime.date.today())
+
+        def ler():
+            return {
+                "propriedades": propriedades.listar(),
+                "semana": unidades.semana_de_todas(tipo, inicio),
+            }
+
+        def abrir(dados):
+            self._a_abrir = False
+            CalendarioSemanaModal(self, tipo, inicio, dados)
+
+        def falhou():
+            self._a_abrir = False
+
+        componentes.carregar_em_segundo_plano(
+            self,
+            ler,
+            abrir,
+            texto="A carregar o calendário…",
+            ao_falhar=falhou,
+        )
 
 
 class CalendarioSemanaModal(ctk.CTkToplevel):
@@ -434,11 +481,17 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
     noite e abre o detalhe do dia ao ser clicada.
     """
 
-    def __init__(self, tela, tipo):
+    def __init__(self, tela, tipo, inicio, dados):
+        """`dados` já vem lido pelo `Calendario._abrir_semana`
+        ({"propriedades": [...], "semana": semana_de_todas(...)}):
+        o popup desenha a grelha antes de aparecer (v1.8.4).
+        """
         super().__init__(tela)
         self.tela = tela
         self.tipo = tipo
-        self.inicio_semana = _segunda_feira(datetime.date.today())
+        self.inicio_semana = inicio
+        self._semana = dados["semana"]
+        self._a_carregar = False
 
         # O controlador da aplicação é o que estava por trás do
         # ecrã `Calendario` (que é `tela` aqui) — guardado no
@@ -460,7 +513,7 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
         # objeto — sem o ID, escolher a errada era silencioso.
         self.id_por_rotulo = {
             f"{prop['nome']} · {prop['id']}": prop["id"]
-            for prop in propriedades.listar()
+            for prop in dados["propriedades"]
         }
 
         self._construir_barra_filtros()
@@ -468,14 +521,11 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
         self._construir_tabela()
         self._construir_rodape()
 
-        # Os 60ms (e não 10) são para o `_colocar_no_topo` — que
-        # agenda o seu lift/focus/grab_set para os +10ms — ter
-        # terminado antes de a construção da grelha começar. Com os
-        # dois na mesma volta do loop de eventos, a janela aparecia e
-        # piscava a meio da construção.
-        self._atualizar_cabecalho()
-        self._mostrar_mensagem(_TEXTO_A_CARREGAR)
-        self.after(60, self._recarregar)
+        # v1.8.4: os dados já cá estão — a grelha é desenhada já,
+        # ainda dentro do __init__, antes de a janela aparecer no
+        # ecrã. Antes ficava vazia e era preenchida 60ms depois, com
+        # as leituras a bloquear tudo pelo meio.
+        self._desenhar(self._semana)
 
     # -- construção --------------------------------------------------
 
@@ -530,9 +580,13 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
         return _OPCAO_TODAS
 
     def _filtro_mudou(self):
-        """Um dos dois filtros mudou: guarda a escolha e redesenha."""
+        """Um dos dois filtros mudou: guarda a escolha e redesenha.
+
+        v1.8.4: os filtros são aplicados em Python sobre a semana já
+        lida — mudar de filtro não volta à base de dados.
+        """
         self._guardar_filtros()
-        self._recarregar()
+        self._desenhar(self._semana)
 
     def _guardar_filtros(self):
         """Guarda o filtro atual para a próxima abertura do mesmo
@@ -702,8 +756,12 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
     # -- carregamento / atualização ----------------------------------
 
     def _mudar_semana(self, semanas):
-        self.inicio_semana += datetime.timedelta(weeks=semanas)
-        self._recarregar()
+        # A semana só passa a ser a nova quando os dados chegam (ver
+        # `_recarregar`): se a leitura falhar, a grelha e o cabeçalho
+        # continuam coerentes com a semana anterior.
+        self._recarregar(
+            self.inicio_semana + datetime.timedelta(weeks=semanas)
+        )
 
     def _propriedade_escolhida_id(self):
         """ID da propriedade selecionada, ou None para "todas"."""
@@ -716,9 +774,8 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
         """Escreve o intervalo da semana e o dia do mês em cada uma
         das sete colunas.
 
-        Separado do `_recarregar` (Fase 5, v1.4.0) para a janela
-        poder mostrar o cabeçalho certo enquanto a grelha ainda está
-        a ser construída — ver o `after` no `__init__`.
+        Separado do `_recarregar` na Fase 5 (v1.4.0); desde a v1.8.4
+        é chamado pelo `_desenhar`, já com a semana lida.
         """
         self.rotulo_semana.configure(text=_texto_intervalo(self.inicio_semana))
 
@@ -726,7 +783,7 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
             dia = self.inicio_semana + datetime.timedelta(days=indice)
             rotulo.configure(text=f"{_DIAS_SEMANA[indice]}  {dia.day}")
 
-    def _unidades_a_mostrar(self):
+    def _unidades_a_mostrar(self, lista):
         """As unidades do regime, já com o nome da propriedade e já
         ordenadas, filtradas pela propriedade escolhida.
 
@@ -743,7 +800,6 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
         lista já em memória, é irrelevante — e continua a ser uma
         query, contra as duas de antes.
         """
-        lista = unidades.listar_com_propriedade(tipo=self.tipo)
         propriedade_id = self._propriedade_escolhida_id()
 
         if propriedade_id is None:
@@ -753,9 +809,48 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
             uni for uni in lista if uni["propriedade_id"] == propriedade_id
         ]
 
-    def _recarregar(self):
-        """Volta a desenhar a grelha da semana atual, reutilizando as
-        linhas do pool.
+    def _recarregar(self, inicio=None):
+        """Relê a semana `inicio` (por omissão, a atual) da base de
+        dados, em segundo plano
+        (com a janelinha "A carregar…"), e redesenha a grelha.
+
+        Chamado ao mudar de semana e pelo `DetalheDiaModal` depois de
+        uma ação. `_a_carregar` ignora pedidos repetidos enquanto a
+        leitura corre (a janelinha já bloqueia os cliques, isto é a
+        rede de segurança).
+        """
+        if self._a_carregar:
+            return
+
+        self._a_carregar = True
+        tipo = self.tipo
+        if inicio is None:
+            inicio = self.inicio_semana
+
+        def ler():
+            return unidades.semana_de_todas(tipo, inicio)
+
+        def pronto(semana):
+            self._a_carregar = False
+            self.inicio_semana = inicio
+            self._semana = semana
+            self._desenhar(semana)
+
+        def falhou():
+            self._a_carregar = False
+
+        componentes.carregar_em_segundo_plano(
+            self,
+            ler,
+            pronto,
+            texto="A carregar a semana…",
+            ao_falhar=falhou,
+        )
+
+    def _desenhar(self, semana):
+        """Desenha a grelha a partir de uma semana já lida
+        (`unidades.semana_de_todas`), reutilizando as linhas do pool.
+        Não lê nada da base de dados.
 
         Nunca destrói nada: as linhas a mais são escondidas com
         `pack_forget` e ficam à espera. Ver `_criar_linha_pool` e
@@ -768,8 +863,8 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
 
         visiveis = 0
 
-        for uni in self._unidades_a_mostrar():
-            estados = self._estados_da_semana(uni["id"])
+        for uni in self._unidades_a_mostrar(semana["unidades"]):
+            estados = semana["estados"].get(uni["id"])
 
             if estados is None:
                 continue
@@ -800,25 +895,6 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
 
         if visiveis == 0:
             self._mostrar_mensagem(_TEXTO_SEM_UNIDADES)
-
-    def _estados_da_semana(self, unidade_id):
-        """Os sete estados de uma unidade, de segunda a domingo.
-
-        Desde a Fase 5 (v1.4.0) é `unidades.estados_da_semana` que
-        faz o trabalho: uma leitura à base de dados por unidade, em
-        vez de uma por dia. Antes eram sete chamadas a
-        `estado_detalhe`, cada uma a reler as mesmas linhas — as
-        leituras não recebem a data, quem filtra por data é o Python
-        a seguir.
-
-        Devolve None se a unidade deixar de existir a meio (só pode
-        acontecer se for apagada noutra janela enquanto esta está
-        aberta) — a linha é simplesmente saltada.
-        """
-        try:
-            return unidades.estados_da_semana(unidade_id, self.inicio_semana)
-        except ValueError:
-            return None
 
     def _criar_linha_pool(self):
         """Constrói uma linha da grelha vazia, sem a empacotar, e
@@ -1068,11 +1144,10 @@ class CalendarioSemanaModal(ctk.CTkToplevel):
         """Mostra uma mensagem centrada no corpo da tabela, criando a
         etiqueta só da primeira vez que for precisa.
 
-        Serve os dois casos em que não há linhas para mostrar: a
-        janela ainda está a construir a grelha
-        (`_TEXTO_A_CARREGAR`), ou os filtros não deixaram nenhuma
-        unidade de fora (`_TEXTO_SEM_UNIDADES`). É a mesma etiqueta
-        nos dois — só muda o texto.
+        Serve o caso em que não há linhas para mostrar: os filtros
+        não deixaram nenhuma unidade (`_TEXTO_SEM_UNIDADES`). Até à
+        v1.8.3 servia também o "A carregar calendário...", que a
+        janelinha `componentes.JanelaCarregar` substituiu.
 
         Também entra no pool: criar e destruir uma etiqueta a cada
         recarregamento vazio seria o mesmo desperdício das linhas,

@@ -4,6 +4,8 @@ import datetime
 import decimal
 import re
 import sys
+import threading
+import time
 import tkinter
 import unicodedata
 from ctypes import wintypes
@@ -2351,6 +2353,152 @@ def colocar_no_topo(janela):
         janela.grab_set()
 
     janela.after(10, _trazer)
+
+
+# =====================================================================
+# CARREGAMENTO EM SEGUNDO PLANO (v1.8.4)
+# =====================================================================
+#
+# Leituras lentas (MySQL na VM, atrás do túnel SSH) bloqueavam o ecrã
+# inteiro: a janela ficava parada e vazia até a leitura acabar. Agora
+# a LEITURA corre numa thread e o ecrã principal só mostra uma
+# janelinha "A carregar…" com uma barra a correr (opção 1 do mockup
+# de 05/10/2026, escolhida pelo aluno). Os widgets continuam a ser
+# criados SÓ na thread principal — o Tk não aceita outra.
+
+# Só mostra a janelinha se a leitura demorar mais do que isto — uma
+# leitura rápida não chega a piscar nada no ecrã.
+_ATRASO_JANELA_CARREGAR_MS = 150
+
+# Uma vez mostrada, a janelinha fica pelo menos isto. Dois motivos:
+# não piscar, e o CTkToplevel agenda sozinho trabalho para os +200ms
+# (ícone e cor da barra de título no Windows) — destruí-la antes
+# disso dava "bad window path name" (o mesmo bug da Planta, v1.8.2).
+_MINIMO_JANELA_CARREGAR_S = 0.4
+
+_INTERVALO_VERIFICACAO_MS = 50
+
+
+class JanelaCarregar(ctk.CTkToplevel):
+    """Janelinha "A carregar…" com uma barra a correr de um lado
+    para o outro (CTkProgressBar indeterminada), centrada sobre a
+    janela que a abriu. Bloqueia os cliques por trás (grab) enquanto
+    está aberta. Quem a fecha é `carregar_em_segundo_plano`.
+    """
+
+    def __init__(self, master, texto):
+        super().__init__(master)
+        self.title("Hostel Clean")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(master.winfo_toplevel())
+        # Fechar no X não pode cancelar a leitura a meio — ignora-se.
+        self.protocol("WM_DELETE_WINDOW", lambda: None)
+
+        ctk.CTkLabel(
+            self,
+            text=texto,
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            anchor="w",
+        ).pack(fill="x", padx=20, pady=(18, 10))
+
+        self.barra = ctk.CTkProgressBar(
+            self,
+            mode="indeterminate",
+            width=240,
+            height=6,
+            progress_color=tema.AZUL_PRINCIPAL,
+            fg_color=tema.ID_CHIP_FUNDO,
+        )
+        self.barra.pack(padx=20, pady=(0, 20))
+        self.barra.start()
+
+        centrar_sobre(self, master.winfo_toplevel(), 280, 90)
+        colocar_no_topo(self)
+        self.aberta_em = time.monotonic()
+
+    def fechar(self):
+        try:
+            self.barra.stop()
+            self.grab_release()
+            self.destroy()
+        except tkinter.TclError:
+            pass
+
+
+def carregar_em_segundo_plano(
+    master, trabalho, ao_terminar, texto="A carregar…", ao_falhar=None
+):
+    """Corre `trabalho()` (só LEITURAS, sem widgets) numa thread e,
+    no fim, chama `ao_terminar(resultado)` na thread principal.
+
+    Se demorar mais de `_ATRASO_JANELA_CARREGAR_MS`, mostra a
+    `JanelaCarregar` por cima de `master`, e o cursor fica em "a
+    trabalhar". Se o `trabalho` levantar uma exceção, ela é lançada
+    de novo na thread principal — chega ao `report_callback_exception`
+    da aplicação como qualquer outro erro de um clique (com a mensagem
+    própria de "ligação perdida", se for o caso). Antes disso chama
+    `ao_falhar()`, se for dado — serve para quem chama limpar o seu
+    estado (ex. a marca "a carregar"), senão ficava preso.
+
+    Devolve logo; o resto acontece por `after`.
+    """
+    resultado = {}
+
+    def correr():
+        try:
+            resultado["valor"] = trabalho()
+        except Exception as erro:  # entregue à thread principal
+            resultado["erro"] = erro
+        resultado["fim"] = True
+
+    principal = master.winfo_toplevel()
+    estado = {"janela": None}
+
+    def mostrar_janela():
+        if "fim" not in resultado and master.winfo_exists():
+            estado["janela"] = JanelaCarregar(master, texto)
+
+    def terminar():
+        janela = estado["janela"]
+        if janela is not None:
+            janela.fechar()
+        try:
+            principal.configure(cursor="")
+        except tkinter.TclError:
+            pass
+
+        if "erro" in resultado:
+            if ao_falhar is not None:
+                ao_falhar()
+            raise resultado["erro"]
+
+        if master.winfo_exists():
+            ao_terminar(resultado["valor"])
+
+    def verificar():
+        if "fim" not in resultado:
+            master.after(_INTERVALO_VERIFICACAO_MS, verificar)
+            return
+
+        master.after_cancel(id_mostrar)
+
+        janela = estado["janela"]
+        if janela is not None:
+            falta = _MINIMO_JANELA_CARREGAR_S - (
+                time.monotonic() - janela.aberta_em
+            )
+            if falta > 0:
+                master.after(int(falta * 1000), terminar)
+                return
+
+        terminar()
+
+    principal.configure(cursor="watch")
+    threading.Thread(target=correr, daemon=True).start()
+    id_mostrar = master.after(_ATRASO_JANELA_CARREGAR_MS, mostrar_janela)
+    master.after(_INTERVALO_VERIFICACAO_MS, verificar)
 
 
 def tornar_cliclavel(widget, ao_clicar):

@@ -1216,12 +1216,41 @@ def estados_da_semana(unidade_id, inicio):
 
     Custo por unidade: 1 query em manutenção, 2 no Airbnb, 3 + N
     quartos no mensal — em vez de 7, 14 e 7 x (3 + N).
+
+    Para a semana de TODAS as unidades de um regime (o calendário),
+    usar `semana_de_todas`, que lê tudo em 2 a 4 queries no total.
     """
     unidade = procurar(unidade_id)
 
     if unidade is None:
         raise ValueError(f"A unidade {unidade_id} não existe.")
 
+    if unidade["em_manutencao"]:
+        return _estados_semana(unidade, inicio, [], None)
+
+    if unidade["tipo"] != "mensal":
+        ocupacoes = repositorio.listar_ocupacoes(
+            unidade_id=unidade_id, tipo="airbnb"
+        )
+        return _estados_semana(unidade, inicio, ocupacoes, None)
+
+    capacidade = _capacidade_mensal(unidade_id)
+    ocupacoes = repositorio.listar_ocupacoes(
+        unidade_id=unidade_id, tipo="mensal"
+    )
+    return _estados_semana(unidade, inicio, ocupacoes, capacidade)
+
+
+def _estados_semana(unidade, inicio, ocupacoes, capacidade):
+    """Classifica os sete dias de uma unidade a partir de dados JÁ
+    LIDOS — não toca na base de dados.
+
+    Separada em 05/10/2026 (v1.8.4) para `estados_da_semana` (uma
+    unidade) e `semana_de_todas` (todas as de um regime) usarem
+    exatamente a mesma regra; só muda a forma de ler os dados.
+    `ocupacoes` são as ocupações desta unidade do regime dela;
+    `capacidade` só conta no mensal.
+    """
     dias = [inicio + timedelta(days=indice) for indice in range(7)]
 
     if unidade["em_manutencao"]:
@@ -1235,9 +1264,6 @@ def estados_da_semana(unidade_id, inicio):
         ]
 
     if unidade["tipo"] != "mensal":
-        ocupacoes = repositorio.listar_ocupacoes(
-            unidade_id=unidade_id, tipo="airbnb"
-        )
         estados = []
 
         for dia in dias:
@@ -1252,10 +1278,6 @@ def estados_da_semana(unidade_id, inicio):
 
         return estados
 
-    capacidade = _capacidade_mensal(unidade_id)
-    ocupacoes = repositorio.listar_ocupacoes(
-        unidade_id=unidade_id, tipo="mensal"
-    )
     estados = []
 
     for dia in dias:
@@ -1269,6 +1291,65 @@ def estados_da_semana(unidade_id, inicio):
         )
 
     return estados
+
+
+def semana_de_todas(tipo, inicio):
+    """Unidades ativas de um regime e os sete estados de cada uma, a
+    começar em 'inicio' — o calendário inteiro de uma semana.
+
+    Devolve {"unidades": [...], "estados": {unidade_id: [7 dicts]}}.
+    As unidades vêm de `listar_com_propriedade` (com
+    `propriedade_nome`, ordenadas por propriedade e nome); os estados
+    têm as mesmas chaves de `estados_da_semana`.
+
+    PORQUÊ (05/10/2026, v1.8.4): `estados_da_semana` chamada unidade
+    a unidade custa 2 ligações por unidade no Airbnb e 3 + N no
+    mensal. Com o MySQL numa VM, atrás de um túnel SSH, cada ligação
+    custa ~100-200ms — o calendário Airbnb abria vazio e só se
+    preenchia segundos depois. Aqui lê-se tudo de uma vez e agrupa-se
+    em Python: 2 queries no Airbnb (unidades + ocupações), 4 no
+    mensal (+ quartos + lugares), seja qual for o número de unidades.
+    A classificação é a mesma (`_estados_semana`).
+
+    Só leitura: pode correr fora da thread da interface.
+    """
+    lista = listar_com_propriedade(tipo=tipo)
+
+    ocupacoes_por_unidade = {}
+    for ocupacao in repositorio.listar_ocupacoes(tipo=tipo):
+        ocupacoes_por_unidade.setdefault(
+            ocupacao["unidade_id"], []
+        ).append(ocupacao)
+
+    capacidade_por_unidade = {}
+    if tipo == "mensal":
+        unidade_do_quarto = {
+            quarto["id"]: quarto["unidade_id"]
+            for quarto in listar_quartos()
+        }
+        for lugar in listar_lugares():
+            unidade_id = unidade_do_quarto.get(lugar["quarto_id"])
+
+            # Lugar ativo num quarto inativo: o `_capacidade_mensal`
+            # também não o conta (só percorre os quartos ativos).
+            if unidade_id is None:
+                continue
+
+            capacidade_por_unidade[unidade_id] = (
+                capacidade_por_unidade.get(unidade_id, 0)
+                + lugar["capacidade"]
+            )
+
+    estados = {}
+    for unidade in lista:
+        estados[unidade["id"]] = _estados_semana(
+            unidade,
+            inicio,
+            ocupacoes_por_unidade.get(unidade["id"], []),
+            capacidade_por_unidade.get(unidade["id"], 0),
+        )
+
+    return {"unidades": lista, "estados": estados}
 
 
 def taxa_ocupacao(data, tipo=None):
