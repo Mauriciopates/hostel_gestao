@@ -61,6 +61,7 @@ from types import TracebackType
 import customtkinter as ctk
 
 import config
+import estoque
 import servidores
 import termos
 import utilizadores
@@ -672,6 +673,112 @@ class TermoModal(ctk.CTkToplevel):
         self.destroy()
 
 
+class KitRoupaModal(ctk.CTkToplevel):
+    """Pergunta do 1.º arranque: criar a roupa de base? (v1.9.0,
+    mockup aprovado a 05/10/2026). Mostra os produtos do
+    `estoque.KIT_ROUPA_BASE` e as quantidades por tipo de cama.
+    """
+
+    _COLUNAS_CAMA = (
+        ("solteiro", "SOLTEIRO"),
+        ("casal", "CASAL"),
+        ("beliche", "BELICHE (PAR)"),
+    )
+
+    def __init__(self, master):
+        super().__init__(master)
+        self.title("Instalação")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(master)
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
+
+        corpo = componentes.Contentor(self)
+        corpo.pack(fill="both", expand=True, padx=20, pady=16)
+
+        componentes.Rotulo(
+            corpo, "Criar a roupa de base?", "titulo"
+        ).pack(anchor="w")
+        componentes.Rotulo(
+            corpo,
+            "O Rol de lavandaria precisa de saber que roupa vai para "
+            "cada tipo de cama. Pode começar com este kit e mudar tudo "
+            "depois em Stock → Regras do Rol.",
+            "secundario",
+            wraplength=500,
+            justify="left",
+            height=0,
+        ).pack(anchor="w", pady=(4, 10))
+
+        grelha = componentes.Contentor(corpo)
+        grelha.pack(fill="x")
+        grelha.grid_columnconfigure(0, weight=1)
+        componentes.Rotulo(grelha, "PRODUTO A CRIAR", "secao").grid(
+            row=0, column=0, sticky="w", pady=(0, 4)
+        )
+        for coluna, (_tipo, titulo) in enumerate(self._COLUNAS_CAMA, 1):
+            componentes.Rotulo(
+                grelha, titulo, "secao", anchor="center", width=100
+            ).grid(row=0, column=coluna)
+
+        for linha, (nome, _tipo_produto, quantidades) in enumerate(
+            estoque.KIT_ROUPA_BASE, 1
+        ):
+            componentes.Rotulo(grelha, nome, "texto").grid(
+                row=linha, column=0, sticky="w", pady=2
+            )
+            for coluna, (tipo, _titulo) in enumerate(
+                self._COLUNAS_CAMA, 1
+            ):
+                componentes.Rotulo(
+                    grelha,
+                    str(quantidades.get(tipo, "–")),
+                    "forte",
+                    anchor="center",
+                    width=100,
+                ).grid(row=linha, column=coluna)
+
+        componentes.Rotulo(
+            corpo,
+            "As camas extra copiam a regra do seu tamanho. Os produtos "
+            "são criados com stock 0: as entradas fazem-se em Stock → "
+            "Movimentos.",
+            "secundario",
+            wraplength=500,
+            justify="left",
+            height=0,
+        ).pack(anchor="w", pady=(10, 14))
+
+        rodape = componentes.Contentor(corpo)
+        rodape.pack(fill="x")
+        componentes.Botao(rodape, "Agora não", self.destroy).pack(
+            side="left"
+        )
+        componentes.Botao(
+            rodape, "Criar kit de roupa", self._criar, estilo="primario"
+        ).pack(side="right")
+
+        componentes.centrar_sobre(self, master, 560, 390)
+        componentes.colocar_no_topo(self)
+
+    def _criar(self):
+        ativo = sessao.obter_responsavel_ativo()
+        try:
+            resultado = estoque.criar_kit_roupa_base(
+                ativo["id"] if ativo else None
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        componentes.mostrar_sucesso(
+            f"Kit criado: {len(resultado['produtos'])} produtos e "
+            f"{resultado['regras']} regras.",
+            titulo="Kit de roupa",
+        )
+        self.destroy()
+
+
 class TrocarPasswordModal(ctk.CTkToplevel):
     """Obriga a trocar a password de fábrica (28/09/2026).
 
@@ -876,6 +983,12 @@ class Aplicacao(ctk.CTk):
             self.destroy()
             return
 
+        # v1.9.0 — kit de roupa de base. Só no 1.º arranque a sério:
+        # a password de fábrica acabou de ser trocada (isso só
+        # acontece uma vez) e a base ainda não tem produto nenhum.
+        if popup_login.password_padrao:
+            self._oferecer_kit_roupa()
+
         # Agora sim — já há sessão ativa.
         itens = _itens_visiveis()
         self.barra_lateral = componentes.BarraLateral(
@@ -1015,6 +1128,24 @@ class Aplicacao(ctk.CTk):
         self.wait_window(popup)
 
         return popup.aceite
+
+    def _oferecer_kit_roupa(self):
+        """Pergunta se se cria o kit de roupa de base (v1.9.0).
+
+        Só numa base sem produtos. "Agora não" não cria nada e não
+        volta a perguntar no arranque — o ecrã Stock → Regras do Rol
+        mantém o botão "Criar kit de roupa" enquanto a base estiver
+        sem produtos. Uma falha aqui nunca impede a entrada.
+        """
+        try:
+            if not estoque.pode_criar_kit_roupa():
+                return
+        except Exception:
+            logger.exception("Não foi possível verificar o kit de roupa")
+            return
+
+        popup = KitRoupaModal(self)
+        self.wait_window(popup)
 
     def _trocar_password(self):
         """True se a password de fábrica foi trocada; False se a

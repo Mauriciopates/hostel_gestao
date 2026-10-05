@@ -71,6 +71,7 @@ from .gui_est_aprovacao import ListaAprovacao
 from .gui_est_devolucoes import ListaDevolucoes
 from .gui_est_movimentos import ListaMovimentos
 from .gui_est_produtos import ListaProdutos
+from .gui_est_regras_rol import RegrasRol
 from .gui_est_requisicoes import ListaRequisicoes
 
 # Áreas do hub. 'ecra' a None significa "ainda por implementar": o
@@ -123,6 +124,15 @@ _AREAS = (
         "titulo": "Movimentos",
         "descricao": "Entradas de compra e ajustes de inventário",
         "ecra": "movimentos",
+        "so_admin": True,
+    },
+    {
+        # v1.9.0 (bloco "rol", mockup aprovado a 05/10/2026).
+        "grupo": "Gestão de Stock",
+        "titulo": "Regras do Rol",
+        "descricao": "Que roupa vai para cada tipo de cama na limpeza "
+        "Airbnb",
+        "ecra": "regras_rol",
         "so_admin": True,
     },
 )
@@ -247,6 +257,10 @@ class EcraStock(ctk.CTkFrame):
 
         if area["ecra"] == "movimentos":
             self.controlador.mostrar_frame(ListaMovimentos)
+            return
+
+        if area["ecra"] == "regras_rol":
+            self.controlador.mostrar_frame(RegrasRol)
             return
 
         componentes.mostrar_erro(

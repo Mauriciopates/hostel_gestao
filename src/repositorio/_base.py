@@ -161,6 +161,7 @@ _TABELA_POR_PREFIXO = {
     "CAT": "categorias_despesa",
     "FOR": "fornecedores",
     "CFH": "configuracoes_historico",
+    "RLR": "rol_lavanderia_regras",
 }
 
 

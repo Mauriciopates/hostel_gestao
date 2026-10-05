@@ -144,11 +144,13 @@ def inserir_unidade(unidade):
     Espera um dicionário com id, propriedade_id, nome, tipo, preco_base,
     preco_epoca_alta, multa_check_in_tardio, epoca_alta_ativa,
     em_manutencao, ativo, permite_cama_extra, qtd_cama_extra,
-    tipo_cama_extra — o mesmo formato que `unidades.criar` já
+    tipo_cama_extra, categoria_cama_extra — o mesmo formato que
+    `unidades.criar` já
     construía para a estrutura em memória. Os três últimos campos
     foram acrescentados na Fase 2, v1.4.0 (item (d) — cama extra do
     Airbnb; a coluna já existia desde um ALTER TABLE anterior, só
-    faltava ser escrita).
+    faltava ser escrita). `categoria_cama_extra` (solteiro/casal) é
+    escrita desde a v1.9.0 — era a que o Rol lia e ninguém gravava.
     """
     conexao = obter_conexao()
     try:
@@ -157,9 +159,10 @@ def inserir_unidade(unidade):
             "INSERT INTO unidades (id, propriedade_id, nome, tipo, "
             "preco_base, preco_epoca_alta, multa_check_in_tardio, "
             "epoca_alta_ativa, em_manutencao, ativo, "
-            "permite_cama_extra, qtd_cama_extra, tipo_cama_extra) "
+            "permite_cama_extra, qtd_cama_extra, tipo_cama_extra, "
+            "categoria_cama_extra) "
             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
-            "%s, %s)",
+            "%s, %s, %s)",
             (
                 unidade["id"],
                 unidade["propriedade_id"],
@@ -174,6 +177,7 @@ def inserir_unidade(unidade):
                 unidade["permite_cama_extra"],
                 unidade["qtd_cama_extra"],
                 unidade["tipo_cama_extra"],
+                unidade.get("categoria_cama_extra"),
             ),
         )
         conexao.commit()

@@ -1915,5 +1915,187 @@ class TesteRolAutomaticoRegistadoPorStaff(BaseMySQLTest):
         self.assertEqual(estoque.saldo_produto(self.produto["id"]), 28)
 
 
+class TesteRegrasRol(BaseMySQLTest):
+    """Regras do Rol de lavandaria (v1.9.0): adicionar, alterar,
+    retirar, barreira de perfil, produtos candidatos e o kit de
+    roupa de base."""
+
+    def setUp(self):
+        super().setUp()
+        self.admin = _admin_ativo()
+        self.lencol = estoque.criar_produto(
+            "Lençol de Casal", "unidade", 0, "roupa_cama"
+        )
+        self.toalha = estoque.criar_produto(
+            "Toalha de Rosto", "unidade", 0, "roupa_banho"
+        )
+        self.lixivia = estoque.criar_produto("Lixívia", "litro")
+
+    def test_adicionar_e_listar_com_dados_do_produto(self):
+        regra = estoque.adicionar_regra_rol(
+            "casal", self.lencol["id"], 1, self.admin["id"]
+        )
+        self.assertTrue(regra["id"].startswith("RLR-"))
+
+        linhas = estoque.listar_regras_rol("casal")
+        self.assertEqual(len(linhas), 1)
+        self.assertEqual(linhas[0]["produto_nome"], "Lençol de Casal")
+        self.assertTrue(linhas[0]["produto_ativo"])
+        self.assertEqual(linhas[0]["quantidade"], 1)
+
+    def test_staff_nao_altera_regras(self):
+        staff = _responsavel_ativo()
+        with self.assertRaises(ValueError):
+            estoque.adicionar_regra_rol(
+                "casal", self.lencol["id"], 1, staff["id"]
+            )
+
+    def test_recusa_produto_que_nao_e_roupa(self):
+        with self.assertRaises(ValueError):
+            estoque.adicionar_regra_rol(
+                "casal", self.lixivia["id"], 1, self.admin["id"]
+            )
+
+    def test_recusa_produto_desativado(self):
+        estoque.desativar_produto(self.toalha["id"])
+        with self.assertRaises(ValueError):
+            estoque.adicionar_regra_rol(
+                "casal", self.toalha["id"], 1, self.admin["id"]
+            )
+
+    def test_recusa_produto_repetido_na_mesma_regra(self):
+        estoque.adicionar_regra_rol(
+            "casal", self.lencol["id"], 1, self.admin["id"]
+        )
+        with self.assertRaises(ValueError):
+            estoque.adicionar_regra_rol(
+                "casal", self.lencol["id"], 2, self.admin["id"]
+            )
+
+    def test_mesmo_produto_pode_estar_em_regras_diferentes(self):
+        estoque.adicionar_regra_rol(
+            "casal", self.toalha["id"], 2, self.admin["id"]
+        )
+        estoque.adicionar_regra_rol(
+            "solteiro", self.toalha["id"], 1, self.admin["id"]
+        )
+        self.assertEqual(len(estoque.listar_regras_rol()), 2)
+
+    def test_recusa_quantidade_fora_dos_limites(self):
+        for quantidade in (0, 21, -1, True, "2"):
+            with self.subTest(quantidade=quantidade):
+                with self.assertRaises(ValueError):
+                    estoque.adicionar_regra_rol(
+                        "casal", self.lencol["id"], quantidade,
+                        self.admin["id"],
+                    )
+
+    def test_recusa_tipo_de_cama_desconhecido(self):
+        with self.assertRaises(ValueError):
+            estoque.adicionar_regra_rol(
+                "sofa", self.lencol["id"], 1, self.admin["id"]
+            )
+
+    def test_alterar_quantidade(self):
+        regra = estoque.adicionar_regra_rol(
+            "casal", self.toalha["id"], 2, self.admin["id"]
+        )
+        estoque.alterar_quantidade_regra_rol(
+            regra["id"], 3, self.admin["id"]
+        )
+        self.assertEqual(
+            estoque.listar_regras_rol("casal")[0]["quantidade"], 3
+        )
+
+    def test_retirar(self):
+        regra = estoque.adicionar_regra_rol(
+            "casal", self.toalha["id"], 2, self.admin["id"]
+        )
+        estoque.retirar_regra_rol(regra["id"], self.admin["id"])
+        self.assertEqual(estoque.listar_regras_rol("casal"), [])
+
+    def test_regra_inexistente(self):
+        with self.assertRaises(ValueError):
+            estoque.retirar_regra_rol("RLR-999", self.admin["id"])
+
+    def test_produtos_para_regra_so_roupa_ativa_e_fora_da_regra(self):
+        estoque.adicionar_regra_rol(
+            "casal", self.lencol["id"], 1, self.admin["id"]
+        )
+        ids = [p["id"] for p in estoque.produtos_para_regra_rol("casal")]
+        self.assertEqual(ids, [self.toalha["id"]])
+
+    def test_produto_desativado_aparece_inativo_na_lista(self):
+        estoque.adicionar_regra_rol(
+            "casal", self.toalha["id"], 2, self.admin["id"]
+        )
+        estoque.desativar_produto(self.toalha["id"])
+        self.assertFalse(
+            estoque.listar_regras_rol("casal")[0]["produto_ativo"]
+        )
+
+    def test_regras_entram_no_calculo_do_rol(self):
+        import propriedades
+        import unidades
+        from decimal import Decimal
+
+        estoque.adicionar_regra_rol(
+            "casal", self.lencol["id"], 1, self.admin["id"]
+        )
+        estoque.adicionar_regra_rol(
+            "extra_solteiro", self.toalha["id"], 1, self.admin["id"]
+        )
+        prop = propriedades.criar("Casa Rol", "Rua 1")
+        uni = unidades.criar(
+            prop["id"], "AP Rol", "airbnb",
+            Decimal("45"), Decimal("90"), Decimal("20"),
+            permite_cama_extra=True, qtd_cama_extra=2,
+            tipo_cama_extra="sofá-cama", categoria_cama_extra="solteiro",
+        )
+        quarto = unidades.criar_quarto(uni["id"], "Quarto")
+        unidades.criar_lugar(quarto["id"], "Cama", "casal", 2)
+
+        enviar, _ = estoque.calcular_rol_lavanderia(uni["id"])
+
+        quantidades = {p["produto_id"]: p["quantidade"] for p in enviar}
+        self.assertEqual(
+            quantidades, {self.lencol["id"]: 1, self.toalha["id"]: 2}
+        )
+
+
+class TesteKitRoupaBase(BaseMySQLTest):
+
+    def test_so_com_base_sem_produtos(self):
+        self.assertTrue(estoque.pode_criar_kit_roupa())
+        estoque.criar_produto("Lixívia", "litro")
+        self.assertFalse(estoque.pode_criar_kit_roupa())
+        with self.assertRaises(ValueError):
+            estoque.criar_kit_roupa_base(_admin_ativo()["id"])
+
+    def test_cria_produtos_e_regras(self):
+        resultado = estoque.criar_kit_roupa_base(_admin_ativo()["id"])
+
+        self.assertEqual(len(resultado["produtos"]), 7)
+        esperadas = sum(
+            len(quantidades)
+            for _nome, _tipo, quantidades in estoque.KIT_ROUPA_BASE
+        )
+        self.assertEqual(resultado["regras"], esperadas)
+        self.assertEqual(len(estoque.listar_regras_rol()), esperadas)
+
+        casal = {
+            linha["produto_nome"]: linha["quantidade"]
+            for linha in estoque.listar_regras_rol("casal")
+        }
+        self.assertEqual(casal["Lençol de Casal"], 1)
+        self.assertEqual(casal["Fronha"], 2)
+        self.assertNotIn("Lençol de Solteiro", casal)
+
+    def test_staff_nao_cria_kit(self):
+        with self.assertRaises(ValueError):
+            estoque.criar_kit_roupa_base(_responsavel_ativo()["id"])
+        self.assertTrue(estoque.pode_criar_kit_roupa())
+
+
 if __name__ == "__main__":
     unittest.main()

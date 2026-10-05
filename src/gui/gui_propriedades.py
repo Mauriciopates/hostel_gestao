@@ -2015,10 +2015,25 @@ class _PopupCamaExtra(ctk.CTkToplevel):
     está, válido ou não, e deixa a validação para o "Criar"/
     "Guardar" do modal principal, tal como qualquer outro campo do
     formulário.
+
+    v1.9.0 (mockup aprovado a 05/10/2026): ganhou o TAMANHO da cama
+    extra (Solteiro | Casal), obrigatório no "Confirmar". É o que o
+    Rol de lavandaria lê para escolher a regra "extra_solteiro" ou
+    "extra_casal" — até aqui só havia o "Tipo" em texto livre, que
+    o Rol não sabe interpretar, e a cama extra nunca enviava roupa.
+    `ao_fechar` passa a receber (quantidade, tipo, tamanho).
     """
 
+    _TAMANHOS = (("Solteiro", "solteiro"), ("Casal", "casal"))
+
     def __init__(
-        self, pai, nome_unidade, qtd_inicial, tipo_inicial, ao_fechar
+        self,
+        pai,
+        nome_unidade,
+        qtd_inicial,
+        tipo_inicial,
+        ao_fechar,
+        tamanho_inicial="",
     ):
         super().__init__(pai)
         self.ao_fechar = ao_fechar
@@ -2064,6 +2079,28 @@ class _PopupCamaExtra(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             self,
+            text="Tamanho *",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=20)
+        rotulo_inicial = next(
+            (
+                rotulo
+                for rotulo, valor in self._TAMANHOS
+                if valor == tamanho_inicial
+            ),
+            "",
+        )
+        self.seletor_tamanho = componentes.SeletorVistas(
+            self,
+            [rotulo for rotulo, _valor in self._TAMANHOS],
+            lambda _rotulo: None,
+            inicial=rotulo_inicial,
+        )
+        self.seletor_tamanho.pack(fill="x", padx=20, pady=(2, 10))
+
+        ctk.CTkLabel(
+            self,
             text="Tipo de cama extra",
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=11),
@@ -2103,13 +2140,21 @@ class _PopupCamaExtra(ctk.CTkToplevel):
 
         self.campo_qtd.focus_set()
 
+    def _tamanho(self):
+        """"solteiro"/"casal", ou "" se nenhum estiver escolhido."""
+        escolhido = self.seletor_tamanho.get()
+        return dict(self._TAMANHOS).get(escolhido, "")
+
     def _voltar(self):
-        self.ao_fechar(self.campo_qtd.get(), self.campo_tipo.get())
+        self.ao_fechar(
+            self.campo_qtd.get(), self.campo_tipo.get(), self._tamanho()
+        )
         self.destroy()
 
     def _confirmar(self):
         texto_qtd = self.campo_qtd.get().strip()
         texto_tipo = self.campo_tipo.get().strip()
+        tamanho = self._tamanho()
 
         try:
             _ler_inteiro_cama_extra(texto_qtd)
@@ -2117,11 +2162,17 @@ class _PopupCamaExtra(ctk.CTkToplevel):
             componentes.mostrar_erro(str(erro))
             return
 
+        if not tamanho:
+            componentes.mostrar_erro(
+                "Escolha o tamanho da cama extra: Solteiro ou Casal."
+            )
+            return
+
         if not texto_tipo:
             componentes.mostrar_erro("O tipo de cama extra é obrigatório.")
             return
 
-        self.ao_fechar(texto_qtd, texto_tipo)
+        self.ao_fechar(texto_qtd, texto_tipo, tamanho)
         self.destroy()
 
 
@@ -2160,6 +2211,7 @@ class NovaUnidadeModal(ctk.CTkToplevel):
         self.prop = prop
         self._cama_extra_qtd_texto = ""
         self._cama_extra_tipo_texto = ""
+        self._cama_extra_tamanho = ""
 
         self.title(f"Nova Unidade — {prop['nome']}")
         self.resizable(False, False)
@@ -2301,6 +2353,7 @@ class NovaUnidadeModal(ctk.CTkToplevel):
         self.permite_cama_extra.set(False)
         self._cama_extra_qtd_texto = ""
         self._cama_extra_tipo_texto = ""
+        self._cama_extra_tamanho = ""
         self.frame_resumo_cama_extra.pack_forget()
         self.bloco_airbnb.pack_forget()
         _ajustar_tamanho(self, largura=380)
@@ -2317,6 +2370,7 @@ class NovaUnidadeModal(ctk.CTkToplevel):
         if not self.permite_cama_extra.get():
             self._cama_extra_qtd_texto = ""
             self._cama_extra_tipo_texto = ""
+            self._cama_extra_tamanho = ""
             self._atualizar_resumo_cama_extra()
             return
 
@@ -2330,6 +2384,7 @@ class NovaUnidadeModal(ctk.CTkToplevel):
         self.permite_cama_extra.set(False)
         self._cama_extra_qtd_texto = ""
         self._cama_extra_tipo_texto = ""
+        self._cama_extra_tamanho = ""
         self._atualizar_resumo_cama_extra()
         componentes.mostrar_erro(
             "Cama extra só se aplica a unidades do tipo Airbnb."
@@ -2342,11 +2397,13 @@ class NovaUnidadeModal(ctk.CTkToplevel):
             self._cama_extra_qtd_texto,
             self._cama_extra_tipo_texto,
             self._ao_fechar_popup_cama_extra,
+            tamanho_inicial=self._cama_extra_tamanho,
         )
 
-    def _ao_fechar_popup_cama_extra(self, qtd_texto, tipo_texto):
+    def _ao_fechar_popup_cama_extra(self, qtd_texto, tipo_texto, tamanho):
         self._cama_extra_qtd_texto = qtd_texto.strip()
         self._cama_extra_tipo_texto = tipo_texto.strip()
+        self._cama_extra_tamanho = tamanho
         self._atualizar_resumo_cama_extra()
 
     def _atualizar_resumo_cama_extra(self):
@@ -2360,6 +2417,10 @@ class NovaUnidadeModal(ctk.CTkToplevel):
                 f"{self._cama_extra_qtd_texto} × "
                 f"{self._cama_extra_tipo_texto}"
             )
+            if self._cama_extra_tamanho:
+                texto += f" ({self._cama_extra_tamanho})"
+            else:
+                texto += " — falta o tamanho"
         else:
             texto = "Por preencher"
 
@@ -2404,6 +2465,7 @@ class NovaUnidadeModal(ctk.CTkToplevel):
                 permite_cama_extra=self.permite_cama_extra.get(),
                 qtd_cama_extra=qtd_cama_extra,
                 tipo_cama_extra=self._cama_extra_tipo_texto,
+                categoria_cama_extra=self._cama_extra_tamanho or None,
             )
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
@@ -2456,6 +2518,7 @@ class EditarUnidadeModal(ctk.CTkToplevel):
             else ""
         )
         self._cama_extra_tipo_texto = uni["tipo_cama_extra"]
+        self._cama_extra_tamanho = uni.get("categoria_cama_extra") or ""
 
         self.title(f"Editar Unidade — {uni['nome']}")
         self.resizable(False, False)
@@ -2650,6 +2713,7 @@ class EditarUnidadeModal(ctk.CTkToplevel):
         if not self.permite_cama_extra.get():
             self._cama_extra_qtd_texto = ""
             self._cama_extra_tipo_texto = ""
+            self._cama_extra_tamanho = ""
             self._atualizar_resumo_cama_extra()
             return
 
@@ -2662,11 +2726,13 @@ class EditarUnidadeModal(ctk.CTkToplevel):
             self._cama_extra_qtd_texto,
             self._cama_extra_tipo_texto,
             self._ao_fechar_popup_cama_extra,
+            tamanho_inicial=self._cama_extra_tamanho,
         )
 
-    def _ao_fechar_popup_cama_extra(self, qtd_texto, tipo_texto):
+    def _ao_fechar_popup_cama_extra(self, qtd_texto, tipo_texto, tamanho):
         self._cama_extra_qtd_texto = qtd_texto.strip()
         self._cama_extra_tipo_texto = tipo_texto.strip()
+        self._cama_extra_tamanho = tamanho
         self._atualizar_resumo_cama_extra()
 
     def _atualizar_resumo_cama_extra(self):
@@ -2680,6 +2746,10 @@ class EditarUnidadeModal(ctk.CTkToplevel):
                 f"{self._cama_extra_qtd_texto} × "
                 f"{self._cama_extra_tipo_texto}"
             )
+            if self._cama_extra_tamanho:
+                texto += f" ({self._cama_extra_tamanho})"
+            else:
+                texto += " — falta o tamanho"
         else:
             texto = "Por preencher"
 
@@ -2718,6 +2788,7 @@ class EditarUnidadeModal(ctk.CTkToplevel):
                 permite_cama_extra=self.permite_cama_extra.get(),
                 qtd_cama_extra=qtd_cama_extra,
                 tipo_cama_extra=self._cama_extra_tipo_texto,
+                categoria_cama_extra=self._cama_extra_tamanho or None,
             )
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))

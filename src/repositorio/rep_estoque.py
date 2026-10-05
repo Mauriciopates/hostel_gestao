@@ -735,3 +735,74 @@ def listar_regras_rol_lavanderia(tipo_cama=None):
         conexao.close()
 
     return linhas
+
+
+def procurar_regra_rol_lavanderia(regra_id):
+    """Devolve a regra do Rol com este id, ou None (v1.9.0)."""
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT * FROM rol_lavanderia_regras WHERE id = %s", (regra_id,)
+        )
+        linha = cursor.fetchone()
+    finally:
+        conexao.close()
+
+    return cast(dict, linha) if linha else None
+
+
+def inserir_regra_rol_lavanderia(regra):
+    """Insere uma regra do Rol (id, tipo_cama, produto_id,
+    quantidade) — v1.9.0, ecrã "Regras do Rol"."""
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(
+            "INSERT INTO rol_lavanderia_regras "
+            "(id, tipo_cama, produto_id, quantidade) "
+            "VALUES (%s, %s, %s, %s)",
+            (
+                regra["id"],
+                regra["tipo_cama"],
+                regra["produto_id"],
+                regra["quantidade"],
+            ),
+        )
+        conexao.commit()
+    finally:
+        conexao.close()
+
+
+def atualizar_quantidade_regra_rol_lavanderia(regra_id, quantidade):
+    """Muda a quantidade de uma regra do Rol (v1.9.0)."""
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(
+            "UPDATE rol_lavanderia_regras SET quantidade = %s WHERE id = %s",
+            (quantidade, regra_id),
+        )
+        conexao.commit()
+    finally:
+        conexao.close()
+
+
+def apagar_regra_rol_lavanderia(regra_id):
+    """Apaga uma regra do Rol (v1.9.0).
+
+    Exceção consciente à regra "não há DELETE no sistema": uma regra
+    do Rol é configuração (que roupa vai para cada cama), não um
+    registo do negócio — nada a referencia, e "retirar um produto da
+    regra" é exatamente deixar de ter a linha. O histórico fica no
+    log (`estoque.retirar_regra_rol`).
+    """
+    conexao = obter_conexao()
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(
+            "DELETE FROM rol_lavanderia_regras WHERE id = %s", (regra_id,)
+        )
+        conexao.commit()
+    finally:
+        conexao.close()

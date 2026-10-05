@@ -2241,6 +2241,336 @@ def _contagem_com_extra(unidade):
 
 
 # =====================================================================
+# REGRAS DO ROL DE LAVANDERIA (v1.9.0 — mockup aprovado pelo aluno a
+# 05/10/2026)
+#
+# A tabela `rol_lavanderia_regras` diz que roupa vai para cada tipo de
+# cama ("1 cama de casal = 1 lençol de casal + 2 fronhas…"). Até à
+# v1.8.x nada a preenchia — sem migração, sem função, sem ecrã — e
+# numa base nova o Rol dizia sempre "Sem produtos a enviar". Aqui
+# vivem as funções do ecrã "Regras do Rol" (Stock) e o kit de roupa
+# de base oferecido no 1.º arranque.
+#
+# A ligação cama → produto é SÓ pela regra, pelo ID do produto: o
+# nome e o tipo_produto não distinguem casal de solteiro. Mudar uma
+# regra só vale para reservas novas (o Rol é calculado ao registar a
+# reserva; requisições já criadas não mudam).
+# =====================================================================
+
+PREFIXO_REGRA_ROL = "RLR"
+
+# Chaves de regra, pela ordem dos separadores do ecrã. 'beliche' é por
+# PAR (ver `_lugares_ativos_por_tipo`); as 'extra_*' são da cama extra
+# do Airbnb, escolhidas pelo tamanho dela (`_contagem_com_extra`).
+TIPOS_CAMA_ROL = (
+    "solteiro",
+    "casal",
+    "beliche",
+    "extra_casal",
+    "extra_solteiro",
+)
+
+# Só a roupa entra no Rol — a mesma regra que o resto do Stock usa.
+TIPOS_PRODUTO_ROUPA = ("roupa_cama", "roupa_banho")
+
+QTD_MAXIMA_REGRA_ROL = 20
+
+# Kit oferecido no 1.º arranque: (nome, tipo_produto, quantidades por
+# tipo de cama). O beliche usa os produtos de solteiro (a cama tem o
+# mesmo tamanho); as extras copiam o tamanho delas.
+KIT_ROUPA_BASE = (
+    ("Lençol de Solteiro", "roupa_cama",
+     {"solteiro": 1, "beliche": 2, "extra_solteiro": 1}),
+    ("Lençol de Casal", "roupa_cama",
+     {"casal": 1, "extra_casal": 1}),
+    ("Fronha", "roupa_cama",
+     {"solteiro": 1, "casal": 2, "beliche": 2,
+      "extra_solteiro": 1, "extra_casal": 2}),
+    ("Capa de Edredão Solteiro", "roupa_cama",
+     {"solteiro": 1, "beliche": 2, "extra_solteiro": 1}),
+    ("Capa de Edredão Casal", "roupa_cama",
+     {"casal": 1, "extra_casal": 1}),
+    ("Toalha de Rosto", "roupa_banho",
+     {"solteiro": 1, "casal": 2, "beliche": 2,
+      "extra_solteiro": 1, "extra_casal": 2}),
+    ("Toalha de Banho", "roupa_banho",
+     {"solteiro": 1, "casal": 2, "beliche": 2,
+      "extra_solteiro": 1, "extra_casal": 2}),
+)
+
+
+def _exigir_administrativo(autor_id, acao):
+    """Barreira de perfil das regras do Rol: só Master ou Admin.
+
+    A GUI já esconde o cartão ao Staff; esta é a barreira real (regra
+    11.2 — o negócio não pode depender de a interface ter escondido o
+    botão). Devolve o registo do autor.
+    """
+    autor = responsaveis.validar_autoria(autor_id)
+
+    if autor.get("tipo_utilizador") not in _TIPOS_ADMINISTRATIVOS:
+        logger.warning(
+            "Regras do Rol: %s recusado — responsavel_id=%s, tipo=%s",
+            acao,
+            autor["id"],
+            autor.get("tipo_utilizador"),
+        )
+        raise ValueError(
+            "Só um Master ou Admin pode alterar as regras do Rol."
+        )
+
+    return autor
+
+
+def _validar_tipo_cama_rol(tipo_cama):
+    if tipo_cama not in TIPOS_CAMA_ROL:
+        raise ValueError(
+            "Tipo de cama inválido. Tem de ser um de: "
+            + ", ".join(TIPOS_CAMA_ROL)
+        )
+
+
+def _validar_quantidade_regra(quantidade):
+    if not isinstance(quantidade, int) or isinstance(quantidade, bool):
+        raise ValueError(
+            f"A quantidade tem de ser um número inteiro: {quantidade}"
+        )
+
+    if not 1 <= quantidade <= QTD_MAXIMA_REGRA_ROL:
+        raise ValueError(
+            f"A quantidade tem de estar entre 1 e {QTD_MAXIMA_REGRA_ROL}."
+        )
+
+
+def listar_regras_rol(tipo_cama=None):
+    """Regras do Rol já com os dados do produto, ordenadas pelo nome
+    do produto.
+
+    Cada linha: id, tipo_cama, produto_id, quantidade, produto_nome,
+    produto_ativo, tipo_produto. Uma regra de um produto desativado
+    continua a aparecer (com `produto_ativo` False) — o Rol ignora-a
+    no envio e o ecrã mostra-a a cinzento.
+    """
+    if tipo_cama is not None:
+        _validar_tipo_cama_rol(tipo_cama)
+
+    produtos = {
+        produto["id"]: produto
+        for produto in repositorio.listar_produtos(incluir_inativos=True)
+    }
+
+    linhas = []
+    for regra in repositorio.listar_regras_rol_lavanderia(
+        tipo_cama=tipo_cama
+    ):
+        produto = produtos.get(regra["produto_id"], {})
+        linhas.append(
+            {
+                "id": regra["id"],
+                "tipo_cama": regra["tipo_cama"],
+                "produto_id": regra["produto_id"],
+                "quantidade": regra["quantidade"],
+                "produto_nome": produto.get("nome", regra["produto_id"]),
+                "produto_ativo": bool(produto.get("ativo", False)),
+                "tipo_produto": produto.get("tipo_produto"),
+            }
+        )
+
+    linhas.sort(key=lambda linha: linha["produto_nome"].lower())
+    return linhas
+
+
+def produtos_para_regra_rol(tipo_cama):
+    """Produtos que podem entrar na regra deste tipo de cama: roupa
+    (cama ou banho), ativos, e que ainda não estão na regra.
+    Ordenados por nome — é a lista do "+ Adicionar produto".
+    """
+    _validar_tipo_cama_rol(tipo_cama)
+
+    ja_na_regra = {
+        regra["produto_id"]
+        for regra in repositorio.listar_regras_rol_lavanderia(
+            tipo_cama=tipo_cama
+        )
+    }
+
+    candidatos = [
+        produto
+        for produto in repositorio.listar_produtos()
+        if produto["tipo_produto"] in TIPOS_PRODUTO_ROUPA
+        and produto["id"] not in ja_na_regra
+    ]
+    candidatos.sort(key=lambda produto: produto["nome"].lower())
+    return candidatos
+
+
+def adicionar_regra_rol(tipo_cama, produto_id, quantidade, autor_id):
+    """Acrescenta um produto à regra de um tipo de cama.
+
+    Recusa: autor que não seja Master/Admin; tipo de cama
+    desconhecido; produto inexistente, desativado ou que não seja
+    roupa; produto já presente nesta regra; quantidade fora de 1 a
+    `QTD_MAXIMA_REGRA_ROL`. Devolve a regra criada.
+    """
+    autor = _exigir_administrativo(autor_id, "adicionar")
+    _validar_tipo_cama_rol(tipo_cama)
+    _validar_quantidade_regra(quantidade)
+
+    produto = repositorio.procurar_produto(produto_id)
+
+    if produto is None:
+        raise ValueError(f"O produto {produto_id} não existe.")
+
+    if not produto["ativo"]:
+        raise ValueError(
+            f"O produto {produto['nome']} está desativado."
+        )
+
+    if produto["tipo_produto"] not in TIPOS_PRODUTO_ROUPA:
+        raise ValueError(
+            f"O produto {produto['nome']} não é roupa de cama nem de "
+            "banho — só a roupa entra no Rol."
+        )
+
+    for regra in repositorio.listar_regras_rol_lavanderia(
+        tipo_cama=tipo_cama
+    ):
+        if regra["produto_id"] == produto_id:
+            raise ValueError(
+                f"O produto {produto['nome']} já está nesta regra."
+            )
+
+    regra = {
+        "id": repositorio.proximo_id(PREFIXO_REGRA_ROL),
+        "tipo_cama": tipo_cama,
+        "produto_id": produto_id,
+        "quantidade": quantidade,
+    }
+    repositorio.inserir_regra_rol_lavanderia(regra)
+
+    logger.info(
+        "Regra do Rol criada — id=%s, tipo_cama=%s, produto_id=%s, "
+        "quantidade=%s, autor_id=%s",
+        regra["id"],
+        tipo_cama,
+        produto_id,
+        quantidade,
+        autor["id"],
+    )
+    return regra
+
+
+def _regra_existente(regra_id):
+    regra = repositorio.procurar_regra_rol_lavanderia(regra_id)
+
+    if regra is None:
+        raise ValueError(f"A regra {regra_id} não existe.")
+
+    return regra
+
+
+def alterar_quantidade_regra_rol(regra_id, quantidade, autor_id):
+    """Muda a quantidade de uma regra. Devolve a regra atualizada."""
+    autor = _exigir_administrativo(autor_id, "alterar")
+    _validar_quantidade_regra(quantidade)
+    regra = _regra_existente(regra_id)
+
+    repositorio.atualizar_quantidade_regra_rol_lavanderia(
+        regra_id, quantidade
+    )
+
+    logger.info(
+        "Regra do Rol alterada — id=%s, tipo_cama=%s, produto_id=%s, "
+        "quantidade %s -> %s, autor_id=%s",
+        regra_id,
+        regra["tipo_cama"],
+        regra["produto_id"],
+        regra["quantidade"],
+        quantidade,
+        autor["id"],
+    )
+    regra["quantidade"] = quantidade
+    return regra
+
+
+def retirar_regra_rol(regra_id, autor_id):
+    """Tira um produto da regra (apaga a linha — ver
+    `repositorio.apagar_regra_rol_lavanderia`). Fica no log."""
+    autor = _exigir_administrativo(autor_id, "retirar")
+    regra = _regra_existente(regra_id)
+
+    repositorio.apagar_regra_rol_lavanderia(regra_id)
+
+    logger.info(
+        "Regra do Rol retirada — id=%s, tipo_cama=%s, produto_id=%s, "
+        "quantidade=%s, autor_id=%s",
+        regra_id,
+        regra["tipo_cama"],
+        regra["produto_id"],
+        regra["quantidade"],
+        autor["id"],
+    )
+
+
+def pode_criar_kit_roupa():
+    """True se a base ainda não tem produto nenhum (nem desativado).
+
+    O kit só é oferecido numa base vazia: numa base com produtos, o
+    cliente já organizou o stock à sua maneira e o kit duplicava
+    nomes.
+    """
+    return not repositorio.listar_produtos(incluir_inativos=True)
+
+
+def criar_kit_roupa_base(autor_id):
+    """Cria os produtos de `KIT_ROUPA_BASE` (stock 0) e as regras do
+    Rol correspondentes. Só com a base sem produtos.
+
+    Devolve {"produtos": [...], "regras": quantas}. Cada produto e
+    cada regra são gravados um a um (uma ligação por operação, como
+    o resto do repositório).
+    """
+    autor = _exigir_administrativo(autor_id, "criar o kit")
+
+    if not pode_criar_kit_roupa():
+        raise ValueError(
+            "O kit de roupa só pode ser criado numa base sem produtos."
+        )
+
+    produtos = []
+    regras = 0
+
+    for nome, tipo_produto, quantidades in KIT_ROUPA_BASE:
+        produto = criar_produto(nome, "unidade", 0, tipo_produto)
+        produtos.append(produto)
+
+        for tipo_cama in TIPOS_CAMA_ROL:
+            quantidade = quantidades.get(tipo_cama)
+
+            if not quantidade:
+                continue
+
+            repositorio.inserir_regra_rol_lavanderia(
+                {
+                    "id": repositorio.proximo_id(PREFIXO_REGRA_ROL),
+                    "tipo_cama": tipo_cama,
+                    "produto_id": produto["id"],
+                    "quantidade": quantidade,
+                }
+            )
+            regras += 1
+
+    logger.info(
+        "Kit de roupa de base criado — %s produtos, %s regras, "
+        "autor_id=%s",
+        len(produtos),
+        regras,
+        autor["id"],
+    )
+    return {"produtos": produtos, "regras": regras}
+
+
+# =====================================================================
 # GUIA DE ENTREGA (27/09/2026, v1.6.0 — mockup aprovado pelo aluno)
 #
 # O que saiu do armazém num dia (data de envio), agrupado pelo staff
