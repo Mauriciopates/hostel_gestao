@@ -7,7 +7,11 @@
 --
 -- Gerado a 30/09/2026 a partir da base real (Localhost, mysqldump
 -- --no-data) e confirmado contra o código: 25 tabelas de negócio, 45
--- chaves estrangeiras, mais a tabela de controlo `migracoes_aplicadas`. Igual ao `Modelo_de_dados_esquema_v.1.5.6.sql`, com:
+-- chaves estrangeiras, mais a tabela de controlo `migracoes_aplicadas`.
+-- Migração 0003: `avisos_privacidade` trocou titular_tipo +
+-- titular_id por cliente_id + responsavel_id, com 3 FKs novas (48 no
+-- total) e o CHECK `ck_aviso_um_titular`.
+-- Partiu do `Modelo_de_dados_esquema_v.1.5.6.sql`, com:
 --   - CREATE TABLE IF NOT EXISTS (pode correr numa base já criada);
 --   - ordem das tabelas pela dependência das chaves estrangeiras;
 --   - uma só collation (utf8mb4_unicode_ci — funciona em MySQL 8 e
@@ -251,8 +255,8 @@ CREATE TABLE IF NOT EXISTS `textos_legais` (
 
 CREATE TABLE IF NOT EXISTS `avisos_privacidade` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `titular_tipo` enum('cliente','responsavel') NOT NULL,
-  `titular_id` varchar(10) NOT NULL,
+  `cliente_id` varchar(10) DEFAULT NULL,
+  `responsavel_id` varchar(10) DEFAULT NULL,
   `documento` enum('privacidade_hospede','privacidade_colaborador','confidencialidade') NOT NULL,
   `versao_texto` varchar(20) NOT NULL,
   `data_entrega` datetime NOT NULL,
@@ -260,9 +264,15 @@ CREATE TABLE IF NOT EXISTS `avisos_privacidade` (
   `suporte` enum('papel','contrato','web','sistema') NOT NULL DEFAULT 'papel',
   `arquivo` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx_aviso_titular` (`titular_tipo`,`titular_id`),
   KEY `idx_aviso_documento` (`documento`,`versao_texto`),
-  CONSTRAINT `fk_aviso_texto` FOREIGN KEY (`documento`, `versao_texto`) REFERENCES `textos_legais` (`tipo`, `versao`) ON DELETE RESTRICT ON UPDATE RESTRICT
+  KEY `fk_aviso_cliente` (`cliente_id`),
+  KEY `fk_aviso_responsavel` (`responsavel_id`),
+  KEY `fk_aviso_registado_por` (`registado_por_id`),
+  CONSTRAINT `fk_aviso_texto` FOREIGN KEY (`documento`, `versao_texto`) REFERENCES `textos_legais` (`tipo`, `versao`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `fk_aviso_cliente` FOREIGN KEY (`cliente_id`) REFERENCES `clientes` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `fk_aviso_responsavel` FOREIGN KEY (`responsavel_id`) REFERENCES `responsaveis` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `fk_aviso_registado_por` FOREIGN KEY (`registado_por_id`) REFERENCES `responsaveis` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `ck_aviso_um_titular` CHECK (((`cliente_id` is null) <> (`responsavel_id` is null)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `unidades` (

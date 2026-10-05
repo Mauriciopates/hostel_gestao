@@ -75,13 +75,46 @@ def obter_texto(tipo, versao):
     return linha
 
 
+# Migração 0003: o titular deixou de ser `titular_tipo` + `titular_id`
+# (sem FK possível) e passou a ser UMA de duas colunas, cada uma com a
+# sua chave estrangeira. O resto do sistema continua a falar em
+# (titular_tipo, titular_id): a tradução para a coluna certa vive só
+# aqui, na camada que toca na base.
+_COLUNA_TITULAR = {
+    "cliente": "cliente_id",
+    "responsavel": "responsavel_id",
+}
+
+
+def _coluna_titular(titular_tipo):
+    """Nome da coluna do titular. Lista fechada: o nome entra no texto
+    do SQL, por isso NUNCA pode vir de fora sem passar por aqui."""
+    try:
+        return _COLUNA_TITULAR[titular_tipo]
+    except KeyError:
+        raise ValueError(
+            f"Tipo de titular desconhecido: {titular_tipo}"
+        ) from None
+
+
 def _normalizar_aviso(linha):
     """NULL vira "" nos campos opcionais, como no resto do sistema.
 
     `registado_por_id` é NULL quando o registo veio do site sem
     ninguém pelo meio (suporte = 'web'); `arquivo` é NULL quando
     não há folha assinada guardada.
+
+    Repõe também `titular_tipo` e `titular_id` (calculados a partir da
+    coluna preenchida), para quem lê o dicionário não ter de saber da
+    mudança da migração 0003.
     """
+    if linha.get("cliente_id"):
+        linha["titular_tipo"], linha["titular_id"] = (
+            "cliente", linha["cliente_id"])
+    else:
+        linha["titular_tipo"], linha["titular_id"] = (
+            "responsavel", linha.get("responsavel_id"))
+
     for campo in ("registado_por_id", "arquivo"):
         if linha.get(campo) is None:
             linha[campo] = ""
@@ -97,15 +130,15 @@ def obter_ultimo_aviso(titular_tipo, titular_id, documento):
     mesmo segundo — sem ele, qual é "a última" ficava ao critério
     do motor.
     """
+    coluna = _coluna_titular(titular_tipo)
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor(dictionary=True)
         cursor.execute(
             "SELECT * FROM avisos_privacidade "
-            "WHERE titular_tipo = %s AND titular_id = %s "
-            "AND documento = %s "
+            f"WHERE {coluna} = %s AND documento = %s "
             "ORDER BY data_entrega DESC, id DESC LIMIT 1",
-            (titular_tipo, titular_id, documento),
+            (titular_id, documento),
         )
         linha = cast(dict, cursor.fetchone())
     finally:
@@ -121,14 +154,15 @@ def listar_avisos(titular_tipo, titular_id):
     """Histórico completo de um titular, do mais recente para o
     mais antigo. Usado para mostrar o que já foi entregue.
     """
+    coluna = _coluna_titular(titular_tipo)
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor(dictionary=True)
         cursor.execute(
             "SELECT * FROM avisos_privacidade "
-            "WHERE titular_tipo = %s AND titular_id = %s "
+            f"WHERE {coluna} = %s "
             "ORDER BY data_entrega DESC, id DESC",
-            (titular_tipo, titular_id),
+            (titular_id,),
         )
         linhas = cast(list, cursor.fetchall())
     finally:
@@ -154,18 +188,26 @@ def registar_aviso(
 
     Uma linha desta tabela nunca se atualiza. Uma aceitação nova
     é uma linha nova.
+
+    O titular vai para `cliente_id` OU `responsavel_id` (a outra fica
+    NULL). As FKs garantem que a pessoa existe e o CHECK
+    `ck_aviso_um_titular` que só uma das duas está preenchida.
     """
+    _coluna_titular(titular_tipo)          # valida o tipo
+    cliente_id = titular_id if titular_tipo == "cliente" else None
+    responsavel_id = titular_id if titular_tipo == "responsavel" else None
+
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor()
         cursor.execute(
             "INSERT INTO avisos_privacidade "
-            "(titular_tipo, titular_id, documento, versao_texto, "
+            "(cliente_id, responsavel_id, documento, versao_texto, "
             "data_entrega, registado_por_id, suporte) "
             "VALUES (%s, %s, %s, %s, NOW(), %s, %s)",
             (
-                titular_tipo,
-                titular_id,
+                cliente_id,
+                responsavel_id,
                 documento,
                 versao_texto,
                 registado_por_id or None,
@@ -219,16 +261,22 @@ def listar_textos(tipo=None):
 def contar_avisos_por_versao(documento, versao_texto):
     """Quantos titulares DISTINTOS registaram esta versão.
 
-    `COUNT(DISTINCT titular_tipo, titular_id)` e não `COUNT(*)`: se
-    um dia a mesma pessoa tiver duas linhas da mesma versão (papel e
-    sistema, por exemplo), continua a ser uma pessoa. O ecrã diz
-    "2 de 4 aceitaram" — tem de contar gente, não registos.
+    `COUNT(DISTINCT ...)` e não `COUNT(*)`: se um dia a mesma pessoa
+    tiver duas linhas da mesma versão (papel e sistema, por exemplo),
+    continua a ser uma pessoa. O ecrã diz "2 de 4 aceitaram" — tem de
+    contar gente, não registos.
+
+    Porquê o CONCAT: `COUNT(DISTINCT a, b)` ignora as linhas em que
+    alguma das colunas é NULL — e aqui uma das duas é SEMPRE NULL.
+    O prefixo "C:"/"R:" separa um cliente de um responsável que por
+    acaso tivessem o mesmo id.
     """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor()
         cursor.execute(
-            "SELECT COUNT(DISTINCT titular_tipo, titular_id) "
+            "SELECT COUNT(DISTINCT IF(cliente_id IS NOT NULL, "
+            "CONCAT('C:', cliente_id), CONCAT('R:', responsavel_id))) "
             "FROM avisos_privacidade "
             "WHERE documento = %s AND versao_texto = %s",
             (documento, versao_texto),

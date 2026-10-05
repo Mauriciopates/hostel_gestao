@@ -85,6 +85,114 @@ def _sql_publicar_texto_demo(tipo, texto):
     )
 
 
+# --- 0003: avisos_privacidade com chaves estrangeiras -----------------
+# Antes: `titular_tipo` + `titular_id` (associação polimórfica — o id
+# podia ser de `clientes` OU de `responsaveis`, por isso nenhuma FK o
+# protegia). Agora: duas colunas, `cliente_id` e `responsavel_id`,
+# cada uma com a sua FK, e um CHECK que obriga a preencher EXATAMENTE
+# uma. O `registado_por_id` (quem registou) ganha também FK para
+# `responsaveis` — continua opcional (NULL = veio do site).
+#
+# IDEMPOTÊNCIA: o MySQL 8.4 não tem "ADD COLUMN IF NOT EXISTS" (só o
+# MariaDB). Cada passo pergunta primeiro ao `information_schema` se
+# ainda é preciso e só então corre o ALTER (ver `_se`). Se a migração
+# falhar a meio, voltar a corrê-la continua do ponto onde parou.
+
+
+def _se(condicao, instrucao):
+    """Corre `instrucao` só se `condicao` (SQL que devolve 0/1) for 1.
+
+    O MySQL não tem IF fora de procedimentos, por isso monta-se a
+    instrução numa variável e corre-se como "prepared statement"; quando
+    a condição é falsa corre-se `DO 0` (não faz nada). Devolve as 4
+    instruções, a juntar à lista da migração.
+    """
+    return [
+        f"SET @sql_migracao = IF(({condicao}) = 1, "
+        f"{_literal_sql(instrucao)}, 'DO 0')",
+        "PREPARE passo_migracao FROM @sql_migracao",
+        "EXECUTE passo_migracao",
+        "DEALLOCATE PREPARE passo_migracao",
+    ]
+
+
+def _existe_coluna(tabela, coluna):
+    return (
+        "SELECT COUNT(*) FROM information_schema.columns "
+        "WHERE table_schema = DATABASE() "
+        f"AND table_name = '{tabela}' AND column_name = '{coluna}'"
+    )
+
+
+def _existe_indice(tabela, indice):
+    return (
+        "SELECT COUNT(*) > 0 FROM information_schema.statistics "
+        "WHERE table_schema = DATABASE() "
+        f"AND table_name = '{tabela}' AND index_name = '{indice}'"
+    )
+
+
+def _existe_restricao(tabela, restricao):
+    """FK ou CHECK com este nome (os dois estão na table_constraints)."""
+    return (
+        "SELECT COUNT(*) FROM information_schema.table_constraints "
+        "WHERE constraint_schema = DATABASE() "
+        f"AND table_name = '{tabela}' AND constraint_name = '{restricao}'"
+    )
+
+
+def _nao(condicao):
+    return f"SELECT NOT ({condicao})"
+
+
+_AVISOS = "avisos_privacidade"
+
+_MIGRACAO_0003 = (
+    # 1. As duas colunas novas, logo a seguir ao id.
+    _se(_nao(_existe_coluna(_AVISOS, "cliente_id")),
+        f"ALTER TABLE {_AVISOS} ADD COLUMN cliente_id VARCHAR(10) "
+        "NULL AFTER id")
+    + _se(_nao(_existe_coluna(_AVISOS, "responsavel_id")),
+          f"ALTER TABLE {_AVISOS} ADD COLUMN responsavel_id VARCHAR(10) "
+          "NULL AFTER cliente_id")
+    # 2. Copiar os dados antigos (só enquanto as colunas antigas
+    #    existem — numa segunda corrida já foram apagadas).
+    + _se(_existe_coluna(_AVISOS, "titular_tipo"),
+          f"UPDATE {_AVISOS} SET cliente_id = titular_id "
+          "WHERE titular_tipo = 'cliente' AND cliente_id IS NULL")
+    + _se(_existe_coluna(_AVISOS, "titular_tipo"),
+          f"UPDATE {_AVISOS} SET responsavel_id = titular_id "
+          "WHERE titular_tipo = 'responsavel' "
+          "AND responsavel_id IS NULL")
+    # 3. Tirar o índice e as colunas antigas.
+    + _se(_existe_indice(_AVISOS, "idx_aviso_titular"),
+          f"ALTER TABLE {_AVISOS} DROP INDEX idx_aviso_titular")
+    + _se(_existe_coluna(_AVISOS, "titular_tipo"),
+          f"ALTER TABLE {_AVISOS} DROP COLUMN titular_tipo")
+    + _se(_existe_coluna(_AVISOS, "titular_id"),
+          f"ALTER TABLE {_AVISOS} DROP COLUMN titular_id")
+    # 4. As chaves estrangeiras (RESTRICT, como as outras do sistema:
+    #    um cliente ou colaborador com avisos registados não se apaga —
+    #    anonimiza-se ou desativa-se).
+    + _se(_nao(_existe_restricao(_AVISOS, "fk_aviso_cliente")),
+          f"ALTER TABLE {_AVISOS} ADD CONSTRAINT fk_aviso_cliente "
+          "FOREIGN KEY (cliente_id) REFERENCES clientes (id) "
+          "ON DELETE RESTRICT ON UPDATE RESTRICT")
+    + _se(_nao(_existe_restricao(_AVISOS, "fk_aviso_responsavel")),
+          f"ALTER TABLE {_AVISOS} ADD CONSTRAINT fk_aviso_responsavel "
+          "FOREIGN KEY (responsavel_id) REFERENCES responsaveis (id) "
+          "ON DELETE RESTRICT ON UPDATE RESTRICT")
+    + _se(_nao(_existe_restricao(_AVISOS, "fk_aviso_registado_por")),
+          f"ALTER TABLE {_AVISOS} ADD CONSTRAINT fk_aviso_registado_por "
+          "FOREIGN KEY (registado_por_id) REFERENCES responsaveis (id) "
+          "ON DELETE RESTRICT ON UPDATE RESTRICT")
+    # 5. Exatamente um titular por linha.
+    + _se(_nao(_existe_restricao(_AVISOS, "ck_aviso_um_titular")),
+          f"ALTER TABLE {_AVISOS} ADD CONSTRAINT ck_aviso_um_titular "
+          "CHECK ((cliente_id IS NULL) <> (responsavel_id IS NULL))")
+)
+
+
 # Lista oficial, por ordem. Só cresce — nunca alterar uma já publicada.
 MIGRACOES = [
     ("0001_categoria_compra_de_stock", [_SQL_CATEGORIA_COMPRA_DE_STOCK]),
@@ -103,6 +211,7 @@ MIGRACOES = [
             ),
         ],
     ),
+    ("0003_avisos_privacidade_fks", _MIGRACAO_0003),
 ]
 
 _FORMATO_NOME = re.compile(r"^\d{4}_[a-z0-9_]+$")

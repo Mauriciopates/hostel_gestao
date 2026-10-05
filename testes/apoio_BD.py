@@ -64,6 +64,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 import mysql.connector  # noqa: E402
 
 import config  # noqa: E402
+import migracoes  # noqa: E402
 import repositorio  # noqa: E402
 import utilizadores  # noqa: E402
 
@@ -127,6 +128,20 @@ DB_NAME_TESTE = os.environ.get("DB_NAME_TESTE", "hostel_gestao_teste")
 # 4 índices da base real). Uma lista de instruções CREATE TABLE IF NOT
 # EXISTS, pela ordem das chaves estrangeiras.
 _ESQUEMA_TABELAS = repositorio.instrucoes_esquema()
+
+# Migrações que MUDAM A ESTRUTURA de uma tabela que já existe. O
+# CREATE TABLE IF NOT EXISTS do esquema não toca numa tabela já criada,
+# por isso uma base de teste antiga ficava com a forma velha. Estas
+# correm (idempotentes: numa base já em dia não fazem nada) sempre que
+# a base de teste é preparada. As migrações de DADOS (0001, 0002) não
+# entram: a base de teste quer as tabelas vazias (decisão 4, passo C).
+_MIGRACOES_DE_ESTRUTURA = ("0003_avisos_privacidade_fks",)
+_INSTRUCOES_ESTRUTURA = [
+    instrucao
+    for nome, instrucoes in migracoes.MIGRACOES
+    if nome in _MIGRACOES_DE_ESTRUTURA
+    for instrucao in instrucoes
+]
 
 # Ordem de TRUNCATE segura para chaves estrangeiras: as tabelas
 # "filhas" antes das "mães" — o inverso da ordem de criação acima.
@@ -207,6 +222,13 @@ def _garantir_base_de_teste():
         cursor.execute(f"USE {DB_NAME_TESTE}")
 
         for comando in _ESQUEMA_TABELAS:
+            cursor.execute(comando)
+
+        # Restos do último teste podiam apontar para pessoas que já não
+        # existem e impedir as FKs novas. É a base de TESTE: cada
+        # `setUp` esvazia tudo de qualquer forma.
+        cursor.execute("TRUNCATE TABLE avisos_privacidade")
+        for comando in _INSTRUCOES_ESTRUTURA:
             cursor.execute(comando)
 
         conexao.commit()

@@ -15,6 +15,7 @@ nunca correu migrações.
 import sys
 import threading
 import unittest
+from datetime import date
 from pathlib import Path
 from typing import cast
 
@@ -22,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from testes.apoio_BD import BaseMySQLTest  # noqa: E402
 
+import clientes  # noqa: E402
 import migracoes  # noqa: E402
 import repositorio  # noqa: E402
 
@@ -378,6 +380,180 @@ class TesteTextosLegaisDemo(BaseMigracoesTest):
         self._aplicar()
 
         self.assertEqual([], self._aplicar())
+
+
+_FORMA_ANTIGA_AVISOS = [
+    # Desfaz a 0003 na base de TESTE, para a migração ter o que fazer.
+    "ALTER TABLE avisos_privacidade DROP CONSTRAINT ck_aviso_um_titular",
+    "ALTER TABLE avisos_privacidade DROP FOREIGN KEY fk_aviso_cliente",
+    "ALTER TABLE avisos_privacidade DROP FOREIGN KEY fk_aviso_responsavel",
+    "ALTER TABLE avisos_privacidade DROP FOREIGN KEY fk_aviso_registado_por",
+    "ALTER TABLE avisos_privacidade DROP INDEX fk_aviso_registado_por",
+    "ALTER TABLE avisos_privacidade DROP COLUMN cliente_id, "
+    "DROP COLUMN responsavel_id",
+    "ALTER TABLE avisos_privacidade "
+    "ADD COLUMN titular_tipo ENUM('cliente','responsavel') NOT NULL "
+    "AFTER id, "
+    "ADD COLUMN titular_id VARCHAR(10) NOT NULL AFTER titular_tipo, "
+    "ADD KEY idx_aviso_titular (titular_tipo, titular_id)",
+]
+
+
+def _colunas_avisos():
+    conexao = repositorio.obter_conexao()
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = DATABASE() "
+            "AND table_name = 'avisos_privacidade'"
+        )
+        return {str(linha[0]) for linha in cast(list, cursor.fetchall())}
+    finally:
+        conexao.close()
+
+
+def _restricoes_avisos():
+    conexao = repositorio.obter_conexao()
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(
+            "SELECT constraint_name FROM information_schema."
+            "table_constraints WHERE constraint_schema = DATABASE() "
+            "AND table_name = 'avisos_privacidade'"
+        )
+        return {str(linha[0]) for linha in cast(list, cursor.fetchall())}
+    finally:
+        conexao.close()
+
+
+class TesteAvisosComFks(BaseMigracoesTest):
+    """Migração 0003 — titular_tipo/titular_id → cliente_id +
+    responsavel_id com FKs e CHECK.
+
+    Cada teste põe a tabela na FORMA ANTIGA, corre a migração e, no
+    fim, garante a forma nova (os outros testes precisam dela).
+    """
+
+    _NOME = "0003_avisos_privacidade_fks"
+
+    def setUp(self):
+        super().setUp()
+        for instrucao in _FORMA_ANTIGA_AVISOS:
+            _executar(instrucao)
+        # Pessoas e texto reais, para as FKs terem a que apontar.
+        _executar(
+            "INSERT INTO responsaveis (id, nome, tipo_utilizador, ativo) "
+            "VALUES ('RES-001', 'Master Teste', 'Master', 1)"
+        )
+        self.cliente = clientes.criar(
+            "Hóspede de Teste", "Passaporte", "X1234567", "airbnb",
+            nacionalidade="Brasileira", pais_emissor_documento="Brasil",
+            pais_residencia="Brasil",
+            data_nascimento=date(1990, 1, 1),
+            validade_documento=date(2035, 1, 1),
+        )
+        _executar(
+            "INSERT INTO textos_legais "
+            "(tipo, versao, texto, publicado_em, em_vigor) VALUES "
+            "('confidencialidade', '1.0', 'T', CURDATE(), 1), "
+            "('privacidade_hospede', '1.0', 'T', CURDATE(), 1)"
+        )
+
+    def tearDown(self):
+        _executar("DELETE FROM avisos_privacidade")
+        self._correr_instrucoes()     # deixa sempre a forma nova
+        super().tearDown()
+
+    def _instrucoes(self):
+        return [m for m in migracoes.MIGRACOES if m[0] == self._NOME][0][1]
+
+    def _correr_instrucoes(self):
+        """As instruções da 0003 numa ligação, SEM registar — como uma
+        nova tentativa depois de uma falha a meio."""
+        conexao = repositorio.obter_conexao()
+        try:
+            cursor = conexao.cursor()
+            for instrucao in self._instrucoes():
+                cursor.execute(instrucao)
+            conexao.commit()
+        finally:
+            conexao.close()
+
+    def _aplicar(self):
+        lista = [m for m in migracoes.MIGRACOES if m[0] == self._NOME]
+        return migracoes.aplicar_pendentes(lista)
+
+    def _aviso_antigo(self, tipo, titular_id, documento, registado=None):
+        registado_sql = f"'{registado}'" if registado else "NULL"
+        _executar(
+            "INSERT INTO avisos_privacidade (titular_tipo, titular_id, "
+            "documento, versao_texto, data_entrega, registado_por_id, "
+            f"suporte) VALUES ('{tipo}', '{titular_id}', '{documento}', "
+            f"'1.0', NOW(), {registado_sql}, 'sistema')"
+        )
+
+    def teste_copia_os_dados_e_cria_as_restricoes(self):
+        self._aviso_antigo("cliente", self.cliente["id"],
+                           "privacidade_hospede", "RES-001")
+        self._aviso_antigo("responsavel", "RES-001", "confidencialidade",
+                           "RES-001")
+
+        self.assertEqual([self._NOME], self._aplicar())
+
+        colunas = _colunas_avisos()
+        self.assertIn("cliente_id", colunas)
+        self.assertIn("responsavel_id", colunas)
+        self.assertNotIn("titular_tipo", colunas)
+        self.assertNotIn("titular_id", colunas)
+        self.assertTrue(
+            {"fk_aviso_cliente", "fk_aviso_responsavel",
+             "fk_aviso_registado_por", "ck_aviso_um_titular",
+             "fk_aviso_texto"} <= _restricoes_avisos()
+        )
+
+        historico_cliente = repositorio.listar_avisos(
+            "cliente", self.cliente["id"])
+        historico_master = repositorio.listar_avisos("responsavel",
+                                                     "RES-001")
+        self.assertEqual(1, len(historico_cliente))
+        self.assertEqual("privacidade_hospede",
+                         historico_cliente[0]["documento"])
+        self.assertEqual(1, len(historico_master))
+        self.assertEqual("confidencialidade",
+                         historico_master[0]["documento"])
+
+    def teste_tabela_vazia_tambem_migra(self):
+        self._aplicar()
+        self.assertIn("cliente_id", _colunas_avisos())
+
+    def teste_segunda_vez_nao_faz_nada(self):
+        self._aplicar()
+        self.assertEqual([], self._aplicar())
+
+    def teste_correr_outra_vez_as_instrucoes_nao_falha(self):
+        """Idempotente: depois de aplicada, repetir as instruções (o
+        que acontece se uma falha a meio obrigar a nova tentativa) não
+        rebenta nem duplica nada."""
+        self._aviso_antigo("responsavel", "RES-001", "confidencialidade")
+        self._correr_instrucoes()
+        self._correr_instrucoes()
+
+        self.assertEqual(
+            1, len(repositorio.listar_avisos("responsavel", "RES-001")))
+
+    def teste_titular_orfao_faz_falhar_e_nao_regista(self):
+        """Um aviso de um cliente que não existe impede a FK: a
+        migração falha com o nome dela e fica por aplicar (a
+        aplicação não abre — decisão 2 do passo C)."""
+        self._aviso_antigo("cliente", "CLI-999", "privacidade_hospede")
+
+        with self.assertRaises(ValueError) as contexto:
+            self._aplicar()
+
+        self.assertIn(self._NOME, str(contexto.exception))
+        self.assertNotIn(self._NOME,
+                         repositorio.listar_migracoes_aplicadas())
 
 
 class TesteValidarLista(unittest.TestCase):

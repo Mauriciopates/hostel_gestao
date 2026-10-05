@@ -345,20 +345,155 @@ class TesteRegistar(BaseTermosTest):
             )
 
     def test_registado_por_none_e_aceite(self):
-        """Registo via web: não há ninguém a assinar pelo sistema."""
+        """Registo via web: não há ninguém a assinar pelo sistema.
+
+        Migração 0003: o cliente tem de EXISTIR (FK fk_aviso_cliente)
+        — antes este teste registava para um "CLI-001" que nunca foi
+        criado, e a base aceitava."""
+        cliente = _criar_cliente_minimo()
         termos.registar(
             termos.TITULAR_CLIENTE,
-            "CLI-001",
+            cliente["id"],
             termos.PRIVACIDADE_HOSPEDE,
             registado_por_id=None,
             suporte="web",
         )
 
         historico = termos.historico(
-            termos.TITULAR_CLIENTE, "CLI-001"
+            termos.TITULAR_CLIENTE, cliente["id"]
         )
         self.assertEqual(len(historico), 1)
         self.assertEqual(historico[0]["registado_por_id"], "")
+
+
+# ---------------------------------------------------------------------
+# 3b. Chaves estrangeiras do titular (migração 0003)
+# ---------------------------------------------------------------------
+
+
+class TesteFksTitular(BaseTermosTest):
+    """`cliente_id` / `responsavel_id` / `registado_por_id` com FK e o
+    CHECK `ck_aviso_um_titular` — a base recusa sozinha um aviso sem
+    pessoa real por trás."""
+
+    def _inserir_cru(self, cliente_id, responsavel_id,
+                     registado_por_id=None):
+        """INSERT direto (fora do `termos`), para provar as regras da
+        PRÓPRIA base — a única forma de testar uma constraint."""
+        conexao = repositorio.obter_conexao()
+        try:
+            cursor = conexao.cursor()
+            cursor.execute(
+                "INSERT INTO avisos_privacidade (cliente_id, "
+                "responsavel_id, documento, versao_texto, data_entrega, "
+                "registado_por_id, suporte) "
+                "VALUES (%s, %s, %s, '1.0', NOW(), %s, 'sistema')",
+                (cliente_id, responsavel_id, termos.CONFIDENCIALIDADE,
+                 registado_por_id),
+            )
+            conexao.commit()
+        finally:
+            conexao.close()
+
+    def test_cliente_inexistente_recusado(self):
+        import mysql.connector
+
+        with self.assertRaises(mysql.connector.IntegrityError):
+            termos.registar(
+                termos.TITULAR_CLIENTE,
+                "CLI-999",
+                termos.PRIVACIDADE_HOSPEDE,
+                registado_por_id=self.master["id"],
+            )
+
+    def test_responsavel_inexistente_recusado(self):
+        import mysql.connector
+
+        with self.assertRaises(mysql.connector.IntegrityError):
+            termos.registar(
+                termos.TITULAR_RESPONSAVEL,
+                "RES-999",
+                termos.CONFIDENCIALIDADE,
+                registado_por_id=self.master["id"],
+            )
+
+    def test_registado_por_inexistente_recusado(self):
+        import mysql.connector
+
+        with self.assertRaises(mysql.connector.IntegrityError):
+            termos.registar(
+                termos.TITULAR_RESPONSAVEL,
+                self.master["id"],
+                termos.CONFIDENCIALIDADE,
+                registado_por_id="RES-999",
+            )
+
+    def test_check_recusa_sem_titular_e_com_dois(self):
+        import mysql.connector
+
+        cliente = _criar_cliente_minimo()
+        for cliente_id, responsavel_id in (
+            (None, None),
+            (cliente["id"], self.master["id"]),
+        ):
+            with self.subTest(cliente=cliente_id, resp=responsavel_id):
+                with self.assertRaises(
+                    (mysql.connector.IntegrityError,
+                     mysql.connector.DatabaseError)
+                ):
+                    self._inserir_cru(cliente_id, responsavel_id)
+
+    def test_grava_na_coluna_certa(self):
+        cliente = _criar_cliente_minimo()
+        termos.registar(
+            termos.TITULAR_CLIENTE,
+            cliente["id"],
+            termos.PRIVACIDADE_HOSPEDE,
+            registado_por_id=self.master["id"],
+            suporte="papel",
+        )
+
+        aviso = termos.historico(termos.TITULAR_CLIENTE, cliente["id"])[0]
+        self.assertEqual(aviso["cliente_id"], cliente["id"])
+        self.assertIsNone(aviso["responsavel_id"])
+        # Compatibilidade: o dicionário continua a trazer o titular.
+        self.assertEqual(aviso["titular_tipo"], termos.TITULAR_CLIENTE)
+        self.assertEqual(aviso["titular_id"], cliente["id"])
+
+    def test_historico_nao_mistura_titulares(self):
+        """Um cliente e um responsável nunca veem os avisos um do
+        outro (a consulta escolhe a coluna pelo tipo)."""
+        cliente = _criar_cliente_minimo()
+        termos.registar(
+            termos.TITULAR_RESPONSAVEL,
+            self.master["id"],
+            termos.CONFIDENCIALIDADE,
+            registado_por_id=self.master["id"],
+        )
+
+        self.assertEqual(
+            [], termos.historico(termos.TITULAR_CLIENTE, cliente["id"])
+        )
+        self.assertEqual(
+            1,
+            len(termos.historico(termos.TITULAR_RESPONSAVEL,
+                                 self.master["id"])),
+        )
+
+    def test_contagem_por_versao_conta_pessoas(self):
+        """`COUNT(DISTINCT a, b)` daria 0 (uma coluna é sempre NULL) —
+        a contagem tem de dar 1 cliente + 1 responsável = 2, e o mesmo
+        cliente registado duas vezes continua a ser 1 pessoa."""
+        cliente = _criar_cliente_minimo()
+        for _ in range(2):
+            self._inserir_cru(cliente["id"], None)
+        self._inserir_cru(None, self.master["id"])
+
+        self.assertEqual(
+            2,
+            repositorio.contar_avisos_por_versao(
+                termos.CONFIDENCIALIDADE, "1.0"),
+        )
 
 
 # ---------------------------------------------------------------------
