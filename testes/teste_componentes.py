@@ -818,5 +818,183 @@ class TesteTabelaOrdenacao(unittest.TestCase):
                 self.assertEqual(acoes._cor_fundo, registo["cor"])
 
 
+# ---------------------------------------------------------------------
+# ChipId — o clique conta ao SOLTAR (v1.8.2)
+# ---------------------------------------------------------------------
+
+
+class TesteChipId(unittest.TestCase):
+    """Bug da Planta de Lugares (v1.8.2): o crachá reagia ao premir e
+    o "soltar" caía no widget de baixo. Agora reage ao soltar, e só
+    com o rato ainda em cima.
+
+    Os eventos vão para o `_label` interno (o CTkLabel liga lá os
+    seus binds — lição 10 do ficheiro 11). O `winfo_containing`
+    (o widget que está debaixo do rato) é simulado: o teste gera os
+    eventos mas não move o rato a sério.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.root = _criar_root()
+        # Os eventos de rato só chegam a uma janela VISÍVEL — a root
+        # está escondida, por isso o crachá vive numa janelinha
+        # própria, aberta só durante esta classe.
+        cls.janela = tkinter.Toplevel(cls.root)
+        cls.janela.geometry("200x80+0+0")
+        cls.root.update()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.janela.destroy()
+        _destruir_root(cls.root)
+
+    def _chip(self):
+        from gui.componentes import ChipId
+
+        cliques = []
+        chip = ChipId(
+            self.janela, "UNI-001", ao_clicar=lambda: cliques.append(1)
+        )
+        chip.pack()
+        self.root.update()
+        return chip, cliques
+
+    def test_premir_nao_dispara(self):
+        chip, cliques = self._chip()
+        chip._label.event_generate("<ButtonPress-1>", x=5, y=5)
+        self.root.update()
+        self.assertEqual(cliques, [])
+
+    def test_soltar_em_cima_dispara(self):
+        chip, cliques = self._chip()
+        with patch.object(chip, "winfo_containing", return_value=chip._label):
+            chip._label.event_generate("<ButtonPress-1>", x=5, y=5)
+            chip._label.event_generate("<ButtonRelease-1>", x=5, y=5)
+            self.root.update()
+        self.assertEqual(cliques, [1])
+
+    def test_soltar_fora_nao_conta(self):
+        chip, cliques = self._chip()
+        with patch.object(chip, "winfo_containing", return_value=None):
+            chip._label.event_generate("<ButtonPress-1>", x=5, y=5)
+            chip._label.event_generate("<ButtonRelease-1>", x=500, y=500)
+            self.root.update()
+        self.assertEqual(cliques, [])
+
+    def test_sem_ao_clicar_nao_reage(self):
+        from gui.componentes import ChipId
+
+        chip = ChipId(self.janela, "UNI-002")
+        chip.pack()
+        self.root.update_idletasks()
+        chip._label.event_generate("<ButtonRelease-1>", x=5, y=5)
+        self.root.update()
+        self.assertFalse(chip.clicavel)
+
+
+# ---------------------------------------------------------------------
+# carregar_em_segundo_plano + JanelaCarregar (v1.8.4)
+# ---------------------------------------------------------------------
+
+
+class TesteCarregarEmSegundoPlano(unittest.TestCase):
+    """A leitura corre numa thread; o resultado volta à thread
+    principal. Os testes fazem girar o loop do Tk à mão até acabar.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.root = _criar_root()
+
+    @classmethod
+    def tearDownClass(cls):
+        _destruir_root(cls.root)
+
+    def _esperar(self, condicao, limite=5.0):
+        import time
+
+        fim = time.monotonic() + limite
+        while not condicao() and time.monotonic() < fim:
+            self.root.update()
+            time.sleep(0.01)
+        self.root.update()
+
+    def _janelas_carregar(self):
+        from gui.componentes import JanelaCarregar
+
+        return [
+            w for w in self.root.winfo_children()
+            if isinstance(w, JanelaCarregar) and w.winfo_exists()
+        ]
+
+    def test_resultado_chega_ao_terminar(self):
+        from gui.componentes import carregar_em_segundo_plano
+
+        recebido = []
+        carregar_em_segundo_plano(self.root, lambda: 42, recebido.append)
+        self._esperar(lambda: recebido)
+        self.assertEqual(recebido, [42])
+
+    def test_leitura_rapida_nao_mostra_janela(self):
+        from gui.componentes import carregar_em_segundo_plano
+
+        recebido = []
+        carregar_em_segundo_plano(self.root, lambda: "ok", recebido.append)
+        vistas = []
+        self._esperar(
+            lambda: vistas.append(len(self._janelas_carregar())) or recebido
+        )
+        self.assertEqual(recebido, ["ok"])
+        self.assertEqual(max(vistas), 0)
+
+    def test_leitura_lenta_mostra_e_fecha_a_janela(self):
+        import time
+
+        from gui.componentes import carregar_em_segundo_plano
+
+        def lento():
+            time.sleep(0.5)
+            return "fim"
+
+        recebido = []
+        vistas = []
+        carregar_em_segundo_plano(self.root, lento, recebido.append)
+        self._esperar(
+            lambda: vistas.append(len(self._janelas_carregar())) or recebido
+        )
+        self.assertEqual(recebido, ["fim"])
+        self.assertGreater(max(vistas), 0)
+        self.assertEqual(self._janelas_carregar(), [])
+
+    def test_erro_chama_ao_falhar_e_chega_ao_tratador(self):
+        from gui.componentes import carregar_em_segundo_plano
+
+        def rebenta():
+            raise RuntimeError("leitura falhou")
+
+        erros = []
+        falhou = []
+        recebido = []
+        anterior = self.root.report_callback_exception
+        self.root.report_callback_exception = (
+            lambda tipo, valor, tb: erros.append(valor)
+        )
+        try:
+            carregar_em_segundo_plano(
+                self.root,
+                rebenta,
+                recebido.append,
+                ao_falhar=lambda: falhou.append(1),
+            )
+            self._esperar(lambda: erros)
+        finally:
+            self.root.report_callback_exception = anterior
+
+        self.assertEqual(falhou, [1])
+        self.assertEqual(recebido, [])
+        self.assertEqual(str(erros[0]), "leitura falhou")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
