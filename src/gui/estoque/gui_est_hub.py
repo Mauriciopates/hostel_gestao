@@ -40,6 +40,25 @@ ALTERAÇÕES 13/09/2026 (Aprovação de Requisições):
   comprida do que as outras e ficava a bater na borda de baixo com
   a altura fixa anterior. A grelha ganha margem inferior para
   respirar.
+
+ALTERAÇÕES 05/10/2026 (v1.9.0, bloco "hubs" — desenho do aluno):
+
+- Os cartões passam a estar em três GRUPOS com título, em vez de uma
+  grelha só: "Solicitações e listagem" (Requisições), "Gestão
+  Administrativa" (Rota de Envio, Devoluções) e "Gestão de Stock"
+  (Produtos, Movimentos). Motivo (aluno): misturava-se o que é para
+  criar registos e ver listagens, o que é administrativo e o que é
+  catálogo/inventário.
+- Cada cartão ganhou a chave "grupo"; a ordem dos grupos está em
+  `_GRUPOS`. O desenho do grupo é o `componentes.GrupoCartoesHub`,
+  partilhado com o hub de Despesas. Títulos e descrições dos cartões
+  não mudaram.
+- Permissões: o cartão Devoluções passa a ser só de Admin/Master
+  (decisão do aluno) — o Staff vê só Requisições. Um grupo sem
+  cartões visíveis não aparece.
+- O selo "por implementar" (cartões com `ecra` None) saiu: os cinco
+  estão implementados há muito, e o `_abrir_area` continua a avisar
+  se um dia aparecer um destino desconhecido.
 """
 
 import customtkinter as ctk
@@ -61,32 +80,46 @@ from .gui_est_requisicoes import ListaRequisicoes
 # Ordem: Requisições primeiro (é o que a maioria dos utilizadores
 # usa), Aprovação a seguir (é o par natural — quem aprova olha para
 # este logo depois), depois Devoluções, Produtos e Movimentos.
+# Grupos do hub, pela ordem em que aparecem (v1.9.0).
+_GRUPOS = (
+    "Solicitações e listagem",
+    "Gestão Administrativa",
+    "Gestão de Stock",
+)
+
 _AREAS = (
     {
+        "grupo": "Solicitações e listagem",
         "titulo": "Requisições",
         "descricao": "Pedir material e acompanhar os pedidos",
         "ecra": "requisicoes",
         "so_admin": False,
     },
     {
+        "grupo": "Gestão Administrativa",
         "titulo": "Rota de Envio",
         "descricao": "Acompanhar e gerir todas as requisições",
         "ecra": "aprovacao",
         "so_admin": True,
     },
     {
+        "grupo": "Gestão Administrativa",
         "titulo": "Devoluções",
         "descricao": "Aceitar sobras de material (administrativo)",
         "ecra": "devolucoes",
-        "so_admin": False,
+        # v1.9.0 (aluno): só administrativo. O Staff reporta sobras
+        # no "Gerir" da própria requisição; aceitá-las é do Admin.
+        "so_admin": True,
     },
     {
+        "grupo": "Gestão de Stock",
         "titulo": "Produtos",
         "descricao": "Catálogo, unidade de medida e stock mínimo",
         "ecra": "produtos",
         "so_admin": True,
     },
     {
+        "grupo": "Gestão de Stock",
         "titulo": "Movimentos",
         "descricao": "Entradas de compra e ajustes de inventário",
         "ecra": "movimentos",
@@ -113,33 +146,35 @@ class EcraStock(ctk.CTkFrame):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=20, pady=(4, 8))
 
-        # Grelha esticada de ponta a ponta (duas colunas de peso
-        # igual). Com cinco cartões, a última linha fica com um
-        # cartão só — o `sticky="nsew"` faz com que ele ocupe
-        # metade da largura, alinhado à esquerda, sem se esticar
-        # pela linha inteira (que ficava estranho).
-        grelha = ctk.CTkFrame(self, fg_color="transparent")
-        grelha.pack(fill="both", expand=True, padx=20, pady=(0, 20))
-        grelha.grid_columnconfigure(0, weight=1, uniform="areas")
-        grelha.grid_columnconfigure(1, weight=1, uniform="areas")
-
         # FASE 4 — visibilidade por perfil. Staff só vê os cartões
-        # marcados com so_admin=False (Requisições, Devoluções);
-        # Admin/Master vê todos. O índice da grelha é contado
-        # separadamente do índice de _AREAS: se filtrarmos um
-        # item, o próximo tem de ocupar a posição seguinte na
-        # grelha, não a posição "original" dele.
+        # marcados com so_admin=False (desde a v1.9.0, só Requisições);
+        # Admin/Master vê todos. v1.9.0: os cartões vão para o seu
+        # grupo, e um grupo que fique sem cartões não se desenha.
         tipo = sessao.tipo_utilizador_ativo()
         e_administrativo = tipo in ("Admin", "Master")
 
-        indice = 0
+        for nome_grupo in _GRUPOS:
+            grupo = componentes.GrupoCartoesHub(
+                self, nome_grupo, cor_borda=tema.AZUL_PRINCIPAL
+            )
 
-        for item in _AREAS:
-            if item.get("so_admin") and not e_administrativo:
+            for item in _AREAS:
+                if item["grupo"] != nome_grupo:
+                    continue
+                if item.get("so_admin") and not e_administrativo:
+                    continue
+
+                grupo.adicionar(
+                    item["titulo"],
+                    item["descricao"],
+                    lambda area=item: self._abrir_area(area),
+                )
+
+            if grupo.vazio:
+                grupo.destroy()
                 continue
 
-            self._desenhar_cartao(grelha, item, indice)
-            indice += 1
+            grupo.pack(fill="x", padx=14, pady=(0, 12))
 
     def _desenhar_alertas(self):
         """Faixa amarela com os produtos abaixo do stock mínimo.
@@ -177,69 +212,6 @@ class EcraStock(ctk.CTkFrame):
             anchor="w",
             justify="left",
         ).pack(fill="x", padx=12, pady=8)
-
-    def _desenhar_cartao(self, master, area, indice):
-        """Desenha um cartão da grelha do hub.
-
-        O cartão cresce com o conteúdo (sem `height` fixo) — a
-        descrição do cartão "Aprovação de Requisições" é mais
-        comprida do que as outras, e a altura fixa anterior
-        cortava-a a meio em certas larguras de janela.
-
-        O `pady` interno no `pack` do título e da descrição dá a
-        folga que antes não existia, e que era a causa do texto
-        bater na borda de baixo.
-        """
-        cartao = ctk.CTkFrame(
-            master,
-            corner_radius=tema.RAIO_CARTAO,
-            border_width=1,
-            border_color=(
-                tema.AZUL_PRINCIPAL if area["ecra"] else tema.COR_BORDA
-            ),
-            fg_color=tema.COR_FUNDO,
-        )
-        cartao.grid(
-            row=indice // 2,
-            column=indice % 2,
-            sticky="nsew",
-            padx=6,
-            pady=6,
-        )
-
-        ativo = area["ecra"] is not None
-
-        ctk.CTkLabel(
-            cartao,
-            text=area["titulo"],
-            text_color=(tema.COR_TEXTO if ativo else tema.TEXTO_INDISPONIVEL),
-            font=ctk.CTkFont(size=15, weight="bold"),
-        ).pack(pady=(20, 6), padx=16)
-
-        ctk.CTkLabel(
-            cartao,
-            text=area["descricao"],
-            text_color=(
-                tema.COR_TEXTO_SECUNDARIO if ativo else tema.TEXTO_INDISPONIVEL
-            ),
-            font=ctk.CTkFont(size=11),
-            wraplength=320,
-            justify="center",
-        ).pack(padx=16, pady=(0, 18))
-
-        if not ativo:
-            ctk.CTkLabel(
-                cartao,
-                text="por implementar",
-                text_color=tema.TEXTO_INDISPONIVEL,
-                fg_color=tema.CINZA_INDISPONIVEL,
-                corner_radius=tema.RAIO_CAMPO,
-                font=ctk.CTkFont(size=10),
-                padx=10,
-                pady=2,
-            ).pack(pady=(0, 16))
-
-        componentes.tornar_cliclavel(cartao, lambda: self._abrir_area(area))
 
     def _abrir_area(self, area):
         # FASE 4 — dupla barreira: o cartão já não aparece ao Staff

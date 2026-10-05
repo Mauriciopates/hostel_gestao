@@ -34,6 +34,14 @@ ALTERAÇÕES 26/09/2026 (divisão em ficheiros):
   gui_desp_stock (VIA 2), gui_desp_aprovacao,
   gui_desp_categorias, gui_desp_fornecedores e
   gui_desp_comum (helpers). Código movido sem alterações.
+
+ALTERAÇÕES 05/10/2026 (v1.9.0, bloco "hubs" — desenho do aluno):
+
+- Os quatro cartões passam a estar em três GRUPOS com título:
+  "Lançamentos" (Despesas), "Gestão Administrativa" (Aprovações) e
+  "Gestão complementar de despesas" (Categorias, Fornecedores). O
+  desenho é o `componentes.GrupoCartoesHub`, partilhado com o hub de
+  Stock. Títulos e descrições dos cartões não mudaram.
 """
 
 import logging
@@ -54,39 +62,44 @@ logger = logging.getLogger(__name__)
 
 
 # =====================================================================
-# ECRÃ HUB — EcraDespesas (4 cartões)
+# ECRÃ HUB — EcraDespesas (4 cartões em 3 grupos)
 # =====================================================================
 
 
 class EcraDespesas(ctk.CTkFrame):
-    """Hub do módulo Despesas — 4 cartões em grelha 2×2.
+    """Hub do módulo Despesas — 4 cartões em 3 grupos com título.
 
-    Mesmo estilo do `EcraStock` (gui_est_hub.py): cada cartão é
-    clicável em qualquer ponto (via `componentes.tornar_cliclavel`),
-    e a navegação é feita por `controlador.mostrar_frame`.
+    Mesmo estilo do `EcraStock` (gui_est_hub.py): os grupos são
+    `componentes.GrupoCartoesHub`, cada cartão é clicável em qualquer
+    ponto, e a navegação é feita por `controlador.mostrar_frame`.
     """
 
-    # Pares (título, descrição, classe de destino) — a ordem é a
-    # ordem de apresentação no Hub.
+    # (grupo, título, descrição, classe de destino) — a ordem é a de
+    # apresentação no Hub; os grupos aparecem pela ordem em que
+    # surgem aqui.
     _AREAS = (
         (
+            "Lançamentos",
             "Despesas",
             "Lançar despesas manuais (EDP, água, internet) e "
             "despesas via stock. Consultar e filtrar histórico.",
             "ListaDespesas",
         ),
         (
+            "Gestão Administrativa",
             "Aprovações",
             "Despesas pendentes a marcar como pagas ou a cancelar. "
             "Itens de stock por confirmar.",
             "Aprovacoes",
         ),
         (
+            "Gestão complementar de despesas",
             "Categorias",
             "Criar, editar e desativar categorias de despesa.",
             "Categorias",
         ),
         (
+            "Gestão complementar de despesas",
             "Fornecedores",
             "Criar, editar e desativar fornecedores de despesas.",
             "Fornecedores",
@@ -106,13 +119,17 @@ class EcraDespesas(ctk.CTkFrame):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=20, pady=(4, 8))
 
-        grelha = ctk.CTkFrame(self, fg_color="transparent")
-        grelha.pack(fill="both", expand=True, padx=20, pady=(0, 20))
-        grelha.grid_columnconfigure(0, weight=1, uniform="areas")
-        grelha.grid_columnconfigure(1, weight=1, uniform="areas")
+        grupos = {}
+        for nome_grupo, titulo, descricao, destino in self._AREAS:
+            if nome_grupo not in grupos:
+                grupos[nome_grupo] = componentes.GrupoCartoesHub(
+                    self, nome_grupo
+                )
+                grupos[nome_grupo].pack(fill="x", padx=14, pady=(0, 12))
 
-        for indice, (titulo, descricao, destino) in enumerate(self._AREAS):
-            self._desenhar_cartao(grelha, titulo, descricao, destino, indice)
+            grupos[nome_grupo].adicionar(
+                titulo, descricao, lambda d=destino: self._abrir(d)
+            )
 
         # Depois de o ecrã aparecer: um aviso a meio da construção
         # abria antes de o ecrã estar desenhado.
@@ -155,46 +172,6 @@ class EcraDespesas(ctk.CTkFrame):
             "Preencha o valor em Despesas (botão Gerir da linha) antes "
             "de a marcar como paga.",
             titulo="Despesas recorrentes",
-        )
-
-    def _desenhar_cartao(self, master, titulo, descricao, destino, indice):
-        cartao = ctk.CTkFrame(
-            master,
-            corner_radius=tema.RAIO_CARTAO,
-            border_width=1,
-            border_color=tema.COR_BORDA,
-            fg_color=tema.COR_FUNDO,
-        )
-        cartao.grid(
-            row=indice // 2,
-            column=indice % 2,
-            sticky="nsew",
-            padx=6,
-            pady=6,
-        )
-
-        ctk.CTkLabel(
-            cartao,
-            text=titulo,
-            text_color=tema.COR_TEXTO,
-            font=ctk.CTkFont(size=15, weight="bold"),
-        ).pack(pady=(22, 6), padx=16)
-
-        ctk.CTkLabel(
-            cartao,
-            text=descricao,
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=11),
-            wraplength=320,
-            justify="center",
-        ).pack(padx=16, pady=(0, 22))
-
-        # Navegação: o clique resolve o destino por nome (evita
-        # import circular — a classe real é procurada em
-        # `_resolver_ecra`).
-        componentes.tornar_cliclavel(
-            cartao,
-            lambda d=destino: self._abrir(d),
         )
 
     def _abrir(self, nome_destino):

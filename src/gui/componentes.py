@@ -3097,6 +3097,85 @@ class Cartao(ctk.CTkFrame):
         )
 
 
+class GrupoCartoesHub(ctk.CTkFrame):
+    """Um grupo de cartões clicáveis de um hub (Stock, Despesas),
+    com o título do grupo por cima — v1.9.0, desenho do aluno de
+    05/10/2026.
+
+    Os hubs mostravam todos os cartões numa grelha só, e misturava-se
+    o que é para criar registos e ver listagens, o que é
+    administrativo (aprovações) e o que é configuração. Agora cada
+    hub é uma pilha de grupos, cada um com o seu título.
+
+    Uso: `grupo = GrupoCartoesHub(pai, "Gestão de Stock")`,
+    `grupo.adicionar(titulo, descricao, ao_clicar)` por cartão e
+    `grupo.pack(...)`. Duas colunas de largura igual: um grupo com
+    um só cartão fica com ele na metade esquerda.
+    """
+
+    def __init__(self, master, titulo, cor_borda=None):
+        super().__init__(master, fg_color="transparent")
+        self._cor_borda = cor_borda or tema.COR_BORDA
+        self._quantos = 0
+
+        ctk.CTkLabel(
+            self,
+            text=titulo,
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=14),
+            anchor="w",
+        ).pack(fill="x", padx=6, pady=(0, 2))
+
+        self._grelha = ctk.CTkFrame(self, fg_color="transparent")
+        self._grelha.pack(fill="x")
+        self._grelha.grid_columnconfigure(0, weight=1, uniform="cartoes")
+        self._grelha.grid_columnconfigure(1, weight=1, uniform="cartoes")
+
+    def adicionar(self, titulo, descricao, ao_clicar):
+        """Acrescenta um cartão (título + descrição), clicável em
+        qualquer ponto. O cartão cresce com o texto (sem altura
+        fixa) — uma descrição comprida não bate na borda.
+        """
+        cartao = ctk.CTkFrame(
+            self._grelha,
+            corner_radius=tema.RAIO_CARTAO,
+            border_width=1,
+            border_color=self._cor_borda,
+            fg_color=tema.COR_FUNDO,
+        )
+        cartao.grid(
+            row=self._quantos // 2,
+            column=self._quantos % 2,
+            sticky="nsew",
+            padx=6,
+            pady=6,
+        )
+        self._quantos += 1
+
+        ctk.CTkLabel(
+            cartao,
+            text=titulo,
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=15, weight="bold"),
+        ).pack(pady=(20, 6), padx=16)
+
+        ctk.CTkLabel(
+            cartao,
+            text=descricao,
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+            wraplength=320,
+            justify="center",
+        ).pack(padx=16, pady=(0, 20))
+
+        tornar_cliclavel(cartao, ao_clicar)
+        return cartao
+
+    @property
+    def vazio(self):
+        return self._quantos == 0
+
+
 class CartaoKpi(Cartao):
     """Cartão de um número: rótulo, valor grande e uma linha de
     contexto por baixo. Com `nivel` (0 a 1) mostra também uma barra.
