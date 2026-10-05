@@ -1,0 +1,9 @@
+# API do pré check-in (corre na VM, num ambiente virtual próprio).
+# Não faz parte da aplicação desktop: o requirements.txt da raiz não
+# muda e o executável (PyInstaller) não leva nada disto.
+fastapi>=0.115,<1.0
+uvicorn>=0.30,<1.0
+mysql-connector-python>=8.0.0
+
+# Só para os testes (TestClient do FastAPI)
+httpx2
