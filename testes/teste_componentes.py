@@ -967,6 +967,42 @@ class TesteCarregarEmSegundoPlano(unittest.TestCase):
         self.assertGreater(max(vistas), 0)
         self.assertEqual(self._janelas_carregar(), [])
 
+    def test_janela_nao_fica_presa_se_a_leitura_acaba_a_meio(self):
+        """Bug de 05/10/2026 (ecrã Pré check-ins, Windows): o
+        CTkToplevel no Windows chama `update()` dentro do próprio
+        __init__ (cor da barra de título). Se a leitura acabasse nesse
+        instante, o `terminar` corria ANTES de a janela ficar
+        registada — e a "A carregar…" ficava aberta para sempre. Aqui
+        imita-se esse `update()` a meio da construção."""
+        import time
+        from unittest import mock
+
+        from gui import componentes
+
+        original = componentes.JanelaCarregar.__init__
+
+        def init_como_no_windows(janela, master, texto):
+            original(janela, master, texto)
+            time.sleep(0.3)          # a leitura acaba entretanto
+            janela.update()          # o Tk corre os temporizadores
+
+        def lento():
+            time.sleep(0.25)
+            return "fim"
+
+        recebido = []
+        with mock.patch.object(
+            componentes.JanelaCarregar, "__init__", init_como_no_windows
+        ):
+            componentes.carregar_em_segundo_plano(
+                self.root, lento, recebido.append
+            )
+            self._esperar(lambda: recebido)
+            self._esperar(lambda: not self._janelas_carregar(), 2.0)
+
+        self.assertEqual(recebido, ["fim"])
+        self.assertEqual(self._janelas_carregar(), [])
+
     def test_erro_chama_ao_falhar_e_chega_ao_tratador(self):
         from gui.componentes import carregar_em_segundo_plano
 
