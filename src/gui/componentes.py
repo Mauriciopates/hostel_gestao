@@ -159,6 +159,8 @@ class BarraLateral(ctk.CTkFrame):
         # pintar de azul quando um ecrã é aberto.
         self.controlador = controlador
         self._botoes_por_ecra = {}
+        # (etiqueta, função) dos itens com contador — F5, 05/10/2026.
+        self._contadores = []
 
         # =============================================================
         # LOGO no topo, dentro de uma caixa quase-branca
@@ -291,6 +293,38 @@ class BarraLateral(ctk.CTkFrame):
                 botao.pack(fill="x", padx=6, pady=1)
 
                 self._botoes_por_ecra[item["ecra"]] = botao
+
+                # Contador opcional (F5): "contador" é uma função sem
+                # argumentos que devolve um inteiro (ex.: pré
+                # check-ins por validar). Pílula à direita do botão,
+                # escondida quando é 0.
+                if item.get("contador"):
+                    etiqueta = Etiqueta(botao, "0", "erro")
+                    tornar_cliclavel(
+                        etiqueta,
+                        lambda ecra=item["ecra"]: (
+                            controlador.mostrar_frame(ecra)
+                        ),
+                    )
+                    self._contadores.append((etiqueta, item["contador"]))
+
+        self.atualizar_contadores()
+
+    def atualizar_contadores(self):
+        """Recalcula os contadores dos itens (chamado ao montar a
+        barra e a cada troca de ecrã). Um erro na contagem esconde a
+        pílula em vez de rebentar a navegação."""
+        for etiqueta, funcao in self._contadores:
+            try:
+                quantos = int(funcao())
+            except Exception:
+                quantos = 0
+
+            if quantos > 0:
+                etiqueta.configure(text=f" {quantos} ")
+                etiqueta.place(relx=1.0, rely=0.5, x=-8, anchor="e")
+            else:
+                etiqueta.place_forget()
 
     def marcar_ativo(self, classe_ecra):
         """Pinta de azul o botão do ecrã indicado, e limpa os
@@ -2487,12 +2521,14 @@ class JanelaCarregar(ctk.CTkToplevel):
         self.aberta_em = time.monotonic()
 
     def fechar(self):
-        try:
-            self.barra.stop()
-            self.grab_release()
-            self.destroy()
-        except tkinter.TclError:
-            pass
+        # Cada passo no seu try: se o stop ou o grab_release falharem,
+        # o destroy tem de acontecer na mesma (senão a janela fica,
+        # e o X está desligado).
+        for passo in (self.barra.stop, self.grab_release, self.destroy):
+            try:
+                passo()
+            except tkinter.TclError:
+                pass
 
 
 def carregar_em_segundo_plano(
@@ -2522,13 +2558,22 @@ def carregar_em_segundo_plano(
         resultado["fim"] = True
 
     principal = master.winfo_toplevel()
-    estado = {"janela": None}
+    estado = {"janela": None, "terminado": False}
 
     def mostrar_janela():
         if "fim" not in resultado and master.winfo_exists():
-            estado["janela"] = JanelaCarregar(master, texto)
+            janela = JanelaCarregar(master, texto)
+            # No Windows o CTkToplevel corre `update()` dentro do
+            # __init__: o `terminar` pode já ter corrido ENTRETANTO,
+            # sem saber desta janela — fechá-la já (bug de 05/10/2026,
+            # "A carregar…" presa no ecrã Pré check-ins).
+            if estado["terminado"]:
+                janela.fechar()
+            else:
+                estado["janela"] = janela
 
     def terminar():
+        estado["terminado"] = True
         janela = estado["janela"]
         if janela is not None:
             janela.fechar()
@@ -3303,6 +3348,27 @@ def fila_de_cartoes(master, colunas):
         fila.grid_columnconfigure(coluna, weight=1, uniform="cartoes")
 
     return fila
+
+
+class AreaTexto(ctk.CTkTextbox):
+    """Caixa de texto de várias linhas (F5: regras da casa no "Gerar
+    link"). Ler com `.texto()`; escrever com `.definir(texto)`."""
+
+    def __init__(self, master, altura=70, **kwargs):
+        kwargs.setdefault("corner_radius", tema.RAIO_CAMPO)
+        kwargs.setdefault("border_width", 1)
+        kwargs.setdefault("border_color", tema.COR_BORDA)
+        kwargs.setdefault("fg_color", tema.COR_FUNDO)
+        kwargs.setdefault("text_color", tema.COR_TEXTO)
+        kwargs.setdefault("wrap", "word")
+        super().__init__(master, height=altura, **kwargs)
+
+    def texto(self):
+        return self.get("1.0", "end").strip()
+
+    def definir(self, texto):
+        self.delete("1.0", "end")
+        self.insert("1.0", texto or "")
 
 
 class CampoTexto(ctk.CTkEntry):

@@ -173,8 +173,10 @@ class TesteVerificar(BaseTermosTest):
 
     def test_em_dia_aviso_hospede(self):
         """v1.9.0, bloco D: `em_dia` é o estado do Gerir do cliente —
-        False sem registo, True depois, False de novo com versão
-        nova publicada (mesmo não bloqueando)."""
+        False sem registo, True depois. Decisão de 05/10/2026 (F5):
+        uma versão nova publicada NÃO volta a pôr o hóspede "por
+        registar" — o aviso validado fica validado (antes dava
+        False)."""
         cliente = _criar_cliente_minimo()
 
         def em_dia():
@@ -201,7 +203,7 @@ class TesteVerificar(BaseTermosTest):
             "Aviso ao hóspede, versão 2.0 de teste.",
             autor=self.master,
         )
-        self.assertFalse(em_dia())
+        self.assertTrue(em_dia())
 
     def test_titular_desconhecido_levanta(self):
         with self.assertRaises(ValueError):

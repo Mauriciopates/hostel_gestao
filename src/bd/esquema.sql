@@ -11,6 +11,8 @@
 -- Migração 0003: `avisos_privacidade` trocou titular_tipo +
 -- titular_id por cliente_id + responsavel_id, com 3 FKs novas (48 no
 -- total) e o CHECK `ck_aviso_um_titular`.
+-- Migração 0004: `clientes.consente_comunicacoes_em` (prova do
+-- consentimento de comunicações vindo do pré check-in).
 -- Partiu do `Modelo_de_dados_esquema_v.1.5.6.sql`, com:
 --   - CREATE TABLE IF NOT EXISTS (pode correr numa base já criada);
 --   - ordem das tabelas pela dependência das chaves estrangeiras;
@@ -75,6 +77,7 @@ CREATE TABLE IF NOT EXISTS `clientes` (
   `numero_documento` varchar(50) NOT NULL,
   `nif` varchar(20) DEFAULT NULL,
   `email` varchar(150) DEFAULT NULL,
+  `consente_comunicacoes_em` datetime DEFAULT NULL,
   `telefone` varchar(30) DEFAULT NULL,
   `morada` varchar(255) DEFAULT NULL,
   `nacionalidade` varchar(100) DEFAULT NULL,

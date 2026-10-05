@@ -42,6 +42,16 @@ DB_USER = _credenciais["user"]
 DB_PASSWORD = _credenciais["password"]
 DB_NAME = _credenciais["database"]
 
+# --- Pré check-in dos hóspedes (F5, 05/10/2026) ----------------------------
+# Caixa de entrada que a API escreve (base separada, no MESMO servidor e
+# com o MESMO utilizador `hostel_app`). Ver o ficheiro 08 do projeto.
+DB_NAME_PRECHECKING = "hostel_prechecking"
+# Página pública do site (GitHub Pages). O link do hóspede é este
+# endereço com "?t=<token>" no fim.
+URL_SITE_PRECHECKING = (
+    "https://mauriciopates.github.io/site_checking_hostel_gestao/"
+)
+
 # --- Preços ---------------------------------------------------------------
 PRECO_BASE_MENSAL = Decimal("250.00")  # por pessoa, por mês
 PRECO_BASE_AIRBNB = Decimal("45.00")  # por noite
@@ -131,6 +141,9 @@ _PASTA_CODIGO = Path(
     getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)
 )
 FICHEIRO_ESQUEMA = _PASTA_CODIGO / "bd" / "esquema.sql"
+FICHEIRO_ESQUEMA_PRECHECKING = (
+    _PASTA_CODIGO / "bd" / "esquema_prechecking.sql"
+)
 
 # --- Imagens (v1.8.0, INST-04) --------------------------------------
 # Fonte única do caminho do `img/` (logótipo, ícone). A correr do

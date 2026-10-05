@@ -220,9 +220,12 @@ def proximo_id(prefixo):
 # entidade, todas já migradas (ver docstring do ficheiro).
 
 
-def obter_conexao():
+def obter_conexao(base=None):
     """Abre uma ligação nova ao servidor MySQL, com as credenciais do
     config (lidas do .env — nunca escritas aqui nem no código-fonte).
+
+    `base` escolhe outra base do MESMO servidor (F5: a
+    `config.DB_NAME_PRECHECKING`); por omissão, a do sistema.
 
     Antes de ligar confirma que o túnel SSH (se o servidor usar um)
     continua aberto e reabre-o se tiver caído — ver
@@ -234,7 +237,7 @@ def obter_conexao():
         port=config.DB_PORT,
         user=config.DB_USER,
         password=config.DB_PASSWORD,
-        database=config.DB_NAME,
+        database=base or config.DB_NAME,
         # Python puro: os plugins de autenticação vêm no código; a
         # extensão em C procura DLLs que o PyInstaller não copia
         # (erro 2059 no .exe). Ver rep_esquema._ligar_sem_base.

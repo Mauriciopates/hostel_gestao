@@ -135,7 +135,10 @@ _ESQUEMA_TABELAS = repositorio.instrucoes_esquema()
 # correm (idempotentes: numa base já em dia não fazem nada) sempre que
 # a base de teste é preparada. As migrações de DADOS (0001, 0002) não
 # entram: a base de teste quer as tabelas vazias (decisão 4, passo C).
-_MIGRACOES_DE_ESTRUTURA = ("0003_avisos_privacidade_fks",)
+_MIGRACOES_DE_ESTRUTURA = (
+    "0003_avisos_privacidade_fks",
+    "0004_consentimento_comunicacoes",
+)
 _INSTRUCOES_ESTRUTURA = [
     instrucao
     for nome, instrucoes in migracoes.MIGRACOES
@@ -453,3 +456,61 @@ class BaseTermosTest(BaseMySQLTest):
                 texto=texto,
                 autor=self.master,
             )
+
+
+# ---------------------------------------------------------------------
+# Pré check-in (F5): a base `hostel_prechecking` de TESTE
+# ---------------------------------------------------------------------
+
+DB_NAME_PRECHECKING_TESTE = os.environ.get(
+    "DB_NAME_PRECHECKING_TESTE", "hostel_prechecking_teste"
+)
+
+
+def instrucoes_esquema_prechecking():
+    """As instruções do `src/bd/esquema_prechecking.sql`, sem
+    comentários (há ";" dentro deles), uma por elemento."""
+    linhas = []
+    for linha in config.FICHEIRO_ESQUEMA_PRECHECKING.read_text(
+        encoding="utf-8"
+    ).splitlines():
+        sem_comentario = linha.split("--", 1)[0].rstrip()
+        if sem_comentario:
+            linhas.append(sem_comentario)
+    texto = "\n".join(linhas)
+    return [i.strip() for i in texto.split(";") if i.strip()]
+
+
+def _garantir_base_prechecking_teste():
+    conexao = _obter_conexao_servidor()
+    try:
+        cursor = conexao.cursor()
+        cursor.execute(
+            f"CREATE DATABASE IF NOT EXISTS {DB_NAME_PRECHECKING_TESTE} "
+            f"CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+        )
+        cursor.execute(f"USE {DB_NAME_PRECHECKING_TESTE}")
+        for comando in instrucoes_esquema_prechecking():
+            cursor.execute(comando)
+        cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
+        cursor.execute("TRUNCATE TABLE pendentes")
+        cursor.execute("TRUNCATE TABLE tokens")
+        cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
+        conexao.commit()
+    finally:
+        conexao.close()
+
+
+class BasePreCheckinTest(BaseTermosTest):
+    """`BaseTermosTest` + a caixa de entrada do pré check-in, vazia, na
+    base `hostel_prechecking_teste` (nunca na real)."""
+
+    def setUp(self):
+        super().setUp()
+        self._db_prechecking_original = config.DB_NAME_PRECHECKING
+        config.DB_NAME_PRECHECKING = DB_NAME_PRECHECKING_TESTE
+        _garantir_base_prechecking_teste()
+
+    def tearDown(self):
+        config.DB_NAME_PRECHECKING = self._db_prechecking_original
+        super().tearDown()

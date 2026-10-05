@@ -5,14 +5,18 @@ from decimal import Decimal, InvalidOperation
 
 import customtkinter as ctk
 
+import datetime
+
 import clientes
 import contratos
+import prechecking
 import responsaveis
 import unidades
 
 from gui import componentes, tema
 from gui.contratos import gui_cnt_comum
 from gui.contratos.gui_cnt_airbnb_nova import NovaReservaAirbnbModal
+from gui.gui_prechecking import GerarLinkModal, abrir
 
 # Aliases locais para helpers que vivem em componentes.py (nomes
 # antigos com "_", para o corpo não ter de ser reescrito).
@@ -122,6 +126,16 @@ _LARGURA_ID_RESERVA = 110
 _LARGURA_UNIDADE_RESERVA = 320
 _LARGURA_ESTADO_RESERVA = 200
 _LARGURA_ACOES_RESERVA = 100
+_LARGURA_PRECHECKING = 130
+
+# Pílula da coluna "PRÉ CHECK-IN" (F5): estado → estilo de Etiqueta.
+_ESTILO_PRECHECKING = {
+    prechecking.SEM_LINK: "info",
+    prechecking.LINK_ENVIADO: "azul",
+    prechecking.EXPIRADO: "info",
+    prechecking.RECEBIDO: "aviso",
+    prechecking.IMPORTADO: "livre",
+}
 
 _ALTURA_LINHA_RESERVA = 52
 
@@ -135,6 +149,9 @@ _COLUNAS_RESERVA = (
         peso=1,
         minimo=_LARGURA_ESTADO_RESERVA,
         alinhamento="centro",
+    ),
+    componentes.Coluna(
+        "PRÉ CHECK-IN", minimo=_LARGURA_PRECHECKING, alinhamento="centro"
     ),
     componentes.Coluna(
         "AÇÕES", minimo=_LARGURA_ACOES_RESERVA, alinhamento="centro"
@@ -219,6 +236,11 @@ class ListaReservasAirbnb(ctk.CTkFrame):
         if not lista:
             self.tabela.mostrar_vazio()
             return
+
+        # Estado do pré check-in de todas as reservas numa só consulta.
+        self.estados_prechecking = prechecking.estados(
+            o["id"] for o in lista
+        )
 
         for ocupacao in lista:
             self._desenhar_ocupacao(ocupacao)
@@ -317,7 +339,20 @@ class ListaReservasAirbnb(ctk.CTkFrame):
 
         self.tabela.colocar(linha, 2, bloco_status)
 
-        acoes = self.tabela.celula_acoes(linha, 3)
+        estado = self.estados_prechecking.get(
+            ocupacao["id"], prechecking.SEM_LINK
+        )
+        self.tabela.colocar(
+            linha,
+            3,
+            componentes.Etiqueta(
+                linha,
+                prechecking.ROTULOS_ESTADO[estado],
+                _ESTILO_PRECHECKING[estado],
+            ),
+        )
+
+        acoes = self.tabela.celula_acoes(linha, 4)
         acoes.adicionar(
             ctk.CTkButton(
                 acoes,
@@ -369,7 +404,12 @@ class _AcoesReservaAirbnbModal(ctk.CTkToplevel):
         unidade = unidades.procurar(ocupacao["unidade_id"])
         nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
 
-        altura = 240 if inativa else 270
+        # F5: "Gerar link de pré check-in" só em reservas ativas que
+        # ainda não acabaram.
+        pode_link = (
+            not inativa and ocupacao["data_fim"] >= datetime.date.today()
+        )
+        altura = 240 if inativa else (310 if pode_link else 270)
 
         self.title(f"Ações — {ocupacao['id']}")
         self.geometry(f"320x{altura}")
@@ -415,6 +455,16 @@ class _AcoesReservaAirbnbModal(ctk.CTkToplevel):
                     self.tela_lista, ocupacao
                 ),
             )
+            if pode_link:
+                self._botao(
+                    "Gerar link de pré check-in",
+                    text_color=tema.AZUL_PRINCIPAL,
+                    hover_color=tema.ID_CHIP_FUNDO,
+                    acao=lambda: abrir(
+                        GerarLinkModal, self.tela_lista, ocupacao,
+                        self._nome_cliente(ocupacao),
+                    ),
+                )
             self._separador()
             self._botao(
                 "Cancelar reserva",
@@ -432,6 +482,11 @@ class _AcoesReservaAirbnbModal(ctk.CTkToplevel):
             hover_color=tema.COR_BORDA,
             command=self.destroy,
         ).pack(side="bottom", fill="x", padx=20, pady=(10, 16))
+
+    @staticmethod
+    def _nome_cliente(ocupacao):
+        cliente = clientes.procurar(ocupacao["cliente_id"])
+        return cliente["nome"] if cliente else ocupacao["cliente_id"]
 
     def _centrar_sobre(self, janela, altura):
         janela.update_idletasks()

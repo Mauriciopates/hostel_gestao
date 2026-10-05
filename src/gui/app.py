@@ -62,6 +62,7 @@ import customtkinter as ctk
 
 import config
 import estoque
+import prechecking
 import servidores
 import termos
 import utilizadores
@@ -73,6 +74,7 @@ from .gui_clientes import ListaClientes
 from .contratos.gui_cnt_mensal_lista import ListaContratosMensais
 from .contratos.gui_cnt_airbnb_lista import ListaReservasAirbnb
 from .gui_calendario import Calendario
+from .gui_prechecking import ListaPreCheckins
 from .estoque.gui_est_hub import EcraStock
 from .despesas.gui_desp_hub import EcraDespesas
 from .gui_responsaveis import ListaResponsaveis
@@ -140,6 +142,14 @@ ITENS_MENU = [
         "texto": "Calendário",
         "ecra": Calendario,
         "perfis": _GESTAO,
+    },
+    {
+        "tipo": "item",
+        "texto": "Pré check-ins",
+        "ecra": ListaPreCheckins,
+        "perfis": _GESTAO,
+        # Pendentes por validar (F5): pílula vermelha, some quando é 0.
+        "contador": prechecking.contar_pendentes,
     },
     {"tipo": "item", "texto": "Stock", "ecra": EcraStock, "perfis": _TODOS},
     {
@@ -1171,6 +1181,7 @@ class Aplicacao(ctk.CTk):
         self.frame_atual.pack(fill="both", expand=True)
 
         self.barra_lateral.marcar_ativo(classe_frame)
+        self.barra_lateral.atualizar_contadores()
 
     def trocar_utilizador(self):
         """Logoff: fecha a janela e pede reabertura ao `main_gui`.

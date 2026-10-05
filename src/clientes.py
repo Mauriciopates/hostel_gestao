@@ -11,9 +11,13 @@ cliente_com_nif_existe). Não acede a ficheiros nem à interface:
 devolve resultado e sinaliza erro com `raise ValueError`.
 """
 
+import logging
+
 import repositorio
 import validacoes
 import responsaveis
+
+logger = logging.getLogger(__name__)
 
 PREFIXO = "CLI"
 
@@ -111,6 +115,7 @@ def criar(
         "numero_documento": candidato["numero_documento"],
         "nif": candidato["nif"],
         "email": candidato["email"],
+        "consente_comunicacoes_em": None,
         "telefone": candidato["telefone"],
         "morada": candidato["morada"],
         "nacionalidade": candidato["nacionalidade"],
@@ -505,6 +510,7 @@ def anonimizar(cliente_id, responsavel_id, data):
         "validade_documento": None,
         "data_nascimento": None,
         "contacto_emergencia": "",
+        "consente_comunicacoes_em": None,
         "incompleto": True,
         "anonimizado": True,
         "data_anonimizado": data,
@@ -515,4 +521,55 @@ def anonimizar(cliente_id, responsavel_id, data):
     repositorio.atualizar_cliente(cliente_id, campos)
     cliente.update(campos)
 
+    return cliente
+
+
+# --- Consentimento de comunicações (F5 — migração 0004) ---------------
+
+_TAMANHO_MAXIMO_EMAIL = 150      # = coluna clientes.email
+
+
+def registar_consentimento_comunicacoes(cliente_id, email, quando):
+    """Guarda o email e a data em que o cliente aceitou receber
+    comunicações (art. 6.º/1/a — consentimento, revogável).
+
+    `quando` é a data/hora do consentimento (no pré check-in, a hora a
+    que o servidor recebeu o pedido). A coluna
+    `consente_comunicacoes_em` a NULL quer dizer "não aceitou": é a
+    data que faz prova de QUE e QUANDO aceitou (art. 7.º/1).
+
+    Levanta ValueError se o cliente não existir, estiver anonimizado
+    ou o email for inválido. Devolve o registo atualizado.
+    """
+    cliente = procurar(cliente_id)
+
+    if cliente is None:
+        raise ValueError(f"O cliente {cliente_id} não existe.")
+
+    if cliente["anonimizado"]:
+        raise ValueError(
+            f"O cliente {cliente_id} está anonimizado e não pode "
+            f"ser atualizado."
+        )
+
+    email = (email or "").strip()
+
+    if not email or "@" not in email or " " in email:
+        raise ValueError("O email do consentimento é inválido.")
+
+    if len(email) > _TAMANHO_MAXIMO_EMAIL:
+        raise ValueError(
+            f"O email tem mais de {_TAMANHO_MAXIMO_EMAIL} caracteres."
+        )
+
+    if quando is None:
+        raise ValueError("A data do consentimento é obrigatória.")
+
+    campos = {"email": email, "consente_comunicacoes_em": quando}
+    repositorio.atualizar_cliente(cliente_id, campos)
+    cliente.update(campos)
+    logger.info(
+        "Consentimento de comunicações registado — cliente=%s",
+        cliente_id,
+    )
     return cliente

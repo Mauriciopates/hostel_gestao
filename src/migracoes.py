@@ -193,6 +193,17 @@ _MIGRACAO_0003 = (
 )
 
 
+# --- 0004: prova do consentimento de comunicações ---------------------
+# F5 (pré check-in): o email do hóspede só existe com consentimento.
+# Esta coluna guarda QUANDO aceitou (NULL = não aceitou) — é a prova do
+# art. 7.º/1 do RGPD. Numa base que já a tem, não faz nada.
+_MIGRACAO_0004 = _se(
+    _nao(_existe_coluna("clientes", "consente_comunicacoes_em")),
+    "ALTER TABLE clientes ADD COLUMN consente_comunicacoes_em DATETIME "
+    "NULL AFTER email",
+)
+
+
 # Lista oficial, por ordem. Só cresce — nunca alterar uma já publicada.
 MIGRACOES = [
     ("0001_categoria_compra_de_stock", [_SQL_CATEGORIA_COMPRA_DE_STOCK]),
@@ -212,6 +223,7 @@ MIGRACOES = [
         ],
     ),
     ("0003_avisos_privacidade_fks", _MIGRACAO_0003),
+    ("0004_consentimento_comunicacoes", _MIGRACAO_0004),
 ]
 
 _FORMATO_NOME = re.compile(r"^\d{4}_[a-z0-9_]+$")

@@ -22,6 +22,7 @@ from . import gui_dash_comum as comum
 
 # Ecrã de destino de cada alerta, pela chave que o `painel` devolve.
 _ECRA_DO_ALERTA = {
+    "prechecking": "ListaPreCheckins",
     "requisicoes": "ListaAprovacao",
     "stock": "ListaProdutos",
     "documentos": "ListaContratosMensais",

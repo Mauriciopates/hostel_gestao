@@ -155,9 +155,11 @@ class TesteAvisoClienteExistente(_BaseGui):
         modal._ao_mudar()
         modal._registar()
 
+        # Desde 05/10/2026 o texto leva também a data do registo.
         self.assertEqual(
             self._texto_botao_aviso(cliente),
-            ["Aviso de privacidade  ✓ v1.0"],
+            ["Aviso de privacidade  ✓ v1.0 · "
+             f"{componentes.formatar_data(date.today())}"],
         )
 
     def test_regista_suporte_contrato(self):

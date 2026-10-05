@@ -871,14 +871,18 @@ class _AcoesClienteModal(ctk.CTkToplevel):
 
     def _botao_aviso(self, tela_lista, cliente):
         """Ação "Aviso de privacidade" com o estado no próprio texto:
-        "✓ v1.0" quando a versão em vigor está registada, âmbar
-        "por registar" quando não (cliente antigo ou versão nova)."""
+        "✓ v1.0 · 05/10/2026" quando o aviso foi registado (em
+        qualquer versão — decisão de 05/10/2026, ver
+        `termos.verificar`), âmbar "por registar" quando nunca foi."""
         estado = self._estado_aviso
         if estado is None:
             return
 
         if estado["em_dia"]:
-            texto = f"Aviso de privacidade  ✓ v{estado['versao_aceite']}"
+            texto = (
+                f"Aviso de privacidade  ✓ v{estado['versao_aceite']}"
+                f" · {componentes.formatar_data(estado['data_aceite'])}"
+            )
             cor, hover = tema.COR_TEXTO, tema.COR_BORDA
         else:
             texto = "Aviso de privacidade · por registar"

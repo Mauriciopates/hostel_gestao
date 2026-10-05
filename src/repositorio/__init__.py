@@ -239,6 +239,15 @@ from .rep_termos import (
     publicar_texto,
     registar_aviso,
 )
+from .rep_prechecking import (
+    apagar_pendente,
+    apagar_token,
+    contar_pendentes,
+    listar_pendentes,
+    obter_pendente,
+    resumo_por_referencia,
+    substituir_token,
+)
 
 # Lista explícita do que o pacote exporta. Também diz ao
 # pyflakes que os imports acima são usados.
@@ -361,4 +370,11 @@ __all__ = [
     "obter_ultimo_aviso",
     "publicar_texto",
     "registar_aviso",
+    "apagar_pendente",
+    "apagar_token",
+    "contar_pendentes",
+    "listar_pendentes",
+    "obter_pendente",
+    "resumo_por_referencia",
+    "substituir_token",
 ]

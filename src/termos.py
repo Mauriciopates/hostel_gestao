@@ -132,10 +132,16 @@ def verificar(titular_tipo, titular_id, tipo):
       precisa_aceitar - True quando o documento bloqueia E a
                         versão registada é diferente da que está
                         em vigor
-      em_dia          - True quando a versão registada é a que está
-                        em vigor, bloqueie ou não (v1.9.0: o estado
-                        "registado / por registar" do aviso ao
-                        hóspede no Gerir do cliente)
+      em_dia          - documento que BLOQUEIA (confidencialidade):
+                        True só quando a versão registada é a que
+                        está em vigor. Documento de INFORMAÇÃO
+                        (avisos de privacidade): True desde que haja
+                        um registo, de qualquer versão — decisão do
+                        aluno de 05/10/2026 (F5): quem foi informado
+                        e validado numa versão fica validado, com a
+                        data e a versão registadas; publicar uma
+                        versão nova não volta a pôr ninguém "por
+                        registar".
 
     Quem nunca aceitou entra no `precisa_aceitar` pela mesma
     comparação (None != "1.0"), sem precisar de ramo próprio.
@@ -155,7 +161,11 @@ def verificar(titular_tipo, titular_id, tipo):
         "precisa_aceitar": (
             bloqueia(tipo) and versao_aceite != texto["versao"]
         ),
-        "em_dia": versao_aceite == texto["versao"],
+        "em_dia": (
+            versao_aceite == texto["versao"]
+            if bloqueia(tipo)
+            else versao_aceite is not None
+        ),
     }
 
 
@@ -205,6 +215,49 @@ def registar(
         suporte,
     )
 
+    return versao
+
+
+def registar_versao_vista(cliente_id, versao, registado_por_id=None):
+    """Regista o aviso de privacidade que o HÓSPEDE viu no site do
+    pré check-in (F5). Devolve a versão registada.
+
+    Exceção consciente à regra da `registar` ("a versão não é
+    parâmetro"): aqui a versão é a que estava em vigor quando o link
+    foi emitido — guardada com o token e copiada pela API para o
+    pendente. É essa que o hóspede leu, mesmo que entretanto tenha sido
+    publicada outra; registar a de hoje seria a mentira que a
+    `registar` existe para evitar. A FK `fk_aviso_texto` garante que a
+    versão existe em `textos_legais`.
+
+    `suporte` = 'web'; `registado_por_id` = quem validou e importou.
+    Se essa versão já estiver registada a este cliente, não duplica.
+    """
+    _validar(TITULAR_CLIENTE, cliente_id, PRIVACIDADE_HOSPEDE)
+
+    versao = (versao or "").strip()
+    if not versao:
+        raise ValueError("A versão do aviso é obrigatória.")
+
+    if repositorio.obter_texto(PRIVACIDADE_HOSPEDE, versao) is None:
+        raise ValueError(
+            f"A versão {versao} do aviso de privacidade do hóspede não "
+            f"existe."
+        )
+
+    for aviso in repositorio.listar_avisos(TITULAR_CLIENTE, cliente_id):
+        if (aviso["documento"] == PRIVACIDADE_HOSPEDE
+                and aviso["versao_texto"] == versao):
+            return versao
+
+    repositorio.registar_aviso(
+        TITULAR_CLIENTE,
+        cliente_id,
+        PRIVACIDADE_HOSPEDE,
+        versao,
+        registado_por_id or None,
+        "web",
+    )
     return versao
 
 

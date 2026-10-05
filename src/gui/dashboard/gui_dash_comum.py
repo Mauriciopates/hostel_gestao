@@ -214,6 +214,10 @@ def abrir_ecra(controlador, nome):
         from ..gui_clientes import ListaClientes
 
         classe = ListaClientes
+    elif nome == "ListaPreCheckins":
+        from ..gui_prechecking import ListaPreCheckins
+
+        classe = ListaPreCheckins
 
     if classe is not None:
         controlador.mostrar_frame(classe)

@@ -38,6 +38,7 @@ import clientes
 import contratos
 import estoque
 import financeiro
+import prechecking
 import responsaveis
 import unidades
 
@@ -324,7 +325,10 @@ def alertas(tipo_utilizador):
     """Alertas que o perfil indicado deve ver, do mais urgente para
     o menos.
 
-    Os mesmos quatro do Dashboard antigo, agora com o detalhe:
+    Os mesmos quatro do Dashboard antigo, agora com o detalhe, e o
+    do pré check-in (F5) à cabeça:
+
+    0. "prechecking"  — pré check-ins por validar (Master/Admin).
 
     1. "requisicoes"  — requisições pendentes (Master/Admin).
     2. "stock"        — produtos abaixo do mínimo (todos).
@@ -338,6 +342,23 @@ def alertas(tipo_utilizador):
     aparecem. Um perfil desconhecido (ou None) não vê nenhum.
     """
     lista = []
+
+    # F5 (05/10/2026): pré check-ins enviados pelos hóspedes, por
+    # validar. 0 quando a caixa de entrada não existe neste servidor.
+    if tipo_utilizador in _GESTAO:
+        n = prechecking.contar_pendentes()
+        if n:
+            lista.append(
+                _alerta(
+                    "prechecking",
+                    f"{n} {_plural(n, 'pré check-in', 'pré check-ins')} "
+                    "por validar",
+                    "enviados pelos hóspedes no site",
+                    "aviso",
+                    n,
+                    _GESTAO,
+                )
+            )
 
     if tipo_utilizador in _GESTAO:
         pendentes = estoque.listar_requisicoes(estado="pendente")
