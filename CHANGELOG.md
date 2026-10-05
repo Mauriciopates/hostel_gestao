@@ -3,6 +3,53 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [1.8.4] — 2026-10-05
+
+Calendário com o MySQL na VM, testes que faltavam das versões 1.8.2
+e 1.8.3, e README.
+
+### Corrigido
+
+- **Calendário abria vazio e só se preenchia segundos depois** —
+  com a base na VM, atrás do túnel SSH, cada ligação ao MySQL custa
+  ~100-200 ms, e o calendário abria 2 ligações por unidade (3 + N no
+  mensal), com o ecrã congelado pelo meio.
+  - `unidades.semana_de_todas(tipo, inicio)` (novo): a semana de
+    todas as unidades de um regime em 2 queries (Airbnb) ou 4
+    (mensal). A classificação dos dias passou para
+    `unidades._estados_semana`, partilhada com `estados_da_semana`.
+    Os cartões do ecrã Calendário também a usam.
+  - `componentes.carregar_em_segundo_plano` + `JanelaCarregar`
+    (novos): a leitura corre numa thread; se demorar mais de 0,15 s
+    aparece a janelinha "A carregar…" com uma barra a correr (opção
+    1 do mockup de 05/10). Os widgets continuam a ser criados só na
+    thread principal; um erro na leitura chega ao tratador de erros
+    da aplicação.
+  - `gui_calendario.py`: o popup da semana só é criado depois de os
+    dados chegarem e desenha a grelha antes de aparecer; mudar de
+    filtro não volta à base; clique duplo no cartão não abre dois
+    calendários; se a leitura falhar, a semana mostrada não muda.
+
+### Testes
+
+- `teste_unidades.TesteSemanaDeTodas` (5): os estados de
+  `semana_de_todas` são iguais aos de `estados_da_semana` unidade a
+  unidade (Airbnb, manutenção, mensal com quarto inativo e unidade
+  sem lugares); só o regime pedido e unidades ativas.
+- `teste_componentes.TesteChipId` (4): premir não dispara, soltar em
+  cima dispara, soltar fora não conta (correção da 1.8.2).
+- `teste_componentes.TesteCarregarEmSegundoPlano` (4): resultado
+  entregue, leitura rápida sem janela, leitura lenta mostra e fecha
+  a janela, erro chama `ao_falhar` e chega ao tratador.
+- `testes/teste_servidores.py` (novo, 10): `garantir_tunel` com
+  processos ssh simulados (vivo, morto, inexistente, falha a
+  reabrir) e `e_falha_de_ligacao`.
+
+### Documentação
+
+- README: caminho do pacote (`dist\HostelGestao_instalacao_vX.Y.Z.zip`)
+  e `_base.py` sem contadores.
+
 ## [1.8.3] — 2026-10-04
 
 Correções apanhadas no teste do manual de instalação (F9 e F12).
