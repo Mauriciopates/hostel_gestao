@@ -19,7 +19,7 @@ e programação de sistemas de informação.
 |------|--------|--------|
 | 1.0 | CLI + JSON | Finalizado |
 | 2.0 | GUI CustomTkinter + MySQL + financeiro, relatórios, utilizadores | Em andamento |
-| 3.0 | Django + Nginx | Fora da entrega de outubro — tentativa em novembro, na apresentação final |
+| 3.0 | Django + Nginx | Fora da entrega de outubro - Continuação para desenvolvimento pessoal |
 
 ---
 
@@ -117,7 +117,7 @@ pyright src
 
 src/ módulos da aplicação
 src/repositorio/ camada de persistência (única que fala com o MySQL),
-  um ficheiro por domínio: _base.py (ligação, contadores, backups)
+  um ficheiro por domínio: _base.py (ligação, identificadores, backups)
   e rep_<módulo>.py (ex.: rep_clientes.py). O código faz sempre
   `import repositorio` — o __init__.py reexporta tudo
 src/gui/ interface gráfica (CustomTkinter), um ficheiro por ecrã;
@@ -144,7 +144,7 @@ relatorios/ ficheiros de armazenamento dos relatórios emitidos
 
 Onde esta o projeto — Git Bash, na raiz do projeto (~/hostel_gestao)
 
-1. Confirmar que estás na versão certa (branch main, já com a tag v1.8.0):
+1. Confirmar que estás na versão certa (branch main, já com a tag v1.8.X):
 
 git status
 git log --oneline -1
@@ -161,7 +161,8 @@ bash montar_pacote.sh
 No fim aparece "Pacote pronto." e ficam criados:
 
 C:\HostelGestao_instalacao\, com HostelGestao\, vm\, docs\ e LEIA-ME.txt
-C:\HostelGestao_instalacao_v1.8.0.zip, que é o ficheiro a levar para o sin-11-teste
+dist\HostelGestao_instalacao_vX.Y.Z.zip (na pasta dist\ do projeto; X.Y.Z é a
+versão do config.VERSAO), que é o ficheiro a levar para o PC cliente
 
 
 
