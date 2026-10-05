@@ -157,6 +157,54 @@ def listar(incluir_inativos=False, incompleto=None):
     )
 
 
+# ---------------------------------------------------------------------
+# Tipo do cliente (v1.9.0, bloco C)
+# ---------------------------------------------------------------------
+#
+# O regime NÃO fica guardado no registo (ver criar()). Para o ecrã
+# Clientes poder mostrar e filtrar "Mensal / Airbnb", o tipo é
+# deduzido pela regra que o Editar Cliente já usava: o regime mensal
+# exige NIF (validacoes.validar_cliente) e o formulário Airbnb nem o
+# pede — com NIF = mensal, sem NIF = airbnb. Um cliente anonimizado
+# perdeu o NIF (RGPD), por isso não tem tipo (None).
+# Decisão do aluno, 05/10/2026: regra do NIF, sem migração.
+
+TIPO_MENSAL = "mensal"
+TIPO_AIRBNB = "airbnb"
+
+
+def tipo(cliente):
+    """Devolve "mensal", "airbnb" ou None (cliente anonimizado)."""
+    if cliente["anonimizado"]:
+        return None
+
+    return TIPO_MENSAL if cliente["nif"] else TIPO_AIRBNB
+
+
+def filtrar_por_tipo(lista, tipo_pedido=None):
+    """Só os clientes do `tipo_pedido`; None devolve a lista toda
+    (opção "Todos", que inclui os anonimizados)."""
+    if tipo_pedido is None:
+        return list(lista)
+
+    if tipo_pedido not in (TIPO_MENSAL, TIPO_AIRBNB):
+        raise ValueError(f"Tipo de cliente desconhecido: {tipo_pedido}")
+
+    return [cliente for cliente in lista if tipo(cliente) == tipo_pedido]
+
+
+def contar_por_tipo(lista):
+    """Contagens para o filtro: {"todos", "mensal", "airbnb"}."""
+    contagem = {"todos": len(lista), TIPO_MENSAL: 0, TIPO_AIRBNB: 0}
+
+    for cliente in lista:
+        tipo_cliente = tipo(cliente)
+        if tipo_cliente is not None:
+            contagem[tipo_cliente] += 1
+
+    return contagem
+
+
 def atualizar(
     cliente_id,
     regime=None,

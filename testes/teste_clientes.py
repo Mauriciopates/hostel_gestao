@@ -679,5 +679,57 @@ class TesteAnonimizar(BaseMySQLTest):
             clientes.anonimizar(cliente["id"], staff["id"], date.today())
 
 
+class TesteTipoCliente(BaseMySQLTest):
+    """v1.9.0, bloco C: tipo deduzido pelo NIF (regime não é
+    guardado) — base da coluna TIPO e do filtro do ecrã Clientes."""
+
+    def test_mensal_tem_nif(self):
+        cliente = criar_cliente_mensal()
+        self.assertEqual(clientes.tipo(cliente), clientes.TIPO_MENSAL)
+
+    def test_airbnb_sem_nif(self):
+        cliente = criar_cliente_airbnb()
+        self.assertEqual(clientes.tipo(cliente), clientes.TIPO_AIRBNB)
+
+    def test_anonimizado_sem_tipo(self):
+        cliente = criar_cliente_mensal()
+        clientes.anonimizar(cliente["id"], _criar_master()["id"], date.today())
+        self.assertIsNone(clientes.tipo(clientes.procurar(cliente["id"])))
+
+    def test_filtra_e_conta(self):
+        mensal = criar_cliente_mensal()
+        airbnb = criar_cliente_airbnb()
+        lista = clientes.listar()
+
+        self.assertEqual(
+            clientes.filtrar_por_tipo(lista, clientes.TIPO_MENSAL), [mensal]
+        )
+        self.assertEqual(
+            clientes.filtrar_por_tipo(lista, clientes.TIPO_AIRBNB), [airbnb]
+        )
+        self.assertEqual(len(clientes.filtrar_por_tipo(lista)), 2)
+        self.assertEqual(
+            clientes.contar_por_tipo(lista),
+            {"todos": 2, "mensal": 1, "airbnb": 1},
+        )
+
+    def test_anonimizado_so_conta_em_todos(self):
+        cliente = criar_cliente_airbnb()
+        clientes.anonimizar(cliente["id"], _criar_master()["id"], date.today())
+        lista = clientes.listar(incluir_inativos=True)
+
+        self.assertEqual(
+            clientes.contar_por_tipo(lista),
+            {"todos": 1, "mensal": 0, "airbnb": 0},
+        )
+        self.assertEqual(
+            clientes.filtrar_por_tipo(lista, clientes.TIPO_AIRBNB), []
+        )
+
+    def test_recusa_tipo_desconhecido(self):
+        with self.assertRaises(ValueError):
+            clientes.filtrar_por_tipo([], "hotel")
+
+
 if __name__ == "__main__":
     unittest.main()

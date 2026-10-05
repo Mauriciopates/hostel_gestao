@@ -239,13 +239,35 @@ OUTRA_NACIONALIDADE = "Outra (escrever ao lado)"
 _LARGURA_ID = 90
 _LARGURA_NOME = 260
 _LARGURA_ESTADO = 120
+_LARGURA_TIPO = 100
 _LARGURA_ACOES = 100
 
 _ALTURA_LINHA = 52
 
+# Filtro "Tipo" do topo (v1.9.0, bloco C): rótulo da pílula -> tipo
+# pedido a `clientes.filtrar_por_tipo` (None = todos).
+_FILTROS_TIPO = (
+    ("Todos", None, "todos"),
+    ("Mensal", clientes.TIPO_MENSAL, clientes.TIPO_MENSAL),
+    ("Airbnb", clientes.TIPO_AIRBNB, clientes.TIPO_AIRBNB),
+)
+
+# Chip da coluna TIPO: (texto, fundo, cor do texto). Azul = Mensal
+# (a cor dos contratos mensais), rosa = Airbnb; claro/escuro.
+_CHIP_TIPO = {
+    clientes.TIPO_MENSAL: ("Mensal", ("#E3EEF7", "#16323F"),
+                           (tema.AZUL_PRINCIPAL, "#8CC8E8")),
+    clientes.TIPO_AIRBNB: ("Airbnb", ("#FDE8EC", "#3F1A24"),
+                           ("#B4234A", "#F2A0B4")),
+    None: ("—", tema.CINZA_INDISPONIVEL, tema.TEXTO_INDISPONIVEL),
+}
+
 _COLUNAS_CLIENTE = (
     componentes.Coluna("ID", minimo=_LARGURA_ID + 24, espaco=8),
     componentes.Coluna("NOME DO CLIENTE", peso=3, minimo=_LARGURA_NOME),
+    componentes.Coluna(
+        "TIPO", minimo=_LARGURA_TIPO + 20, alinhamento="centro"
+    ),
     componentes.Coluna(
         "ESTADO", peso=1, minimo=_LARGURA_ESTADO, alinhamento="centro"
     ),
@@ -337,6 +359,17 @@ class ListaClientes(ctk.CTkFrame):
         barra = ctk.CTkFrame(self, fg_color=tema.COR_FUNDO)
         barra.pack(fill="x", padx=20, pady=(0, 4))
 
+        # Filtro por tipo (v1.9.0, bloco C). Os rótulos levam a
+        # contagem — "Mensal (2)" — e são refeitos em cada _recarregar;
+        # o filtro escolhido guarda-se pelo índice para sobreviver.
+        self._indice_filtro_tipo = 0
+        self.filtro_tipo = componentes.SeletorVistas(
+            barra,
+            [rotulo for rotulo, _tipo, _chave in _FILTROS_TIPO],
+            ao_mudar=self._ao_mudar_filtro_tipo,
+        )
+        self.filtro_tipo.pack(side="left")
+
         self.mostrar_inativos = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
             barra,
@@ -371,7 +404,11 @@ class ListaClientes(ctk.CTkFrame):
         """
         self.tabela.limpar()
 
-        lista = clientes.listar(incluir_inativos=self.mostrar_inativos.get())
+        todos = clientes.listar(incluir_inativos=self.mostrar_inativos.get())
+        self._atualizar_rotulos_filtro(clientes.contar_por_tipo(todos))
+
+        _rotulo, tipo_pedido, _chave = _FILTROS_TIPO[self._indice_filtro_tipo]
+        lista = clientes.filtrar_por_tipo(todos, tipo_pedido)
 
         if not lista:
             self.tabela.mostrar_vazio()
@@ -379,6 +416,23 @@ class ListaClientes(ctk.CTkFrame):
 
         for cliente in lista:
             self._desenhar_cliente(cliente)
+
+    def _rotulos_filtro(self, contagem):
+        return [
+            f"{rotulo} ({contagem[chave]})"
+            for rotulo, _tipo, chave in _FILTROS_TIPO
+        ]
+
+    def _atualizar_rotulos_filtro(self, contagem):
+        """Põe as contagens nas pílulas, mantendo a escolhida."""
+        rotulos = self._rotulos_filtro(contagem)
+        self.filtro_tipo.configure(values=rotulos)
+        self.filtro_tipo.set(rotulos[self._indice_filtro_tipo])
+
+    def _ao_mudar_filtro_tipo(self, rotulo_escolhido):
+        valores = list(self.filtro_tipo.cget("values"))
+        self._indice_filtro_tipo = valores.index(rotulo_escolhido)
+        self._recarregar()
 
     # -- desenho -------------------------------------------------------
 
@@ -443,6 +497,23 @@ class ListaClientes(ctk.CTkFrame):
         ).pack(fill="x")
         self.tabela.colocar(linha, 1, bloco_nome)
 
+        # ---- TIPO (chip Mensal / Airbnb, v1.9.0) ----
+        tipo_texto, tipo_fundo, tipo_cor = _CHIP_TIPO[clientes.tipo(cliente)]
+        self.tabela.colocar(
+            linha,
+            2,
+            ctk.CTkLabel(
+                linha,
+                text=tipo_texto,
+                text_color=tipo_cor,
+                fg_color=tipo_fundo,
+                corner_radius=8,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                width=_LARGURA_TIPO,
+                height=22,
+            ),
+        )
+
         # ---- ESTADO (chip colorido) ----
         if anonimizado:
             chip_texto, chip_fundo, chip_cor = (
@@ -465,7 +536,7 @@ class ListaClientes(ctk.CTkFrame):
 
         self.tabela.colocar(
             linha,
-            2,
+            3,
             ctk.CTkLabel(
                 linha,
                 text=chip_texto,
@@ -479,7 +550,7 @@ class ListaClientes(ctk.CTkFrame):
         )
 
         # ---- AÇÕES (um único botão "Gerir") ----
-        acoes = self.tabela.celula_acoes(linha, 3)
+        acoes = self.tabela.celula_acoes(linha, 4)
         acoes.adicionar(
             ctk.CTkButton(
                 acoes,
@@ -1243,7 +1314,11 @@ class EditarClienteModal(_FormularioCliente):
         self.campo_nome.insert(0, cliente["nome"])
         self.combo_tipo_documento.set(cliente["tipo_documento"])
         self.campo_numero_documento.insert(0, cliente["numero_documento"])
-        self.combo_regime.set("Mensal" if cliente["nif"] else "Airbnb")
+        self.combo_regime.set(
+            "Mensal"
+            if clientes.tipo(cliente) == clientes.TIPO_MENSAL
+            else "Airbnb"
+        )
         self.campo_nif.insert(0, cliente["nif"])
         self.campo_email.insert(0, cliente["email"])
         self.campo_telefone.insert(0, cliente["telefone"])
