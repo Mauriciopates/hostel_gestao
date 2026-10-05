@@ -1316,6 +1316,119 @@ class TesteQuartoPrivativoOcupado(BaseMySQLTest):
         )
 
 
+class TesteTamanhoCamaExtra(BaseMySQLTest):
+    """v1.9.0: o tamanho da cama extra (solteiro/casal) é obrigatório
+    quando a unidade permite cama extra — é o que o Rol lê."""
+
+    def _criar(self, **kwargs):
+        propriedade = criar_propriedade()
+        return unidades.criar(
+            propriedade["id"],
+            "Estúdio",
+            "airbnb",
+            Decimal("45.00"),
+            Decimal("90.00"),
+            Decimal("20.00"),
+            **kwargs,
+        )
+
+    def test_criar_grava_o_tamanho(self):
+        unidade = self._criar(
+            permite_cama_extra=True,
+            qtd_cama_extra=1,
+            tipo_cama_extra="sofá-cama",
+            categoria_cama_extra="casal",
+        )
+        self.assertEqual(
+            unidades.procurar(unidade["id"])["categoria_cama_extra"],
+            "casal",
+        )
+
+    def test_criar_sem_tamanho_e_recusado(self):
+        with self.assertRaises(ValueError):
+            self._criar(
+                permite_cama_extra=True,
+                qtd_cama_extra=1,
+                tipo_cama_extra="sofá-cama",
+            )
+
+    def test_tamanho_invalido_e_recusado(self):
+        with self.assertRaises(ValueError):
+            self._criar(
+                permite_cama_extra=True,
+                qtd_cama_extra=1,
+                tipo_cama_extra="sofá-cama",
+                categoria_cama_extra="king",
+            )
+
+    def test_sem_cama_extra_o_tamanho_fica_vazio(self):
+        unidade = self._criar(categoria_cama_extra="casal")
+        self.assertIsNone(
+            unidades.procurar(unidade["id"])["categoria_cama_extra"]
+        )
+
+    def test_atualizar_tamanho(self):
+        unidade = self._criar(
+            permite_cama_extra=True,
+            qtd_cama_extra=1,
+            tipo_cama_extra="sofá-cama",
+            categoria_cama_extra="solteiro",
+        )
+        unidades.atualizar(unidade["id"], categoria_cama_extra="casal")
+        self.assertEqual(
+            unidades.procurar(unidade["id"])["categoria_cama_extra"],
+            "casal",
+        )
+
+    def test_desligar_cama_extra_limpa_o_tamanho(self):
+        unidade = self._criar(
+            permite_cama_extra=True,
+            qtd_cama_extra=1,
+            tipo_cama_extra="sofá-cama",
+            categoria_cama_extra="solteiro",
+        )
+        unidades.atualizar(unidade["id"], permite_cama_extra=False)
+        self.assertIsNone(
+            unidades.procurar(unidade["id"])["categoria_cama_extra"]
+        )
+
+    def test_unidade_antiga_sem_tamanho_aparece_no_aviso(self):
+        unidade = self._criar(
+            permite_cama_extra=True,
+            qtd_cama_extra=1,
+            tipo_cama_extra="sofá-cama",
+            categoria_cama_extra="solteiro",
+        )
+        # Simula uma unidade criada antes da v1.9.0 (sem tamanho).
+        repositorio.atualizar_unidade(
+            unidade["id"], {"categoria_cama_extra": None}
+        )
+        com_tamanho = self._criar(
+            permite_cama_extra=True,
+            qtd_cama_extra=1,
+            tipo_cama_extra="colchão",
+            categoria_cama_extra="casal",
+        )
+
+        ids = [u["id"] for u in unidades.com_cama_extra_sem_tamanho()]
+
+        self.assertIn(unidade["id"], ids)
+        self.assertNotIn(com_tamanho["id"], ids)
+
+    def test_atualizar_unidade_antiga_exige_tamanho(self):
+        unidade = self._criar(
+            permite_cama_extra=True,
+            qtd_cama_extra=1,
+            tipo_cama_extra="sofá-cama",
+            categoria_cama_extra="solteiro",
+        )
+        repositorio.atualizar_unidade(
+            unidade["id"], {"categoria_cama_extra": None}
+        )
+        with self.assertRaises(ValueError):
+            unidades.atualizar(unidade["id"], qtd_cama_extra=2)
+
+
 class TesteSemanaDeTodas(BaseMySQLTest):
     """`semana_de_todas` (v1.8.4) lê a semana de todas as unidades de
     um regime de uma vez. Tem de dar EXATAMENTE os mesmos estados que

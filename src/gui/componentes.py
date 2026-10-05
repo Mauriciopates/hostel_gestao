@@ -46,7 +46,7 @@ def mostrar_erro(mensagem, titulo="Erro"):
     o formulário fica exatamente como estava, pronto a continuar a
     editar.
     """
-    messagebox.showwarning(titulo, mensagem)
+    messagebox.showwarning(titulo, mensagem, **_dono_do_aviso())
 
 
 def mostrar_sucesso(mensagem, titulo="Sucesso"):
@@ -56,7 +56,7 @@ def mostrar_sucesso(mensagem, titulo="Sucesso"):
     06/09/2026, logo a seguir a pedir o popup de erro): "após criado,
     apareça um pop up, contrato criado com sucesso: CNT-XXX".
     """
-    messagebox.showinfo(titulo, mensagem)
+    messagebox.showinfo(titulo, mensagem, **_dono_do_aviso())
 
 
 def confirmar(mensagem, titulo="Confirmar"):
@@ -73,7 +73,48 @@ def confirmar(mensagem, titulo="Confirmar"):
 
     Devolve True só se o utilizador confirmar ("Sim").
     """
-    return messagebox.askyesno(titulo, mensagem)
+    return messagebox.askyesno(titulo, mensagem, **_dono_do_aviso())
+
+
+def _dono_do_aviso():
+    """A janela por cima da qual os avisos (erro, sucesso, confirmar)
+    devem abrir — v1.9.0.
+
+    Sem `parent`, o aviso do sistema pertence à janela principal e,
+    no Windows, pode abrir POR TRÁS de um modal aberto por cima dela:
+    a "Reserva registada" ficava escondida atrás da Nova Reserva
+    Airbnb, o ecrã parecia preso e o segundo clique em "Registar"
+    dava "já tem uma reserva nesse período" (teste de 05/10/2026).
+
+    Escolhe, por esta ordem: a janela com a captura de eventos (o
+    modal ativo), a janela com o foco, ou nenhuma (comportamento
+    antigo). Devolve um dicionário para passar com `**`.
+    """
+    raiz = tkinter._default_root
+    if raiz is None:
+        return {}
+
+    candidatos = []
+    try:
+        candidatos.append(raiz.grab_current())
+    except tkinter.TclError:
+        pass
+    try:
+        candidatos.append(raiz.focus_get())
+    except (tkinter.TclError, KeyError):
+        pass
+
+    for widget in candidatos:
+        if widget is None:
+            continue
+        try:
+            janela = widget.winfo_toplevel()
+            if janela.winfo_exists() and janela.winfo_viewable():
+                return {"parent": janela}
+        except tkinter.TclError:
+            continue
+
+    return {}
 
 
 class BarraLateral(ctk.CTkFrame):
@@ -1502,11 +1543,18 @@ def chave_ordenacao(valor):
 # `Tabela`, onde uma correção chegou a todos os ecrãs de uma vez.
 # =====================================================================
 
-# A partir de quantos itens é que o menu nativo deixa de servir. Uma
-# lista de meses, de estados civis ou de tipos de cama continua no
-# menu de sempre: é mais rápido, é o que o utilizador já conhece, e
-# trocá-lo não traria ganho nenhum.
-_LIMITE_MENU_NATIVO = 8
+# A partir de quantos itens é que o menu nativo deixa de servir.
+# Até à v1.8.x era 8: listas curtas abriam o menu nativo do Windows e
+# as longas o painel — o mesmo campo mudava de aspeto quando a lista
+# crescia (ex.: Cliente com 3 clientes vs Produto com 9). v1.9.0
+# (decisão do aluno, 05/10/2026): o painel é usado SEMPRE, para
+# padronizar. O caminho do menu nativo fica só para quem passar um
+# `limite` explícito (os testes do Seletor).
+_LIMITE_MENU_NATIVO = 0
+
+# A caixa de pesquisa só aparece em listas maiores do que isto — numa
+# lista de 2 ou 3 opções (estado civil, regime) seria só ruído.
+_LIMITE_PESQUISA = 8
 
 # Linhas visíveis no painel antes de ser preciso rolar.
 _LINHAS_VISIVEIS = 6
@@ -1701,7 +1749,7 @@ class Seletor(ctk.CTkOptionMenu):
         )
         moldura.pack(fill="both", expand=True, padx=1, pady=1)
 
-        if self._com_pesquisa:
+        if self._com_pesquisa and len(self._values) > _LIMITE_PESQUISA:
             self._campo_pesquisa = ctk.CTkEntry(
                 moldura,
                 corner_radius=tema.RAIO_CAMPO,
@@ -1717,10 +1765,13 @@ class Seletor(ctk.CTkOptionMenu):
                 "<KeyRelease>", self._ao_filtrar, add=True
             )
 
+        # Lista curta = painel curto (v1.9.0): com o painel usado
+        # sempre, uma lista de 2 opções não pode abrir 6 linhas vazias.
+        linhas = max(1, min(self._linhas_visiveis, len(self._values)))
         self._lista_painel = ctk.CTkScrollableFrame(
             moldura,
             fg_color="transparent",
-            height=self._linhas_visiveis * _ALTURA_OPCAO,
+            height=linhas * _ALTURA_OPCAO,
         )
         self._lista_painel.pack(fill="both", expand=True, padx=4)
 

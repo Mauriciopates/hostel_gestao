@@ -44,9 +44,14 @@ PREFIXO_ATRIBUICAO = "ATR"
 # (ver criar_beliche, mais abaixo) — sem contador próprio.
 POSICOES_BELICHE = ("superior", "inferior")
 
+# Tamanho da cama extra (v1.9.0) — é o que o Rol de lavandaria lê
+# para escolher a regra "extra_solteiro" ou "extra_casal". Bate com o
+# ENUM da coluna `unidades.categoria_cama_extra`.
+TAMANHOS_CAMA_EXTRA = ("solteiro", "casal")
+
 
 def _validar_cama_extra(tipo, permite_cama_extra, qtd_cama_extra,
-                        tipo_cama_extra):
+                        tipo_cama_extra, categoria_cama_extra=None):
     """Valida os três campos de cama extra do Airbnb em conjunto
     (Fase 2, v1.4.0, item (d) do plano de correções).
 
@@ -82,6 +87,14 @@ def _validar_cama_extra(tipo, permite_cama_extra, qtd_cama_extra,
             "permite cama extra."
         )
 
+    # v1.9.0: o tamanho passa a obrigatório. Sem ele o Rol de
+    # lavandaria não sabe se a cama extra leva roupa de solteiro ou
+    # de casal — e até aqui ignorava-a sempre, porque nada o gravava.
+    if categoria_cama_extra not in TAMANHOS_CAMA_EXTRA:
+        raise ValueError(
+            "O tamanho da cama extra é obrigatório: solteiro ou casal."
+        )
+
 
 def criar(
     propriedade_id,
@@ -94,9 +107,14 @@ def criar(
     permite_cama_extra=False,
     qtd_cama_extra=None,
     tipo_cama_extra=None,
+    categoria_cama_extra=None,
 ):
     """Criação das unidades, faz a validações de existencia
-    antes de criar a unidade"""
+    antes de criar a unidade.
+
+    `categoria_cama_extra` (v1.9.0): tamanho da cama extra,
+    "solteiro" ou "casal" — obrigatório quando `permite_cama_extra`.
+    """
 
     propriedade = propriedades.procurar(propriedade_id)
 
@@ -131,7 +149,11 @@ def criar(
             raise ValueError(f"{nome_preco} não pode ser negativo: {valor}.")
 
     _validar_cama_extra(
-        tipo, permite_cama_extra, qtd_cama_extra, tipo_cama_extra
+        tipo,
+        permite_cama_extra,
+        qtd_cama_extra,
+        tipo_cama_extra,
+        categoria_cama_extra,
     )
 
     unidade = {
@@ -151,6 +173,9 @@ def criar(
             tipo_cama_extra.strip()
             if permite_cama_extra and tipo_cama_extra
             else None
+        ),
+        "categoria_cama_extra": (
+            categoria_cama_extra if permite_cama_extra else None
         ),
     }
 
@@ -195,6 +220,23 @@ def listar_com_propriedade(incluir_inativas=False, tipo=None):
     )
 
 
+def com_cama_extra_sem_tamanho():
+    """Unidades Airbnb ativas que permitem cama extra mas não têm o
+    tamanho dela (solteiro/casal) — v1.9.0.
+
+    São as criadas antes de o tamanho existir no formulário. O Rol de
+    lavandaria não sabe que roupa mandar para a cama extra delas e
+    ignora-a; o ecrã "Regras do Rol" mostra-as num aviso para alguém
+    lhes definir o tamanho. Vêm com `propriedade_nome`.
+    """
+    return [
+        unidade
+        for unidade in listar_com_propriedade(tipo="airbnb")
+        if unidade["permite_cama_extra"]
+        and unidade.get("categoria_cama_extra") not in TAMANHOS_CAMA_EXTRA
+    ]
+
+
 def rotulo_com_propriedade(unidade):
     """Formata o rótulo "[PROPRIEDADE] - [UNIDADE] (ID)" usado nos
     ComboBoxes de unidade, a partir de uma linha devolvida por
@@ -218,6 +260,7 @@ def atualizar(
     permite_cama_extra=None,
     qtd_cama_extra=None,
     tipo_cama_extra=None,
+    categoria_cama_extra=None,
 ):
     """Altera o nome, os preços, o indicador de época alta e a cama
     extra do Airbnb de uma unidade.
@@ -244,6 +287,11 @@ def atualizar(
     sempre `qtd_cama_extra`/`tipo_cama_extra` para None, mesmo que
     tenham sido passados — a flag é que manda, nunca fica um par
     quantidade/tipo "orfão" de uma cama extra desligada.
+
+    v1.9.0: `categoria_cama_extra` (tamanho, solteiro/casal) entra no
+    mesmo conjunto. Uma unidade antiga com cama extra mas sem tamanho
+    só passa a validar quando lhe for dado um tamanho — é isso que o
+    aviso do ecrã "Regras do Rol" pede.
     """
 
     unidade = procurar(unidade_id)
@@ -293,6 +341,7 @@ def atualizar(
         permite_cama_extra is not None
         or qtd_cama_extra is not None
         or tipo_cama_extra is not None
+        or categoria_cama_extra is not None
     )
 
     if algum_cama_extra_mudou:
@@ -312,13 +361,22 @@ def atualizar(
             else unidade["tipo_cama_extra"]
         )
 
+        nova_categoria = (
+            categoria_cama_extra
+            if categoria_cama_extra is not None
+            else unidade.get("categoria_cama_extra")
+        )
+
         _validar_cama_extra(unidade["tipo"], novo_permite, novo_qtd,
-                            novo_tipo)
+                            novo_tipo, nova_categoria)
 
         campos["permite_cama_extra"] = novo_permite
         campos["qtd_cama_extra"] = novo_qtd if novo_permite else None
         campos["tipo_cama_extra"] = (
             novo_tipo.strip() if novo_permite and novo_tipo else None
+        )
+        campos["categoria_cama_extra"] = (
+            nova_categoria if novo_permite else None
         )
 
     if campos:
