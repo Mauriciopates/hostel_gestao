@@ -180,6 +180,7 @@ import customtkinter as ctk
 import clientes
 import contratos
 import responsaveis
+import termos
 import unidades
 import validacoes
 from . import componentes
@@ -301,6 +302,72 @@ def _ler_data(texto, nome_campo):
         return datetime.datetime.strptime(texto, "%d/%m/%Y").date()
     except ValueError:
         raise ValueError(f"{nome_campo} inválida (usa dd/mm/aaaa).")
+
+
+# =====================================================================
+# Aviso de privacidade do hóspede (v1.9.0, bloco D)
+# =====================================================================
+#
+# RGPD art. 13.º: a informação é dada NO MOMENTO da recolha; art. 5.º,
+# n.º 2: a empresa tem de conseguir provar que a deu. Ao hóspede NÃO
+# se pede consentimento (o fundamento é o contrato e a obrigação
+# legal do boletim — ver docstring de termos.py): a caixa é o
+# funcionário a confirmar que ENTREGOU a informação, e por isso pode
+# trancar o Guardar. Decisão do aluno, 05/10/2026.
+
+_SUPORTES_AVISO_HOSPEDE = {"Papel": "papel", "Contrato": "contrato"}
+
+_ROTULO_AVISO_HOSPEDE = "Confirmo que entreguei esta informação ao cliente. *"
+
+_ALTURA_TEXTO_AVISO = 110
+
+
+def _bloco_aviso_hospede(master, texto, ao_mudar, estado=None):
+    """Monta o `BlocoTermo` do aviso ao hóspede com a escolha
+    "Entregue em Papel | Contrato".
+
+    Devolve (bloco, função que diz o suporte escolhido). `estado` é o
+    dicionário do `termos.verificar` (só existe quando o cliente já
+    existe — Gerir → Aviso de privacidade).
+    """
+    escolha = {}
+
+    def montar_suporte(pai):
+        linha = ctk.CTkFrame(pai, fg_color="transparent")
+        ctk.CTkLabel(
+            linha,
+            text="Entregue em",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(side="left", padx=(0, 10))
+        escolha["seletor"] = componentes.SeletorVistas(
+            linha, list(_SUPORTES_AVISO_HOSPEDE), ao_mudar=lambda _v: None
+        )
+        escolha["seletor"].pack(side="left")
+        return linha
+
+    bloco = componentes.BlocoTermo(
+        master,
+        titulo="Aviso de privacidade do hóspede (RGPD art. 13.º)",
+        texto=texto["texto"],
+        versao=texto["versao"],
+        rotulo=_ROTULO_AVISO_HOSPEDE,
+        versao_anterior=estado["versao_aceite"] if estado else None,
+        data_anterior=estado["data_aceite"] if estado else None,
+        ao_mudar=ao_mudar,
+        altura_texto=_ALTURA_TEXTO_AVISO,
+        extra=montar_suporte,
+    )
+
+    def suporte():
+        return _SUPORTES_AVISO_HOSPEDE[escolha["seletor"].get()]
+
+    return bloco, suporte
+
+
+def _id_responsavel_ativo():
+    ativo = sessao.obter_responsavel_ativo()
+    return ativo["id"] if ativo else None
 
 
 def _recarregar_tela_lista(tela_lista):
@@ -678,6 +745,22 @@ class _AcoesClienteModal(ctk.CTkToplevel):
         else:
             altura = 290
 
+        # v1.9.0, bloco D — estado do aviso de privacidade. Sem texto
+        # publicado (erro de configuração) a ação simplesmente não
+        # aparece; num anonimizado não faz sentido.
+        self._estado_aviso = None
+        if not anonimizado:
+            try:
+                self._estado_aviso = termos.verificar(
+                    termos.TITULAR_CLIENTE,
+                    cliente["id"],
+                    termos.PRIVACIDADE_HOSPEDE,
+                )
+            except ValueError:
+                self._estado_aviso = None
+        if self._estado_aviso is not None:
+            altura += 40
+
         self.title(f"Ações — {cliente['id']}")
         self.geometry(f"320x{altura}")
         self.resizable(False, False)
@@ -740,6 +823,7 @@ class _AcoesClienteModal(ctk.CTkToplevel):
                 hover_color=tema.VERDE_LIVRE,
                 acao=lambda: self.tela_lista._reativar(cliente),
             )
+            self._botao_aviso(tela_lista, cliente)
             if pode_anonimizar:
                 self._botao(
                     "Anonimizar (irreversível)",
@@ -759,6 +843,7 @@ class _AcoesClienteModal(ctk.CTkToplevel):
                 hover_color=tema.COR_BORDA,
                 acao=lambda: EditarClienteModal(tela_lista, cliente),
             )
+            self._botao_aviso(tela_lista, cliente)
             if pode_anonimizar:
                 self._botao(
                     "Anonimizar (irreversível)",
@@ -783,6 +868,28 @@ class _AcoesClienteModal(ctk.CTkToplevel):
             hover_color=tema.COR_BORDA,
             command=self.destroy,
         ).pack(side="bottom", fill="x", padx=20, pady=(10, 16))
+
+    def _botao_aviso(self, tela_lista, cliente):
+        """Ação "Aviso de privacidade" com o estado no próprio texto:
+        "✓ v1.0" quando a versão em vigor está registada, âmbar
+        "por registar" quando não (cliente antigo ou versão nova)."""
+        estado = self._estado_aviso
+        if estado is None:
+            return
+
+        if estado["em_dia"]:
+            texto = f"Aviso de privacidade  ✓ v{estado['versao_aceite']}"
+            cor, hover = tema.COR_TEXTO, tema.COR_BORDA
+        else:
+            texto = "Aviso de privacidade · por registar"
+            cor, hover = tema.TEXTO_AVISO, tema.AMARELO_AVISO
+
+        self._botao(
+            texto,
+            text_color=cor,
+            hover_color=hover,
+            acao=lambda: AvisoPrivacidadeClienteModal(tela_lista, cliente),
+        )
 
     def _centrar_sobre(self, janela, altura):
         """Abre por cima da janela que o chamou.
@@ -925,6 +1032,108 @@ class _SeletorRegimeClienteModal(ctk.CTkToplevel):
         NovoClienteAirbnbModal(self.tela_lista)
 
 
+class AvisoPrivacidadeClienteModal(ctk.CTkToplevel):
+    """Regista a entrega do aviso de privacidade a um cliente que já
+    existe (v1.9.0, bloco D) — clientes de antes da v1.9.0, ou uma
+    versão nova do texto entretanto publicada. Mesmo bloco do Novo
+    Cliente; o "Registar" fica trancado até a caixa ser marcada."""
+
+    def __init__(self, tela_lista, cliente):
+        super().__init__(tela_lista)
+        self.tela_lista = tela_lista
+        self.cliente = cliente
+
+        try:
+            estado = termos.verificar(
+                termos.TITULAR_CLIENTE,
+                cliente["id"],
+                termos.PRIVACIDADE_HOSPEDE,
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            self.after(0, self.destroy)
+            return
+
+        self.title(f"Aviso de privacidade — {cliente['id']}")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(tela_lista)
+        _colocar_no_topo(self)
+
+        ctk.CTkLabel(
+            self,
+            text="Aviso de privacidade",
+            text_color=tema.COR_TEXTO,
+            font=ctk.CTkFont(size=16, weight="bold"),
+        ).pack(anchor="w", padx=24, pady=(20, 2))
+        ctk.CTkLabel(
+            self,
+            text=f"{cliente['nome']} — {cliente['id']}",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=24, pady=(0, 12))
+
+        self.bloco, self.suporte = _bloco_aviso_hospede(
+            self, estado["texto"], ao_mudar=self._ao_mudar, estado=estado
+        )
+        self.bloco.configure(width=460)
+        self.bloco.pack(fill="x", padx=24)
+
+        rodape = ctk.CTkFrame(self, fg_color="transparent")
+        rodape.pack(fill="x", padx=24, pady=(14, 20))
+        ctk.CTkButton(
+            rodape,
+            text="Cancelar",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color="transparent",
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            text_color=tema.COR_TEXTO,
+            hover_color=tema.COR_BORDA,
+            command=self.destroy,
+        ).pack(side="left")
+        self.botao_registar = ctk.CTkButton(
+            rodape,
+            text="Registar",
+            corner_radius=tema.RAIO_BOTAO,
+            fg_color=tema.COR_BORDA,
+            hover_color=tema.AZUL_CLARO,
+            text_color_disabled=tema.TEXTO_INDISPONIVEL,
+            state="disabled",
+            command=self._registar,
+        )
+        self.botao_registar.pack(side="right")
+
+    def _ao_mudar(self):
+        aceite = self.bloco.esta_aceite()
+        self.botao_registar.configure(
+            state="normal" if aceite else "disabled",
+            fg_color=tema.AZUL_PRINCIPAL if aceite else tema.COR_BORDA,
+        )
+
+    def _registar(self):
+        if not self.bloco.esta_aceite():
+            return
+
+        try:
+            versao = termos.registar(
+                termos.TITULAR_CLIENTE,
+                self.cliente["id"],
+                termos.PRIVACIDADE_HOSPEDE,
+                registado_por_id=_id_responsavel_ativo(),
+                suporte=self.suporte(),
+            )
+        except ValueError as erro:
+            componentes.mostrar_erro(str(erro))
+            return
+
+        componentes.mostrar_sucesso(
+            f"Aviso de privacidade registado para {self.cliente['id']} "
+            f"(versão {versao})."
+        )
+        self.destroy()
+
+
 class _FormularioCliente(ctk.CTkToplevel):
     """Base comum aos modais de cliente — monta a moldura (título,
     geometria, cartão com CTkScrollableFrame, rodapé Cancelar/
@@ -962,6 +1171,9 @@ class _FormularioCliente(ctk.CTkToplevel):
 
         area = ctk.CTkScrollableFrame(self, fg_color="transparent")
         area.pack(fill="both", expand=True, padx=20)
+        self._area = area
+        self._bloco_aviso = None
+        self._suporte_aviso = None
 
         cartao = ctk.CTkFrame(
             area,
@@ -1083,6 +1295,86 @@ class _FormularioCliente(ctk.CTkToplevel):
             campo_entrada.insert(0, valor)
             campo_entrada.grid_remove()
 
+    # -- aviso de privacidade (v1.9.0, bloco D) -----------------------
+
+    def _montar_aviso_privacidade(self):
+        """Segundo cartão, por baixo dos campos, com o aviso ao
+        hóspede. Só os modais de CRIAÇÃO o chamam (o Editar não —
+        os clientes já existentes registam em Gerir). O Guardar fica
+        trancado até a caixa ser marcada."""
+        cartao = ctk.CTkFrame(
+            self._area,
+            fg_color=tema.COR_FUNDO,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            corner_radius=tema.RAIO_CARTAO,
+        )
+        cartao.pack(fill="x", pady=(0, 12))
+
+        try:
+            texto = termos.texto_em_vigor(termos.PRIVACIDADE_HOSPEDE)
+        except ValueError as erro:
+            # Sem texto publicado não há o que entregar: avisa e
+            # mantém o Guardar trancado (erro de configuração).
+            ctk.CTkLabel(
+                cartao,
+                text=(
+                    f"{erro}\nPublica-o em Configurações → Sistema → "
+                    f"Documentos legais."
+                ),
+                text_color=tema.TEXTO_AVISO,
+                fg_color=tema.AMARELO_AVISO,
+                corner_radius=6,
+                font=ctk.CTkFont(size=11),
+                anchor="w",
+                justify="left",
+                wraplength=480,
+            ).pack(fill="x", padx=12, pady=12)
+            self._ao_mudar_aviso()
+            return
+
+        self._bloco_aviso, self._suporte_aviso = _bloco_aviso_hospede(
+            cartao, texto, ao_mudar=self._ao_mudar_aviso
+        )
+        self._bloco_aviso.pack(fill="x", padx=12, pady=12)
+        self._ao_mudar_aviso()
+
+    def _aviso_confirmado(self):
+        return (
+            self._bloco_aviso is not None and self._bloco_aviso.esta_aceite()
+        )
+
+    def _ao_mudar_aviso(self):
+        confirmado = self._aviso_confirmado()
+        self.botao_guardar.configure(
+            state="normal" if confirmado else "disabled",
+            fg_color=tema.AZUL_PRINCIPAL if confirmado else tema.COR_BORDA,
+        )
+
+    def _registar_aviso(self, cliente):
+        """Regista a entrega do aviso a um cliente acabado de criar.
+
+        Corre DEPOIS do `clientes.criar` (antes não há ID). Se falhar,
+        o cliente fica gravado e o aviso "por registar" no Gerir —
+        devolve o texto a juntar à mensagem de sucesso; senão "".
+        """
+        try:
+            versao = termos.registar(
+                termos.TITULAR_CLIENTE,
+                cliente["id"],
+                termos.PRIVACIDADE_HOSPEDE,
+                registado_por_id=_id_responsavel_ativo(),
+                suporte=self._suporte_aviso(),
+            )
+        except ValueError as erro:
+            return (
+                f"\n\nAtenção: o aviso de privacidade NÃO ficou "
+                f"registado ({erro}). Regista-o em Gerir → Aviso de "
+                f"privacidade."
+            )
+
+        return f"\nAviso de privacidade registado (versão {versao})."
+
     # -- submissão ----------------------------------------------------
 
     def _guardar(self):
@@ -1100,7 +1392,7 @@ class NovoClienteMensalModal(_FormularioCliente):
 
     def __init__(self, tela_lista):
         super().__init__(
-            tela_lista, "Novo Cliente Mensal", largura=620, altura=680
+            tela_lista, "Novo Cliente Mensal", largura=620, altura=720
         )
 
         self.campo_nome = self._campo_texto("Nome completo *")
@@ -1129,8 +1421,15 @@ class NovoClienteMensalModal(_FormularioCliente):
         self.campo_contacto_emergencia = self._campo_texto(
             "Contacto de emergência"
         )
+        self._montar_aviso_privacidade()
 
     def _guardar(self):
+        if not self._aviso_confirmado():
+            componentes.mostrar_erro(
+                "Confirma que entregaste o aviso de privacidade ao cliente."
+            )
+            return
+
         try:
             data_nascimento = _ler_data(
                 self.campo_data_nascimento.get(), "Data de nascimento"
@@ -1167,8 +1466,9 @@ class NovoClienteMensalModal(_FormularioCliente):
             componentes.mostrar_erro(str(erro))
             return
 
+        nota_aviso = self._registar_aviso(cliente)
         componentes.mostrar_sucesso(
-            f"Cliente criado com sucesso: {cliente['id']}"
+            f"Cliente criado com sucesso: {cliente['id']}{nota_aviso}"
         )
         self.destroy()
         _recarregar_tela_lista(self.tela_lista)
@@ -1192,7 +1492,7 @@ class NovoClienteAirbnbModal(_FormularioCliente):
 
     def __init__(self, tela_lista):
         super().__init__(
-            tela_lista, "Novo Cliente Airbnb", largura=580, altura=460
+            tela_lista, "Novo Cliente Airbnb", largura=600, altura=680
         )
 
         self.campo_nome = self._campo_texto("Nome completo *")
@@ -1214,8 +1514,15 @@ class NovoClienteAirbnbModal(_FormularioCliente):
         self.campo_pais_residencia = self._campo_texto(
             "País de residência *", placeholder="ex.: Portugal"
         )
+        self._montar_aviso_privacidade()
 
     def _guardar(self):
+        if not self._aviso_confirmado():
+            componentes.mostrar_erro(
+                "Confirma que entregaste o aviso de privacidade ao cliente."
+            )
+            return
+
         try:
             data_nascimento = _ler_data(
                 self.campo_data_nascimento.get(), "Data de nascimento"
@@ -1239,8 +1546,9 @@ class NovoClienteAirbnbModal(_FormularioCliente):
             componentes.mostrar_erro(str(erro))
             return
 
+        nota_aviso = self._registar_aviso(cliente)
         componentes.mostrar_sucesso(
-            f"Cliente criado com sucesso: {cliente['id']}"
+            f"Cliente criado com sucesso: {cliente['id']}{nota_aviso}"
         )
         self.destroy()
         _recarregar_tela_lista(self.tela_lista)

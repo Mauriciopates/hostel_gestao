@@ -2065,6 +2065,16 @@ class BlocoTermo(ctk.CTkFrame):
       aviso           - texto da faixa âmbar no topo; None esconde-a
       ao_mudar        - chamado sem argumentos sempre que a caixa
                         muda de estado
+      com_caixa       - False para um documento só de INFORMAÇÃO,
+                        sem nada a marcar (v1.9.0: aviso de
+                        privacidade do colaborador)
+      altura_texto    - altura da caixa do texto (v1.9.0: dois
+                        blocos no mesmo modal precisam de ser mais
+                        baixos)
+      extra           - função `extra(master)` que devolve um widget
+                        a mostrar logo antes da caixa de marcar
+                        (v1.9.0: o "Entregue em Papel | Contrato"
+                        do aviso ao hóspede)
 
     A caixa de texto é um `CTkTextbox` desativado: rola, seleciona-se
     para copiar, mas não se edita. Um `CTkLabel` com o texto todo não
@@ -2083,6 +2093,9 @@ class BlocoTermo(ctk.CTkFrame):
         data_anterior=None,
         aviso=None,
         ao_mudar=None,
+        com_caixa=True,
+        altura_texto=_ALTURA_TEXTO_TERMO,
+        extra=None,
         **kwargs,
     ):
         super().__init__(
@@ -2119,7 +2132,7 @@ class BlocoTermo(ctk.CTkFrame):
 
         self.caixa_texto = ctk.CTkTextbox(
             self,
-            height=_ALTURA_TEXTO_TERMO,
+            height=altura_texto,
             corner_radius=6,
             border_width=1,
             border_color=tema.COR_BORDA,
@@ -2133,19 +2146,23 @@ class BlocoTermo(ctk.CTkFrame):
 
         self.aceite = ctk.BooleanVar(value=False)
 
-        ctk.CTkCheckBox(
-            self,
-            text=rotulo,
-            variable=self.aceite,
-            command=self._mudou,
-            text_color=tema.COR_TEXTO,
-            font=ctk.CTkFont(size=12),
-            checkbox_width=18,
-            checkbox_height=18,
-            corner_radius=4,
-            fg_color=tema.AZUL_PRINCIPAL,
-            hover_color=tema.AZUL_CLARO,
-        ).pack(anchor="w", padx=12, pady=(10, 0))
+        if extra is not None:
+            extra(self).pack(fill="x", padx=12, pady=(10, 0))
+
+        if com_caixa:
+            ctk.CTkCheckBox(
+                self,
+                text=rotulo,
+                variable=self.aceite,
+                command=self._mudou,
+                text_color=tema.COR_TEXTO,
+                font=ctk.CTkFont(size=12),
+                checkbox_width=18,
+                checkbox_height=18,
+                corner_radius=4,
+                fg_color=tema.AZUL_PRINCIPAL,
+                hover_color=tema.AZUL_CLARO,
+            ).pack(anchor="w", padx=12, pady=(10, 0))
 
         ctk.CTkLabel(
             self,

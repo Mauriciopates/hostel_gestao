@@ -132,6 +132,10 @@ def verificar(titular_tipo, titular_id, tipo):
       precisa_aceitar - True quando o documento bloqueia E a
                         versão registada é diferente da que está
                         em vigor
+      em_dia          - True quando a versão registada é a que está
+                        em vigor, bloqueie ou não (v1.9.0: o estado
+                        "registado / por registar" do aviso ao
+                        hóspede no Gerir do cliente)
 
     Quem nunca aceitou entra no `precisa_aceitar` pela mesma
     comparação (None != "1.0"), sem precisar de ramo próprio.
@@ -151,6 +155,7 @@ def verificar(titular_tipo, titular_id, tipo):
         "precisa_aceitar": (
             bloqueia(tipo) and versao_aceite != texto["versao"]
         ),
+        "em_dia": versao_aceite == texto["versao"],
     }
 
 

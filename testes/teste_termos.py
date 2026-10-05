@@ -171,6 +171,38 @@ class TesteVerificar(BaseTermosTest):
         self.assertEqual(estado["versao_aceite"], "1.0")
         self.assertIsNotNone(estado["data_aceite"])
 
+    def test_em_dia_aviso_hospede(self):
+        """v1.9.0, bloco D: `em_dia` é o estado do Gerir do cliente —
+        False sem registo, True depois, False de novo com versão
+        nova publicada (mesmo não bloqueando)."""
+        cliente = _criar_cliente_minimo()
+
+        def em_dia():
+            return termos.verificar(
+                termos.TITULAR_CLIENTE,
+                cliente["id"],
+                termos.PRIVACIDADE_HOSPEDE,
+            )["em_dia"]
+
+        self.assertFalse(em_dia())
+
+        termos.registar(
+            termos.TITULAR_CLIENTE,
+            cliente["id"],
+            termos.PRIVACIDADE_HOSPEDE,
+            registado_por_id=self.master["id"],
+            suporte="papel",
+        )
+        self.assertTrue(em_dia())
+
+        termos.publicar(
+            termos.PRIVACIDADE_HOSPEDE,
+            "2.0",
+            "Aviso ao hóspede, versão 2.0 de teste.",
+            autor=self.master,
+        )
+        self.assertFalse(em_dia())
+
     def test_titular_desconhecido_levanta(self):
         with self.assertRaises(ValueError):
             termos.verificar(

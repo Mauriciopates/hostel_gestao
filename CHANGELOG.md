@@ -3,6 +3,81 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [1.9.0] — 2026-10-05
+
+Hubs agrupados, Rol de Lavanderia configurável, tipo de cliente e
+avisos de privacidade (RGPD art. 13.º) ao criar clientes e
+colaboradores.
+
+### Adicionado
+
+- **Hubs de Stock e Despesas agrupados** (bloco A) —
+  `componentes.GrupoCartoesHub`: os cartões passam a estar em grupos
+  com título (ex.: "Gestão de Stock"); grupos sem cartões para o
+  perfil não aparecem. Devoluções só para Master/Admin.
+- **Regras do Rol de Lavanderia** (bloco B) — ecrã novo
+  `gui_est_regras_rol.py` (Stock → Gestão de Stock, só Master/Admin):
+  um separador por tipo de cama (solteiro, casal, beliche por par,
+  cama extra casal/solteiro), produto de roupa e quantidade por
+  regra, pré-visualização. Negócio em `estoque.py`
+  (`listar_regras_rol`, `adicionar_regra_rol`,
+  `alterar_quantidade_regra_rol`, `retirar_regra_rol`). Antes a
+  tabela `rol_lavanderia_regras` nunca era preenchida e o Rol saía
+  sempre vazio numa base nova.
+  - Kit de roupa base (`estoque.criar_kit_roupa_base`): no primeiro
+    arranque com a base sem produtos, o sistema oferece criar os 7
+    produtos de roupa e as regras de base.
+  - Cama extra com tamanho (Solteiro/Casal) —
+    `unidades.categoria_cama_extra`, obrigatório quando há cama
+    extra; o Rol usa-o para escolher a regra.
+- **Tipo de cliente no ecrã Clientes** (bloco C) — filtro
+  "Todos | Mensal | Airbnb" com contagens e coluna TIPO. O tipo é
+  deduzido pelo NIF (o regime não é guardado; o mensal exige NIF e
+  o formulário Airbnb não o pede): `clientes.tipo`,
+  `filtrar_por_tipo`, `contar_por_tipo`. Anonimizados sem tipo.
+- **Avisos de privacidade** (bloco D, RGPD art. 13.º e 5.º/2):
+  - Novo Cliente (Mensal e Airbnb): aviso ao hóspede no fim do
+    formulário, com "Entregue em Papel | Contrato"; o Guardar fica
+    trancado até se confirmar a entrega. Não é consentimento — o
+    fundamento é o contrato e a obrigação legal; regista-se que a
+    informação foi entregue (`avisos_privacidade`).
+  - Gerir cliente: ação "Aviso de privacidade" com o estado
+    ("✓ v1.0" ou "por registar") e modal para registar nos clientes
+    que já existiam ou quando há versão nova.
+  - Definir credencial: aviso de privacidade do colaborador mostrado
+    por baixo do termo de confidencialidade; é só informação (sem
+    caixa) e fica registado como entregue ("sistema") ao definir.
+  - `termos.verificar` devolve também `em_dia`;
+    `componentes.BlocoTermo` aceita `com_caixa`, `altura_texto` e
+    `extra`.
+
+### Alterado
+
+- **Seletor sempre em painel** — `componentes.Seletor` deixa de usar
+  o menu nativo nas listas curtas: o mesmo campo tinha dois aspetos
+  consoante o número de opções. A pesquisa só aparece com mais de 8
+  opções e o painel ajusta a altura à lista.
+
+### Corrigido
+
+- **Aviso de sucesso escondido atrás do modal** — `mostrar_erro`,
+  `mostrar_sucesso` e `confirmar` abrem agora por cima da janela
+  ativa (a que tem a captura ou o foco). Na Nova Reserva Airbnb o
+  "Reserva registada" ficava por trás, o ecrã parecia parado e um
+  segundo clique dava "já tem uma reserva nesse período".
+- **Duplo envio na Nova Reserva Airbnb** — enquanto grava, um novo
+  "Registar"/"Confirmar" é ignorado.
+
+### Testes
+
+- `teste_estoque.TesteRegrasRol` e `TesteKitRoupaBase`;
+  `teste_unidades.TesteTamanhoCamaExtra`.
+- `teste_clientes.TesteTipoCliente` (6).
+- `teste_termos`: `em_dia` do aviso ao hóspede.
+- `testes/teste_gui_termos.py` (novo, 8): Guardar trancado, registo
+  com suporte, estado no Gerir, modal para clientes antigos e aviso
+  do colaborador no Definir credencial.
+
 ## [1.8.4] — 2026-10-05
 
 Calendário com o MySQL na VM, testes que faltavam das versões 1.8.2

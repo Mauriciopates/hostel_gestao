@@ -748,6 +748,19 @@ class DefinirCredencialModal(ctk.CTkToplevel):
             self.after(0, self.destroy)
             return
 
+        # v1.9.0, bloco D — aviso de privacidade do colaborador (RGPD
+        # art. 13.º). É INFORMAÇÃO, não compromisso: não tem caixa nem
+        # tranca nada; fica registado como entregue ("sistema") ao
+        # carregar em Definir, porque a pessoa está aqui a lê-lo. Sem
+        # texto publicado, o bloco não aparece e a credencial define-se
+        # como antes (só a confidencialidade é condição de acesso).
+        try:
+            self.texto_privacidade = termos.texto_em_vigor(
+                termos.PRIVACIDADE_COLABORADOR
+            )
+        except ValueError:
+            self.texto_privacidade = None
+
         self.title(f"Definir credencial — {registo['id']}")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
@@ -778,8 +791,22 @@ class DefinirCredencialModal(ctk.CTkToplevel):
             versao=texto["versao"],
             rotulo="Li e aceito o termo de confidencialidade. *",
             ao_mudar=self._ao_mudar_termo,
+            altura_texto=80,
         )
-        self.bloco_termo.pack(fill="x", padx=24, pady=(0, 16))
+        self.bloco_termo.pack(fill="x", padx=24, pady=(0, 10))
+
+        if self.texto_privacidade is not None:
+            componentes.BlocoTermo(
+                self,
+                titulo=(
+                    "Aviso de privacidade do colaborador (RGPD art. 13.º)"
+                ),
+                texto=self.texto_privacidade["texto"],
+                versao=self.texto_privacidade["versao"],
+                rotulo="",
+                com_caixa=False,
+                altura_texto=60,
+            ).pack(fill="x", padx=24, pady=(0, 16))
 
         ctk.CTkLabel(
             self,
@@ -928,6 +955,22 @@ class DefinirCredencialModal(ctk.CTkToplevel):
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
             return
+
+        # v1.9.0 — o aviso de privacidade foi mostrado neste ecrã:
+        # regista-se como entregue (suporte "sistema"), também antes
+        # da credencial.
+        if self.texto_privacidade is not None:
+            try:
+                termos.registar(
+                    termos.TITULAR_RESPONSAVEL,
+                    self.registo["id"],
+                    termos.PRIVACIDADE_COLABORADOR,
+                    registado_por_id=autor["id"] if autor else None,
+                    suporte="sistema",
+                )
+            except ValueError as erro:
+                componentes.mostrar_erro(str(erro))
+                return
 
         try:
             utilizadores.definir_credencial(
