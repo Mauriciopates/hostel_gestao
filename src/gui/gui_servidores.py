@@ -591,15 +591,22 @@ class JanelaFalhaLigacao(ctk.CTk):
         self.destroy()
 
 
-def _diagnosticar_e_oferecer(servidor, password):
+def _diagnosticar_e_oferecer(servidor, password, diagnostico=None):
     """Testa o servidor e, se a base se resolve criando-a ou
     completando-a, pergunta e prepara-a (INST-02).
 
     Devolve (ok, texto) — ok só é True com a base PRONTA. Se o
     utilizador disser que não, ou se a preparação falhar, devolve
     False com o texto do diagnóstico (ou do erro).
+
+    `diagnostico` (v1.10.0): o resultado de um `instalacao.diagnosticar`
+    já feito — a janela de arranque testa a ligação numa thread e,
+    se falhar, entrega o resultado aqui em vez de se testar outra vez
+    (um servidor em baixo custava o tempo de espera a dobrar).
     """
-    estado, texto, _ = instalacao.diagnosticar(servidor, password)
+    if diagnostico is None:
+        diagnostico = instalacao.diagnosticar(servidor, password)
+    estado, texto, _ = diagnostico
 
     if estado == instalacao.PRONTA:
         return True, texto
@@ -630,12 +637,15 @@ def _diagnosticar_e_oferecer(servidor, password):
     return estado == instalacao.PRONTA, texto
 
 
-def garantir_ligacao():
+def garantir_ligacao(diagnostico=None):
     """Chamado pelo main_gui.py antes do backup, do seed e do login.
 
     Devolve True para continuar o arranque. Devolve False para terminar:
     o utilizador saiu, ou mudou/corrigiu o servidor e já foi lançada uma
     cópia nova da aplicação (o `config` só lê o servidor ao arrancar).
+
+    `diagnostico` (v1.10.0): o teste já feito pela janela de arranque,
+    usado só na primeira volta; um "Tentar de novo" testa outra vez.
     """
     while True:
         id_servidor, servidor = servidores.servidor_ativo()
@@ -654,10 +664,12 @@ def garantir_ligacao():
         raiz.withdraw()
         try:
             ok, texto = _diagnosticar_e_oferecer(
-                servidor, servidores.obter_password(id_servidor)
+                servidor, servidores.obter_password(id_servidor),
+                diagnostico,
             )
         finally:
             raiz.destroy()
+        diagnostico = None
         if ok:
             logger.info("Servidor '%s': %s", id_servidor, texto)
             return True

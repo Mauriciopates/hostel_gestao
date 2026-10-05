@@ -3117,6 +3117,25 @@ class BarraNivel(ctk.CTkProgressBar):
         self.set(max(0.0, min(1.0, float(valor))))
 
 
+class BarraCorrer(ctk.CTkProgressBar):
+    """Barra "a trabalhar": um bloco azul a correr de um lado para o
+    outro (indeterminada), para quando não se sabe quanto falta.
+    Usada pela janela de arranque (v1.10.0). Arranca com `.start()`
+    e para com `.stop()`.
+    """
+
+    def __init__(self, master, largura=240, altura=6):
+        super().__init__(
+            master,
+            mode="indeterminate",
+            width=largura,
+            height=altura,
+            corner_radius=altura // 2,
+            progress_color=tema.AZUL_PRINCIPAL,
+            fg_color=tema.ID_CHIP_FUNDO,
+        )
+
+
 class Separador(ctk.CTkFrame):
     """Linha horizontal de 1px, na cor das bordas."""
 

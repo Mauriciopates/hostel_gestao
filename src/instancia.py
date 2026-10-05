@@ -92,6 +92,30 @@ def libertar():
     _largar(recurso)
 
 
+# Início dos títulos das janelas da aplicação: a janela de arranque
+# ("Hostel Gestão — a iniciar") e as da `Aplicacao` ("Hostel Clean
+# v… — Entrar", "… — Gestão de Alojamento").
+PREFIXOS_JANELA = ("Hostel Gestão", "Hostel Clean")
+
+
+def trazer_para_frente(prefixos=PREFIXOS_JANELA):
+    """Traz para a frente a janela da cópia que já está aberta (v1.10.0).
+
+    Chamado pela segunda cópia, depois do aviso "já está a abrir",
+    para a pessoa ver onde está a aplicação em vez de clicar outra
+    vez. Procura a primeira janela visível cujo título comece por um
+    dos `prefixos`. Devolve True se encontrou. Fora do Windows não faz
+    nada (só serve para os testes correrem em Linux). Uma falha do
+    sistema fica no log e não impede nada.
+    """
+    try:
+        return _trazer_no_sistema(tuple(prefixos))
+    except OSError as erro:
+        logger.warning("Não consegui trazer a janela para a frente: %s",
+                       erro)
+        return False
+
+
 # ---------------------------------------------------------------------
 # Implementação por sistema operativo. O `if` fica ao nível do módulo
 # para o pyright só analisar o ramo do sistema onde corre (ctypes.WinDLL
@@ -132,6 +156,37 @@ if sys.platform == "win32":
         kernel32.ReleaseMutex(mutex)
         kernel32.CloseHandle(mutex)
 
+    _SW_RESTORE = 9
+
+    def _trazer_no_sistema(prefixos):
+        """EnumWindows: a primeira janela visível com o título certo
+        é restaurada (se estiver minimizada) e posta à frente."""
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        procurar = ctypes.WINFUNCTYPE(
+            wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        encontrada = []
+
+        def verificar(hwnd, _):
+            if not user32.IsWindowVisible(hwnd):
+                return True
+            tamanho = user32.GetWindowTextLengthW(hwnd)
+            if tamanho == 0:
+                return True
+            titulo = ctypes.create_unicode_buffer(tamanho + 1)
+            user32.GetWindowTextW(hwnd, titulo, tamanho + 1)
+            if titulo.value.startswith(prefixos):
+                encontrada.append(hwnd)
+                return False  # para a procura
+            return True
+
+        user32.EnumWindows(procurar(verificar), 0)
+        if not encontrada:
+            return False
+        if user32.IsIconic(encontrada[0]):
+            user32.ShowWindow(encontrada[0], _SW_RESTORE)
+        user32.SetForegroundWindow(encontrada[0])
+        return True
+
 else:
     import fcntl
 
@@ -153,3 +208,7 @@ else:
     def _largar(ficheiro):
         fcntl.flock(ficheiro, fcntl.LOCK_UN)
         ficheiro.close()
+
+    def _trazer_no_sistema(prefixos):
+        """Fora do Windows não há nada a trazer."""
+        return False

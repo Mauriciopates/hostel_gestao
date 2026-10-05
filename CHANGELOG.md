@@ -3,6 +3,72 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [1.10.0] — 2026-10-05
+
+Janela de arranque e caixa de entrada do pré check-in na VM.
+
+### Adicionado
+
+- **Janela de arranque** — `gui/janela_arranque.py` (novo): aparece
+  logo a seguir ao trinco de cópia única, antes de qualquer ligação,
+  com os 5 passos do arranque (A preparar · A ligar ao servidor ·
+  Cópia de segurança do dia · A atualizar a base de dados · A abrir
+  o início de sessão), cada um marcado ✓ com os segundos que levou,
+  o servidor ativo e uma barra a correr. Na cópia de segurança, se
+  passar de 2 s (primeiro arranque do dia), mostra um aviso amarelo.
+  Sem botão de fechar: cancelar a meio da cópia ou das migrações
+  deixava a base a meio do caminho. Mockup aprovado a 05/10/2026.
+  Antes, o arranque no Sin-Windows11 (túnel SSH até à VM) demorava
+  vários segundos sem nada no ecrã e as pessoas voltavam a clicar no
+  ícone.
+  - `JanelaArranque.correr(indice, trabalho)`: o trabalho corre numa
+    thread e a janela continua viva; uma exceção volta à thread
+    principal. `correr_aqui` para o que tem de ficar na principal
+    (importar os ecrãs).
+  - `componentes.BarraCorrer` (nova): barra indeterminada.
+- **Segunda cópia traz a janela para a frente** —
+  `instancia.trazer_para_frente()`: depois do aviso "O Hostel Gestão
+  já está a abrir", a janela da cópia que está aberta vem para a
+  frente (Windows; noutros sistemas não faz nada).
+- **Caixa de entrada do pré check-in na VM** —
+  `vm/instalar_prechecking.sh` (novo, corre depois do
+  `instalar_vm.sh`): cria a base `hostel_prechecking` (tabelas
+  `tokens`, com o hash SHA-256 do link e os detalhes da reserva a
+  mostrar ao hóspede, e `pendentes`, com os 7 campos do boletim e as
+  3 confirmações separadas), o utilizador `api_prechecking` (só
+  insere pendentes, lê tokens e marca-os como usados) e dá ao
+  `hostel_app` o acesso de que o desktop precisa. Testa-se a si
+  próprio: 3 permissões aceites, 7 recusadas e o CHECK das
+  confirmações obrigatórias. Idempotente; a password da API é gerada
+  uma vez para o `/opt/hostel/.env`.
+
+### Alterado
+
+- **Arranque (`main_gui.py`)** — passos reorganizados à volta da
+  janela de arranque; `gui.app` passa a ser importado já com a
+  janela no ecrã. Os popups (migração falhada, Master criado) só
+  aparecem depois de ela fechar.
+- **Servidor em baixo não espera duas vezes** —
+  `gui_servidores.garantir_ligacao(diagnostico)` e
+  `_diagnosticar_e_oferecer(..., diagnostico)` usam o teste já feito
+  pela janela de arranque na primeira volta; "Tentar de novo" testa
+  outra vez.
+
+### Testes
+
+- `testes/teste_janela_arranque.py` (novo, 19): passos e tempos,
+  trabalho noutra thread, exceção relançada, aviso só na cópia
+  demorada, reabertura depois do plano B, `main_gui._ligar` (base
+  pronta / servidor em baixo / sem servidor), diagnóstico
+  reaproveitado e `trazer_para_frente` sem janela.
+
+### Notas
+
+- Na nova-vm (05/10/2026): ufw ativo (SSH só das redes
+  192.168.56.0/24 e 192.168.110.0/24, uma regra por cliente), SSH só
+  com chave, DNS fixo em `/etc/netplan/90-dns.yaml`. Não faz parte do
+  código; ver o ficheiro 08 do projeto.
+
 ## [1.9.0] — 2026-10-05
 
 Hubs agrupados, Rol de Lavanderia configurável, tipo de cliente e
