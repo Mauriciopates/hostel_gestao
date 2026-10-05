@@ -45,6 +45,9 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         self.controlador = controlador
         self.unidade_selecionada = None
         self.popup_pai = popup_pai
+        # v1.9.0: True enquanto uma reserva está a ser gravada — trava
+        # um segundo "Registar" (o duplo envio do teste de 05/10/2026).
+        self._a_gravar = False
 
         componentes.Cabecalho(self, "Nova Reserva Airbnb").pack(fill="x")
 
@@ -572,6 +575,9 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         Caso contrário: segue direto para
         `contratos.registar_airbnb`.
         """
+        if self._a_gravar:
+            return
+
         if self.unidade_selecionada is None:
             self._mostrar_erro("Escolhe uma unidade Airbnb.")
             return
@@ -651,7 +657,40 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         (`responsavel_desconto_preco_id`) vêm do
         formulário da Zona 1 desse modal; se não houver desconto, o
         modal chama o método com os valores por omissão.
+
+        v1.9.0: protegido contra duplo envio — enquanto grava, e até o
+        utilizador fechar o aviso final, um novo "Registar" é ignorado.
         """
+        if self._a_gravar:
+            return
+
+        self._a_gravar = True
+        try:
+            self._gravar_reserva(
+                data_inicio,
+                data_fim,
+                preco_praticado,
+                responsavel_desconto_preco_id,
+                check_in_tardio,
+                hora_chegada,
+                multa_praticada,
+            )
+        finally:
+            if self.winfo_exists():
+                self._a_gravar = False
+
+    def _gravar_reserva(
+        self,
+        data_inicio,
+        data_fim,
+        preco_praticado,
+        responsavel_desconto_preco_id,
+        check_in_tardio,
+        hora_chegada,
+        multa_praticada,
+    ):
+        """O trabalho do `_gravar`: regista a reserva, gera o Rol e
+        mostra o resultado."""
         unidade = self.unidade_selecionada
 
         if unidade is None:
