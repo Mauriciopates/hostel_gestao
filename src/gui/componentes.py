@@ -247,6 +247,26 @@ class BarraLateral(ctk.CTkFrame):
             command=controlador.trocar_utilizador,
         ).pack(side="bottom", fill="x", padx=10, pady=(4, 0))
 
+        # ÁREA DOS ITENS COM SCROLL (06/10/2026): com o Master e o item
+        # "Pré check-ins" (F5) os itens deixaram de caber numa janela
+        # que não esteja maximizada — o rodapé tem prioridade no pack e
+        # o último item ("Configurações") ficava cortado. Os itens vão
+        # para dentro de um CTkScrollableFrame: se não couberem, a lista
+        # rola com a roda do rato. A barra de scroll tem a cor do fundo
+        # e só aparece ao passar o rato (AZUL_CLARO). `width=130` (+ a
+        # barra) mantém a largura de antes — sem ele o frame pedia os
+        # 200 px por omissão e alargava a sidebar.
+        area_itens = ctk.CTkScrollableFrame(
+            self,
+            width=130,
+            fg_color="transparent",
+            corner_radius=0,
+            scrollbar_fg_color="transparent",
+            scrollbar_button_color=tema.NAVY_ESCURO,
+            scrollbar_button_hover_color=tema.AZUL_CLARO,
+        )
+        area_itens.pack(fill="both", expand=True)
+
         # =============================================================
         # ITENS da navegação
         #
@@ -270,7 +290,7 @@ class BarraLateral(ctk.CTkFrame):
                 # esquerda, o que lê melhor do que alinhado ao
                 # pixel).
                 ctk.CTkLabel(
-                    self,
+                    area_itens,
                     text=item["texto"].upper(),
                     text_color=tema.COR_TEXTO_SIDEBAR_SECAO,
                     font=ctk.CTkFont(size=10, weight="bold"),
@@ -278,7 +298,7 @@ class BarraLateral(ctk.CTkFrame):
                 ).pack(fill="x", padx=14, pady=(8, 2))
             else:
                 botao = ctk.CTkButton(
-                    self,
+                    area_itens,
                     text=item["texto"],
                     fg_color="transparent",
                     text_color=tema.COR_TEXTO_SIDEBAR,
