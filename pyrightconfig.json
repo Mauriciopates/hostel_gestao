@@ -1,0 +1,6 @@
+{
+  "executionEnvironments": [
+    { "root": "api", "extraPaths": ["api"] },
+    { "root": ".", "extraPaths": ["src"] }
+  ]
+}
