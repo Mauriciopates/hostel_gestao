@@ -890,7 +890,7 @@ class _NovoQuartoModal(ctk.CTkToplevel):
         self.campo_nome = ctk.CTkEntry(
             self,
             corner_radius=tema.RAIO_CAMPO,
-            placeholder_text="ex.: Quarto 3 — Vista Jardim",
+            placeholder_text="ex.: Quarto 3 Vista Jardim",
         )
         self.campo_nome.pack(fill="x", padx=24, pady=(2, 12))
 
@@ -903,10 +903,10 @@ class _NovoQuartoModal(ctk.CTkToplevel):
 
         self.combo_privativo = componentes.Seletor(
             self,
-            values=["Não — partilhado", "Sim — privativo"],
+            values=["Não, partilhado", "Sim, privativo"],
             corner_radius=tema.RAIO_CAMPO,
         )
-        self.combo_privativo.set("Não — partilhado")
+        self.combo_privativo.set("Não, partilhado")
         self.combo_privativo.pack(fill="x", padx=24, pady=(2, 12))
 
         ctk.CTkLabel(
@@ -955,7 +955,7 @@ class _NovoQuartoModal(ctk.CTkToplevel):
         self.campo_nome.focus_set()
 
     def _criar(self):
-        privativo = self.combo_privativo.get() == "Sim — privativo"
+        privativo = self.combo_privativo.get() == "Sim, privativo"
         limpeza_incluida = self.combo_limpeza.get() == "Sim"
 
         try:
@@ -1119,7 +1119,7 @@ class _NovoLugarModal(ctk.CTkToplevel):
         self.campo_nome = ctk.CTkEntry(
             self.corpo,
             corner_radius=tema.RAIO_CAMPO,
-            placeholder_text="ex.: Cama 3 — janela",
+            placeholder_text="ex.: Cama 3 junto à janela",
         )
         self.campo_nome.pack(fill="x", padx=24, pady=(2, 12))
 
@@ -1472,11 +1472,11 @@ class _EditarQuartoModal(ctk.CTkToplevel):
 
         self.combo_privativo = componentes.Seletor(
             self,
-            values=["Não — partilhado", "Sim — privativo"],
+            values=["Não, partilhado", "Sim, privativo"],
             corner_radius=tema.RAIO_CAMPO,
         )
         self.combo_privativo.set(
-            "Sim — privativo" if quarto["privativo"] else "Não — partilhado"
+            "Sim, privativo" if quarto["privativo"] else "Não, partilhado"
         )
         self.combo_privativo.pack(fill="x", padx=24, pady=(2, 12))
 
@@ -1524,7 +1524,7 @@ class _EditarQuartoModal(ctk.CTkToplevel):
         ).pack(side="right")
 
     def _guardar(self):
-        privativo = self.combo_privativo.get() == "Sim — privativo"
+        privativo = self.combo_privativo.get() == "Sim, privativo"
         limpeza_incluida = self.combo_limpeza.get() == "Sim"
 
         try:

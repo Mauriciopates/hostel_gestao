@@ -325,7 +325,7 @@ class RegrasRol(ctk.CTkFrame):
 
         if not regras:
             componentes.Etiqueta(
-                corpo, "Nada — esta cama não recebe roupa", estilo="aviso"
+                corpo, "Nada, esta cama não recebe roupa", estilo="aviso"
             ).pack(anchor="w")
             return
 

@@ -10,7 +10,12 @@ apresentação — tabelas, gráficos, exportação.
 O relatório é o "Opção 1" definido no handoff original:
 um número final só.
 
-    Receita − Descontos − Custos = Resultado Líquido
+    Receita recebida − Despesas = Resultado Líquido
+
+(revisão de 07/10/2026, v1.11.1: a receita já vem líquida de
+descontos — é o valor praticado. Subtrair os descontos outra vez
+contava-os duas vezes. O desconto passa a ser só informativo e
+mostra-se ao lado da "Receita de tabela" = recebida + descontos.)
 
 O utilizador não vê COGS e despesas operacionais separados — as
 duas origens continuam distintas na base de dados, mas somam-se
@@ -28,7 +33,9 @@ DECISÕES DE NEGÓCIO (fechadas na sessão de 19/09/2026):
     receita (mensal = meses × (renda_calculada −
     renda_praticada); airbnb = rateio × (preco_calculado −
     preco_praticado) + rateio × (multa_calculada −
-    multa_praticada)).
+    multa_praticada)). Nunca negativo (v1.11.1): um valor
+    praticado ACIMA da tabela dá desconto 0, não um desconto
+    negativo — ver `_desconto`.
   - Mês parcial conta como mês inteiro se o contrato vigorou em
     qualquer dia desse mês. Sem rateio de dias, sem
     arredondamentos.
@@ -369,7 +376,7 @@ def _valores_da_ocupacao_no_periodo(
 
       - Mensal: `receita = meses_vigorados × renda_praticada`,
         `desconto = meses_vigorados × (renda_calculada −
-        renda_praticada)`. `meses_vigorados` é o que
+        renda_praticada)`, nunca negativo. `meses_vigorados` é o que
         `_meses_de_vigencia_no_periodo` devolveu.
 
       - Airbnb: `receita = ratear(preco_praticado,
@@ -389,8 +396,8 @@ def _valores_da_ocupacao_no_periodo(
             return Decimal("0.00"), Decimal("0.00")
 
         receita = mensal["renda_praticada"] * meses_vigorados
-        desconto = (
-            mensal["renda_calculada"] - mensal["renda_praticada"]
+        desconto = _desconto(
+            mensal["renda_calculada"], mensal["renda_praticada"]
         ) * meses_vigorados
 
         return (
@@ -410,16 +417,26 @@ def _valores_da_ocupacao_no_periodo(
     )
 
     desconto = _ratear(
-        airbnb["preco_calculado"] - airbnb["preco_praticado"],
+        _desconto(airbnb["preco_calculado"], airbnb["preco_praticado"]),
         noites_periodo,
         noites_totais,
     ) + _ratear(
-        airbnb["multa_calculada"] - airbnb["multa_praticada"],
+        _desconto(airbnb["multa_calculada"], airbnb["multa_praticada"]),
         noites_periodo,
         noites_totais,
     )
 
     return receita, desconto
+
+
+def _desconto(calculado, praticado):
+    """Devolve `calculado − praticado`, nunca abaixo de zero.
+
+    Um preço praticado acima do de tabela não é um desconto — é
+    receita a mais, que já está na receita recebida. Sem este
+    limite aparecia um desconto negativo (o "--150" do relatório).
+    """
+    return max(calculado - praticado, Decimal("0.00"))
 
 
 def _detalhes_da_ocupacao(ocupacao):
@@ -733,13 +750,18 @@ def resultado(data_inicio, data_fim):
     A estrutura devolvida:
 
         {
-            "receita": Decimal(...),           # mensal + airbnb
+            "receita": Decimal(...),           # recebida (praticada)
             "descontos": Decimal(...),          # mensal + airbnb
+            "receita_tabela": Decimal(...),     # receita + descontos
             "despesas_operacionais": Decimal(...),
-            # receita − descontos − despesas
+            # receita recebida − despesas
             "resultado_liquido": Decimal(...),
             "cogs_quantidade": int,             # NÃO entra no resultado
         }
+
+    Os cartões do relatório leem-se como uma conta que fecha:
+    Receita de tabela − Descontos − Despesas = Resultado, porque
+    Receita de tabela − Descontos é a receita recebida.
 
     COGS fica fora do cálculo do resultado — é reportado em
     quantidade, à parte, porque a tabela `produtos` não tem preço
@@ -761,6 +783,10 @@ def resultado(data_inicio, data_fim):
     Não há aqui rateio nem regra de negócio nova: se uma regra
     mudar, muda nas funções do Bloco 2 e esta herda. É
     deliberado — uma só fonte de verdade para cada número.
+
+    Até à v1.11.0 o resultado era `receita − descontos −
+    despesas`, mas a `receita` já é a praticada (líquida de
+    desconto): o desconto era tirado duas vezes.
 
     O resultado líquido pode ser negativo (despesas superiores à
     receita) — devolve-se o valor com o sinal, o consumidor é
@@ -788,11 +814,12 @@ def resultado(data_inicio, data_fim):
 
     cogs_quantidade = sum(item["quantidade"] for item in por_produto)
 
-    resultado_liquido = receita - descontos - despesas_operacionais
+    resultado_liquido = receita - despesas_operacionais
 
     return {
         "receita": receita,
         "descontos": descontos,
+        "receita_tabela": receita + descontos,
         "despesas_operacionais": despesas_operacionais,
         "resultado_liquido": resultado_liquido,
         "cogs_quantidade": cogs_quantidade,

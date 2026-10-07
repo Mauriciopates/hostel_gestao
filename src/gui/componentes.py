@@ -1670,7 +1670,7 @@ class Seletor(ctk.CTkOptionMenu):
     Uso — igual ao `CTkOptionMenu`, porque é um:
 
         self.combo_cliente = componentes.Seletor(
-            bloco, values=["—"], width=1, command=self._ao_escolher
+            bloco, values=[""], width=1, command=self._ao_escolher
         )
     """
 

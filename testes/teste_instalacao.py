@@ -65,6 +65,21 @@ class BaseInstalacaoTest(unittest.TestCase):
 
 class TesteDiagnosticar(BaseInstalacaoTest):
 
+    def teste_sem_ficheiro_do_esquema_da_erro_e_nao_rebenta(self):
+        """v1.11.1: sem src/bd/esquema.sql devolve ERRO com o caminho,
+        em vez de levantar FileNotFoundError."""
+        original = config.FICHEIRO_ESQUEMA
+        config.FICHEIRO_ESQUEMA = original.with_name("nao_existe.sql")
+        try:
+            estado, texto, em_falta = self._diagnosticar()
+        finally:
+            config.FICHEIRO_ESQUEMA = original
+
+        self.assertEqual(instalacao.ERRO, estado)
+        self.assertIn("nao_existe.sql", texto)
+        self.assertEqual([], em_falta)
+        self.assertFalse(instalacao.pode_preparar(estado))
+
     def teste_base_inexistente(self):
         estado, texto, em_falta = self._diagnosticar()
 

@@ -243,7 +243,7 @@ class _ConfirmacaoAirbnb(ctk.CTkToplevel):
         ).pack(fill="x", pady=(12, 2))
 
         self.responsaveis_disponiveis = responsaveis.listar()
-        nomes = ["— Escolher —"] + [
+        nomes = ["Escolher"] + [
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
 

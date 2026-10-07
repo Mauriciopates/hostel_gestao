@@ -3,6 +3,67 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [1.11.1] — 2026-10-07
+
+Revisão com a colega de turma, Bloco 1 (branch `revisao`): contas do
+relatório Resultado, negativos a vermelho, NIF dos fornecedores e
+pequenas correções de ecrã. Sem migrações.
+
+### Corrigido
+
+- **Desconto nunca negativo** — `financeiro._desconto`: desconto =
+  tabela − praticado, com mínimo 0. Um preço praticado acima da
+  tabela dava um desconto negativo, que o relatório mostrava como
+  "--150 €". Vale para a renda mensal e para o preço e a multa Airbnb.
+- **Resultado sem o desconto a dobrar** — `financeiro.resultado`: o
+  resultado é agora receita recebida − despesas. A receita já é a
+  praticada (líquida de desconto); até aqui o desconto era subtraído
+  outra vez. Nova chave `receita_tabela` (= recebida + descontos).
+- **Erro a ler o esquema** — `instalacao.diagnosticar`: sem o
+  `bd/esquema.sql` devolve ERRO com o caminho do ficheiro e "volte a
+  instalar a aplicação", em vez de "Unhandled exception" no arranque.
+- **NIF dos fornecedores validado** — `despesas.criar_fornecedor` e
+  `atualizar_fornecedor` usam `validacoes.nif_valido` (vazio continua
+  aceite; o NIF é opcional).
+- **Novo contrato mensal** — depois de criar, o popup fecha e a lista
+  é atualizada (antes limpava o formulário e ficava aberto).
+  `NovoContratoMensal` ganhou `ao_criar`.
+
+### Alterado
+
+- **Relatório Resultado** — cartões Receita de tabela · Descontos (−)
+  · Despesas (−) · Resultado, que fecham a conta. A tabela mostra
+  também a receita recebida (total, mensal e Airbnb). Descontos e
+  despesas vão com sinal negativo para a tabela e para a exportação.
+- **Dashboard Financeiro** — "Receita recebida"; a percentagem dos
+  descontos é sobre a receita de tabela; subtítulo "receita recebida
+  − despesas".
+- **Negativos a vermelho em todos os relatórios** — no ecrã
+  (`gui_relat_comum.cor_valor`), no PDF (`pdf._e_negativo`) e no
+  Excel (já estava). Descontos por unidade/propriedade passam a
+  valores negativos (`gui_relat_comum.simetrico`, sem "-0,00").
+- **Sem travessões em exemplos e opções** — "Nenhum", "Escolher",
+  "Sem clientes", "Sim, privativo", "ex.: Quarto 3 Vista Jardim", etc.
+  Os títulos de janela, as mensagens e o "—" das células vazias
+  ficam.
+- **CSV sem perguntar o separador** — usa o separador de listas do
+  Windows (`impressao.csv.separador_do_sistema`, registo
+  `Control Panel\International\sList`); fora do Windows ou sem a
+  chave, ";". O modal `_perguntar_separador_csv` saiu.
+
+### Testes
+
+- `teste_financeiro`: `test_resultado_com_desconto` espera 200 (era
+  150); o caso negativo espera −400 (era −550); estrutura com seis
+  chaves; novos `test_desconto_mensal_nunca_negativo`,
+  `test_desconto_airbnb_nunca_negativo`,
+  `test_resultado_renda_acima_da_tabela_desconto_zero`.
+- `teste_despesas`: NIF inválido no criar/atualizar, NIF vazio, limpar
+  NIF (o teste antigo usava 500123456, que não é válido).
+- `teste_instalacao`: sem o ficheiro do esquema → ERRO.
+- `teste_impressao`: CSV com o separador do sistema; leitura do
+  registo com um `winreg` falso.
+
 ## [1.11.0] — 2026-10-07
 
 Pré check-in pelos hóspedes: API na VM, site público, caixa de entrada

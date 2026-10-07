@@ -698,7 +698,7 @@ class _ConfirmarForcarModal(ctk.CTkToplevel):
         ).pack(anchor="w", padx=20)
 
         self.responsaveis_disponiveis = responsaveis.listar()
-        nomes = ["— Nenhum —"] + [
+        nomes = ["Nenhum"] + [
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
         self.combo_responsavel = componentes.Seletor(self, values=nomes)

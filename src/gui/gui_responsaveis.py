@@ -1278,7 +1278,7 @@ class UnidadesDoResponsavelModal(ctk.CTkToplevel):
 
         self.combo_unidade = componentes.Seletor(
             barra,
-            values=["—"],
+            values=[""],
             width=300,
             corner_radius=tema.RAIO_CAMPO,
         )
@@ -1372,9 +1372,9 @@ class UnidadesDoResponsavelModal(ctk.CTkToplevel):
             self.combo_unidade.set(rotulos[0])
         else:
             self.combo_unidade.configure(
-                values=["— Sem unidades disponíveis —"], state="disabled"
+                values=["Sem unidades disponíveis"], state="disabled"
             )
-            self.combo_unidade.set("— Sem unidades disponíveis —")
+            self.combo_unidade.set("Sem unidades disponíveis")
 
     def _desenhar_gerida(self, unidade, tingida):
         linha = ctk.CTkFrame(

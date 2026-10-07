@@ -672,6 +672,46 @@ class TesteReceita(BaseMySQLTest):
         self.assertEqual(resultado[0]["receita"], Decimal("600.00"))
         self.assertEqual(resultado[0]["desconto"], Decimal("150.00"))
 
+    def test_desconto_mensal_nunca_negativo(self):
+        """Renda praticada acima da tabela → desconto 0, não −50."""
+        _criar_contrato_mensal(
+            self.unidade_mensal["id"],
+            self.cliente_mensal["id"],
+            date(2026, 1, 1),
+            renda="300.00",
+            data_fim=date(2026, 2, 1),
+        )
+
+        resultado = financeiro.receita_por_unidade(
+            date(2026, 1, 1), date(2026, 2, 1)
+        )
+
+        self.assertEqual(resultado[0]["receita"], Decimal("300.00"))
+        self.assertEqual(resultado[0]["desconto"], Decimal("0.00"))
+
+    def test_desconto_airbnb_nunca_negativo(self):
+        """Preço praticado acima do calculado → desconto 0."""
+        unidade = unidades.procurar(self.unidade_airbnb["id"])
+        calculado = contratos.calcular_preco_airbnb(
+            unidade, date(2026, 1, 10), date(2026, 1, 13)
+        )
+        _criar_reserva_airbnb(
+            self.unidade_airbnb["id"],
+            self.cliente_airbnb["id"],
+            date(2026, 1, 10),
+            date(2026, 1, 13),
+            preco=calculado + Decimal("150.00"),
+        )
+
+        resultado = financeiro.receita_por_unidade(
+            date(2026, 1, 1), date(2026, 2, 1)
+        )
+
+        self.assertEqual(
+            resultado[0]["receita"], calculado + Decimal("150.00")
+        )
+        self.assertEqual(resultado[0]["desconto"], Decimal("0.00"))
+
     # -- receita airbnb -----------------------------------------------
 
     def test_receita_airbnb_total_dentro_do_periodo(self):
@@ -1255,7 +1295,7 @@ class TesteResultado(BaseMySQLTest):
         self.assertEqual(r["resultado_liquido"], Decimal("0.00"))
         self.assertEqual(r["cogs_quantidade"], 0)
 
-    def test_resultado_estrutura_tem_cinco_chaves(self):
+    def test_resultado_estrutura_tem_seis_chaves(self):
         r = financeiro.resultado(date(2026, 1, 1), date(2026, 2, 1))
 
         self.assertEqual(
@@ -1263,6 +1303,7 @@ class TesteResultado(BaseMySQLTest):
             {
                 "receita",
                 "descontos",
+                "receita_tabela",
                 "despesas_operacionais",
                 "resultado_liquido",
                 "cogs_quantidade",
@@ -1270,7 +1311,7 @@ class TesteResultado(BaseMySQLTest):
         )
 
     def test_resultado_receita_so(self):
-        """Sem despesas, o resultado líquido = receita − descontos."""
+        """Sem despesas nem descontos, resultado líquido = receita."""
         _criar_contrato_mensal(
             self.unidade["id"],
             self.cliente["id"],
@@ -1302,7 +1343,9 @@ class TesteResultado(BaseMySQLTest):
         self.assertEqual(r["resultado_liquido"], Decimal("220.00"))
 
     def test_resultado_com_desconto(self):
-        """O desconto entra na conta final: receita − descontos."""
+        """A receita já é a praticada (líquida de desconto): o
+        desconto NÃO volta a ser subtraído (v1.11.1). Receita de
+        tabela 250 − desconto 50 = recebida 200 = resultado."""
         _criar_contrato_mensal_com_desconto(
             self.unidade["id"],
             self.cliente["id"],
@@ -1317,21 +1360,18 @@ class TesteResultado(BaseMySQLTest):
 
         self.assertEqual(r["receita"], Decimal("200.00"))
         self.assertEqual(r["descontos"], Decimal("50.00"))
-        self.assertEqual(r["resultado_liquido"], Decimal("150.00"))
+        self.assertEqual(r["receita_tabela"], Decimal("250.00"))
+        self.assertEqual(r["resultado_liquido"], Decimal("200.00"))
 
     def test_resultado_negativo_quando_despesas_superam_receita(self):
-        """Caso com desconto E despesa alta, para confirmar que a
-        fórmula do `resultado` subtrai os dois.
+        """Caso com desconto E despesa alta.
 
         Renda praticada 100, calculada 250 → desconto 150.
         Despesa 500.
 
-        Conta final: 100 − 150 − 500 = −550.
-
-        O desconto entra na conta como valor a subtrair, não como
-        mera informação — foi o que a primeira versão deste teste
-        assumiu mal (esperava -400, como se o desconto não
-        contasse).
+        Conta final (v1.11.1): recebida 100 − despesas 500 = −400.
+        O desconto já está dentro dos 100 recebidos — até à 1.11.0
+        era subtraído outra vez e dava −550.
         """
         _criar_contrato_mensal_com_desconto(
             self.unidade["id"],
@@ -1352,7 +1392,25 @@ class TesteResultado(BaseMySQLTest):
         self.assertEqual(r["receita"], Decimal("100.00"))
         self.assertEqual(r["descontos"], Decimal("150.00"))
         self.assertEqual(r["despesas_operacionais"], Decimal("500.00"))
-        self.assertEqual(r["resultado_liquido"], Decimal("-550.00"))
+        self.assertEqual(r["resultado_liquido"], Decimal("-400.00"))
+
+    def test_resultado_renda_acima_da_tabela_desconto_zero(self):
+        """Renda praticada 300 com tabela 250: desconto 0 (nunca
+        negativo) e o resultado é o recebido."""
+        _criar_contrato_mensal(
+            self.unidade["id"],
+            self.cliente["id"],
+            date(2026, 1, 1),
+            renda="300.00",
+            data_fim=date(2026, 2, 1),
+        )
+
+        r = financeiro.resultado(date(2026, 1, 1), date(2026, 2, 1))
+
+        self.assertEqual(r["receita"], Decimal("300.00"))
+        self.assertEqual(r["descontos"], Decimal("0.00"))
+        self.assertEqual(r["receita_tabela"], Decimal("300.00"))
+        self.assertEqual(r["resultado_liquido"], Decimal("300.00"))
 
     def test_resultado_cogs_quantidade_soma_saidas(self):
         produto = estoque.criar_produto("Lixívia", "L")

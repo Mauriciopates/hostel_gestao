@@ -77,6 +77,7 @@ import estoque
 import repositorio
 import responsaveis
 import utilizadores
+import validacoes
 
 # Prefixos dos IDs — mesma convenção dos outros módulos (PRD, MOV,
 # REQ, DEV, CNT, RSV, RES...). DSP = despesa, IDP = item de despesa,
@@ -560,7 +561,7 @@ def criar_fornecedor(nome, autor, contacto="", nif=""):
     O nome é obrigatório. `contacto` (telefone/email) e `nif` são
     opcionais — nem todos os fornecedores têm NIF conhecido no
     momento do cadastro (mesma lógica de `propriedades.criar` com
-    o IBAN).
+    o IBAN). Um NIF preenchido tem de ser válido (v1.11.1).
 
     Devolve o registo criado.
     """
@@ -571,16 +572,29 @@ def criar_fornecedor(nome, autor, contacto="", nif=""):
     if not nome:
         raise ValueError("O nome do fornecedor é obrigatório.")
 
+    nif = _validar_nif_fornecedor(nif)
+
     fornecedor = {
         "id": repositorio.proximo_id(PREFIXO_FORNECEDOR),
         "nome": nome,
         "contacto": contacto.strip(),
-        "nif": nif.strip(),
+        "nif": nif,
         "ativo": True,
     }
 
     repositorio.inserir_fornecedor(fornecedor)
     return fornecedor
+
+
+def _validar_nif_fornecedor(nif):
+    """Devolve o NIF sem espaços nas pontas. Vazio é aceite (o NIF é
+    opcional); preenchido tem de passar o dígito de controlo — a
+    mesma regra dos clientes (`validacoes.nif_valido`). Revisão de
+    07/10/2026: antes gravava-se qualquer texto."""
+    nif = nif.strip()
+    if nif and not validacoes.nif_valido(nif):
+        raise ValueError(f"NIF inválido: {nif}")
+    return nif
 
 
 def atualizar_fornecedor(
@@ -613,7 +627,7 @@ def atualizar_fornecedor(
         campos["contacto"] = contacto.strip()
 
     if nif is not None:
-        campos["nif"] = nif.strip()
+        campos["nif"] = _validar_nif_fornecedor(nif)
 
     if campos:
         repositorio.atualizar_fornecedor(fornecedor_id, campos)

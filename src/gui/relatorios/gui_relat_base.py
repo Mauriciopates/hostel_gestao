@@ -846,11 +846,8 @@ class RelatorioBase(ctk.CTkToplevel):
 
         try:
             if formato == "csv":
-                separador = _perguntar_separador_csv(self)
-                if separador is None:
-                    # Utilizador cancelou — não gera nada.
-                    return
-
+                # Sem perguntar (v1.11.1): o separador é o de listas
+                # do Windows, o mesmo que o Excel usa ao abrir o CSV.
                 caminho = impressao.gerar_relatorio_csv(
                     titulo=titulo,
                     colunas=colunas,
@@ -859,7 +856,6 @@ class RelatorioBase(ctk.CTkToplevel):
                     relatorio_id=relatorio_id,
                     data_inicio=inicio,
                     data_fim=fim,
-                    separador=separador,
                 )
             elif formato == "pdf":
                 caminho = impressao.gerar_relatorio_pdf(
@@ -922,93 +918,3 @@ class RelatorioBase(ctk.CTkToplevel):
                 subprocess.Popen(["xdg-open", str(caminho)])
         except (FileNotFoundError, OSError):
             pass
-
-
-def _perguntar_separador_csv(janela_pai):
-    """Pergunta ao utilizador qual separador usar no CSV.
-
-    Abre um modal pequeno, no estilo do projeto, com duas opções:
-    "Ponto e vírgula (;)" (por omissão — o que o Excel em PT-PT
-    costuma abrir corretamente) ou "Vírgula (,)" (para instalações
-    que preferem a convenção inglesa).
-
-    Devolve `";"`, `","` ou `None` se o utilizador cancelar.
-
-    O modal é `CTkToplevel`, bloqueante (`wait_window`), para o
-    `_exportar` poder ler o resultado depois de o utilizador
-    escolher. Fecha pela X nativa ou pelo botão Cancelar.
-    """
-    resultado = {"separador": None}
-
-    janela = ctk.CTkToplevel(janela_pai)
-    janela.title("Separador do CSV")
-    janela.geometry("380x230")
-    janela.resizable(False, False)
-    janela.configure(fg_color=tema.COR_FUNDO)
-    janela.transient(janela_pai)
-    componentes.colocar_no_topo(janela)
-
-    ctk.CTkLabel(
-        janela,
-        text="Separador do ficheiro CSV",
-        text_color=tema.COR_TEXTO,
-        font=ctk.CTkFont(size=14, weight="bold"),
-    ).pack(anchor="w", padx=20, pady=(18, 4))
-
-    ctk.CTkLabel(
-        janela,
-        text=(
-            "Ponto e vírgula é o que o Excel em PT-PT costuma "
-            "abrir corretamente. Vírgula é a convenção inglesa — "
-            "usa se o teu Excel abrir tudo na mesma coluna."
-        ),
-        text_color=tema.COR_TEXTO_SECUNDARIO,
-        font=ctk.CTkFont(size=10),
-        justify="left",
-        wraplength=330,
-        anchor="w",
-    ).pack(fill="x", padx=20, pady=(0, 12))
-
-    def escolher(valor):
-        resultado["separador"] = valor
-        janela.destroy()
-
-    ctk.CTkButton(
-        janela,
-        text="Ponto e vírgula ( ; )",
-        height=34,
-        corner_radius=tema.RAIO_BOTAO,
-        fg_color=tema.AZUL_PRINCIPAL,
-        hover_color=tema.AZUL_CLARO,
-        font=ctk.CTkFont(size=11, weight="bold"),
-        command=lambda: escolher(";"),
-    ).pack(fill="x", padx=20, pady=4)
-
-    ctk.CTkButton(
-        janela,
-        text="Vírgula ( , )",
-        height=34,
-        corner_radius=tema.RAIO_BOTAO,
-        fg_color="transparent",
-        border_width=1,
-        border_color=tema.COR_BORDA,
-        text_color=tema.COR_TEXTO,
-        hover_color=tema.COR_BORDA,
-        font=ctk.CTkFont(size=11),
-        command=lambda: escolher(","),
-    ).pack(fill="x", padx=20, pady=4)
-
-    ctk.CTkButton(
-        janela,
-        text="Cancelar",
-        height=28,
-        corner_radius=tema.RAIO_BOTAO,
-        fg_color="transparent",
-        text_color=tema.COR_TEXTO_SECUNDARIO,
-        hover_color=tema.COR_BORDA,
-        font=ctk.CTkFont(size=10),
-        command=janela.destroy,
-    ).pack(fill="x", padx=20, pady=(8, 14))
-
-    janela.wait_window()
-    return resultado["separador"]

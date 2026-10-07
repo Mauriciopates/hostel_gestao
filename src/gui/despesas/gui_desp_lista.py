@@ -631,7 +631,7 @@ class _EditarDespesaModal(ctk.CTkToplevel):
             anchor="w",
         ).pack(fill="x")
         self.combo_categoria = componentes.Seletor(
-            bloco_cat, values=["—"], corner_radius=tema.RAIO_CAMPO
+            bloco_cat, values=[""], corner_radius=tema.RAIO_CAMPO
         )
         self.combo_categoria.pack(fill="x", pady=(2, 0))
 
@@ -645,7 +645,7 @@ class _EditarDespesaModal(ctk.CTkToplevel):
             anchor="w",
         ).pack(fill="x")
         self.combo_fornecedor = componentes.Seletor(
-            bloco_forn, values=["— Nenhum —"], corner_radius=tema.RAIO_CAMPO
+            bloco_forn, values=["Nenhum"], corner_radius=tema.RAIO_CAMPO
         )
         self.combo_fornecedor.pack(fill="x", pady=(2, 0))
 
@@ -756,7 +756,7 @@ class _EditarDespesaModal(ctk.CTkToplevel):
             for c in despesas.listar_categorias()
             if c["nome"] != "Compra de Stock"
         ]
-        nomes_cat = [c["nome"] for c in self._categorias] or ["—"]
+        nomes_cat = [c["nome"] for c in self._categorias] or ["Sem categorias"]
         self.combo_categoria.configure(values=nomes_cat)
 
         cat_atual = None
@@ -767,10 +767,10 @@ class _EditarDespesaModal(ctk.CTkToplevel):
         self.combo_categoria.set(cat_atual or nomes_cat[0])
 
         self._fornecedores = despesas.listar_fornecedores()
-        nomes_forn = ["— Nenhum —"] + [f["nome"] for f in self._fornecedores]
+        nomes_forn = ["Nenhum"] + [f["nome"] for f in self._fornecedores]
         self.combo_fornecedor.configure(values=nomes_forn)
 
-        forn_atual = "— Nenhum —"
+        forn_atual = "Nenhum"
         if self.despesa["fornecedor_id"]:
             for f in self._fornecedores:
                 if f["id"] == self.despesa["fornecedor_id"]:
@@ -787,7 +787,7 @@ class _EditarDespesaModal(ctk.CTkToplevel):
 
     def _id_fornecedor(self):
         nome = self.combo_fornecedor.get()
-        if nome == "— Nenhum —":
+        if nome == "Nenhum":
             return ""
         for f in self._fornecedores:
             if f["nome"] == nome:

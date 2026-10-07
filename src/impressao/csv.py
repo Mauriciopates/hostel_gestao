@@ -22,6 +22,42 @@ import csv
 
 from . import base
 
+# Separador usado quando o sistema não diz qual é (fora do Windows,
+# ou sem a chave no registo). É o do Windows em PT-PT.
+SEPARADOR_POR_OMISSAO = ";"
+
+_SEPARADORES_ACEITES = (";", ",")
+
+
+def separador_do_sistema():
+    """Devolve o separador de listas do Windows (Definições → Hora e
+    idioma → Região: o mesmo que o Excel usa para abrir um CSV com
+    duplo clique), ou ";" se não o conseguir ler.
+
+    Revisão de 07/10/2026 (v1.11.1): a exportação deixou de
+    perguntar o separador — a pergunta obrigava o utilizador a saber
+    uma coisa técnica, e o Windows já sabe a resposta.
+
+    Lê `HKEY_CURRENT_USER\\Control Panel\\International\\sList`. Só
+    aceita ";" ou ","; qualquer outro valor (ou erro) dá ";".
+    """
+    try:
+        import winreg
+    except ImportError:  # não é Windows
+        return SEPARADOR_POR_OMISSAO
+
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, r"Control Panel\International"
+        ) as chave:
+            valor, _ = winreg.QueryValueEx(chave, "sList")
+    except OSError:
+        return SEPARADOR_POR_OMISSAO
+
+    if valor in _SEPARADORES_ACEITES:
+        return valor
+    return SEPARADOR_POR_OMISSAO
+
 
 def gerar_relatorio_csv(
     titulo,
@@ -31,7 +67,7 @@ def gerar_relatorio_csv(
     relatorio_id,
     data_inicio,
     data_fim,
-    separador=";",
+    separador=None,
 ):
     """Gera um CSV com o conteúdo de um relatório.
 
@@ -47,11 +83,10 @@ def gerar_relatorio_csv(
       - `relatorio_id`: id do relatório ('resultado', etc.).
       - `data_inicio`: `date` — primeira data do período.
       - `data_fim`:   `date` — última data do período (inclusiva).
-      - `separador`:  `";"` (por omissão) ou `","`. Quem chama
-                      decide — o Excel em PT-PT costuma abrir `;`
-                      corretamente, mas há instalações que
-                      preferem `,`. A interface pergunta antes de
-                      gerar.
+      - `separador`:  `";"` ou `","`. Por omissão (None) usa o
+                      separador de listas do Windows
+                      (`separador_do_sistema`), o mesmo que o
+                      Excel usa ao abrir o ficheiro (v1.11.1).
 
     Devolve o `Path` do ficheiro gerado.
 
@@ -69,7 +104,10 @@ def gerar_relatorio_csv(
       - `str`: tal e qual.
       - `None`: string vazia.
     """
-    if separador not in (";", ","):
+    if separador is None:
+        separador = separador_do_sistema()
+
+    if separador not in _SEPARADORES_ACEITES:
         raise ValueError(
             f"Separador inválido: {separador!r}. Usa ';' ou ','."
         )

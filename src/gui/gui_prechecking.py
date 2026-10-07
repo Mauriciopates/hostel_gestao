@@ -115,7 +115,7 @@ class GerarLinkModal(ctk.CTkToplevel):
         self._leitura(grelha, 0, 0, "Alojamento", self.dados["unidade"])
         self._leitura(
             grelha, 0, 1, "Morada (da propriedade)",
-            self.dados["morada"] or "— sem morada —",
+            self.dados["morada"] or "(sem morada)",
         )
         self._leitura(
             grelha, 1, 0, "Entrada",

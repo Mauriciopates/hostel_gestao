@@ -40,7 +40,7 @@ REESTRUTURAÇÃO 13/09/2026 (ronda 3 — aprovada por mockup HTML):
 
 - `_atualizar_resumo` passa a atualizar também o rótulo "Preço
   calculado" dentro do cartão Estadia (antes só mexia no resumo —
-  o rótulo ficava sempre a dizer "— (escolhe as datas)" mesmo
+  o rótulo ficava sempre a dizer "(escolhe as datas)" mesmo
   com as datas preenchidas).
 
 CORREÇÃO — fecho do popup de Nova Reserva depois de registar. O
@@ -773,7 +773,7 @@ class _ImprimirContratoModal(ctk.CTkToplevel):
         ).pack(anchor="w", padx=24)
 
         self.responsaveis_disponiveis = responsaveis.listar()
-        nomes = ["— Escolher responsável —"] + [
+        nomes = ["Escolher responsável"] + [
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
         self.combo_senhorio = componentes.Seletor(

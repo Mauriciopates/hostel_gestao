@@ -101,7 +101,7 @@ class NovaDespesaStockModal(ctk.CTkToplevel):
         self.campo_descricao = self._campo_texto(
             area,
             "Descrição *",
-            "ex.: Compra de lixívias e detergentes — setembro",
+            "ex.: Compra de lixívias e detergentes de setembro",
         )
 
         linha = ctk.CTkFrame(area, fg_color="transparent")
@@ -148,10 +148,10 @@ class NovaDespesaStockModal(ctk.CTkToplevel):
         ).pack(fill="x")
         self.combo_fornecedor = componentes.Seletor(
             bloco_forn,
-            values=["— Nenhum —"],
+            values=["Nenhum"],
             corner_radius=tema.RAIO_CAMPO,
         )
-        self.combo_fornecedor.set("— Nenhum —")
+        self.combo_fornecedor.set("Nenhum")
         self.combo_fornecedor.pack(fill="x", pady=(2, 0))
 
         self.campo_data_lancamento = self._campo_texto(
@@ -451,7 +451,7 @@ class NovaDespesaStockModal(ctk.CTkToplevel):
         self._produtos = estoque.listar_produtos()
         self._fornecedores = despesas.listar_fornecedores()
 
-        nomes_forn = ["— Nenhum —"] + [f["nome"] for f in self._fornecedores]
+        nomes_forn = ["Nenhum"] + [f["nome"] for f in self._fornecedores]
         self.combo_fornecedor.configure(values=nomes_forn)
         self.combo_fornecedor.set(nomes_forn[0])
 
@@ -461,7 +461,7 @@ class NovaDespesaStockModal(ctk.CTkToplevel):
 
     def _id_fornecedor(self):
         nome = self.combo_fornecedor.get()
-        if nome == "— Nenhum —":
+        if nome == "Nenhum":
             return None
         for f in self._fornecedores:
             if f["nome"] == nome:

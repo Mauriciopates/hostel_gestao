@@ -602,7 +602,7 @@ class EditarReservaAirbnbModal(ctk.CTkToplevel):
 
         self._linha(corpo, 3, "Responsável do desconto")
         self.combo_responsavel_preco = componentes.Seletor(
-            corpo, values=["— Nenhum —"]
+            corpo, values=["Nenhum"]
         )
         self.combo_responsavel_preco.grid(row=3, column=1, sticky="ew", pady=6)
         ctk.CTkLabel(
@@ -637,7 +637,7 @@ class EditarReservaAirbnbModal(ctk.CTkToplevel):
 
             self._linha(corpo_ct, 2, "Responsável do desconto")
             self.combo_responsavel_multa = componentes.Seletor(
-                corpo_ct, values=["— Nenhum —"]
+                corpo_ct, values=["Nenhum"]
             )
             self.combo_responsavel_multa.grid(
                 row=2, column=1, sticky="ew", pady=6
@@ -744,7 +744,7 @@ class EditarReservaAirbnbModal(ctk.CTkToplevel):
 
     def _recarregar_responsaveis(self):
         self.responsaveis_disponiveis = responsaveis.listar()
-        nomes = ["— Nenhum —"] + [
+        nomes = ["Nenhum"] + [
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
         self.combo_responsavel_preco.configure(values=nomes)

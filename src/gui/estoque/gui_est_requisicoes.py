@@ -1734,7 +1734,7 @@ class NovaRequisicaoModal(ctk.CTkToplevel):
 
         self.combo_responsavel = componentes.Seletor(
             self,
-            values=rotulos or ["— Nenhum —"],
+            values=rotulos or ["Nenhum"],
             corner_radius=tema.RAIO_CAMPO,
         )
         self.combo_responsavel.pack(fill="x", padx=20, pady=(2, 12))
@@ -1748,7 +1748,7 @@ class NovaRequisicaoModal(ctk.CTkToplevel):
         elif rotulos:
             self.combo_responsavel.set(rotulos[0])
         else:
-            self.combo_responsavel.set("— Nenhum —")
+            self.combo_responsavel.set("Nenhum")
 
     def _construir_tabela(self):
         cartao = ctk.CTkFrame(
@@ -2123,7 +2123,7 @@ class RolLavanderiaModal(ctk.CTkToplevel):
         ).pack(fill="x")
         self.combo_recebe = componentes.Seletor(
             coluna_recebe,
-            values=rotulos or ["— Nenhum —"],
+            values=rotulos or ["Nenhum"],
             corner_radius=tema.RAIO_CAMPO,
         )
         self.combo_recebe.pack(fill="x", pady=(2, 0))
@@ -2141,7 +2141,7 @@ class RolLavanderiaModal(ctk.CTkToplevel):
         ).pack(fill="x")
         self.combo_envia = componentes.Seletor(
             coluna_envia,
-            values=rotulos or ["— Nenhum —"],
+            values=rotulos or ["Nenhum"],
             corner_radius=tema.RAIO_CAMPO,
         )
         self.combo_envia.pack(fill="x", pady=(2, 0))
@@ -2156,7 +2156,7 @@ class RolLavanderiaModal(ctk.CTkToplevel):
         elif rotulos:
             self.combo_envia.set(rotulos[-1])
         else:
-            self.combo_envia.set("— Nenhum —")
+            self.combo_envia.set("Nenhum")
 
     def _construir_tabela(self):
         cartao = ctk.CTkFrame(

@@ -36,9 +36,16 @@ _abrir_novo_cliente = gui_cnt_comum.abrir_novo_cliente
 class NovoContratoMensal(ctk.CTkFrame):
     """Formulário de criação de um contrato de arrendamento mensal."""
 
-    def __init__(self, master, controlador, unidade_id=None, lugar_id=None):
+    def __init__(
+        self, master, controlador, unidade_id=None, lugar_id=None,
+        ao_criar=None,
+    ):
         super().__init__(master, fg_color=tema.COR_FUNDO)
         self.controlador = controlador
+        # Chamado depois de criar o contrato (v1.11.1): o popup passa o
+        # seu `_fechar`, que fecha e atualiza a lista. Sem ele, o
+        # formulário limpa-se para o próximo registo, como antes.
+        self.ao_criar = ao_criar
         self.unidade_selecionada = None
         self.lugares_da_unidade = []
         self.lugar_id_pendente = lugar_id
@@ -97,13 +104,13 @@ class NovoContratoMensal(ctk.CTkFrame):
         self._linha(corpo, 0, "Unidade *")
         self.combo_unidade = componentes.Seletor(
             corpo,
-            values=["—"],
+            values=[""],
             command=self._ao_escolher_unidade,
         )
         self.combo_unidade.grid(row=0, column=1, sticky="ew", pady=6)
 
         self._linha(corpo, 1, "Lugar (opcional)")
-        self.combo_lugar = componentes.Seletor(corpo, values=["— Nenhum —"])
+        self.combo_lugar = componentes.Seletor(corpo, values=["Nenhum"])
         self.combo_lugar.grid(row=1, column=1, sticky="ew", pady=6)
 
     def _montar_cartao_cliente(self):
@@ -116,7 +123,7 @@ class NovoContratoMensal(ctk.CTkFrame):
         bloco.grid(row=0, column=1, sticky="ew", pady=6)
         bloco.grid_columnconfigure(0, weight=1)
 
-        self.combo_cliente = componentes.Seletor(bloco, values=["—"], width=1)
+        self.combo_cliente = componentes.Seletor(bloco, values=[""], width=1)
         self.combo_cliente.grid(row=0, column=0, sticky="ew")
 
         ctk.CTkButton(
@@ -155,7 +162,7 @@ class NovoContratoMensal(ctk.CTkFrame):
         self._linha(corpo, 2, "Renda calculada")
         self.rotulo_renda_calculada = ctk.CTkLabel(
             corpo,
-            text="— (escolhe a unidade)",
+            text="(escolhe a unidade)",
             text_color=tema.COR_TEXTO_SECUNDARIO,
             anchor="w",
         )
@@ -169,13 +176,13 @@ class NovoContratoMensal(ctk.CTkFrame):
 
         self._linha(corpo, 4, "Motivo da diferença")
         self.campo_motivo_renda = ctk.CTkEntry(
-            corpo, placeholder_text="opcional — só se a renda for diferente"
+            corpo, placeholder_text="opcional, só se a renda for diferente"
         )
         self.campo_motivo_renda.grid(row=4, column=1, sticky="ew", pady=6)
 
         self._linha(corpo, 5, "Responsável do desconto")
         self.combo_responsavel = componentes.Seletor(
-            corpo, values=["— Nenhum —"]
+            corpo, values=["Nenhum"]
         )
         self.combo_responsavel.grid(row=5, column=1, sticky="ew", pady=6)
         ctk.CTkLabel(
@@ -237,7 +244,7 @@ class NovoContratoMensal(ctk.CTkFrame):
         nomes = [
             f"{u['id']} · {u['propriedade_nome']} - {u['nome']}"
             for u in self.unidades_mensais
-        ] or ["— Sem unidades mensais —"]
+        ] or ["Sem unidades mensais"]
         self.combo_unidade.configure(values=nomes)
 
         alvo = None
@@ -263,7 +270,7 @@ class NovoContratoMensal(ctk.CTkFrame):
         nomes = [
             f"{c['id']} · {c['nome']} (NIF {c['nif'] or '—'})"
             for c in self.clientes_disponiveis
-        ] or ["— Sem clientes —"]
+        ] or ["Sem clientes"]
         self.combo_cliente.configure(values=nomes)
         if self.clientes_disponiveis:
             self.combo_cliente.set(nomes[0])
@@ -283,7 +290,7 @@ class NovoContratoMensal(ctk.CTkFrame):
 
     def _recarregar_responsaveis(self):
         self.responsaveis_disponiveis = responsaveis.listar()
-        nomes = ["— Nenhum —"] + [
+        nomes = ["Nenhum"] + [
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
         self.combo_responsavel.configure(values=nomes)
@@ -296,8 +303,8 @@ class NovoContratoMensal(ctk.CTkFrame):
         if indice >= len(self.unidades_mensais):
             self.unidade_selecionada = None
             self.rotulo_renda_calculada.configure(text="—")
-            self.combo_lugar.configure(values=["— Nenhum —"])
-            self.combo_lugar.set("— Nenhum —")
+            self.combo_lugar.configure(values=["Nenhum"])
+            self.combo_lugar.set("Nenhum")
             return
 
         self.unidade_selecionada = self.unidades_mensais[indice]
@@ -308,7 +315,7 @@ class NovoContratoMensal(ctk.CTkFrame):
 
     def _recarregar_lugares(self):
         self.lugares_da_unidade = []
-        opcoes = ["— Nenhum —"]
+        opcoes = ["Nenhum"]
 
         if self.unidade_selecionada is None:
             self.combo_lugar.configure(values=opcoes)
@@ -443,6 +450,9 @@ class NovoContratoMensal(ctk.CTkFrame):
         self._mostrar_sucesso(
             f"Contrato criado com sucesso: {ocupacao['id']}{aviso}"
         )
+        if self.ao_criar is not None:
+            self.ao_criar()
+            return
         self._limpar_formulario()
 
     def _limpar_formulario(self):
@@ -483,8 +493,11 @@ class NovoContratoModal(ctk.CTkToplevel):
             controlador=tela_lista.controlador,
             unidade_id=unidade_id,
             lugar_id=lugar_id,
+            ao_criar=self._fechar,
         ).pack(fill="both", expand=True)
 
     def _fechar(self):
+        """Fecha o popup e atualiza a lista de quem o abriu — ao
+        carregar no X e depois de criar o contrato."""
         self.tela_lista._recarregar()
         self.destroy()

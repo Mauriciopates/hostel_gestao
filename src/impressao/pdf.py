@@ -821,6 +821,12 @@ def gerar_relatorio_pdf(
         for i, celula in enumerate(linha):
             texto = _celula_para_pdf(celula)
 
+            # Negativos a vermelho (v1.11.1) — o mesmo vermelho do
+            # ecrã e do Excel.
+            negativo = _e_negativo(celula)
+            if negativo:
+                pdf.set_text_color(*_VERMELHO_NEGATIVO)
+
             pdf.cell(
                 larguras[i],
                 altura_linha,
@@ -829,6 +835,9 @@ def gerar_relatorio_pdf(
                 align="L",
                 fill=True,
             )
+
+            if negativo:
+                pdf.set_text_color(0, 0, 0)
         pdf.ln()
 
         # Linha horizontal no fundo de cada linha de dados.
@@ -877,6 +886,20 @@ def gerar_relatorio_pdf(
 
     pdf.output(str(caminho))
     return caminho
+
+
+# Vermelho dos negativos — tema.TEXTO_ERRO / excel._COR_NEGATIVO.
+_VERMELHO_NEGATIVO = (192, 57, 43)  # #C0392B
+
+
+def _e_negativo(celula):
+    """True se a célula é um número (Decimal/int/float) abaixo de
+    zero. `bool` é int em Python — fica de fora de propósito."""
+    from decimal import Decimal
+
+    if isinstance(celula, bool):
+        return False
+    return isinstance(celula, (Decimal, int, float)) and celula < 0
 
 
 def _celula_para_pdf(celula):

@@ -64,6 +64,24 @@ from impressao import csv as impressao_csv  # noqa: E402
 from impressao import excel as impressao_excel  # noqa: E402
 from impressao import pdf as impressao_pdf  # noqa: E402
 
+
+def _winreg_falso(valor):
+    """Módulo `winreg` de mentira: `sList` = `valor`, ou OSError
+    (chave em falta) quando `valor` é None."""
+    from types import SimpleNamespace
+    from contextlib import nullcontext
+
+    def consultar(_chave, _nome):
+        if valor is None:
+            raise OSError("sem a chave")
+        return valor, 1
+
+    return SimpleNamespace(
+        HKEY_CURRENT_USER=object(),
+        OpenKey=lambda *_: nullcontext(object()),
+        QueryValueEx=consultar,
+    )
+
 # ---------------------------------------------------------------------
 # Helpers de fixture — para as classes que precisam de BD
 # ---------------------------------------------------------------------
@@ -394,6 +412,39 @@ class TesteCSV(BaseMySQLTest):
 
         conteudo = caminho.read_text(encoding="utf-8-sig")
         self.assertIn("A,B", conteudo)
+
+    def test_csv_sem_separador_usa_o_do_sistema(self):
+        """v1.11.1: sem `separador`, usa o separador de listas do
+        sistema (aqui forçado a ",")."""
+        with patch.object(
+            impressao_csv, "separador_do_sistema", return_value=","
+        ):
+            caminho = impressao_csv.gerar_relatorio_csv(
+                titulo="X",
+                colunas=("A", "B"),
+                linhas=[["1", "2"]],
+                area="financeiro",
+                relatorio_id="teste_sep_sistema",
+                data_inicio=date(2026, 9, 1),
+                data_fim=date(2026, 9, 19),
+            )
+
+        conteudo = caminho.read_text(encoding="utf-8-sig")
+        self.assertIn("A,B", conteudo)
+
+    def test_separador_do_sistema_le_o_registo_do_windows(self):
+        for valor, esperado in ((",", ","), (";", ";"), ("|", ";")):
+            with self.subTest(valor=valor):
+                with patch.dict(
+                    sys.modules, {"winreg": _winreg_falso(valor)}
+                ):
+                    self.assertEqual(
+                        esperado, impressao_csv.separador_do_sistema()
+                    )
+
+    def test_separador_do_sistema_sem_chave_da_ponto_e_virgula(self):
+        with patch.dict(sys.modules, {"winreg": _winreg_falso(None)}):
+            self.assertEqual(";", impressao_csv.separador_do_sistema())
 
     def test_csv_separador_invalido_falha(self):
         with self.assertRaises(ValueError):

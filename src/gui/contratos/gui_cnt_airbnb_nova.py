@@ -110,7 +110,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         self._linha(corpo, 0, "Unidade *")
         self.combo_unidade = componentes.Seletor(
             corpo,
-            values=["—"],
+            values=[""],
             command=self._ao_escolher_unidade,
         )
         self.combo_unidade.grid(row=0, column=1, sticky="ew", pady=6)
@@ -121,7 +121,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         bloco.grid(row=1, column=1, sticky="ew", pady=6)
         bloco.grid_columnconfigure(0, weight=1)
 
-        self.combo_cliente = componentes.Seletor(bloco, values=["—"], width=1)
+        self.combo_cliente = componentes.Seletor(bloco, values=[""], width=1)
         self.combo_cliente.grid(row=0, column=0, sticky="ew")
 
         ctk.CTkButton(
@@ -168,7 +168,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         self._linha(corpo, 2, "Preço calculado")
         self.rotulo_preco_calculado = ctk.CTkLabel(
             corpo,
-            text="— (escolhe as datas)",
+            text="(escolhe as datas)",
             text_color=tema.COR_TEXTO,
             font=ctk.CTkFont(size=12, weight="bold"),
             anchor="w",
@@ -238,7 +238,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
 
         self.rotulo_multa_calculada = ctk.CTkLabel(
             corpo,
-            text="— (escolhe a unidade)",
+            text="(escolhe a unidade)",
             text_color=tema.COR_TEXTO_SECUNDARIO,
             anchor="w",
         )
@@ -256,7 +256,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         ).grid(row=3, column=0, sticky="w", pady=6, padx=(0, 12))
 
         self.combo_responsavel_multa = componentes.Seletor(
-            corpo, values=["— Nenhum —"]
+            corpo, values=["Nenhum"]
         )
         self.combo_responsavel_multa.grid(row=3, column=1, sticky="ew", pady=6)
 
@@ -359,7 +359,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         nomes = [
             f"{u['id']} · {u['propriedade_nome']} - {u['nome']}"
             for u in self.unidades_airbnb
-        ] or ["— Sem unidades Airbnb —"]
+        ] or ["Sem unidades Airbnb"]
         self.combo_unidade.configure(values=nomes)
 
         alvo = None
@@ -385,7 +385,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         nomes = [
             f"{c['id']} · {c['nome']} (NIF {c['nif'] or '—'})"
             for c in self.clientes_disponiveis
-        ] or ["— Sem clientes —"]
+        ] or ["Sem clientes"]
         self.combo_cliente.configure(values=nomes)
         if self.clientes_disponiveis:
             self.combo_cliente.set(nomes[0])
@@ -403,7 +403,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
 
     def _recarregar_responsaveis(self):
         self.responsaveis_disponiveis = responsaveis.listar()
-        nomes = ["— Nenhum —"] + [
+        nomes = ["Nenhum"] + [
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
         self.combo_responsavel_multa.configure(values=nomes)
@@ -451,7 +451,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
 
     def _atualizar_multa_calculada(self):
         if self.unidade_selecionada is None:
-            self.rotulo_multa_calculada.configure(text="— (escolhe a unidade)")
+            self.rotulo_multa_calculada.configure(text="(escolhe a unidade)")
             return
 
         self.rotulo_multa_calculada.configure(
@@ -467,7 +467,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         Chamado quando as datas mudam (FocusOut/Enter nos campos) e
         quando a unidade muda. Antes só mexia no resumo — o rótulo
         "Preço calculado" do cartão Estadia ficava sempre a dizer
-        "— (escolhe as datas)", mesmo com as datas preenchidas (bug
+        "(escolhe as datas)", mesmo com as datas preenchidas (bug
         apanhado pelo aluno, 13/09/2026).
         """
         resumo = self._resumo() or {}
@@ -475,7 +475,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
 
         # Rótulo do Preço calculado, dentro do cartão Estadia.
         if preco_calculado is None:
-            self.rotulo_preco_calculado.configure(text="— (escolhe as datas)")
+            self.rotulo_preco_calculado.configure(text="(escolhe as datas)")
         else:
             self.rotulo_preco_calculado.configure(
                 text=_formatar_valor(preco_calculado)

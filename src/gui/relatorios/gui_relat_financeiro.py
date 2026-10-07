@@ -19,6 +19,8 @@ from .gui_relat_base import RelatorioBase
 _formatar_valor = gui_relat_comum.formatar_valor
 _mapa_por_id = gui_relat_comum.mapa_por_id
 _celula_entidade = gui_relat_comum.celula_entidade
+_cor_valor = gui_relat_comum.cor_valor
+_simetrico = gui_relat_comum.simetrico
 
 
 class RelatFinanceiro(RelatorioBase):
@@ -33,14 +35,17 @@ class RelatFinanceiro(RelatorioBase):
     # -- 1. RESULTADO -------------------------------------------------
 
     def _desenhar_resultado(self, master):
-        """Relatório "Resultado" — 4 KPIs + COGS em linha à parte +
-        tabela com os cinco números.
+        """Relatório "Resultado": 4 KPIs + tabela + COGS à parte.
 
-        O `financeiro.resultado` devolve cinco valores; quatro são
-        monetários (Receita, Descontos, Despesas operacionais,
-        Resultado líquido) e um é quantidade (COGS). Os quatro
-        monetários vão para os cartões de KPI; o COGS fica numa
-        linha separada, com nota — não é dinheiro.
+        Os cartões leem-se como uma conta que fecha (v1.11.1):
+        Receita de tabela − Descontos − Despesas = Resultado. A
+        receita recebida já vem líquida de desconto; o resultado é
+        recebida − despesas (até à 1.11.0 o desconto era tirado duas
+        vezes). O COGS fica numa linha separada, com nota — não é
+        dinheiro.
+
+        Descontos e despesas entram na tabela e na exportação com
+        sinal negativo (são o que se tira), a vermelho.
         """
         dados = financeiro.resultado(self.data_inicio, self.data_fim)
 
@@ -53,21 +58,29 @@ class RelatFinanceiro(RelatorioBase):
             kpis.grid_columnconfigure(coluna, weight=1, uniform="kpi")
 
         receita = dados["receita"]
-        descontos = dados["descontos"]
-        despesas_op = dados["despesas_operacionais"]
+        receita_tabela = dados["receita_tabela"]
+        # Descontos e despesas com sinal: são o que se tira.
+        descontos = _simetrico(dados["descontos"])
+        despesas_op = _simetrico(dados["despesas_operacionais"])
         resultado_liquido = dados["resultado_liquido"]
 
         # Cor do resultado: verde se positivo, vermelho se negativo.
-        # Os outros três ficam em cor neutra — não é uma "boa" ou
-        # "má" notícia, é um número.
         cor_resultado = (
             tema.TEXTO_LIVRE if resultado_liquido >= 0 else tema.TEXTO_ERRO
         )
 
         cartoes = (
-            ("Receita", _formatar_valor(receita), tema.COR_TEXTO),
-            ("Descontos", f"-{_formatar_valor(descontos)}", tema.COR_TEXTO),
-            ("Despesas", f"-{_formatar_valor(despesas_op)}", tema.COR_TEXTO),
+            (
+                "Receita de tabela",
+                _formatar_valor(receita_tabela),
+                _cor_valor(receita_tabela),
+            ),
+            ("Descontos", _formatar_valor(descontos), _cor_valor(descontos)),
+            (
+                "Despesas",
+                _formatar_valor(despesas_op),
+                _cor_valor(despesas_op),
+            ),
             ("Resultado", _formatar_valor(resultado_liquido), cor_resultado),
         )
 
@@ -84,9 +97,11 @@ class RelatFinanceiro(RelatorioBase):
             self.data_inicio, self.data_fim
         )
         linhas = (
-            ("Receita mensal", por_tipo["mensal"]),
-            ("Receita Airbnb", por_tipo["airbnb"]),
+            ("Receita de tabela", receita_tabela),
             ("Descontos", descontos),
+            ("Receita recebida", receita),
+            ("Receita recebida (mensal)", por_tipo["mensal"]),
+            ("Receita recebida (Airbnb)", por_tipo["airbnb"]),
             ("Despesas operacionais", despesas_op),
             ("Resultado líquido", resultado_liquido),
         )
@@ -107,11 +122,7 @@ class RelatFinanceiro(RelatorioBase):
                 ctk.CTkLabel(
                     linha,
                     text=rotulo,
-                    text_color=(
-                        tema.COR_TEXTO
-                        if rotulo != "Resultado líquido"
-                        else tema.COR_TEXTO
-                    ),
+                    text_color=tema.COR_TEXTO,
                     font=ctk.CTkFont(
                         size=12,
                         weight=(
@@ -132,7 +143,7 @@ class RelatFinanceiro(RelatorioBase):
                     text_color=(
                         cor_resultado
                         if rotulo == "Resultado líquido"
-                        else tema.COR_TEXTO
+                        else _cor_valor(valor)
                     ),
                     font=ctk.CTkFont(
                         size=12,
@@ -297,16 +308,8 @@ class RelatFinanceiro(RelatorioBase):
                 2,
                 ctk.CTkLabel(
                     linha,
-                    text=(
-                        f"-{_formatar_valor(item['desconto'])}"
-                        if item["desconto"] > 0
-                        else _formatar_valor(Decimal("0.00"))
-                    ),
-                    text_color=(
-                        tema.TEXTO_ERRO
-                        if item["desconto"] > 0
-                        else tema.COR_TEXTO
-                    ),
+                    text=_formatar_valor(_simetrico(item["desconto"])),
+                    text_color=_cor_valor(_simetrico(item["desconto"])),
                     font=ctk.CTkFont(size=12),
                     anchor="e",
                 ),
@@ -316,7 +319,7 @@ class RelatFinanceiro(RelatorioBase):
                 [
                     f"{nome} ({item['unidade_id']})",
                     item["receita"],
-                    item["desconto"],
+                    _simetrico(item["desconto"]),
                 ]
             )
 
@@ -408,16 +411,8 @@ class RelatFinanceiro(RelatorioBase):
                 2,
                 ctk.CTkLabel(
                     linha,
-                    text=(
-                        f"-{_formatar_valor(item['desconto'])}"
-                        if item["desconto"] > 0
-                        else _formatar_valor(Decimal("0.00"))
-                    ),
-                    text_color=(
-                        tema.TEXTO_ERRO
-                        if item["desconto"] > 0
-                        else tema.COR_TEXTO
-                    ),
+                    text=_formatar_valor(_simetrico(item["desconto"])),
+                    text_color=_cor_valor(_simetrico(item["desconto"])),
                     font=ctk.CTkFont(size=12),
                     anchor="e",
                 ),
@@ -427,7 +422,7 @@ class RelatFinanceiro(RelatorioBase):
                 [
                     f"{item['propriedade_nome']} ({item['propriedade_id']})",
                     item["receita"],
-                    item["desconto"],
+                    _simetrico(item["desconto"]),
                 ]
             )
 
@@ -460,15 +455,9 @@ class RelatFinanceiro(RelatorioBase):
             2,
             ctk.CTkLabel(
                 linha_total,
-                text=(
-                    f"-{_formatar_valor(total_desconto)}"
-                    if total_desconto > 0
-                    else _formatar_valor(Decimal("0.00"))
-                ),
-                text_color=(
-                    tema.TEXTO_ERRO
-                    if total_desconto > 0
-                    else tema.AZUL_PRINCIPAL
+                text=_formatar_valor(_simetrico(total_desconto)),
+                text_color=_cor_valor(
+                    _simetrico(total_desconto), tema.AZUL_PRINCIPAL
                 ),
                 font=ctk.CTkFont(size=12, weight="bold"),
                 anchor="e",
@@ -479,7 +468,7 @@ class RelatFinanceiro(RelatorioBase):
             [
                 f"TOTAL ({len(linhas)} propriedades)",
                 total_receita,
-                total_desconto,
+                _simetrico(total_desconto),
             ]
         )
 

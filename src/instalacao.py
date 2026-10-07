@@ -25,6 +25,7 @@ A `migracoes_aplicadas` não conta para INCOMPLETA: numa base anterior
 
 import logging
 
+import config
 import repositorio
 import servidores
 
@@ -60,10 +61,17 @@ def diagnosticar(servidor, password):
     except Exception as erro:  # erro do MySQL (driver) ao ligar
         return ERRO, f"O MySQL recusou a ligação.\n\n{erro}", []
 
-    do_esquema = [
-        t for t in repositorio.tabelas_do_esquema()
-        if t != _TABELA_DE_CONTROLO
-    ]
+    # Ler o esquema também pode falhar (v1.11.1): sem a pasta bd/ o
+    # arranque rebentava com "Unhandled exception" em vez de dizer o
+    # que falta.
+    try:
+        do_esquema = [
+            t for t in repositorio.tabelas_do_esquema()
+            if t != _TABELA_DE_CONTROLO
+        ]
+    except OSError as erro:
+        logger.error("Não foi possível ler o esquema: %s", erro)
+        return ERRO, _texto_sem_esquema(), []
 
     if not existe:
         return (
@@ -101,6 +109,17 @@ def diagnosticar(servidor, password):
         PRONTA,
         f"Ligação a '{base}' com sucesso — {len(tabelas)} tabelas.",
         [],
+    )
+
+
+def _texto_sem_esquema():
+    """Frase para o ecrã quando o ficheiro do esquema falta ou não se
+    consegue ler."""
+    return (
+        f"Não foi possível ler o ficheiro do esquema da base de dados:\n"
+        f"{config.FICHEIRO_ESQUEMA}\n\n"
+        f"A instalação da aplicação está incompleta (falta a pasta "
+        f"bd). Volte a instalar a aplicação."
     )
 
 

@@ -89,7 +89,7 @@ class NovaDespesaManualModal(ctk.CTkToplevel):
         ).pack(fill="x", pady=(0, 6))
 
         self.campo_descricao = self._campo_texto(
-            area, "Descrição *", "ex.: Conta EDP — Setembro 2026"
+            area, "Descrição *", "ex.: Conta EDP de setembro 2026"
         )
 
         linha = ctk.CTkFrame(area, fg_color="transparent")
@@ -101,7 +101,7 @@ class NovaDespesaManualModal(ctk.CTkToplevel):
             linha, 0, "Categoria *", []
         )
         self.combo_fornecedor = self._campo_dropdown(
-            linha, 1, "Fornecedor", ["— Nenhum —"]
+            linha, 1, "Fornecedor", ["Nenhum"]
         )
 
         linha2 = ctk.CTkFrame(area, fg_color="transparent")
@@ -129,7 +129,7 @@ class NovaDespesaManualModal(ctk.CTkToplevel):
             linha3, 0, "Data de vencimento", "dd/mm/aaaa (opcional)"
         )
         self.combo_unidade = self._campo_dropdown(
-            linha3, 1, "Unidade", ["— Nenhuma (despesa geral) —"]
+            linha3, 1, "Unidade", ["Nenhuma (despesa geral)"]
         )
 
         ctk.CTkLabel(
@@ -256,7 +256,7 @@ class NovaDespesaManualModal(ctk.CTkToplevel):
         ).pack(fill="x")
         combo = componentes.Seletor(
             bloco,
-            values=opcoes or ["—"],
+            values=opcoes or [""],
             corner_radius=tema.RAIO_CAMPO,
         )
         if opcoes:
@@ -274,13 +274,13 @@ class NovaDespesaManualModal(ctk.CTkToplevel):
             for c in despesas.listar_categorias()
             if c["nome"] != "Compra de Stock"
         ]
-        nomes_cat = [c["nome"] for c in self._categorias] or ["—"]
+        nomes_cat = [c["nome"] for c in self._categorias] or ["Sem categorias"]
         self.combo_categoria.configure(values=nomes_cat)
         self.combo_categoria.set(nomes_cat[0])
 
         # Fornecedores ativos.
         self._fornecedores = despesas.listar_fornecedores()
-        nomes_forn = ["— Nenhum —"] + [f["nome"] for f in self._fornecedores]
+        nomes_forn = ["Nenhum"] + [f["nome"] for f in self._fornecedores]
         self.combo_fornecedor.configure(values=nomes_forn)
         self.combo_fornecedor.set(nomes_forn[0])
 
@@ -289,7 +289,7 @@ class NovaDespesaManualModal(ctk.CTkToplevel):
         self._unidade_por_rotulo = {
             _rotulo_unidade(u): u["id"] for u in self._unidades
         }
-        rotulos_uni = ["— Nenhuma (despesa geral) —"] + sorted(
+        rotulos_uni = ["Nenhuma (despesa geral)"] + sorted(
             self._unidade_por_rotulo
         )
         self.combo_unidade.configure(values=rotulos_uni)
@@ -306,7 +306,7 @@ class NovaDespesaManualModal(ctk.CTkToplevel):
 
     def _id_fornecedor(self):
         nome = self.combo_fornecedor.get()
-        if nome == "— Nenhum —":
+        if nome == "Nenhum":
             return None
         for f in self._fornecedores:
             if f["nome"] == nome:
@@ -450,7 +450,7 @@ class DividirPorPropriedadeModal(ctk.CTkToplevel):
         ).pack(fill="x", pady=(0, 6))
 
         self.campo_descricao = self._campo_texto(
-            area, "Descrição *", "ex.: Internet — Setembro 2026"
+            area, "Descrição *", "ex.: Internet de setembro 2026"
         )
 
         linha = ctk.CTkFrame(area, fg_color="transparent")
@@ -462,7 +462,7 @@ class DividirPorPropriedadeModal(ctk.CTkToplevel):
             linha, 0, "Categoria *", []
         )
         self.combo_fornecedor = self._campo_dropdown(
-            linha, 1, "Fornecedor", ["— Nenhum —"]
+            linha, 1, "Fornecedor", ["Nenhum"]
         )
 
         linha2 = ctk.CTkFrame(area, fg_color="transparent")
@@ -508,7 +508,7 @@ class DividirPorPropriedadeModal(ctk.CTkToplevel):
 
         self.combo_propriedade = componentes.Seletor(
             bloco_prop,
-            values=["—"],
+            values=[""],
             corner_radius=tema.RAIO_CAMPO,
             command=lambda _v: self._atualizar_previsao(),
         )
@@ -648,7 +648,7 @@ class DividirPorPropriedadeModal(ctk.CTkToplevel):
         ).pack(fill="x")
         combo = componentes.Seletor(
             bloco,
-            values=opcoes or ["—"],
+            values=opcoes or [""],
             corner_radius=tema.RAIO_CAMPO,
         )
         if opcoes:
@@ -664,12 +664,12 @@ class DividirPorPropriedadeModal(ctk.CTkToplevel):
             for c in despesas.listar_categorias()
             if c["nome"] != "Compra de Stock"
         ]
-        nomes_cat = [c["nome"] for c in self._categorias] or ["—"]
+        nomes_cat = [c["nome"] for c in self._categorias] or ["Sem categorias"]
         self.combo_categoria.configure(values=nomes_cat)
         self.combo_categoria.set(nomes_cat[0])
 
         self._fornecedores = despesas.listar_fornecedores()
-        nomes_forn = ["— Nenhum —"] + [f["nome"] for f in self._fornecedores]
+        nomes_forn = ["Nenhum"] + [f["nome"] for f in self._fornecedores]
         self.combo_fornecedor.configure(values=nomes_forn)
         self.combo_fornecedor.set(nomes_forn[0])
 
@@ -686,7 +686,9 @@ class DividirPorPropriedadeModal(ctk.CTkToplevel):
         self._propriedade_por_rotulo = {
             f"{p['nome']} ({p['id']})": p["id"] for p in self._propriedades
         }
-        self.combo_propriedade.configure(values=rotulos or ["—"])
+        self.combo_propriedade.configure(
+            values=rotulos or ["Sem propriedades"]
+        )
         if rotulos:
             self.combo_propriedade.set(rotulos[0])
         self._atualizar_previsao()
@@ -751,7 +753,7 @@ class DividirPorPropriedadeModal(ctk.CTkToplevel):
 
     def _id_fornecedor(self):
         nome = self.combo_fornecedor.get()
-        if nome == "— Nenhum —":
+        if nome == "Nenhum":
             return None
         for f in self._fornecedores:
             if f["nome"] == nome:

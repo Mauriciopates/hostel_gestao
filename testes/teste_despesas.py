@@ -186,14 +186,44 @@ class TesteFornecedores(BaseMySQLTest):
 
     def test_criar_fornecedor_valido(self):
         forn = despesas.criar_fornecedor(
-            "EDP", self.autor, contacto="800 500 505", nif="500123456"
+            "EDP", self.autor, contacto="800 500 505", nif="501442600"
         )
 
         self.assertEqual(forn["nome"], "EDP")
         self.assertEqual(forn["contacto"], "800 500 505")
-        self.assertEqual(forn["nif"], "500123456")
+        self.assertEqual(forn["nif"], "501442600")
         self.assertTrue(forn["ativo"])
         self.assertTrue(forn["id"].startswith("FOR-"))
+
+    def test_criar_fornecedor_nif_invalido_falha(self):
+        """v1.11.1: o NIF do fornecedor passa pelo dígito de
+        controlo, como o dos clientes."""
+        for nif in ("500123456", "12345", "ABCDEFGHI"):
+            with self.subTest(nif=nif):
+                with self.assertRaises(ValueError):
+                    despesas.criar_fornecedor("EDP", self.autor, nif=nif)
+
+    def test_criar_fornecedor_sem_nif_continua_valido(self):
+        forn = despesas.criar_fornecedor("EDP", self.autor, nif="  ")
+
+        self.assertEqual(forn["nif"], "")
+
+    def test_atualizar_fornecedor_nif_invalido_falha(self):
+        forn = despesas.criar_fornecedor("EDP", self.autor)
+
+        with self.assertRaises(ValueError):
+            despesas.atualizar_fornecedor(
+                forn["id"], self.autor, nif="500123456"
+            )
+
+    def test_atualizar_fornecedor_limpar_nif(self):
+        forn = despesas.criar_fornecedor("EDP", self.autor, nif="501442600")
+
+        atualizado = despesas.atualizar_fornecedor(
+            forn["id"], self.autor, nif=""
+        )
+
+        self.assertEqual(atualizado["nif"], "")
 
     def test_criar_fornecedor_nome_vazio_falha(self):
         with self.assertRaises(ValueError):

@@ -3,9 +3,10 @@
 Mockup aprovado a 27/09/2026. Um mês de cada vez, navegável com
 ◀ ▶ (não deixa ir além do mês atual):
 
-1. Receita, descontos, despesas operacionais e resultado líquido do
-   mês — os quatro números do `financeiro.resultado`, com a
-   comparação com o mês anterior.
+1. Receita recebida, descontos, despesas operacionais e resultado
+   líquido do mês — os quatro números do `financeiro.resultado`,
+   com a comparação com o mês anterior. Desde a v1.11.1 o resultado
+   é recebida − despesas (o desconto já está fora da recebida).
 2. Receita vs. despesas dos últimos 6 meses (gráfico) e receita por
    propriedade.
 3. Despesas por categoria (mais o consumo de stock em quantidade,
@@ -112,13 +113,17 @@ class VistaFinanceiro(comum.VistaBase):
             resumo["variacao_receita"], nome_ant, subir_e_bom=True
         )
         componentes.CartaoKpi(
-            fila, "Receita", componentes.formatar_valor(atual["receita"]),
+            fila,
+            "Receita recebida",
+            componentes.formatar_valor(atual["receita"]),
             texto, cor_contexto=cor,
         ).grid(row=0, column=0, sticky="nsew", padx=(0, 6))
 
-        if atual["descontos"] and atual["receita"]:
-            percentagem = round(atual["descontos"] / atual["receita"] * 100)
-            texto = f"{percentagem}% da receita"
+        if atual["descontos"] and atual["receita_tabela"]:
+            percentagem = round(
+                atual["descontos"] / atual["receita_tabela"] * 100
+            )
+            texto = f"{percentagem}% da receita de tabela"
         else:
             texto = "sem descontos"
         componentes.CartaoKpi(
@@ -142,7 +147,7 @@ class VistaFinanceiro(comum.VistaBase):
             fila,
             "Resultado líquido",
             componentes.formatar_valor(liquido),
-            "receita − descontos − despesas",
+            "receita recebida − despesas",
             cor_valor=tema.TEXTO_LIVRE if liquido >= 0 else tema.TEXTO_ERRO,
         ).grid(row=0, column=3, sticky="nsew", padx=(6, 0))
 

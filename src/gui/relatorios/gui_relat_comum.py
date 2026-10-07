@@ -4,9 +4,11 @@ Mesmo papel do `gui_est_comum.py` / `gui_desp_comum.py`: nomes
 públicos aqui; cada `gui_relat_*` cria o alias privado no topo."""
 
 from datetime import date, timedelta
+from decimal import Decimal
 
 from .. import componentes
 from .. import sessao
+from .. import tema
 
 
 # =====================================================================
@@ -206,6 +208,25 @@ def formatar_valor(valor):
     sempre ao `componentes`.
     """
     return componentes.formatar_valor(valor)
+
+
+def cor_valor(valor, cor_normal=None):
+    """Cor do texto de um valor num relatório: vermelho se for
+    negativo, senão `cor_normal` (por omissão a cor do texto).
+
+    Regra da revisão de 07/10/2026 (v1.11.1): negativos a vermelho
+    em todos os relatórios — ecrã, PDF e Excel.
+    """
+    if valor is not None and valor < 0:
+        return tema.TEXTO_ERRO
+    return tema.COR_TEXTO if cor_normal is None else cor_normal
+
+
+def simetrico(valor):
+    """`0 − valor`, sem o "-0,00" que `-Decimal("0.00")` daria.
+    Usado nos descontos e despesas, que se mostram como o que se
+    tira (negativos)."""
+    return Decimal("0.00") - valor
 
 
 def primeiro_dia_do_mes(d):

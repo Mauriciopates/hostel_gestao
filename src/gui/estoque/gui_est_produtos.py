@@ -85,7 +85,7 @@ UNIDADES_MEDIDA = (
     "pacote",  # pacote
 )
 
-UNIDADE_PLACEHOLDER = "— Escolher —"
+UNIDADE_PLACEHOLDER = "Escolher"
 OUTRA_UNIDADE = "Outro (escrever ao lado)"
 
 # Tipos de produto (Fase 4, v1.4.0). Os mesmos quatro valores do
@@ -547,7 +547,7 @@ class _ConfirmarForcarProdutoModal(ctk.CTkToplevel):
         ).pack(anchor="w", padx=20)
 
         self.responsaveis_disponiveis = responsaveis.listar()
-        nomes = ["— Nenhum —"] + [
+        nomes = ["Nenhum"] + [
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
         self.combo_responsavel = componentes.Seletor(self, values=nomes)
@@ -922,7 +922,7 @@ class _FormularioProduto(ctk.CTkToplevel):
 
         - "Outro (escrever ao lado)" → limpa a caixa, mostra-a e põe
           o foco.
-        - placeholder ("— Escolher —") → esconde a caixa.
+        - placeholder ("Escolher") → esconde a caixa.
         - valor da lista → preenche a caixa e esconde-a (só o
           seletor mostra o valor).
         """

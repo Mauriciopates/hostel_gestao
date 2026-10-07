@@ -69,7 +69,7 @@ def parse_data(texto, nome_campo):
 def rotulo_unidade(unidade):
     """Rótulo de dropdown de unidade: "NOME (ID) · Propriedade"."""
     if unidade is None:
-        return "— Nenhuma (despesa geral) —"
+        return "Nenhuma (despesa geral)"
     return (
         f"{unidade['nome']} ({unidade['id']}) · "
         f"{unidade.get('propriedade_nome', '')}"

@@ -441,7 +441,7 @@ class _EscolherTipoMovimentoModal(ctk.CTkToplevel):
         )
         self._cartao(
             "Ajuste",
-            "Correção de inventário — motivo obrigatório",
+            "Correção de inventário (motivo obrigatório)",
             lambda: self._abrir("ajuste"),
         )
 
@@ -588,7 +588,7 @@ class RegistarMovimentoModal(ctk.CTkToplevel):
 
         self.combo_produto = componentes.Seletor(
             self,
-            values=rotulos or ["— Sem produtos —"],
+            values=rotulos or ["Sem produtos"],
             corner_radius=tema.RAIO_CAMPO,
             command=lambda _valor: self._atualizar_saldo(),
         )
@@ -683,12 +683,12 @@ class RegistarMovimentoModal(ctk.CTkToplevel):
         self.combo_responsavel = componentes.Seletor(
             self,
             values=(
-                ["— Nenhum —"]
+                ["Nenhum"]
                 + sorted(self.id_por_rotulo_responsavel)
             ),
             corner_radius=tema.RAIO_CAMPO,
         )
-        self.combo_responsavel.set("— Nenhum —")
+        self.combo_responsavel.set("Nenhum")
         self.combo_responsavel.pack(fill="x", padx=24, pady=(2, 2))
 
         ctk.CTkLabel(

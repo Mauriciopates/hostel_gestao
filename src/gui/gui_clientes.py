@@ -226,7 +226,7 @@ NACIONALIDADES = (
     "Moçambicana",
     "Cabo-verdiana",
 )
-NACIONALIDADE_PLACEHOLDER = "— Escolher —"
+NACIONALIDADE_PLACEHOLDER = "Escolher"
 OUTRA_NACIONALIDADE = "Outra (escrever ao lado)"
 
 
@@ -975,13 +975,13 @@ class _SeletorRegimeClienteModal(ctk.CTkToplevel):
 
         self._cartao(
             "Cliente Mensal",
-            "Contrato de arrendamento — formulário completo (NIF, "
+            "Contrato de arrendamento: formulário completo (NIF, "
             "morada, estado civil, etc.).",
             self._abrir_mensal,
         )
         self._cartao(
             "Cliente Airbnb",
-            "Reserva de curta duração — só os dados exigidos para o "
+            "Reserva de curta duração: só os dados exigidos para o "
             "boletim de alojamento.",
             self._abrir_airbnb,
         )
@@ -1781,7 +1781,7 @@ class _AnonimizarModal(ctk.CTkToplevel):
             for r in responsaveis.listar()
             if r["tipo_utilizador"] == "Master"
         ]
-        nomes = ["— Nenhum —"] + [
+        nomes = ["Nenhum"] + [
             f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
         ]
         self.combo_responsavel = componentes.Seletor(self, values=nomes)
