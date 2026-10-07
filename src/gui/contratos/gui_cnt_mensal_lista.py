@@ -143,11 +143,7 @@ class EncerrarContratoModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=20)
 
-        self.campo_data_fim = ctk.CTkEntry(
-            self,
-            placeholder_text="dd/mm/aaaa",
-            corner_radius=tema.RAIO_CAMPO,
-        )
+        self.campo_data_fim = componentes.CampoData(self)
         self.campo_data_fim.insert(
             0, datetime.date.today().strftime("%d/%m/%Y")
         )

@@ -100,10 +100,11 @@ def validar_cliente(dados, regime):
     chega a existir no formulário daquele regime. Já não há aqui
     noção de registo "incompleto".
 
-    - Mensal: tudo obrigatório, exceto email e contacto de
-      emergência — nome, tipo de documento, número de documento,
-      NIF, morada, estado civil, nacionalidade, telefone, data de
-      nascimento e validade do documento.
+    - Mensal: tudo obrigatório, exceto o email — nome, tipo de
+      documento, número de documento, NIF, morada, estado civil,
+      nacionalidade, telefone, data de nascimento, validade do
+      documento e (desde a v1.11.2) contacto de emergência: quem
+      vive meses na casa tem de ter alguém a quem ligar.
     - Airbnb: nome, nacionalidade, data de nascimento, tipo de
       documento, número de documento, país emissor do documento e
       país de residência — só o que o boletim de alojamento exige.
@@ -172,6 +173,12 @@ def validar_cliente(dados, regime):
 
         if not dados.get("telefone", "").strip():
             raise ValueError("O telefone é obrigatório no regime mensal.")
+
+        if not dados.get("contacto_emergencia", "").strip():
+            raise ValueError(
+                "O contacto de emergência é obrigatório no regime "
+                "mensal."
+            )
     else:
         if not dados.get("pais_emissor_documento", "").strip():
             raise ValueError(

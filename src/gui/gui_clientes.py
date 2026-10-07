@@ -1231,7 +1231,13 @@ class _FormularioCliente(ctk.CTkToplevel):
 
     def _campo_texto(self, rotulo, placeholder=""):
         linha = self._linha(rotulo)
-        entrada = ctk.CTkEntry(
+        # Datas com CampoData: só algarismos, barras automáticas.
+        classe = (
+            componentes.CampoData
+            if placeholder == "dd/mm/aaaa"
+            else ctk.CTkEntry
+        )
+        entrada = classe(
             self.corpo,
             corner_radius=tema.RAIO_CAMPO,
             placeholder_text=placeholder,
@@ -1388,10 +1394,11 @@ class _FormularioCliente(ctk.CTkToplevel):
 class NovoClienteMensalModal(_FormularioCliente):
     """Modal de criação de um cliente Mensal.
 
-    REGRA 16/09/2026 (aluno): tudo obrigatório, exceto Email e
-    Contacto de emergência — inclui Nacionalidade e Telefone, que
-    antes (decisão de 26/08) eram opcionais no regime mensal e
-    passaram a obrigatórios. Ver `validacoes.validar_cliente`.
+    REGRA 16/09/2026 (aluno): tudo obrigatório, exceto Email —
+    inclui Nacionalidade e Telefone, que antes (decisão de 26/08)
+    eram opcionais no regime mensal e passaram a obrigatórios. O
+    Contacto de emergência passou a obrigatório na v1.11.2. Ver
+    `validacoes.validar_cliente`.
     """
 
     def __init__(self, tela_lista):
@@ -1423,7 +1430,7 @@ class NovoClienteMensalModal(_FormularioCliente):
         )
         self.campo_email = self._campo_texto("Email")
         self.campo_contacto_emergencia = self._campo_texto(
-            "Contacto de emergência"
+            "Contacto de emergência *", placeholder="ex.: Mãe, 912345678"
         )
         self._montar_aviso_privacidade()
 

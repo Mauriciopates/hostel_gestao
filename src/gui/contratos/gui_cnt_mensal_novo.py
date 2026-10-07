@@ -144,9 +144,7 @@ class NovoContratoMensal(ctk.CTkFrame):
         corpo = self._criar_cartao("Datas e valores")
 
         self._linha(corpo, 0, "Data de início *")
-        self.campo_data_inicio = ctk.CTkEntry(
-            corpo, placeholder_text="dd/mm/aaaa"
-        )
+        self.campo_data_inicio = componentes.CampoData(corpo)
         self.campo_data_inicio.grid(row=0, column=1, sticky="ew", pady=6)
 
         self._linha(corpo, 1, "Dia de vencimento")

@@ -1,12 +1,11 @@
 """Modais de confirmação do ecrã de Configurações.
 
-Este módulo tem duas funções públicas, ambas bloqueantes
-(`wait_window`) — quem chama fica à espera do resultado:
+Este módulo tem dois modais:
 
-  - `confirmar_alteracao(...)` — aparece sempre que um valor de
-    configuração é alterado. Mostra o antes → depois, um aviso do
-    que muda, e um campo de motivo opcional. Devolve `True` se o
-    utilizador confirmar, `False` se cancelar.
+  - `GerirConfiguracaoModal` (v1.11.2) — o botão "Gerir" de cada
+    linha. Campo do valor, resumo antes → depois enquanto se
+    escreve, e "Confirmar alteração", que grava pelo
+    `configuracoes.definir`. Substituiu o `confirmar_alteracao`.
 
   - `confirmar_reset_sistema(...)` — aparece quando o Master clica
     em "Começar do zero". Exige confirmação dupla (escrever
@@ -23,6 +22,7 @@ import logging
 
 import customtkinter as ctk
 
+import configuracoes
 import utilizadores
 from . import componentes
 from . import sessao
@@ -31,226 +31,334 @@ from . import tema
 logger = logging.getLogger(__name__)
 
 # =====================================================================
-# MODAL 1 — CONFIRMAR ALTERAÇÃO
+# MODAL 1 — GERIR UMA CONFIGURAÇÃO (v1.11.2, mockup aprovado 07/10)
 # =====================================================================
+#
+# Substitui o `confirmar_alteracao`. Antes, cada linha do ecrã tinha
+# o controlo à vista (campo + Guardar, interruptor, seletores) e um
+# segundo modal pedia a confirmação. Agora a linha só mostra o valor
+# e o botão "Gerir"; o modal junta o campo, o resumo "antes → depois"
+# (atualizado enquanto se escreve) e a confirmação, num passo só.
+
+_MESES = (
+    "jan", "fev", "mar", "abr", "mai", "jun",
+    "jul", "ago", "set", "out", "nov", "dez",
+)
+
+# Unidade mostrada a seguir aos números (linha do ecrã e resumo).
+_UNIDADES = {
+    "operacao.dia_vencimento": "do mês",
+    "operacao.aviso_previo_dias": "dias",
+    "operacao.duracao_minima_meses": "meses",
+    "financeiro.multiplicador_caucao": "× renda",
+    "financeiro.multiplicador_maximo_caucao": "× renda",
+}
+
+_LARGURA_GERIR = 460
 
 
-def confirmar_alteracao(
-    pai,
-    titulo,
-    chave,
-    valor_antigo,
-    valor_novo,
-):
-    """Abre o modal de confirmação e devolve True/False.
+def formatar_valor(chave, valor, tipo):
+    """Texto de um valor de configuração para o ecrã.
 
-    Parâmetros:
-      - `pai`:      o widget que abre o modal (parent do Toplevel).
-      - `titulo`:   o título humano da configuração (ex.: "Aviso
-                    prévio padrão (dias)").
-      - `chave`:    a chave completa (ex.: "operacao.aviso_previo_dias").
-      - `valor_antigo`: valor atual (antes da alteração).
-      - `valor_novo`:   valor pretendido.
-
-    Devolve:
-      - `True` se o utilizador clicar em "Confirmar alteração".
-      - `False` se clicar em "Cancelar" ou fechar pela X.
-
-    Bloqueia até o utilizador decidir. Não grava nada — quem chama
-    usa o resultado para decidir se chama `configuracoes.definir`.
+    - bool → "Sim" / "Não"
+    - tupla (mês, dia) → "15 de jun"
+    - número → "30 dias" (com a unidade da chave, vírgula decimal)
+    - texto → tal e qual
     """
-    resultado = {"confirmado": False}
+    if tipo == "bool":
+        return "Sim" if valor else "Não"
 
-    janela = ctk.CTkToplevel(pai)
-    janela.title("Confirmar alteração")
-    janela.resizable(False, False)
-    janela.configure(fg_color=tema.COR_FUNDO)
-    janela.transient(pai)
-    componentes.colocar_no_topo(janela)
+    if tipo == "tupla_mes_dia":
+        mes, dia = valor
+        return f"{dia} de {_MESES[mes - 1]}"
 
-    def fechar(confirmado):
-        resultado["confirmado"] = confirmado
-        janela.destroy()
+    if tipo in ("int", "decimal"):
+        texto = str(valor).replace(".", ",")
+        unidade = _UNIDADES.get(chave, "")
+        return f"{texto} {unidade}".strip()
 
-    janela.protocol("WM_DELETE_WINDOW", lambda: fechar(False))
+    return str(valor)
 
-    # ---------------------------------------------------------------
-    # Cabeçalho — ícone + título + subtítulo
-    # ---------------------------------------------------------------
-    cabecalho = ctk.CTkFrame(janela, fg_color="transparent")
-    cabecalho.pack(fill="x", padx=24, pady=(20, 8))
 
-    ctk.CTkLabel(
-        cabecalho,
-        text="⚠  Confirmar alteração de regra",
-        text_color=tema.COR_TEXTO,
-        font=ctk.CTkFont(size=15, weight="bold"),
-        anchor="w",
-    ).pack(fill="x")
+def _texto_limites(definicao):
+    """"Novo valor (1 a 28)", "(número inteiro, mínimo 0)"…"""
+    minimo = definicao.get("minimo")
+    maximo = definicao.get("maximo")
+    tipo = "número inteiro" if definicao["tipo"] == "int" else "número"
 
-    ctk.CTkLabel(
-        cabecalho,
-        text="Esta é uma configuração que afeta o comportamento do sistema.",
-        text_color=tema.COR_TEXTO_SECUNDARIO,
-        font=ctk.CTkFont(size=11),
-        anchor="w",
-        justify="left",
-        wraplength=460,
-    ).pack(fill="x", pady=(4, 0))
+    if minimo is not None and maximo is not None:
+        return f"Novo valor ({minimo} a {maximo})"
+    if minimo is not None:
+        return f"Novo valor ({tipo}, mínimo {minimo})"
+    return f"Novo valor ({tipo})"
 
-    # ---------------------------------------------------------------
-    # Aviso amarelo
-    # ---------------------------------------------------------------
-    aviso = ctk.CTkFrame(
-        janela,
-        fg_color=tema.AMARELO_AVISO,
-        corner_radius=tema.RAIO_CAMPO,
-    )
-    aviso.pack(fill="x", padx=24, pady=(4, 12))
 
-    ctk.CTkLabel(
-        aviso,
-        text=titulo,
-        text_color=tema.TEXTO_AVISO,
-        font=ctk.CTkFont(size=12, weight="bold"),
-        anchor="w",
-    ).pack(fill="x", padx=14, pady=(10, 2))
+class GerirConfiguracaoModal(ctk.CTkToplevel):
+    """Modal "Gerir" de uma linha das Configurações.
 
-    ctk.CTkLabel(
-        aviso,
-        text=(
-            "A alteração é imediata e fica registada com o seu nome. "
-            "Contratos e registos já criados não são afetados."
-        ),
-        text_color=tema.TEXTO_AVISO,
-        font=ctk.CTkFont(size=11),
-        anchor="w",
-        justify="left",
-        wraplength=440,
-    ).pack(fill="x", padx=14, pady=(0, 10))
+    `definicao` vem do `configuracoes.listar_definicoes`; `valor_atual`
+    do `configuracoes.obter`. `ao_gravar(novo)` é chamado depois de o
+    `configuracoes.definir` gravar — o ecrã atualiza a linha.
 
-    # ---------------------------------------------------------------
-    # Bloco antes → depois
-    # ---------------------------------------------------------------
-    mudanca = ctk.CTkFrame(
-        janela,
-        fg_color=tema.LINHA_ALTERNADA,
-        corner_radius=tema.RAIO_CAMPO,
-    )
-    mudanca.pack(fill="x", padx=24, pady=(0, 12))
+    O botão "Confirmar alteração" só fica ativo quando o valor mudou e
+    é válido (a validação é a do negócio, `configuracoes.ler_numero` /
+    `validar_valor`). Enter confirma; Escape cancela.
+    """
 
-    interno = ctk.CTkFrame(mudanca, fg_color="transparent")
-    interno.pack(fill="x", padx=16, pady=14)
+    def __init__(self, pai, titulo, definicao, valor_atual, ao_gravar):
+        super().__init__(pai)
+        self.pai = pai
+        self.chave = definicao["chave"]
+        self.tipo = definicao["tipo"]
+        self.definicao = definicao
+        self.valor_atual = valor_atual
+        self.ao_gravar = ao_gravar
+        self.titulo = titulo
+        self.novo = valor_atual
+        self._valido = True
 
-    # Lado "Antes"
-    lado_antes = ctk.CTkFrame(interno, fg_color="transparent")
-    lado_antes.pack(side="left", expand=True)
+        self.title("Gerir configuração")
+        self.resizable(False, False)
+        self.configure(fg_color=tema.COR_FUNDO)
+        self.transient(pai)
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
 
-    ctk.CTkLabel(
-        lado_antes,
-        text="ANTES",
-        text_color=tema.COR_TEXTO_SECUNDARIO,
-        font=ctk.CTkFont(size=10, weight="bold"),
-    ).pack()
+        self.corpo = componentes.Contentor(self)
+        self.corpo.pack(fill="both", expand=True, padx=22, pady=(18, 16))
 
-    ctk.CTkLabel(
-        lado_antes,
-        text=_formatar_valor(valor_antigo),
-        text_color=tema.COR_TEXTO_SECUNDARIO,
-        font=ctk.CTkFont(size=16, overstrike=True),
-    ).pack(pady=(2, 0))
+        componentes.Rotulo(
+            self.corpo, f"Gerir: {titulo}", "cartao"
+        ).pack(fill="x")
+        componentes.Rotulo(
+            self.corpo, definicao["descricao"], "secundario",
+            wraplength=_LARGURA_GERIR - 50, justify="left", height=0,
+        ).pack(fill="x", pady=(2, 12))
 
-    # Seta
-    ctk.CTkLabel(
-        interno,
-        text="→",
-        text_color=tema.COR_TEXTO_SECUNDARIO,
-        font=ctk.CTkFont(size=18),
-    ).pack(side="left", padx=12)
+        self._montar_controlo()
 
-    # Lado "Depois"
-    lado_depois = ctk.CTkFrame(interno, fg_color="transparent")
-    lado_depois.pack(side="left", expand=True)
+        self.rotulo_erro = componentes.Rotulo(
+            self.corpo, "", "secundario", cor=tema.TEXTO_ERRO
+        )
+        self.rotulo_erro.pack(fill="x", pady=(4, 0))
 
-    ctk.CTkLabel(
-        lado_depois,
-        text="DEPOIS",
-        text_color=tema.COR_TEXTO_SECUNDARIO,
-        font=ctk.CTkFont(size=10, weight="bold"),
-    ).pack()
+        self.caixa_resumo = componentes.Contentor(
+            self.corpo, corner_radius=tema.RAIO_CAMPO,
+            fg_color=tema.LINHA_ALTERNADA,
+        )
+        self.caixa_resumo.pack(fill="x", pady=(8, 0))
+        self.rotulo_resumo = componentes.Rotulo(
+            self.caixa_resumo, "", "texto",
+            wraplength=_LARGURA_GERIR - 80, justify="left", height=0,
+        )
+        self.rotulo_resumo.pack(fill="x", padx=12, pady=(10, 2))
+        self.rotulo_nota = componentes.Rotulo(
+            self.caixa_resumo, "", "secundario",
+            wraplength=_LARGURA_GERIR - 80, justify="left", height=0,
+        )
+        self.rotulo_nota.pack(fill="x", padx=12, pady=(0, 10))
 
-    ctk.CTkLabel(
-        lado_depois,
-        text=_formatar_valor(valor_novo),
-        text_color=tema.AZUL_PRINCIPAL,
-        font=ctk.CTkFont(size=16, weight="bold"),
-    ).pack(pady=(2, 0))
+        rodape = componentes.Contentor(self.corpo)
+        rodape.pack(fill="x", pady=(14, 0))
+        self.botao_confirmar = componentes.Botao(
+            rodape, "Confirmar alteração", self._confirmar, "primario",
+            width=170, height=34,
+        )
+        self.botao_confirmar.pack(side="right")
+        componentes.Botao(
+            rodape, "Cancelar", self.destroy, width=110, height=34
+        ).pack(side="right", padx=(0, 8))
 
-    # ---------------------------------------------------------------
-    # Campo de motivo (opcional)
-    # ---------------------------------------------------------------
-    motivo = ctk.CTkFrame(janela, fg_color="transparent")
-    motivo.pack(fill="x", padx=24, pady=(0, 16))
+        self.bind("<Return>", lambda _e: self._confirmar(), add="+")
+        self.bind("<Escape>", lambda _e: self.destroy(), add="+")
 
-    ctk.CTkLabel(
-        motivo,
-        text="Motivo (opcional)",
-        text_color=tema.COR_TEXTO_SECUNDARIO,
-        font=ctk.CTkFont(size=11),
-        anchor="w",
-    ).pack(fill="x")
+        self._atualizar()
+        self._ajustar_tamanho()
+        componentes.colocar_no_topo(self)
 
-    campo_motivo = ctk.CTkEntry(
-        motivo,
-        corner_radius=tema.RAIO_CAMPO,
-        placeholder_text="ex.: revisão anual da política",
-    )
-    campo_motivo.pack(fill="x", pady=(2, 0))
+    # -- controlo, conforme o tipo ------------------------------------
 
-    # ---------------------------------------------------------------
-    # Rodapé — Cancelar + Confirmar
-    # ---------------------------------------------------------------
-    rodape = ctk.CTkFrame(janela, fg_color="transparent")
-    rodape.pack(fill="x", padx=24, pady=(0, 20))
+    def _montar_controlo(self):
+        if self.tipo == "bool":
+            componentes.Rotulo(self.corpo, "Ativo?", "secundario").pack(
+                fill="x", pady=(0, 4)
+            )
+            self.seletor_bool = componentes.SeletorVistas(
+                self.corpo, ("Sim", "Não"), self._ao_mudar_bool,
+                inicial="Sim" if self.valor_atual else "Não",
+            )
+            self.seletor_bool.pack(anchor="w")
+            return
 
-    ctk.CTkButton(
-        rodape,
-        text="Cancelar",
-        width=130,
-        height=36,
-        corner_radius=tema.RAIO_BOTAO,
-        fg_color="transparent",
-        border_width=1,
-        border_color=tema.COR_BORDA,
-        text_color=tema.COR_TEXTO,
-        hover_color=tema.COR_BORDA,
-        command=lambda: fechar(False),
-    ).pack(side="left")
+        if self.tipo == "tupla_mes_dia":
+            componentes.Rotulo(
+                self.corpo, "Novo valor (mês e dia)", "secundario"
+            ).pack(fill="x", pady=(0, 4))
+            linha = componentes.Contentor(self.corpo)
+            linha.pack(anchor="w")
+            mes, dia = self.valor_atual
+            self.combo_mes = componentes.Seletor(
+                linha, values=list(_MESES), width=90,
+                command=lambda _v: self._ao_mudar_tupla(),
+            )
+            self.combo_mes.set(_MESES[mes - 1])
+            self.combo_mes.pack(side="left")
+            self.combo_dia = componentes.Seletor(
+                linha, values=[str(d) for d in range(1, 32)], width=80,
+                command=lambda _v: self._ao_mudar_tupla(),
+            )
+            self.combo_dia.set(str(dia))
+            self.combo_dia.pack(side="left", padx=(8, 0))
+            return
 
-    ctk.CTkButton(
-        rodape,
-        text="Confirmar alteração",
-        width=170,
-        height=36,
-        corner_radius=tema.RAIO_BOTAO,
-        fg_color=tema.AZUL_PRINCIPAL,
-        hover_color=tema.AZUL_CLARO,
-        command=lambda: fechar(True),
-    ).pack(side="right")
+        if self.tipo == "texto":
+            componentes.Rotulo(
+                self.corpo, "Nova pasta", "secundario"
+            ).pack(fill="x", pady=(0, 4))
+            linha = componentes.Contentor(self.corpo)
+            linha.pack(fill="x")
+            self.campo = componentes.CampoTexto(linha)
+            self.campo.insert(0, str(self.valor_atual))
+            self.campo.pack(side="left", fill="x", expand=True)
+            self.campo.bind("<KeyRelease>", self._ao_escrever, add=True)
+            componentes.Botao(
+                linha, "Escolher", self._escolher_pasta, width=90
+            ).pack(side="left", padx=(8, 0))
+            return
 
-    # Ajusta a janela ao tamanho do conteúdo e centra
-    janela.update_idletasks()
-    largura = 520
-    altura = janela.winfo_reqheight()
-    janela.geometry(f"{largura}x{altura}")
+        # int / decimal
+        componentes.Rotulo(
+            self.corpo, _texto_limites(self.definicao), "secundario"
+        ).pack(fill="x", pady=(0, 4))
+        self.campo = componentes.CampoTexto(
+            self.corpo, width=120, justify="center"
+        )
+        self.campo.insert(0, str(self.valor_atual).replace(".", ","))
+        self.campo.pack(anchor="w")
+        self.campo.bind("<KeyRelease>", self._ao_escrever, add=True)
+        self.after(50, self._focar_campo)
 
-    # Centrar no parent
-    _centrar_no_parent(janela, pai, largura, altura)
+    def _focar_campo(self):
+        try:
+            self.campo.focus_set()
+            self.campo.select_range(0, "end")
+        except Exception:  # janela fechada entretanto
+            pass
 
-    # Bloqueia até o utilizador decidir
-    janela.wait_window()
+    # -- leitura do valor ---------------------------------------------
 
-    return resultado["confirmado"]
+    def _ao_mudar_bool(self, texto):
+        self.novo = texto == "Sim"
+        self._valido = True
+        self._atualizar()
+
+    def _ao_mudar_tupla(self):
+        novo = (
+            _MESES.index(self.combo_mes.get()) + 1,
+            int(self.combo_dia.get()),
+        )
+        self._validar(novo)
+        self._atualizar()
+
+    def _ao_escrever(self, _evento=None):
+        texto = self.campo.get()
+        if self.tipo == "texto":
+            self._validar(texto.strip())
+        else:
+            try:
+                self.novo = configuracoes.ler_numero(self.chave, texto)
+                self._valido = True
+                self.rotulo_erro.configure(text="")
+            except ValueError as erro:
+                self._valido = False
+                self.rotulo_erro.configure(text=str(erro))
+        self._atualizar()
+
+    def _validar(self, valor):
+        try:
+            configuracoes.validar_valor(self.chave, valor)
+        except ValueError as erro:
+            self._valido = False
+            self.rotulo_erro.configure(text=str(erro))
+            return
+        self.novo = valor
+        self._valido = True
+        self.rotulo_erro.configure(text="")
+
+    def _escolher_pasta(self):
+        from tkinter import filedialog
+
+        pasta = filedialog.askdirectory(
+            parent=self, title="Escolher pasta",
+            initialdir=str(self.valor_atual),
+        )
+        if not pasta:
+            return
+        self.campo.delete(0, "end")
+        self.campo.insert(0, pasta)
+        self._ao_escrever()
+
+    # -- resumo e confirmação -----------------------------------------
+
+    def _mudou(self):
+        return self._valido and self.novo != self.valor_atual
+
+    def _atualizar(self):
+        if self._mudou():
+            antes = formatar_valor(self.chave, self.valor_atual, self.tipo)
+            depois = formatar_valor(self.chave, self.novo, self.tipo)
+            self.caixa_resumo.configure(fg_color=tema.AMARELO_AVISO)
+            self.rotulo_resumo.configure(
+                text=f"{antes}  →  {depois}", text_color=tema.TEXTO_AVISO,
+                font=ctk.CTkFont(size=13, weight="bold"),
+            )
+            self.rotulo_nota.configure(
+                text=(
+                    "Vale para os registos novos; os que já existem não "
+                    "mudam. Fica registado com o seu nome."
+                )
+            )
+            self.botao_confirmar.configure(state="normal")
+        else:
+            self.caixa_resumo.configure(fg_color=tema.LINHA_ALTERNADA)
+            self.rotulo_resumo.configure(
+                text=(
+                    "Sem alterações: o valor é igual ao atual."
+                    if self._valido
+                    else "Corrige o valor para ver a alteração."
+                ),
+                text_color=tema.COR_TEXTO_SECUNDARIO,
+                font=ctk.CTkFont(size=12),
+            )
+            self.rotulo_nota.configure(text="")
+            self.botao_confirmar.configure(state="disabled")
+
+    def _confirmar(self):
+        if not self._mudou():
+            return
+
+        autor = sessao.obter_responsavel_ativo()
+        try:
+            configuracoes.definir(self.chave, self.novo, autor)
+        except ValueError as erro:
+            self.rotulo_erro.configure(text=str(erro))
+            return
+
+        logger.info(
+            "Configuração alterada pelo Gerir — chave=%s", self.chave
+        )
+        novo = self.novo
+        self.destroy()
+        self.ao_gravar(novo)
+
+    def _ajustar_tamanho(self):
+        """Mede o conteúdo e centra sobre a janela que abriu (regra da
+        geometria dos modais: medir e converter para lógico)."""
+        self.update_idletasks()
+        fator = componentes.escala(self)
+        altura = int(self.corpo.winfo_reqheight() / fator) + 40
+        componentes.centrar_sobre(
+            self, self.pai.winfo_toplevel(), _LARGURA_GERIR, altura
+        )
 
 
 # =====================================================================
@@ -486,37 +594,6 @@ def _password_do_master_valida(password):
         return False
 
     return utilizadores.verificar_password(ativo["id"], password)
-
-
-def _formatar_valor(valor):
-    """Formata um valor de configuração para mostrar no modal.
-
-    - `bool` → "Ligado" / "Desligado"
-    - tuplo (mes, dia) → "1 de jul"
-    - resto → str()
-    """
-    if isinstance(valor, bool):
-        return "Ligado" if valor else "Desligado"
-
-    if isinstance(valor, tuple) and len(valor) == 2:
-        mes, dia = valor
-        meses = (
-            "jan",
-            "fev",
-            "mar",
-            "abr",
-            "mai",
-            "jun",
-            "jul",
-            "ago",
-            "set",
-            "out",
-            "nov",
-            "dez",
-        )
-        return f"{dia} de {meses[mes - 1]}"
-
-    return str(valor)
 
 
 def _centrar_no_parent(janela, pai, largura, altura):

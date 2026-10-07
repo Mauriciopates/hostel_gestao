@@ -82,6 +82,8 @@ logger = logging.getLogger(__name__)
 #   - "tipo":   "int", "decimal", "bool", "tupla_mes_dia" ou "texto"
 #   - "perfil": "master" ou "master_admin" — quem pode alterar
 #   - "default": valor por omissão (usado no seed e como fallback)
+#   - "minimo" / "maximo" (opcionais, int e decimal — v1.11.2): limites
+#     que o `definir` impõe (ver `validar_valor`)
 #
 # Este mapa é a FONTE DE VERDADE do módulo. Se uma chave não estiver
 # aqui, o `obter` e o `definir` recusam-na (evita gravar chaves
@@ -93,12 +95,15 @@ _CHAVES = {
         "tipo": "int",
         "perfil": "master",
         "default": config.DIA_VENCIMENTO,
-        "descricao": "Dia do mês sugerido para novas rendas mensais (1–28).",
+        "minimo": 1,
+        "maximo": 28,
+        "descricao": "Dia do mês sugerido para novas rendas mensais (1 a 28).",
     },
     "operacao.aviso_previo_dias": {
         "tipo": "int",
         "perfil": "master",
         "default": config.AVISO_PREVIO_DIAS,
+        "minimo": 0,
         "descricao": (
             "Antecedência mínima para encerramento de um contrato mensal."
         ),
@@ -107,6 +112,7 @@ _CHAVES = {
         "tipo": "int",
         "perfil": "master",
         "default": config.DURACAO_MINIMA_MESES,
+        "minimo": 1,
         "descricao": (
             "Abaixo deste valor, o encerramento é sinalizado com aviso."
         ),
@@ -117,6 +123,7 @@ _CHAVES = {
         "tipo": "decimal",
         "perfil": "master",
         "default": config.MULTIPLICADOR_CAUCAO,
+        "minimo": 0,
         "descricao": (
             "Quantas rendas sugerir como caução ao criar um contrato "
             "mensal."
@@ -126,6 +133,7 @@ _CHAVES = {
         "tipo": "decimal",
         "perfil": "master",
         "default": config.MULTIPLICADOR_MAXIMO_CAUCAO,
+        "minimo": 0,
         "descricao": "Teto acima do qual o sistema recusa a caução.",
     },
     "financeiro.epoca_alta_inicio": {
@@ -297,6 +305,75 @@ def _validar_permissao(chave, autor):
         )
 
 
+# =====================================================================
+# VALIDAÇÃO DOS VALORES (v1.11.2)
+# =====================================================================
+
+
+def validar_valor(chave, valor):
+    """Confirma que `valor` serve para a chave; levanta ValueError
+    com uma frase para o ecrã se não servir.
+
+    Até à v1.11.1 o `definir` gravava qualquer número (um dia de
+    vencimento 45, por exemplo). O modal "Gerir" das Configurações
+    chama isto enquanto se escreve, e o `definir` chama-o antes de
+    gravar — a regra fica num só sítio.
+    """
+    definicao = _CHAVES.get(chave)
+
+    if definicao is None:
+        raise ValueError(f"Chave de configuração desconhecida: {chave}")
+
+    tipo = definicao["tipo"]
+
+    if tipo in ("int", "decimal"):
+        minimo = definicao.get("minimo")
+        maximo = definicao.get("maximo")
+
+        if minimo is not None and maximo is not None:
+            if not minimo <= valor <= maximo:
+                raise ValueError(f"Tem de estar entre {minimo} e {maximo}.")
+        elif minimo is not None and valor < minimo:
+            raise ValueError(f"Tem de ser pelo menos {minimo}.")
+        elif maximo is not None and valor > maximo:
+            raise ValueError(f"Não pode passar de {maximo}.")
+
+    elif tipo == "tupla_mes_dia":
+        mes, dia = valor
+        if not 1 <= mes <= 12 or not 1 <= dia <= 31:
+            raise ValueError("Mês ou dia inválido.")
+
+    elif tipo == "texto" and not str(valor).strip():
+        raise ValueError("O valor não pode ficar vazio.")
+
+
+def ler_numero(chave, texto):
+    """Converte o texto escrito no ecrã para o número da chave (int ou
+    Decimal, aceita vírgula) e valida-o. Levanta ValueError com a
+    frase para o ecrã."""
+    definicao = _CHAVES.get(chave)
+
+    if definicao is None:
+        raise ValueError(f"Chave de configuração desconhecida: {chave}")
+
+    texto = (texto or "").strip().replace(",", ".")
+
+    if definicao["tipo"] == "int":
+        if not texto.lstrip("-").isdigit():
+            raise ValueError("Escreve um número inteiro.")
+        valor = int(texto)
+    else:
+        try:
+            valor = Decimal(texto)
+        except InvalidOperation:
+            raise ValueError("Escreve um número (ex.: 1,5).")
+        if not valor.is_finite():
+            raise ValueError("Escreve um número (ex.: 1,5).")
+
+    validar_valor(chave, valor)
+    return valor
+
+
 def pode_alterar(chave, autor):
     """Devolve True se o autor pode alterar a chave — sem levantar.
 
@@ -422,6 +499,7 @@ def definir(chave, valor, autor, motivo=""):
         raise
 
     definicao = _CHAVES[chave]
+    validar_valor(chave, valor)
     texto_novo = _para_texto(valor)
 
     # Ler o valor anterior — para o histórico
@@ -512,6 +590,7 @@ def listar_definicoes(prefixo=None):
       - "perfil": perfil mínimo para alterar
       - "default": valor por omissão
       - "descricao": texto descritivo
+      - "minimo" / "maximo": limites (None quando não há)
 
     Filtra por prefixo quando indicado. A GUI usa isto para saber
     que opções mostrar numa tab — sem precisar de hardcoded.
@@ -529,6 +608,8 @@ def listar_definicoes(prefixo=None):
                 "perfil": definicao["perfil"],
                 "default": definicao["default"],
                 "descricao": definicao["descricao"],
+                "minimo": definicao.get("minimo"),
+                "maximo": definicao.get("maximo"),
             }
         )
 

@@ -75,6 +75,7 @@ class RelatContratos(RelatorioBase):
 
         tabela = componentes.Tabela(
             master,
+            rolagem_horizontal=True,
             colunas=colunas,
             altura_linha=52,
             mensagem_vazia="Sem ocupações no período.",
@@ -306,6 +307,7 @@ class RelatContratos(RelatorioBase):
 
         tabela = componentes.Tabela(
             master,
+            rolagem_horizontal=True,
             colunas=colunas,
             altura_linha=52,
             mensagem_vazia="Sem contratos mensais no período.",
@@ -572,6 +574,7 @@ class RelatContratos(RelatorioBase):
 
         tabela = componentes.Tabela(
             master,
+            rolagem_horizontal=True,
             colunas=colunas,
             altura_linha=52,
             mensagem_vazia="Sem reservas Airbnb no período.",
@@ -905,6 +908,7 @@ class RelatContratos(RelatorioBase):
 
         tabela = componentes.Tabela(
             master,
+            rolagem_horizontal=True,
             colunas=colunas,
             altura_linha=52,
             mensagem_vazia="Sem encerramentos fora das regras no período.",

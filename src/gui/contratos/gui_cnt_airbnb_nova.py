@@ -142,9 +142,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         corpo = self._criar_cartao("Estadia")
 
         self._linha(corpo, 0, "Data de entrada *")
-        self.campo_data_inicio = ctk.CTkEntry(
-            corpo, placeholder_text="dd/mm/aaaa"
-        )
+        self.campo_data_inicio = componentes.CampoData(corpo)
         self.campo_data_inicio.grid(row=0, column=1, sticky="ew", pady=6)
         self.campo_data_inicio.bind(
             "<FocusOut>", lambda _evento: self._atualizar_resumo()
@@ -154,9 +152,7 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         )
 
         self._linha(corpo, 1, "Data de saída *")
-        self.campo_data_fim = ctk.CTkEntry(
-            corpo, placeholder_text="dd/mm/aaaa"
-        )
+        self.campo_data_fim = componentes.CampoData(corpo)
         self.campo_data_fim.grid(row=1, column=1, sticky="ew", pady=6)
         self.campo_data_fim.bind(
             "<FocusOut>", lambda _evento: self._atualizar_resumo()

@@ -681,9 +681,7 @@ class _EditarDespesaModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
             anchor="w",
         ).pack(fill="x")
-        self.campo_data_lancamento = ctk.CTkEntry(
-            bloco_lanc, corner_radius=tema.RAIO_CAMPO
-        )
+        self.campo_data_lancamento = componentes.CampoData(bloco_lanc)
         self.campo_data_lancamento.insert(
             0, _formatar_data(self.despesa["data_lancamento"])
         )
@@ -697,9 +695,8 @@ class _EditarDespesaModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
             anchor="w",
         ).pack(fill="x", pady=(8, 2))
-        self.campo_data_vencimento = ctk.CTkEntry(
+        self.campo_data_vencimento = componentes.CampoData(
             area,
-            corner_radius=tema.RAIO_CAMPO,
             placeholder_text="dd/mm/aaaa (deixa em branco para limpar)",
         )
         if self.despesa["data_vencimento"]:

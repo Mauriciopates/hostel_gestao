@@ -8,11 +8,12 @@ HTML validado em 19/09/2026, com duas vistas:
             só as chaves que lhe pertencem (as de caução ficam de
             fora, com aviso).
 
-Cada opção é uma linha com título + descrição + controlo à direita.
-Ao alterar um valor, aparece um modal de confirmação (antes → depois)
-— exceto para as chaves que não mudam regra de negócio (pasta dos
-relatórios, por exemplo). Se o utilizador cancelar, o controlo volta
-ao valor antigo.
+Cada opção é uma linha com título + descrição + valor atual (só
+leitura) + botão "Gerir" (v1.11.2, mockup aprovado a 07/10/2026). O
+Gerir abre o `GerirConfiguracaoModal`: campo, resumo antes → depois
+enquanto se escreve, e "Confirmar alteração" (só ativo com um valor
+novo e válido). Até à v1.11.1 o controlo estava na própria linha e
+gravava logo, com um segundo modal de confirmação.
 
 Segue a mesma disciplina de camadas do resto da GUI (decisão 7):
 fala só com `configuracoes` (o módulo de negócio), `sessao` e
@@ -57,7 +58,7 @@ import utilizadores
 from . import componentes
 from . import sessao
 from . import tema
-from .gui_configuracoes_modal import confirmar_alteracao
+from .gui_configuracoes_modal import GerirConfiguracaoModal, formatar_valor
 from .gui_documentos_legais import publicar_documento, ver_texto
 from . import gui_servidores
 
@@ -466,52 +467,88 @@ class Configuracoes(ctk.CTkFrame):
     # -- linhas --------------------------------------------------------
 
     def _desenhar_linha(self, master, definicao, bloqueada=False):
-        """Desenha uma linha da secção — título + descrição + controlo.
+        """Desenha uma linha da secção — título + descrição + valor
+        atual (só leitura) + botão "Gerir" (v1.11.2, mockup aprovado
+        a 07/10/2026).
 
-        'bloqueada' — quando True, o controlo é criado mas fica
-        disabled (cinzento, sem responder ao clique). Usado pelas
-        secções em `_SECOES_BLOQUEADAS`.
+        O valor muda-se no `GerirConfiguracaoModal`, que mostra o
+        resumo antes → depois e grava. 'bloqueada' — quando True, o
+        Gerir fica cinzento e não responde (secções em
+        `_SECOES_BLOQUEADAS` e separadores em `_TABS_BLOQUEADAS`).
         """
         chave = definicao["chave"]
         valor_atual = configuracoes.obter(chave)
 
-        linha = ctk.CTkFrame(master, fg_color="transparent")
+        linha = componentes.Contentor(master)
         linha.pack(fill="x", padx=16, pady=14)
 
         # Texto (título + descrição)
-        bloco_texto = ctk.CTkFrame(linha, fg_color="transparent")
+        bloco_texto = componentes.Contentor(linha)
         bloco_texto.pack(side="left", fill="x", expand=True)
 
-        ctk.CTkLabel(
-            bloco_texto,
-            text=self._titulo_amigavel(chave),
-            text_color=tema.COR_TEXTO,
-            font=ctk.CTkFont(size=13),
-            anchor="w",
+        componentes.Rotulo(
+            bloco_texto, self._titulo_amigavel(chave), "texto"
         ).pack(fill="x")
 
-        ctk.CTkLabel(
-            bloco_texto,
-            text=definicao["descricao"],
-            text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=11),
-            anchor="w",
-            justify="left",
-            wraplength=600,
+        componentes.Rotulo(
+            bloco_texto, definicao["descricao"], "secundario",
+            justify="left", wraplength=600, height=0,
         ).pack(fill="x", pady=(2, 0))
 
-        # Controlo — consoante o tipo da chave
-        controlo = self._criar_controlo(linha, definicao, valor_atual)
-        controlo.pack(side="right", padx=(20, 0))
+        # Gerir à direita, valor atual logo antes dele.
+        botao = componentes.Botao(
+            linha, "Gerir",
+            lambda: self._gerir(definicao, celula_valor),
+            width=80,
+        )
+        botao.pack(side="right", padx=(16, 0))
 
-        # Bloquear depois de criar — os controlos não expõem o
-        # `state` de forma uniforme, por isso cada um é tratado
-        # pelo seu método `_bloquear_controlo`.
+        celula_valor = componentes.Contentor(linha)
+        celula_valor.pack(side="right", padx=(20, 0))
+        self._mostrar_valor(celula_valor, definicao, valor_atual)
+
         if bloqueada:
-            self._bloquear_controlo(controlo)
+            self._bloquear_controlo(botao)
 
         # Linha fina em baixo (exceto na última — tratada pelo cartão)
-        ctk.CTkFrame(master, height=1, fg_color=tema.COR_BORDA).pack(fill="x")
+        componentes.Separador(master).pack(fill="x")
+
+    def _mostrar_valor(self, celula, definicao, valor):
+        """(Re)desenha o valor atual de uma linha: pílula Sim/Não nos
+        sim/não, texto forte nos outros."""
+        for filho in celula.winfo_children():
+            filho.destroy()
+
+        texto = formatar_valor(definicao["chave"], valor, definicao["tipo"])
+
+        if definicao["tipo"] == "bool":
+            componentes.Etiqueta(
+                celula, texto, estilo="livre" if valor else "info"
+            ).pack(anchor="e")
+            return
+
+        componentes.Rotulo(
+            celula, texto, "forte", anchor="e", justify="right",
+            wraplength=300, height=0,
+        ).pack(anchor="e")
+
+    def _gerir(self, definicao, celula_valor):
+        """Abre o modal Gerir; depois de gravar, atualiza a linha."""
+        if sessao.obter_responsavel_ativo() is None:
+            componentes.mostrar_erro(
+                "Não há responsável ativo. Entre novamente no sistema."
+            )
+            return
+
+        GerirConfiguracaoModal(
+            self,
+            titulo=self._titulo_amigavel(definicao["chave"]),
+            definicao=definicao,
+            valor_atual=configuracoes.obter(definicao["chave"]),
+            ao_gravar=lambda novo: self._mostrar_valor(
+                celula_valor, definicao, novo
+            ),
+        )
 
     def _bloquear_controlo(self, controlo):
         """Põe um controlo já criado em modo disabled.
@@ -612,194 +649,6 @@ class Configuracoes(ctk.CTkFrame):
         }
 
         return str(mapa.get(chave, chave))
-
-    # -- controlos -----------------------------------------------------
-
-    def _criar_controlo(self, master, definicao, valor_atual):
-        """Cria o widget certo para o tipo da chave.
-
-        - int / decimal  → campo de texto pequeno + botão Guardar
-        - bool           → pílula deslizante (CTkSwitch)
-        - texto          → campo de texto + botão "Escolher" (se for pasta)
-        - tupla_mes_dia  → dois dropdowns (dia + mês)
-        """
-        tipo = definicao["tipo"]
-
-        if tipo == "bool":
-            return self._controlo_bool(master, definicao, valor_atual)
-
-        if tipo == "tupla_mes_dia":
-            return self._controlo_tupla(master, definicao, valor_atual)
-
-        if tipo == "texto":
-            return self._controlo_texto(master, definicao, valor_atual)
-
-        # int e decimal caem aqui
-        return self._controlo_numerico(master, definicao, valor_atual)
-
-    def _controlo_bool(self, master, definicao, valor_atual):
-        """Pílula deslizante (CTkSwitch)."""
-        chave = definicao["chave"]
-
-        variavel = ctk.BooleanVar(value=bool(valor_atual))
-
-        def ao_mudar():
-            novo = variavel.get()
-            self._tentar_gravar(chave, novo, None, valor_atual, "bool")
-
-        switch = ctk.CTkSwitch(
-            master,
-            text="",
-            variable=variavel,
-            command=ao_mudar,
-            progress_color=tema.AZUL_PRINCIPAL,
-            fg_color=tema.CINZA_INDISPONIVEL,
-        )
-
-        return switch
-
-    def _controlo_numerico(self, master, definicao, valor_atual):
-        """Campo de texto pequeno + botão Guardar ao lado.
-
-        A gravação acontece só ao clicar em "Guardar" ou ao premir
-        Enter no campo — nunca no `<FocusOut>`. O `FocusOut` era a
-        origem de um ciclo infinito: cada vez que o modal de
-        confirmação abria, roubava o foco ao campo, e ao fechar o
-        foco voltava a sair, disparando o `FocusOut` outra vez.
-
-        Com o botão explícito, a intenção é clara e o ciclo
-        desaparece.
-        """
-        chave = definicao["chave"]
-        tipo = definicao["tipo"]
-
-        bloco = ctk.CTkFrame(master, fg_color="transparent")
-
-        entrada = ctk.CTkEntry(
-            bloco,
-            width=70,
-            corner_radius=tema.RAIO_CAMPO,
-            justify="center",
-        )
-        entrada.insert(0, str(valor_atual))
-        entrada.pack(side="left")
-
-        def guardar(_evento=None):
-            texto = entrada.get().strip()
-
-            try:
-                if tipo == "int":
-                    novo = int(texto)
-                else:
-                    from decimal import Decimal
-
-                    novo = Decimal(texto)
-            except Exception:
-                componentes.mostrar_erro("Valor inválido.")
-                entrada.delete(0, "end")
-                entrada.insert(0, str(valor_atual))
-                return
-
-            self._tentar_gravar(chave, novo, entrada, valor_atual, tipo)
-
-        ctk.CTkButton(
-            bloco,
-            text="Guardar",
-            width=70,
-            height=28,
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color=tema.AZUL_PRINCIPAL,
-            hover_color=tema.AZUL_CLARO,
-            font=ctk.CTkFont(size=11),
-            command=guardar,
-        ).pack(side="left", padx=(6, 0))
-
-        # Enter no campo também grava — atalho útil.
-        entrada.bind("<Return>", guardar)
-
-        return bloco
-
-    def _controlo_texto(self, master, definicao, valor_atual):
-        """Campo de texto largo + botão Escolher (para pastas)."""
-        chave = definicao["chave"]
-
-        bloco = ctk.CTkFrame(master, fg_color="transparent")
-
-        entrada = ctk.CTkEntry(
-            bloco,
-            width=280,
-            corner_radius=tema.RAIO_CAMPO,
-        )
-        entrada.insert(0, str(valor_atual))
-        entrada.pack(side="left")
-
-        ctk.CTkButton(
-            bloco,
-            text="Escolher",
-            width=90,
-            height=30,
-            corner_radius=tema.RAIO_BOTAO,
-            fg_color=tema.AZUL_PRINCIPAL,
-            hover_color=tema.AZUL_CLARO,
-            font=ctk.CTkFont(size=11),
-            command=lambda: self._escolher_pasta(chave, entrada, valor_atual),
-        ).pack(side="left", padx=(8, 0))
-
-        return bloco
-
-    def _controlo_tupla(self, master, definicao, valor_atual):
-        """Dois dropdowns (dia + mês) lado a lado."""
-        chave = definicao["chave"]
-        mes_atual, dia_atual = valor_atual
-
-        bloco = ctk.CTkFrame(master, fg_color="transparent")
-
-        # Mês
-        meses = (
-            "jan",
-            "fev",
-            "mar",
-            "abr",
-            "mai",
-            "jun",
-            "jul",
-            "ago",
-            "set",
-            "out",
-            "nov",
-            "dez",
-        )
-        combo_mes = componentes.Seletor(
-            bloco,
-            values=list(meses),
-            width=80,
-            corner_radius=tema.RAIO_CAMPO,
-        )
-        combo_mes.set(meses[mes_atual - 1])
-        combo_mes.pack(side="left")
-
-        # Dia
-        dias = tuple(str(d) for d in range(1, 32))
-        combo_dia = componentes.Seletor(
-            bloco,
-            values=list(dias),
-            width=70,
-            corner_radius=tema.RAIO_CAMPO,
-        )
-        combo_dia.set(str(dia_atual))
-        combo_dia.pack(side="left", padx=(6, 0))
-
-        def ao_mudar(_valor=None):
-            novo_mes = meses.index(combo_mes.get()) + 1
-            novo_dia = int(combo_dia.get())
-            self._tentar_gravar(
-                chave, (novo_mes, novo_dia), None, valor_atual, "tupla"
-            )
-
-        combo_mes.configure(command=ao_mudar)
-        combo_dia.configure(command=ao_mudar)
-
-        return bloco
 
     # -- ações ---------------------------------------------------------
 
@@ -1051,125 +900,7 @@ class Configuracoes(ctk.CTkFrame):
         if publicar_documento(self, documento):
             self._recarregar_documentos()
 
-    # -- gravação ------------------------------------------------------
-
-    def _tentar_gravar(self, chave, novo, widget, valor_antigo, tipo):
-        """Chama o modal de confirmação, e só grava se o utilizador
-        confirmar.
-
-        'tipo' é o tipo do valor (int, decimal, bool, tupla, texto).
-        'widget' é o controlo (para repor o valor antigo se cancelar);
-        pode ser None nos casos em que não há repor (bool, tupla).
-        """
-        if novo == valor_antigo:
-            return
-
-        autor = sessao.obter_responsavel_ativo()
-
-        if autor is None:
-            componentes.mostrar_erro(
-                "Não há responsável ativo. Entre novamente no sistema."
-            )
-            self._repor_widget(widget, valor_antigo)
-            return
-
-        # Modal de confirmação
-        titulo = self._titulo_amigavel(chave)
-        confirmado = confirmar_alteracao(
-            self,
-            titulo=titulo,
-            chave=chave,
-            valor_antigo=valor_antigo,
-            valor_novo=novo,
-        )
-
-        if not confirmado:
-            # Volta ao valor antigo
-            self._repor_widget(widget, valor_antigo)
-            return
-
-        # Gravar via módulo de negócio (que valida permissão de novo)
-        try:
-            configuracoes.definir(chave, novo, autor)
-        except ValueError as erro:
-            componentes.mostrar_erro(str(erro))
-            self._repor_widget(widget, valor_antigo)
-            return
-
-        componentes.mostrar_sucesso(
-            f"{titulo} alterado para {self._formatar_valor(novo, tipo)}."
-        )
-
-    def _repor_widget(self, widget, valor_antigo):
-        """Repõe o valor antigo no controlo, quando o utilizador
-        cancela ou há erro.
-
-        Só se aplica a campos de texto (`CTkEntry`). Os outros
-        controlos (`CTkSwitch`, `CTkOptionMenu`) ficam como estão —
-        repor um switch ou um dropdown seria mais complexo e o
-        ganho é pequeno.
-        """
-        if widget is None:
-            return
-
-        if isinstance(widget, ctk.CTkEntry):
-            widget.delete(0, "end")
-            widget.insert(0, str(valor_antigo))
-
-    def _formatar_valor(self, valor, tipo):
-        """Formata um valor para mostrar na mensagem de sucesso."""
-        if tipo == "bool":
-            return "Ligado" if valor else "Desligado"
-
-        if tipo == "tupla":
-            mes, dia = valor
-            meses = (
-                "jan",
-                "fev",
-                "mar",
-                "abr",
-                "mai",
-                "jun",
-                "jul",
-                "ago",
-                "set",
-                "out",
-                "nov",
-                "dez",
-            )
-            return f"{dia} de {meses[mes - 1]}"
-
-        return str(valor)
-
     # -- ações específicas --------------------------------------------
-
-    def _escolher_pasta(self, chave, entrada, valor_atual):
-        """Abre um diálogo nativo para escolher uma pasta."""
-        from tkinter import filedialog
-
-        pasta = filedialog.askdirectory(
-            title="Escolher pasta",
-            initialdir=str(valor_atual),
-        )
-
-        if not pasta:
-            return
-
-        entrada.delete(0, "end")
-        entrada.insert(0, pasta)
-
-        autor = sessao.obter_responsavel_ativo()
-
-        if autor is None:
-            return
-
-        try:
-            configuracoes.definir(chave, pasta, autor)
-        except ValueError as erro:
-            componentes.mostrar_erro(str(erro))
-            return
-
-        componentes.mostrar_sucesso(f"Pasta alterada: {pasta}")
 
     def _forcar_backup(self):
         """Executa o backup fora do arranque normal.

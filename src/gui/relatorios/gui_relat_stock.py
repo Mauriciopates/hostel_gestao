@@ -197,6 +197,7 @@ class RelatStock(RelatorioBase):
 
         tabela = componentes.Tabela(
             master,
+            rolagem_horizontal=True,
             colunas=colunas,
             altura_linha=44,
             mensagem_vazia="Sem movimentos no período com estes filtros.",
@@ -392,6 +393,7 @@ class RelatStock(RelatorioBase):
 
         tabela = componentes.Tabela(
             master,
+            rolagem_horizontal=True,
             colunas=colunas,
             altura_linha=44,
             mensagem_vazia="Sem produtos ativos no catálogo.",
@@ -596,6 +598,7 @@ class RelatStock(RelatorioBase):
 
         tabela = componentes.Tabela(
             master,
+            rolagem_horizontal=True,
             colunas=colunas,
             altura_linha=44,
             mensagem_vazia="Sem requisições no período com estes filtros.",
@@ -846,6 +849,7 @@ class RelatStock(RelatorioBase):
 
         tabela = componentes.Tabela(
             master,
+            rolagem_horizontal=True,
             colunas=colunas,
             altura_linha=44,
             mensagem_vazia="Sem devoluções no período com estes filtros.",

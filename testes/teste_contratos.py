@@ -110,6 +110,7 @@ class BaseContratosTest(BaseMySQLTest):
             telefone="912345678",
             data_nascimento=date(1990, 5, 20),
             validade_documento=date(2030, 1, 1),
+            contacto_emergencia="Mãe: 912000000",
         )
         self.cliente_airbnb = clientes.criar(
             "Ana Costa",
@@ -221,6 +222,7 @@ class TesteCriarMensal(BaseContratosTest):
             telefone="912222222",
             data_nascimento=date(1992, 4, 10),
             validade_documento=date(2030, 1, 1),
+            contacto_emergencia="Mãe: 912000000",
         )
         cliente_3 = clientes.criar(
             "Pedro",
@@ -234,6 +236,7 @@ class TesteCriarMensal(BaseContratosTest):
             telefone="912333333",
             data_nascimento=date(1988, 7, 1),
             validade_documento=date(2030, 1, 1),
+            contacto_emergencia="Mãe: 912000000",
         )
         contratos.criar_mensal(
             self.unidade_mensal["id"],
@@ -305,6 +308,7 @@ class TesteCriarMensal(BaseContratosTest):
             telefone="912222222",
             data_nascimento=date(1992, 4, 10),
             validade_documento=date(2030, 1, 1),
+            contacto_emergencia="Mãe: 912000000",
         )
         contratos.criar_mensal(
             self.unidade_mensal["id"],
@@ -337,6 +341,7 @@ class TesteCriarMensal(BaseContratosTest):
             telefone="912222222",
             data_nascimento=date(1992, 4, 10),
             validade_documento=date(2030, 1, 1),
+            contacto_emergencia="Mãe: 912000000",
         )
         outro_quarto = unidades.criar_quarto(
             self.unidade_mensal["id"], "Quarto 2"
@@ -355,6 +360,7 @@ class TesteCriarMensal(BaseContratosTest):
             telefone="912333333",
             data_nascimento=date(1988, 7, 1),
             validade_documento=date(2030, 1, 1),
+            contacto_emergencia="Mãe: 912000000",
         )
         contratos.criar_mensal(
             self.unidade_mensal["id"],
@@ -415,6 +421,7 @@ class TesteCriarMensal(BaseContratosTest):
             telefone="912444444",
             data_nascimento=date(1991, 2, 2),
             validade_documento=date(2025, 12, 31),
+            contacto_emergencia="Mãe: 912000000",
         )
         ocupacao, _ = contratos.criar_mensal(
             self.unidade_mensal["id"],
@@ -438,6 +445,7 @@ class TesteCriarMensal(BaseContratosTest):
             telefone="912555555",
             data_nascimento=date(1993, 6, 15),
             validade_documento=date(2030, 1, 1),
+            contacto_emergencia="Mãe: 912000000",
         )
         ocupacao, _ = contratos.criar_mensal(
             self.unidade_mensal["id"],
@@ -618,6 +626,7 @@ class TesteCriarMensal(BaseContratosTest):
             telefone="912222222",
             data_nascimento=date(1992, 4, 15),
             validade_documento=date(2030, 1, 1),
+            contacto_emergencia="Mãe: 912000000",
         )
         repositorio.atualizar_cliente(
             cliente_b["id"], {"nif": self.cliente_mensal["nif"]}

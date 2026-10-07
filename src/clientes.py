@@ -99,6 +99,7 @@ def criar(
         "validade_documento": validade_documento,
         "pais_emissor_documento": pais_emissor_documento.strip(),
         "pais_residencia": pais_residencia.strip(),
+        "contacto_emergencia": contacto_emergencia.strip(),
     }
 
     validacoes.validar_cliente(candidato, regime)
@@ -122,7 +123,7 @@ def criar(
         "estado_civil": candidato["estado_civil"],
         "data_nascimento": data_nascimento,
         "validade_documento": validade_documento,
-        "contacto_emergencia": contacto_emergencia.strip(),
+        "contacto_emergencia": candidato["contacto_emergencia"],
         "pais_emissor_documento": candidato["pais_emissor_documento"],
         "pais_residencia": candidato["pais_residencia"],
         "incompleto": False,
@@ -332,6 +333,11 @@ def atualizar(
             pais_residencia.strip()
             if pais_residencia is not None
             else cliente["pais_residencia"]
+        ),
+        "contacto_emergencia": (
+            contacto_emergencia.strip()
+            if contacto_emergencia is not None
+            else cliente["contacto_emergencia"]
         ),
     }
 

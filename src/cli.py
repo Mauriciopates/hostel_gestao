@@ -1513,9 +1513,7 @@ def _criar_cliente():
         telefone = ler_texto("Telefone: ")
         validade_documento = ler_data("Validade do documento: ")
         email = ler_texto("Email: ", obrigatorio=False)
-        contacto_emergencia = ler_texto(
-            "Contacto de emergência: ", obrigatorio=False
-        )
+        contacto_emergencia = ler_texto("Contacto de emergência: ")
         pais_emissor_documento = ""
         pais_residencia = ""
     else:

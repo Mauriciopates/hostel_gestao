@@ -729,6 +729,7 @@ class Tabela(ctk.CTkFrame):
         divisorias=True,
         linhas_verticais=True,
         tom_alternado=False,
+        rolagem_horizontal=False,
     ):
         super().__init__(
             master,
@@ -763,15 +764,33 @@ class Tabela(ctk.CTkFrame):
         self._titulos = {}
         self._reordenacao_agendada = None
 
+        # -- scroll horizontal (opcional, v1.11.2) --------------------
+        #
+        # Com `rolagem_horizontal=True`, cabeçalho e corpo vivem
+        # dentro de um `conteudo` posto num canvas com barra
+        # horizontal. Quando a tabela cabe, o conteúdo estica até à
+        # largura do canvas e a barra esconde-se — fica igual a
+        # antes. Quando não cabe (colunas com mínimos que somam mais
+        # do que o ecrã), o conteúdo fica com a largura que pede e a
+        # barra aparece. Sem a opção, nada muda.
+        self._rolagem_horizontal = rolagem_horizontal
+        if rolagem_horizontal:
+            destino = self._montar_rolagem_horizontal()
+            margem = 0
+        else:
+            destino = self
+            margem = 1
+
         # -- cabeçalho fixo, fora do scroll ---------------------------
         #
         # O `padx=1, pady=(1, 0)` mete a faixa por dentro da borda de
         # 1px do cartão. Sem isso, a faixa (de cantos retos) passava
-        # por cima dos cantos redondos do cartão e comia-os.
+        # por cima dos cantos redondos do cartão e comia-os. Com scroll
+        # horizontal essa folga é do canvas (`_montar_rolagem_horizontal`).
         self.cabecalho = ctk.CTkFrame(
-            self, corner_radius=0, fg_color=tema.CABECALHO_TABELA_FUNDO
+            destino, corner_radius=0, fg_color=tema.CABECALHO_TABELA_FUNDO
         )
-        self.cabecalho.pack(fill="x", padx=1, pady=(1, 0))
+        self.cabecalho.pack(fill="x", padx=margem, pady=(margem, 0))
 
         self.grelha_cabecalho = ctk.CTkFrame(
             self.cabecalho, fg_color="transparent"
@@ -779,11 +798,11 @@ class Tabela(ctk.CTkFrame):
         self.grelha_cabecalho.pack(fill="x", padx=(0, self._folga_scroll))
 
         ctk.CTkFrame(
-            self, height=1, corner_radius=0, fg_color=tema.COR_BORDA
+            destino, height=1, corner_radius=0, fg_color=tema.COR_BORDA
         ).pack(fill="x")
 
         # -- corpo com scroll -----------------------------------------
-        self.corpo = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self.corpo = ctk.CTkScrollableFrame(destino, fg_color="transparent")
         self.corpo.pack(fill="both", expand=True)
 
         self.grelha = ctk.CTkFrame(self.corpo, fg_color="transparent")
@@ -840,6 +859,86 @@ class Tabela(ctk.CTkFrame):
         self.cabecalho.bind("<Configure>", self._alinhar_cabecalho, add=True)
 
     # -- construção interna ------------------------------------------
+
+    def _montar_rolagem_horizontal(self):
+        """Canvas + barra horizontal; devolve o `conteudo` onde vão o
+        cabeçalho e o corpo.
+
+        O canvas é um `tkinter.Canvas` simples: o CustomTkinter não
+        tem um frame com scroll nas duas direções, e meter um
+        `CTkScrollableFrame` vertical (o corpo) dentro de outro
+        horizontal deixava a altura do corpo sem controlo.
+        """
+        self._canvas_h = tkinter.Canvas(
+            self,
+            highlightthickness=0,
+            borderwidth=0,
+            background=self._apply_appearance_mode(tema.COR_FUNDO),
+        )
+        self._barra_h = ctk.CTkScrollbar(
+            self, orientation="horizontal", command=self._canvas_h.xview
+        )
+        self._canvas_h.configure(xscrollcommand=self._barra_h.set)
+        self._barra_h_visivel = False
+        self._canvas_h.pack(fill="both", expand=True, padx=1, pady=1)
+
+        conteudo = ctk.CTkFrame(
+            self._canvas_h, corner_radius=0, fg_color=tema.COR_FUNDO
+        )
+        self._conteudo_h = conteudo
+        self._janela_h = self._canvas_h.create_window(
+            0, 0, window=conteudo, anchor="nw"
+        )
+
+        # Canvas do Tkinter: `add="+"` para não apagar outros binds
+        # (lição 1 do ficheiro 11).
+        self._canvas_h.bind("<Configure>", self._ajustar_rolagem_h, add="+")
+        conteudo.bind("<Configure>", self._ajustar_rolagem_h, add=True)
+
+        return conteudo
+
+    def _ajustar_rolagem_h(self, _evento=None):
+        """Acerta o tamanho do conteúdo dentro do canvas e mostra ou
+        esconde a barra horizontal.
+
+        Largura: a do canvas, ou a que o conteúdo pede (soma dos
+        mínimos das colunas), a que for maior. Altura: a do canvas,
+        ou a que o conteúdo pede. O canvas pede a altura do conteúdo,
+        para uma tabela com `pack(fill="x")` não ficar espremida.
+        Os valores só mudam quando são diferentes, por isso os
+        `<Configure>` que isto provoca não criam ciclo.
+        """
+        try:
+            pedida_l = self._conteudo_h.winfo_reqwidth()
+            pedida_a = self._conteudo_h.winfo_reqheight()
+            largura = self._canvas_h.winfo_width()
+            altura = self._canvas_h.winfo_height()
+        except tkinter.TclError:
+            return
+
+        if int(self._canvas_h.cget("height")) != pedida_a:
+            self._canvas_h.configure(height=pedida_a)
+
+        self._canvas_h.itemconfigure(
+            self._janela_h,
+            width=max(largura, pedida_l),
+            height=max(altura, pedida_a),
+        )
+        self._canvas_h.configure(
+            scrollregion=(0, 0, max(largura, pedida_l), max(altura, 1))
+        )
+
+        precisa = largura > 1 and pedida_l > largura
+        if precisa and not self._barra_h_visivel:
+            self._barra_h.pack(
+                side="bottom", fill="x", padx=1, pady=(0, 1),
+                before=self._canvas_h,
+            )
+            self._barra_h_visivel = True
+        elif not precisa and self._barra_h_visivel:
+            self._barra_h.pack_forget()
+            self._canvas_h.xview_moveto(0)
+            self._barra_h_visivel = False
 
     def _configurar_colunas(self, grelha):
         """Aplica a definição de colunas a uma grelha.
@@ -3405,3 +3504,86 @@ class CampoTexto(ctk.CTkEntry):
             kwargs.setdefault("show", "•")
 
         super().__init__(master, **kwargs)
+
+
+# Teclas que não alteram o texto — o campo de data não reformata.
+_TECLAS_NAVEGACAO = frozenset({
+    "Left", "Right", "Up", "Down", "Home", "End", "Tab", "ISO_Left_Tab",
+    "Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "Alt_R",
+    "Return", "KP_Enter", "Escape",
+})
+
+
+def formatar_digitos_data(texto, acrescentar_barra=True):
+    """Põe um texto qualquer no formato dd/mm/aaaa à medida que se
+    escreve: guarda só os algarismos (no máximo 8) e mete as barras.
+
+    `acrescentar_barra` acrescenta a barra logo a seguir ao dia e ao
+    mês ("07" → "07/"); a apagar (BackSpace) vai a False, senão a
+    barra voltava sempre e não se conseguia apagar o dia.
+
+        formatar_digitos_data("07102026")  → "07/10/2026"
+        formatar_digitos_data("0710")      → "07/10/"
+        formatar_digitos_data("07a1")      → "07/1"
+    """
+    digitos = "".join(c for c in texto if c.isdigit())[:8]
+    partes = [digitos[:2], digitos[2:4], digitos[4:]]
+    resultado = partes[0]
+    if len(digitos) > 2 or (acrescentar_barra and len(digitos) == 2):
+        resultado += "/" + partes[1]
+    if len(digitos) > 4 or (acrescentar_barra and len(digitos) == 4):
+        resultado += "/" + partes[2]
+    return resultado
+
+
+class CampoData(ctk.CTkEntry):
+    """Campo de data dd/mm/aaaa (revisão de 07/10/2026, v1.11.2).
+
+    Só aceita algarismos e põe as barras sozinho: escreve-se
+    "07102026" e fica "07/10/2026". Colar "07/10/2026" também
+    funciona. Continua a ser um CTkEntry — `get()`, `insert()` e
+    `delete()` funcionam como antes, e a leitura da data (strptime
+    "%d/%m/%Y") não muda em nenhum ecrã.
+
+    `placeholder_text` por omissão: "dd/mm/aaaa".
+    """
+
+    def __init__(self, master, **kwargs):
+        kwargs.setdefault("corner_radius", tema.RAIO_CAMPO)
+        kwargs.setdefault("placeholder_text", "dd/mm/aaaa")
+        super().__init__(master, **kwargs)
+        # add=True: não tirar os bindings do próprio CTkEntry (lição 1).
+        self.bind("<KeyRelease>", self._ao_escrever, add=True)
+
+    def _ao_escrever(self, evento):
+        if evento.keysym in _TECLAS_NAVEGACAO:
+            return
+
+        texto = self.get()
+        posicao = self.index("insert")
+        # Quantos algarismos estão antes do cursor — para o voltar a
+        # pôr no mesmo sítio depois de reformatar.
+        antes = sum(c.isdigit() for c in texto[:posicao])
+
+        novo = formatar_digitos_data(
+            texto,
+            acrescentar_barra=evento.keysym not in ("BackSpace", "Delete"),
+        )
+        if novo == texto:
+            return
+
+        self.delete(0, "end")
+        self.insert(0, novo)
+
+        nova_posicao = len(novo)
+        contados = 0
+        for indice, caractere in enumerate(novo):
+            if contados == antes:
+                nova_posicao = indice
+                break
+            if caractere.isdigit():
+                contados += 1
+        # Cursor a seguir a uma barra automática, não antes dela.
+        while nova_posicao < len(novo) and novo[nova_posicao] == "/":
+            nova_posicao += 1
+        self.icursor(nova_posicao)

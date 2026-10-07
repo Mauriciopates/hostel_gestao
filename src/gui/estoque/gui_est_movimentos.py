@@ -655,11 +655,7 @@ class RegistarMovimentoModal(ctk.CTkToplevel):
             anchor="w",
         ).pack(fill="x")
 
-        self.campo_data = ctk.CTkEntry(
-            coluna_data,
-            corner_radius=tema.RAIO_CAMPO,
-            placeholder_text="dd/mm/aaaa",
-        )
+        self.campo_data = componentes.CampoData(coluna_data)
         self.campo_data.insert(
             0, datetime.date.today().strftime("%d/%m/%Y")
         )

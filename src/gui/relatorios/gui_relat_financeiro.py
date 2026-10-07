@@ -108,6 +108,7 @@ class RelatFinanceiro(RelatorioBase):
 
         tabela = componentes.Tabela(
             master,
+            rolagem_horizontal=True,
             colunas=colunas,
             altura_linha=38,
             tom_alternado=True,
@@ -257,6 +258,7 @@ class RelatFinanceiro(RelatorioBase):
 
         tabela = componentes.Tabela(
             master,
+            rolagem_horizontal=True,
             colunas=colunas,
             altura_linha=44,
             mensagem_vazia="Sem receita de unidades no período.",
@@ -354,6 +356,7 @@ class RelatFinanceiro(RelatorioBase):
 
         tabela = componentes.Tabela(
             master,
+            rolagem_horizontal=True,
             colunas=colunas,
             altura_linha=44,
             mensagem_vazia="Sem receita de propriedades no período.",
@@ -499,6 +502,7 @@ class RelatFinanceiro(RelatorioBase):
 
         tabela = componentes.Tabela(
             master,
+            rolagem_horizontal=True,
             colunas=colunas,
             altura_linha=44,
             mensagem_vazia="Sem despesas pagas no período.",
@@ -619,6 +623,7 @@ class RelatFinanceiro(RelatorioBase):
 
         tabela = componentes.Tabela(
             master,
+            rolagem_horizontal=True,
             colunas=colunas,
             altura_linha=44,
             mensagem_vazia="Sem consumo de stock no período.",

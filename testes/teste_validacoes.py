@@ -104,6 +104,7 @@ class TesteValidarCliente(unittest.TestCase):
             "estado_civil": "Solteiro(a)",
             "pais_emissor_documento": "Portugal",
             "pais_residencia": "Portugal",
+            "contacto_emergencia": "Mãe: 912000000",
         }
 
     def teste_cliente_completo_nao_bloqueia(self):
@@ -278,6 +279,16 @@ class TesteValidarCliente(unittest.TestCase):
 
         # Não levanta: os obrigatórios estão todos preenchidos.
         validacoes.validar_cliente(dados, "mensal")
+
+    def teste_contacto_emergencia_obrigatorio_apenas_no_mensal(self):
+        """v1.11.2: bloqueia no mensal; no Airbnb continua opcional."""
+        dados = self.cliente_valido()
+        dados["contacto_emergencia"] = ""
+
+        with self.assertRaises(ValueError):
+            validacoes.validar_cliente(dados, "mensal")
+
+        validacoes.validar_cliente(dados, "airbnb")
 
     def teste_campos_opcionais_nao_bloqueiam_no_airbnb(self):
         """No Airbnb, email/telefone/morada em falta não bloqueiam —

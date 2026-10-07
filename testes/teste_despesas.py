@@ -769,6 +769,55 @@ class TesteVia2(BaseMySQLTest):
 # =====================================================================
 
 
+class TesteDataDeLancamento(BaseMySQLTest):
+    """v1.11.2: o lançamento pode ser passado, nunca futuro; o
+    vencimento pode ser futuro, nunca antes do lançamento."""
+
+    def setUp(self):
+        super().setUp()
+        self.autor = _criar_autor("Master")
+        self.categoria = despesas.criar_categoria("Água", self.autor)
+
+    def _criar(self, lancamento, vencimento=None):
+        return despesas.criar_despesa_manual(
+            categoria_id=self.categoria["id"],
+            valor=Decimal("10.00"),
+            data_lancamento=lancamento,
+            responsavel_id=self.autor["id"],
+            autor=self.autor,
+            data_vencimento=vencimento,
+            descricao="Teste de datas",
+        )
+
+    def test_lancamento_passado_e_hoje_aceites(self):
+        hoje = date.today()
+        self._criar(hoje - timedelta(days=40))
+        self._criar(hoje)
+
+    def test_lancamento_futuro_recusado(self):
+        with self.assertRaises(ValueError):
+            self._criar(date.today() + timedelta(days=1))
+
+    def test_vencimento_futuro_aceite(self):
+        hoje = date.today()
+        d = self._criar(hoje, vencimento=hoje + timedelta(days=30))
+        self.assertEqual(d["data_vencimento"], hoje + timedelta(days=30))
+
+    def test_vencimento_antes_do_lancamento_recusado(self):
+        hoje = date.today()
+        with self.assertRaises(ValueError):
+            self._criar(hoje, vencimento=hoje - timedelta(days=1))
+
+    def test_editar_para_lancamento_futuro_recusado(self):
+        d = self._criar(date.today())
+        with self.assertRaises(ValueError):
+            despesas.editar_despesa_pendente(
+                d["id"],
+                self.autor,
+                data_lancamento=date.today() + timedelta(days=1),
+            )
+
+
 class TesteRecorrencias(BaseMySQLTest):
     """Geração automática do lançamento do mês seguinte."""
 
@@ -790,7 +839,11 @@ class TesteRecorrencias(BaseMySQLTest):
         return despesas.criar_despesa_manual(
             categoria_id=self.categoria["id"],
             valor=Decimal("45.00"),
-            data_lancamento=date(ano, mes, 15),
+            # No mês atual, nunca depois de hoje: o lançamento não
+            # pode ser futuro (v1.11.2).
+            data_lancamento=date(
+                ano, mes, 15 if meses_atras else min(15, hoje.day)
+            ),
             responsavel_id=self.autor["id"],
             autor=self.autor,
             recorrente=True,

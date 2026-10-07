@@ -3,6 +3,61 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [1.11.2] — 2026-10-07
+
+Revisão com a colega de turma, Bloco 2 (branch `revisao`): campos de
+data, regras de datas das despesas, contacto de emergência, ecrã de
+Configurações com "Gerir" e scroll horizontal nas tabelas dos
+relatórios. Sem migrações.
+
+### Adicionado
+
+- **`componentes.CampoData`** — campo dd/mm/aaaa que só aceita
+  algarismos e põe as barras sozinho ("07102026" → "07/10/2026");
+  colar uma data também funciona. Usado em todos os campos de data
+  (clientes, contratos mensais, reservas Airbnb, despesas manuais e
+  via stock, editar despesa, movimentos de stock, guia de entrega).
+  `componentes.formatar_digitos_data` faz a conta.
+- **`GerirConfiguracaoModal`** (`gui_configuracoes_modal.py`, mockup
+  aprovado) — campo do valor, resumo "antes → depois" enquanto se
+  escreve e "Confirmar alteração" só ativo com um valor novo e
+  válido. Substituiu o `confirmar_alteracao`.
+- **Limites das configurações** — `configuracoes.validar_valor` e
+  `ler_numero`; `_CHAVES` ganhou `minimo`/`maximo` (dia de vencimento
+  1 a 28, aviso prévio ≥ 0, duração mínima ≥ 1, multiplicadores ≥ 0).
+  O `definir` passou a recusar valores fora dos limites.
+- **`Tabela(rolagem_horizontal=True)`** — cabeçalho e corpo num canvas
+  com barra horizontal, que só aparece quando as colunas não cabem.
+  Ligado em todas as tabelas dos relatórios.
+
+### Alterado
+
+- **Configurações** — cada linha mostra o valor atual só para
+  leitura e um botão **Gerir** (antes: campo + Guardar, interruptor
+  ou seletores na própria linha). Os separadores bloqueados deixam o
+  Gerir cinzento.
+- **Contacto de emergência obrigatório no regime Mensal**
+  (`validacoes.validar_cliente`, Novo Cliente Mensal com "*", CLI).
+  No Airbnb continua opcional. Clientes mensais antigos sem contacto
+  passam a pedi-lo ao serem editados.
+- **Despesas** — a data de lançamento pode ser passada, nunca futura
+  (`despesas._validar_data_lancamento`, no criar manual, via stock e
+  no editar). O vencimento pode ser futuro, nunca antes do
+  lançamento (regra que já existia).
+
+### Testes
+
+- `teste_componentes`: `TesteCampoData` (6) e
+  `TesteTabelaRolagemHorizontal` (2).
+- `teste_despesas`: `TesteDataDeLancamento` (5); a recorrente "do mês
+  atual" deixou de nascer no dia 15 (era futura até dia 14).
+- `teste_clientes` / `teste_validacoes`: contacto de emergência
+  obrigatório no mensal e opcional no Airbnb; os clientes mensais de
+  teste de vários ficheiros passaram a ter contacto.
+- `teste_configuracoes`: `TesteValidarValor` (5).
+- `teste_gui_configuracoes` (novo): modal Gerir (formatos, botão
+  desativado sem mudança e fora dos limites, gravação).
+
 ## [1.11.1] — 2026-10-07
 
 Revisão com a colega de turma, Bloco 1 (branch `revisao`): contas do

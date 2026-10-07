@@ -327,7 +327,13 @@ class NovaDespesaStockModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
             anchor="w",
         ).pack(fill="x", pady=(8, 2))
-        entrada = ctk.CTkEntry(
+        # Datas com CampoData: só algarismos, barras automáticas.
+        classe = (
+            componentes.CampoData
+            if placeholder.startswith("dd/mm/aaaa")
+            else ctk.CTkEntry
+        )
+        entrada = classe(
             master,
             corner_radius=tema.RAIO_CAMPO,
             placeholder_text=placeholder,

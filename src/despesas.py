@@ -695,6 +695,18 @@ def reativar_fornecedor(fornecedor_id, autor):
 # =====================================================================
 
 
+def _validar_data_lancamento(data_lancamento):
+    """O lançamento regista uma despesa que já aconteceu: pode ser
+    de um dia passado, nunca de um dia futuro (revisão de 07/10/2026,
+    v1.11.2). O que ainda vai acontecer é o vencimento, que pode ser
+    futuro — mas nunca antes do lançamento (regra já existente)."""
+    if data_lancamento > date.today():
+        raise ValueError(
+            "A data de lançamento não pode ser futura (hoje é "
+            f"{date.today():%d/%m/%Y})."
+        )
+
+
 def criar_despesa_manual(
     categoria_id,
     valor,
@@ -766,6 +778,8 @@ def criar_despesa_manual(
 
     if data_lancamento is None:
         raise ValueError("A data de lançamento é obrigatória.")
+
+    _validar_data_lancamento(data_lancamento)
 
     if data_vencimento is not None and data_vencimento < data_lancamento:
         raise ValueError(
@@ -960,6 +974,8 @@ def criar_despesa_stock(
 
     if data_lancamento is None:
         raise ValueError("A data de lançamento é obrigatória.")
+
+    _validar_data_lancamento(data_lancamento)
 
     if fornecedor_id is not None:
         fornecedor = repositorio.procurar_fornecedor(fornecedor_id)
@@ -1370,6 +1386,7 @@ def editar_despesa_pendente(
 
     # ---- data_lancamento ----
     if data_lancamento is not None:
+        _validar_data_lancamento(data_lancamento)
         campos["data_lancamento"] = data_lancamento
 
     # ---- data_vencimento ----

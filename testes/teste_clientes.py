@@ -85,8 +85,8 @@ def criar_cliente_mensal(**overrides):
     """Cria um cliente de teste válido e completo para o regime
     mensal. O regime mensal exige (validacoes.validar_cliente):
     nome, tipo_documento, numero_documento, nacionalidade,
-    data_nascimento, validade_documento, nif, morada, estado_civil
-    e telefone.
+    data_nascimento, validade_documento, nif, morada, estado_civil,
+    telefone e (v1.11.2) contacto_emergencia.
 
     O 'telefone' foi acrescentado em 16/09/2026 (decisão do aluno ao
     reestruturar os formulários por regime) — antes era opcional no
@@ -104,6 +104,7 @@ def criar_cliente_mensal(**overrides):
         "telefone": "912345678",
         "data_nascimento": date(1990, 5, 20),
         "validade_documento": date(2030, 1, 1),
+        "contacto_emergencia": "Mãe: 912000000",
     }
     campos.update(overrides)
     return clientes.criar(**campos)
@@ -231,6 +232,26 @@ class TesteCriar(BaseMySQLTest):
         regime mensal."""
         with self.assertRaises(ValueError):
             criar_cliente_mensal(telefone="")
+
+    def test_recusa_contacto_emergencia_em_falta_no_mensal(self):
+        """v1.11.2: o contacto de emergência é obrigatório no
+        mensal."""
+        for valor in ("", "   "):
+            with self.subTest(valor=valor):
+                with self.assertRaises(ValueError):
+                    criar_cliente_mensal(contacto_emergencia=valor)
+
+    def test_contacto_emergencia_opcional_no_airbnb(self):
+        """No Airbnb continua opcional."""
+        cliente = criar_cliente_airbnb()
+        self.assertEqual(cliente["contacto_emergencia"], "")
+
+    def test_recusa_atualizar_mensal_sem_contacto_emergencia(self):
+        cliente = criar_cliente_mensal()
+        with self.assertRaises(ValueError):
+            clientes.atualizar(
+                cliente["id"], regime="mensal", contacto_emergencia=""
+            )
 
     def test_recusa_nacionalidade_em_falta_no_airbnb(self):
         """Obrigatória no Airbnb (decisão de 26/08, ponto 2)."""
@@ -442,7 +463,8 @@ class TesteAtualizar(BaseMySQLTest):
     def test_com_regime_mensal_nif_novo_valido_passa(self):
         """Um cliente que foi criado no regime Airbnb pode passar a
         mensal, DESDE QUE traga os campos obrigatórios do mensal
-        (morada, estado civil, telefone) — o regime mensal exige
+        (morada, estado civil, telefone, contacto de emergência) — o
+        regime mensal exige
         todos eles (decisão 26/08 + 16/09/2026). Sem os fornecer,
         o `validar_cliente` recusa antes mesmo de olhar para o NIF.
         """
@@ -454,6 +476,7 @@ class TesteAtualizar(BaseMySQLTest):
             morada="Rua X, 1",
             estado_civil="Solteiro(a)",
             telefone="912345678",
+            contacto_emergencia="Mãe: 912000000",
         )
         self.assertEqual(atualizado["nif"], "501442600")
 

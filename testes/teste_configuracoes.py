@@ -362,6 +362,57 @@ class TesteDefinir(BaseMySQLTest):
 # =====================================================================
 
 
+class TesteValidarValor(BaseMySQLTest):
+    """v1.11.2: limites das chaves numéricas (`validar_valor`,
+    `ler_numero`) e o `definir` a recusar valores fora deles."""
+
+    def test_dia_vencimento_entre_1_e_28(self):
+        configuracoes.validar_valor("operacao.dia_vencimento", 1)
+        configuracoes.validar_valor("operacao.dia_vencimento", 28)
+        for valor in (0, 29, 45):
+            with self.subTest(valor=valor):
+                with self.assertRaises(ValueError):
+                    configuracoes.validar_valor(
+                        "operacao.dia_vencimento", valor
+                    )
+
+    def test_aviso_previo_minimo_0(self):
+        configuracoes.validar_valor("operacao.aviso_previo_dias", 0)
+        with self.assertRaises(ValueError):
+            configuracoes.validar_valor("operacao.aviso_previo_dias", -1)
+
+    def test_ler_numero_aceita_virgula_e_recusa_texto(self):
+        self.assertEqual(
+            Decimal("1.5"),
+            configuracoes.ler_numero(
+                "financeiro.multiplicador_caucao", "1,5"
+            ),
+        )
+        self.assertEqual(
+            30, configuracoes.ler_numero("operacao.aviso_previo_dias", " 30 ")
+        )
+        for texto in ("", "abc", "2,5"):
+            with self.subTest(texto=texto):
+                with self.assertRaises(ValueError):
+                    configuracoes.ler_numero(
+                        "operacao.aviso_previo_dias", texto
+                    )
+
+    def test_definir_recusa_valor_fora_dos_limites(self):
+        master = _criar_master()
+        with self.assertRaises(ValueError):
+            configuracoes.definir(
+                "operacao.dia_vencimento", 45, autor=master
+            )
+
+    def test_definicoes_trazem_os_limites(self):
+        definicao = configuracoes.listar_definicoes(
+            "operacao.dia_vencimento"
+        )[0]
+        self.assertEqual(1, definicao["minimo"])
+        self.assertEqual(28, definicao["maximo"])
+
+
 class TestePermissoes(BaseMySQLTest):
     """Regras de perfil por prefixo de chave.
 

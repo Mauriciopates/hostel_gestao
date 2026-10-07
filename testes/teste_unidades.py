@@ -169,6 +169,7 @@ def criar_cliente_mensal():
         telefone="912345678",
         data_nascimento=date(1990, 1, 1),
         validade_documento=date(2035, 1, 1),
+        contacto_emergencia="Mãe: 912000000",
     )
 
 

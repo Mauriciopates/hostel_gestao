@@ -898,6 +898,141 @@ class TesteChipId(unittest.TestCase):
 # ---------------------------------------------------------------------
 
 
+class TesteCampoData(unittest.TestCase):
+    """`CampoData` (v1.11.2): só algarismos, barras automáticas.
+
+    As teclas são simuladas como no Seletor: o texto entra com
+    `insert` (o que a tecla faria) e o `<KeyRelease>` é gerado no
+    `_entry` interno, que é onde o CTkEntry liga os seus binds.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.root = _criar_root()
+        # Os eventos de teclado só chegam a uma janela VISÍVEL (mesmo
+        # motivo do TesteChipId).
+        cls.janela = tkinter.Toplevel(cls.root)
+        cls.janela.geometry("200x80+0+0")
+        cls.root.update()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.janela.destroy()
+        _destruir_root(cls.root)
+
+    def _campo(self):
+        from gui.componentes import CampoData
+
+        # Um campo de cada vez: o foco (e as teclas) vão só para ele.
+        for filho in self.janela.winfo_children():
+            filho.destroy()
+        campo = CampoData(self.janela)
+        campo.pack()
+        # As teclas vão para quem tem o foco.
+        campo._entry.focus_force()
+        self.root.update()
+        return campo
+
+    def _escrever(self, campo, texto, tecla="0"):
+        campo.insert("end", texto)
+        campo._entry.event_generate("<KeyRelease>", keysym=tecla)
+        self.root.update()
+
+    def test_formatar_digitos(self):
+        from gui.componentes import formatar_digitos_data as f
+
+        self.assertEqual("07/10/2026", f("07102026"))
+        self.assertEqual("07/10/2026", f("07/10/2026"))
+        self.assertEqual("07/10/2026", f("0710202699"))
+        self.assertEqual("07/", f("07"))
+        self.assertEqual("07", f("07", acrescentar_barra=False))
+        self.assertEqual("07/1", f("07a1"))
+        self.assertEqual("", f("abc"))
+
+    def test_escrever_so_algarismos_poe_as_barras(self):
+        campo = self._campo()
+        self._escrever(campo, "07102026", tecla="6")
+        self.assertEqual("07/10/2026", campo.get())
+
+    def test_barra_aparece_depois_do_dia(self):
+        campo = self._campo()
+        self._escrever(campo, "07", tecla="7")
+        self.assertEqual("07/", campo.get())
+
+    def test_letras_sao_ignoradas(self):
+        campo = self._campo()
+        self._escrever(campo, "x", tecla="x")
+        self.assertEqual("", campo.get())
+
+    def test_apagar_nao_repoe_a_barra(self):
+        campo = self._campo()
+        campo.insert(0, "07")
+        campo._entry.event_generate("<KeyRelease>", keysym="BackSpace")
+        self.root.update()
+        self.assertEqual("07", campo.get())
+
+    def test_valor_inserido_pelo_programa_fica_igual(self):
+        campo = self._campo()
+        campo.insert(0, "15/09/2026")
+        self.assertEqual("15/09/2026", campo.get())
+
+
+class TesteTabelaRolagemHorizontal(unittest.TestCase):
+    """`Tabela(rolagem_horizontal=True)` (v1.11.2): barra horizontal
+    só quando as colunas não cabem."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.root = _criar_root()
+        cls.janela = tkinter.Toplevel(cls.root)
+        cls.janela.geometry("600x300+0+0")
+        cls.root.update()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.janela.destroy()
+        _destruir_root(cls.root)
+
+    def _tabela(self, n_colunas):
+        from gui.componentes import Coluna, Tabela
+
+        for filho in self.janela.winfo_children():
+            filho.destroy()
+        tabela = Tabela(
+            self.janela,
+            colunas=[
+                Coluna(f"C{i}", peso=1, minimo=150)
+                for i in range(n_colunas)
+            ],
+            rolagem_horizontal=True,
+        )
+        tabela.pack(fill="x")
+        linha = tabela.nova_linha()
+        for i in range(n_colunas):
+            tabela.colocar(linha, i, ctk.CTkLabel(linha, text="x"))
+        for _ in range(5):
+            self.root.update()
+        return tabela
+
+    def test_tabela_larga_mostra_a_barra(self):
+        tabela = self._tabela(7)
+
+        self.assertTrue(tabela._barra_h_visivel)
+        self.assertGreater(
+            tabela._conteudo_h.winfo_width(),
+            tabela._canvas_h.winfo_width(),
+        )
+
+    def test_tabela_que_cabe_nao_mostra_a_barra(self):
+        tabela = self._tabela(2)
+
+        self.assertFalse(tabela._barra_h_visivel)
+        self.assertEqual(
+            tabela._conteudo_h.winfo_width(),
+            tabela._canvas_h.winfo_width(),
+        )
+
+
 class TesteCarregarEmSegundoPlano(unittest.TestCase):
     """A leitura corre numa thread; o resultado volta à thread
     principal. Os testes fazem girar o loop do Tk à mão até acabar.

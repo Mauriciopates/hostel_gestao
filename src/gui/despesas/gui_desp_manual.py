@@ -234,7 +234,13 @@ class NovaDespesaManualModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
             anchor="w",
         ).pack(fill="x")
-        entrada = ctk.CTkEntry(
+        # Datas com CampoData: só algarismos, barras automáticas.
+        classe = (
+            componentes.CampoData
+            if placeholder.startswith("dd/mm/aaaa")
+            else ctk.CTkEntry
+        )
+        entrada = classe(
             bloco,
             corner_radius=tema.RAIO_CAMPO,
             placeholder_text=placeholder,
@@ -626,7 +632,13 @@ class DividirPorPropriedadeModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
             anchor="w",
         ).pack(fill="x")
-        entrada = ctk.CTkEntry(
+        # Datas com CampoData: só algarismos, barras automáticas.
+        classe = (
+            componentes.CampoData
+            if placeholder.startswith("dd/mm/aaaa")
+            else ctk.CTkEntry
+        )
+        entrada = classe(
             bloco,
             corner_radius=tema.RAIO_CAMPO,
             placeholder_text=placeholder,

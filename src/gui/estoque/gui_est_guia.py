@@ -120,9 +120,7 @@ class GuiaEntregaModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w")
 
-        self.campo_data = ctk.CTkEntry(
-            linha, width=140, corner_radius=tema.RAIO_CAMPO
-        )
+        self.campo_data = componentes.CampoData(linha, width=140)
         self.campo_data.insert(0, self.data_envio.strftime(_FORMATO_DATA))
         self.campo_data.pack(side="left")
         # Enter no campo (nunca <FocusOut> — lição da v1.5.0).
