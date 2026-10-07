@@ -3,6 +3,100 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [1.11.0] — 2026-10-07
+
+Pré check-in pelos hóspedes: API na VM, site público, caixa de entrada
+no desktop e testes de ataque. Migrações 0003 e 0004.
+
+### Adicionado
+
+- **API do pré check-in** — pasta `api/` (fora do executável e do
+  `requirements.txt` da raiz) + `vm/instalar_api.sh`. FastAPI a ouvir
+  só em `127.0.0.1:8000`, como utilizador de sistema `hostel_api`
+  (serviço systemd `hostel-api`, endurecido), ligada à base
+  `hostel_prechecking` com o utilizador `api_prechecking`.
+  - `GET /api/saude`, `POST /api/reserva` (detalhes da reserva do
+    token) e `POST /api/pre-checkin` (grava o pendente e gasta o
+    token). O token vai no corpo, nunca no endereço.
+  - Token de uso único guardado só como SHA-256; a mesma resposta 404
+    para token inexistente, usado ou expirado.
+  - Pydantic com os tamanhos das colunas e `extra="forbid"`; 422 só
+    com os nomes dos campos (nunca os valores); corpo > 8 KB → 413;
+    10 pedidos por minuto por IP → 429; CORS só para o site; sem
+    `/docs` nem `/openapi.json`; `no-store` e `nosniff`.
+  - Publicada pelo Tailscale Funnel em
+    `https://nova-vm.tailce9342.ts.net` (a VM liga-se para fora; o
+    router não abre portas).
+- **Pré check-ins no desktop** (F5) — `prechecking.py`,
+  `repositorio/rep_prechecking.py`, `gui/gui_prechecking.py` e
+  `bd/esquema_prechecking.sql` (novos):
+  - Reservas Airbnb: coluna PRÉ CHECK-IN e botão **Gerar link** no
+    Gerir (token `secrets.token_urlsafe(32)`, validade até à saída;
+    recusa sem morada na propriedade, reserva cancelada/terminada e
+    Staff). Estados: — / Link enviado / Link expirado / Recebido /
+    Importado.
+  - Ecrã **Pré check-ins** (Operação, só Master/Admin, com contador
+    na barra lateral) e alerta no Dashboard: Validar → Importar
+    (atualiza a ficha, regista o consentimento de comunicações e o
+    aviso de privacidade com a versão do link) ou Rejeitar.
+  - Sem a base `hostel_prechecking` no servidor (MySQL local): contador
+    0 e "indisponível neste servidor".
+- **Migração 0003** — `avisos_privacidade` troca
+  `titular_tipo`/`titular_id` por `cliente_id` + `responsavel_id`, com
+  FKs para `clientes` e `responsaveis` (e para quem registou) e o
+  CHECK `ck_aviso_um_titular` (exatamente um titular). Copia os avisos
+  já registados; idempotente.
+- **Migração 0004** — `clientes.consente_comunicacoes_em` (prova do
+  consentimento de comunicações, RGPD art. 7.º/1).
+- **Testes de ataque** — `api/testes/ataques.sh` (F6): tokens
+  inventado/usado/expirado, CORS, tamanhos, injeção de SQL, limite de
+  pedidos, rotas escondidas e portas fechadas, contra o endereço
+  público. Na nova-vm a 07/10/2026: 22 OK.
+
+### Alterado
+
+- `clientes.registar_consentimento_comunicacoes`; `anonimizar` limpa a
+  data do consentimento.
+- `termos.em_dia` e `registar_versao_vista`: um aviso informativo
+  validado numa versão fica validado.
+- `config`: `DB_NAME_PRECHECKING`, `URL_SITE_PRECHECKING`,
+  `FICHEIRO_ESQUEMA_PRECHECKING`; `_base.obter_conexao(base=None)`.
+- `componentes.BarraLateral`: itens com contador opcional; nova
+  `AreaTexto`.
+- `pyrightconfig.json` (novo): a pasta `api/` tem ambiente próprio
+  (o Pylance confundia `api/prechecking` com `src/prechecking.py`).
+
+### Corrigido
+
+- **"A carregar…" presa no Windows** (ecrã Pré check-ins e
+  Calendário): o `CTkToplevel` corre `update()` no `__init__`, e o fim
+  do trabalho chegava antes de a `JanelaCarregar` ficar registada.
+- **"Configurações" cortado na barra lateral** com a janela não
+  maximizada (desde o item "Pré check-ins"): os itens passam para um
+  `CTkScrollableFrame` com a mesma largura; o rodapé fica fixo.
+
+### Testes
+
+- `testes/teste_prechecking.py` (31) e `testes/teste_gui_prechecking.py`
+  (12), novos; um teste garante que o `esquema_prechecking.sql` é igual
+  ao do `instalar_prechecking.sh`.
+- `api/testes/teste_api.py` (39, repositório falso).
+- `teste_migracoes.py`: 0003 (cópia dos dados, FKs, CHECK, titular
+  órfão faz falhar) e 0004. `teste_componentes.py`: caso que imita o
+  Windows na `JanelaCarregar`.
+- `apoio_BD`: base `hostel_prechecking_teste` e migrações de estrutura
+  0003/0004 na base de teste.
+
+### Notas
+
+- **O executável 1.10.0 não funciona com uma base que já tem a 0003**
+  (rebenta no login com "Unknown column 'titular_tipo'"). Reinstalar
+  todos os PCs com esta versão.
+- A partir de agora, a `VERSAO` sobe sempre que entra uma migração
+  nova, para nunca haver dois executáveis com o mesmo número.
+- Site do hóspede: repositório próprio `site_checking_hostel_gestao`
+  (GitHub Pages).
+
 ## [1.10.0] — 2026-10-05
 
 Janela de arranque e caixa de entrada do pré check-in na VM.
