@@ -13,6 +13,9 @@
 -- total) e o CHECK `ck_aviso_um_titular`.
 -- Migração 0004: `clientes.consente_comunicacoes_em` (prova do
 -- consentimento de comunicações vindo do pré check-in).
+-- Migração 0005: `despesas.unidade_atribuida_por_id` e
+-- `unidade_atribuida_em` (+ FK; 49 no total) — auditoria da atribuição
+-- de unidade a uma despesa paga sem unidade.
 -- Partiu do `Modelo_de_dados_esquema_v.1.5.6.sql`, com:
 --   - CREATE TABLE IF NOT EXISTS (pode correr numa base já criada);
 --   - ordem das tabelas pela dependência das chaves estrangeiras;
@@ -323,6 +326,8 @@ CREATE TABLE IF NOT EXISTS `despesas` (
   `motivo_cancelamento` varchar(255) DEFAULT NULL,
   `descricao` varchar(255) DEFAULT NULL,
   `comprovativo_caminho` varchar(255) DEFAULT NULL,
+  `unidade_atribuida_por_id` varchar(10) DEFAULT NULL,
+  `unidade_atribuida_em` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_despesas_unidade` (`unidade_id`),
   KEY `idx_despesas_categoria` (`categoria_id`),
@@ -333,12 +338,14 @@ CREATE TABLE IF NOT EXISTS `despesas` (
   KEY `fk_despesas_responsavel_lancamento` (`responsavel_lancamento_id`),
   KEY `fk_despesas_responsavel_cancelamento` (`responsavel_cancelamento_id`),
   KEY `fk_despesas_itens_confirmados_por` (`itens_confirmados_por_id`),
+  KEY `fk_despesas_unidade_atribuida` (`unidade_atribuida_por_id`),
   CONSTRAINT `fk_despesas_categoria` FOREIGN KEY (`categoria_id`) REFERENCES `categorias_despesa` (`id`),
   CONSTRAINT `fk_despesas_despesa_origem` FOREIGN KEY (`despesa_origem_id`) REFERENCES `despesas` (`id`),
   CONSTRAINT `fk_despesas_fornecedor` FOREIGN KEY (`fornecedor_id`) REFERENCES `fornecedores` (`id`),
   CONSTRAINT `fk_despesas_itens_confirmados_por` FOREIGN KEY (`itens_confirmados_por_id`) REFERENCES `responsaveis` (`id`),
   CONSTRAINT `fk_despesas_responsavel_cancelamento` FOREIGN KEY (`responsavel_cancelamento_id`) REFERENCES `responsaveis` (`id`),
   CONSTRAINT `fk_despesas_responsavel_lancamento` FOREIGN KEY (`responsavel_lancamento_id`) REFERENCES `responsaveis` (`id`),
+  CONSTRAINT `fk_despesas_unidade_atribuida` FOREIGN KEY (`unidade_atribuida_por_id`) REFERENCES `responsaveis` (`id`),
   CONSTRAINT `fk_despesas_unidade` FOREIGN KEY (`unidade_id`) REFERENCES `unidades` (`id`),
   CONSTRAINT `despesas_chk_cancelamento` CHECK (((`estado` <> 'cancelada') or ((`motivo_cancelamento` is not null) and (`responsavel_cancelamento_id` is not null)))),
   CONSTRAINT `despesas_chk_valor` CHECK ((`valor` >= 0))

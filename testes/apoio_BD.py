@@ -138,6 +138,7 @@ _ESQUEMA_TABELAS = repositorio.instrucoes_esquema()
 _MIGRACOES_DE_ESTRUTURA = (
     "0003_avisos_privacidade_fks",
     "0004_consentimento_comunicacoes",
+    "0005_despesa_unidade_atribuida",
 )
 _INSTRUCOES_ESTRUTURA = [
     instrucao

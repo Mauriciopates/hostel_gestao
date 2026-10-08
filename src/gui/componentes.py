@@ -730,6 +730,7 @@ class Tabela(ctk.CTkFrame):
         linhas_verticais=True,
         tom_alternado=False,
         rolagem_horizontal=False,
+        altura_corpo=None,
     ):
         super().__init__(
             master,
@@ -738,6 +739,11 @@ class Tabela(ctk.CTkFrame):
             border_color=tema.COR_BORDA,
             fg_color=tema.COR_FUNDO,
         )
+        # `altura_corpo` (v1.12.0): altura PEDIDA para o corpo com
+        # scroll, em pixels. Omisso = a do CTkScrollableFrame (200px),
+        # como até aqui. Serve a relatórios com poucas linhas, que
+        # ficavam cortadas a pedir scroll sem necessidade.
+        self._altura_corpo = altura_corpo
 
         self._colunas = tuple(colunas)
         self._altura_linha = altura_linha
@@ -802,7 +808,12 @@ class Tabela(ctk.CTkFrame):
         ).pack(fill="x")
 
         # -- corpo com scroll -----------------------------------------
-        self.corpo = ctk.CTkScrollableFrame(destino, fg_color="transparent")
+        opcoes_corpo = {}
+        if self._altura_corpo is not None:
+            opcoes_corpo["height"] = self._altura_corpo
+        self.corpo = ctk.CTkScrollableFrame(
+            destino, fg_color="transparent", **opcoes_corpo
+        )
         self.corpo.pack(fill="both", expand=True)
 
         self.grelha = ctk.CTkFrame(self.corpo, fg_color="transparent")

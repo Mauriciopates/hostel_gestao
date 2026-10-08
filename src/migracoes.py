@@ -204,6 +204,27 @@ _MIGRACAO_0004 = _se(
 )
 
 
+# --- 0005: atribuir unidade a uma despesa paga sem unidade -----------
+# v1.12.0: uma despesa paga fica bloqueada, mas pode faltar-lhe a
+# unidade (ex.: Prejuízo lançado como geral). A única exceção ao
+# bloqueio é atribuir-lhe UMA unidade, UMA vez — estas duas colunas
+# guardam quem o fez e quando (auditoria). Numa base que já as tem,
+# não faz nada.
+_DESP = "despesas"
+_MIGRACAO_0005 = (
+    _se(_nao(_existe_coluna(_DESP, "unidade_atribuida_por_id")),
+        f"ALTER TABLE {_DESP} ADD COLUMN unidade_atribuida_por_id "
+        "VARCHAR(10) NULL")
+    + _se(_nao(_existe_coluna(_DESP, "unidade_atribuida_em")),
+          f"ALTER TABLE {_DESP} ADD COLUMN unidade_atribuida_em "
+          "DATETIME NULL")
+    + _se(_nao(_existe_restricao(_DESP, "fk_despesas_unidade_atribuida")),
+          f"ALTER TABLE {_DESP} ADD CONSTRAINT "
+          "fk_despesas_unidade_atribuida FOREIGN KEY "
+          "(unidade_atribuida_por_id) REFERENCES responsaveis (id)")
+)
+
+
 # Lista oficial, por ordem. Só cresce — nunca alterar uma já publicada.
 MIGRACOES = [
     ("0001_categoria_compra_de_stock", [_SQL_CATEGORIA_COMPRA_DE_STOCK]),
@@ -224,6 +245,7 @@ MIGRACOES = [
     ),
     ("0003_avisos_privacidade_fks", _MIGRACAO_0003),
     ("0004_consentimento_comunicacoes", _MIGRACAO_0004),
+    ("0005_despesa_unidade_atribuida", _MIGRACAO_0005),
 ]
 
 _FORMATO_NOME = re.compile(r"^\d{4}_[a-z0-9_]+$")

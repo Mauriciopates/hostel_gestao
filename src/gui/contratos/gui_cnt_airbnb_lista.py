@@ -313,6 +313,12 @@ class ListaReservasAirbnb(ctk.CTkFrame):
                 width=90,
                 height=22,
             ).pack(side="left")
+        elif contratos.esta_finalizada(ocupacao):
+            # A data de saída já passou: a reserva terminou (estado
+            # calculado, nada se grava).
+            componentes.Etiqueta(
+                bloco_status, "Finalizada", "azul", largura=70
+            ).pack(side="left")
         else:
             ctk.CTkLabel(
                 bloco_status,
@@ -427,11 +433,13 @@ class _AcoesReservaAirbnbModal(ctk.CTkToplevel):
             wraplength=280,
         ).pack(padx=20, pady=(20, 2))
 
-        subtitulo = (
-            f"{ocupacao['id']} · cancelada"
-            if inativa
-            else f"{ocupacao['id']} · ativa"
-        )
+        if inativa:
+            situacao = "cancelada"
+        elif contratos.esta_finalizada(ocupacao):
+            situacao = "finalizada"
+        else:
+            situacao = "ativa"
+        subtitulo = f"{ocupacao['id']} · {situacao}"
         ctk.CTkLabel(
             self,
             text=subtitulo,

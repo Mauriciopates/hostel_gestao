@@ -600,6 +600,67 @@ class TesteConsentimentoComunicacoes(BaseMigracoesTest):
         self.assertEqual([], migracoes.aplicar_pendentes(lista))
 
 
+class TesteDespesaUnidadeAtribuida(BaseMigracoesTest):
+    """Migração 0005 — auditoria da atribuição de unidade."""
+
+    _NOME = "0005_despesa_unidade_atribuida"
+
+    def setUp(self):
+        super().setUp()
+        _executar("ALTER TABLE despesas DROP FOREIGN KEY "
+                  "fk_despesas_unidade_atribuida")
+        _executar("ALTER TABLE despesas DROP COLUMN "
+                  "unidade_atribuida_por_id")
+        _executar("ALTER TABLE despesas DROP COLUMN unidade_atribuida_em")
+
+    def tearDown(self):
+        conexao = repositorio.obter_conexao()
+        try:
+            cursor = conexao.cursor()
+            for instrucao in self._instrucoes():
+                cursor.execute(instrucao)
+            conexao.commit()
+        finally:
+            conexao.close()
+        super().tearDown()
+
+    def _instrucoes(self):
+        return [m for m in migracoes.MIGRACOES if m[0] == self._NOME][0][1]
+
+    def _colunas(self):
+        conexao = repositorio.obter_conexao()
+        try:
+            cursor = conexao.cursor()
+            cursor.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = DATABASE() "
+                "AND table_name = 'despesas'"
+            )
+            return {str(c[0]) for c in cast(list, cursor.fetchall())}
+        finally:
+            conexao.close()
+
+    def teste_cria_as_colunas_e_e_idempotente(self):
+        lista = [m for m in migracoes.MIGRACOES if m[0] == self._NOME]
+        self.assertEqual([self._NOME], migracoes.aplicar_pendentes(lista))
+        colunas = self._colunas()
+        self.assertIn("unidade_atribuida_por_id", colunas)
+        self.assertIn("unidade_atribuida_em", colunas)
+        self.assertEqual([], migracoes.aplicar_pendentes(lista))
+
+    def teste_corre_duas_vezes_sem_erro(self):
+        for _ in range(2):
+            conexao = repositorio.obter_conexao()
+            try:
+                cursor = conexao.cursor()
+                for instrucao in self._instrucoes():
+                    cursor.execute(instrucao)
+                conexao.commit()
+            finally:
+                conexao.close()
+        self.assertIn("unidade_atribuida_em", self._colunas())
+
+
 class TesteValidarLista(unittest.TestCase):
     """Validação da lista — não precisa de base de dados."""
 

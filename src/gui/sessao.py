@@ -55,3 +55,16 @@ def limpar_responsavel_ativo():
     de reiniciar o processo."""
     global _responsavel_ativo
     _responsavel_ativo = None
+
+
+def contador_so_gestao(contagem):
+    """Embrulha uma função de contagem do menu lateral: só o
+    Master/Admin vê o número; para os outros perfis (ou sem sessão) a
+    pílula fica escondida (devolve 0)."""
+
+    def contar():
+        if tipo_utilizador_ativo() not in ("Master", "Admin"):
+            return 0
+        return contagem()
+
+    return contar

@@ -299,6 +299,7 @@ def _normalizar_despesa(linha):
         "despesa_origem_id",
         "itens_confirmados_por_id",
         "responsavel_cancelamento_id",
+        "unidade_atribuida_por_id",
         "motivo_cancelamento",
         "descricao",
         "comprovativo_caminho",
@@ -396,6 +397,7 @@ def atualizar_despesa(despesa_id, campos):
         "despesa_origem_id",
         "itens_confirmados_por_id",
         "responsavel_cancelamento_id",
+        "unidade_atribuida_por_id",
     ):
         if campo_fk in campos:
             campos[campo_fk] = campos[campo_fk] or None

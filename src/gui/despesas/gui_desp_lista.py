@@ -6,10 +6,13 @@ import tkinter.font as tkfont
 import customtkinter as ctk
 
 import despesas
+import estoque
+import responsaveis
 import unidades
 
 from .. import componentes
 from .. import tema
+from . import gui_desp_atribuir
 from . import gui_desp_comum
 from .gui_desp_manual import NovaDespesaManualModal
 from .gui_desp_stock import NovaDespesaStockModal
@@ -851,48 +854,55 @@ class _DetalheDespesaModal(ctk.CTkToplevel):
     """Modal de leitura de uma despesa paga ou cancelada.
 
     Aberto pelo botão "Gerir" na Lista Despesas, para despesas que
-    já não estão pendentes. Só mostra a ficha — sem ações.
+    já não estão pendentes. Mostra a ficha completa (v1.12.0): a
+    imputação, quem lançou, se é recorrente, o comprovativo, os itens
+    de stock e quem os confirmou, e quem cancelou e porquê — só as
+    linhas que fazem sentido para o estado e a origem da despesa.
+    Quando a despesa não tem unidade, oferece "Atribuir unidade".
     """
+
+    _LARGURA = 560
 
     def __init__(self, tela_lista, despesa):
         super().__init__(tela_lista)
         self.tela_lista = tela_lista
         self.despesa = despesa
+        self.itens = despesas.listar_itens_despesa(despesa["id"])
 
-        largura, altura = 520, 520
         self.title(f"Detalhe — {despesa['id']}")
-        self.geometry(f"{largura}x{altura}")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
         self.transient(tela_lista)
-        componentes.centrar_sobre(self, tela_lista, largura, altura)
-        componentes.colocar_no_topo(self)
         self.protocol("WM_DELETE_WINDOW", self.destroy)
 
+        self.corpo = componentes.Contentor(self)
+        self.corpo.pack(fill="both", expand=True, padx=22, pady=(18, 16))
+
+        origem = "via stock" if self.itens else "manual"
         ctk.CTkLabel(
-            self,
+            self.corpo,
             text=despesa["descricao"] or "(sem descrição)",
             text_color=tema.COR_TEXTO,
             font=ctk.CTkFont(size=15, weight="bold"),
-            wraplength=460,
+            wraplength=self._LARGURA - 50,
             anchor="w",
             justify="left",
-        ).pack(fill="x", padx=22, pady=(18, 2))
+        ).pack(fill="x", pady=(0, 2))
 
         ctk.CTkLabel(
-            self,
-            text=(f"{despesa['id']} · estado: {despesa['estado']}"),
+            self.corpo,
+            text=f"{despesa['id']} · estado: {despesa['estado']} · {origem}",
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=11),
             anchor="w",
-        ).pack(fill="x", padx=22, pady=(0, 14))
+        ).pack(fill="x", pady=(0, 12))
 
         ficha = ctk.CTkFrame(
-            self,
+            self.corpo,
             fg_color=tema.LINHA_ALTERNADA,
             corner_radius=tema.RAIO_CAMPO,
         )
-        ficha.pack(fill="x", padx=22)
+        ficha.pack(fill="x")
         interno = ctk.CTkFrame(ficha, fg_color="transparent")
         interno.pack(fill="x", padx=16, pady=12)
 
@@ -904,6 +914,7 @@ class _DetalheDespesaModal(ctk.CTkToplevel):
             componentes.formatar_valor(despesa["valor"]),
             forte=True,
         )
+        self._linha_imputacao(interno)
         self._linha(
             interno,
             "Lançamento",
@@ -919,13 +930,42 @@ class _DetalheDespesaModal(ctk.CTkToplevel):
             "Pagamento",
             _formatar_data(despesa["data_pagamento"]),
         )
+        self._linha(
+            interno,
+            "Lançada por",
+            self._nome_responsavel(despesa["responsavel_lancamento_id"]),
+        )
+        self._linha(
+            interno, "Recorrente", "Sim" if despesa["recorrente"] else "Não"
+        )
+        self._linha(
+            interno,
+            "Comprovativo",
+            despesa["comprovativo_caminho"] or "Nenhum anexado",
+        )
+
+        if despesa.get("unidade_atribuida_por_id"):
+            quem = self._nome_responsavel(
+                despesa["unidade_atribuida_por_id"]
+            )
+            self._linha(
+                interno,
+                "Unidade atribuída",
+                f"por {quem} em "
+                f"{self._data_curta(despesa.get('unidade_atribuida_em'))}",
+            )
+
+        if self.itens:
+            self._bloco_itens(interno)
 
         if despesa["estado"] == "cancelada":
-            ctk.CTkLabel(
+            self._linha(
                 interno,
-                text="",
-                font=ctk.CTkFont(size=4),
-            ).pack()
+                "Cancelada por",
+                self._nome_responsavel(
+                    despesa["responsavel_cancelamento_id"]
+                ),
+            )
             self._linha(
                 interno,
                 "Motivo",
@@ -933,7 +973,7 @@ class _DetalheDespesaModal(ctk.CTkToplevel):
             )
 
         ctk.CTkButton(
-            self,
+            self.corpo,
             text="Fechar",
             height=34,
             corner_radius=tema.RAIO_BOTAO,
@@ -943,7 +983,98 @@ class _DetalheDespesaModal(ctk.CTkToplevel):
             text_color=tema.COR_TEXTO,
             hover_color=tema.COR_BORDA,
             command=self.destroy,
-        ).pack(fill="x", padx=22, pady=(14, 18), side="bottom")
+        ).pack(fill="x", pady=(14, 0))
+
+        self.update_idletasks()
+        fator = componentes.escala(self)
+        altura = int(self.corpo.winfo_reqheight() / fator) + 40
+        componentes.centrar_sobre(
+            self, tela_lista.winfo_toplevel(), self._LARGURA, altura
+        )
+        componentes.colocar_no_topo(self)
+
+    # -- partes da ficha ----------------------------------------------
+
+    def _linha_imputacao(self, interno):
+        """"Imputação": a unidade (com a propriedade), "Armazém" nas
+        compras de stock, ou "Geral, sem unidade" com o botão de
+        atribuir (só se a despesa não estiver cancelada)."""
+        despesa = self.despesa
+
+        if despesa["unidade_id"]:
+            unidade = unidades.procurar(despesa["unidade_id"])
+            texto = (
+                f"{unidade['nome']} ({unidade['id']})" if unidade else "—"
+            )
+            self._linha(interno, "Imputação", texto)
+            return
+
+        texto = "Armazém (geral)" if self.itens else "Geral, sem unidade"
+        linha = self._linha(interno, "Imputação", texto)
+
+        # Compra de stock: o stock é central, não se atribui a unidade.
+        if despesa["estado"] != "cancelada" and not self.itens:
+            ctk.CTkButton(
+                linha,
+                text="Atribuir unidade",
+                width=120,
+                height=24,
+                corner_radius=tema.RAIO_BOTAO,
+                fg_color="transparent",
+                border_width=1,
+                border_color=tema.COR_BORDA,
+                text_color=tema.COR_TEXTO,
+                hover_color=tema.COR_BORDA,
+                font=ctk.CTkFont(size=11),
+                command=self._atribuir,
+            ).pack(side="left", padx=(10, 0))
+
+    def _bloco_itens(self, interno):
+        """Confirmação dos itens e a lista do que entrou no stock."""
+        despesa = self.despesa
+
+        if despesa["itens_confirmados"]:
+            quem = self._nome_responsavel(
+                despesa["itens_confirmados_por_id"]
+            )
+            quando = self._data_curta(despesa.get("itens_confirmados_em"))
+            texto = f"Sim, por {quem} em {quando}"
+        else:
+            texto = "Não — ainda por confirmar"
+        self._linha(interno, "Itens confirmados", texto)
+
+        for item in self.itens:
+            produto = estoque.procurar_produto(item["produto_id"])
+            nome = produto["nome"] if produto else item["produto_id"]
+            self._linha(
+                interno,
+                "Item" if item is self.itens[0] else "",
+                f"{item['produto_id']} {nome} — {item['quantidade']}",
+            )
+
+    def _atribuir(self):
+        def depois():
+            self.destroy()
+            self.tela_lista._recarregar()
+
+        gui_desp_atribuir.AtribuirUnidadeModal(
+            self, self.despesa, depois
+        )
+
+    # -- leitura ------------------------------------------------------
+
+    @staticmethod
+    def _data_curta(valor):
+        if not valor:
+            return "—"
+        return valor.strftime("%d/%m/%Y")
+
+    @staticmethod
+    def _nome_responsavel(responsavel_id):
+        if not responsavel_id:
+            return "—"
+        responsavel = responsaveis.procurar(responsavel_id)
+        return responsavel["nome"] if responsavel else responsavel_id
 
     def _nome_categoria(self):
         c = despesas.procurar_categoria(self.despesa["categoria_id"])
@@ -956,6 +1087,8 @@ class _DetalheDespesaModal(ctk.CTkToplevel):
         return f["nome"] if f else "—"
 
     def _linha(self, master, rotulo, valor, forte=False):
+        """Uma linha "rótulo  valor". Devolve a linha, para se poder
+        juntar um botão à direita."""
         linha = ctk.CTkFrame(master, fg_color="transparent")
         linha.pack(fill="x", pady=3)
 
@@ -964,7 +1097,7 @@ class _DetalheDespesaModal(ctk.CTkToplevel):
             text=rotulo,
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=11),
-            width=110,
+            width=120,
             anchor="w",
         ).pack(side="left")
         ctk.CTkLabel(
@@ -974,5 +1107,6 @@ class _DetalheDespesaModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=12, weight="bold" if forte else "normal"),
             anchor="w",
             justify="left",
-            wraplength=330,
+            wraplength=self._LARGURA - 220,
         ).pack(side="left")
+        return linha

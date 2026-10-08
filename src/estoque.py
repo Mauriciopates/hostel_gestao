@@ -2748,3 +2748,16 @@ def guia_entrega(data_envio, tipo_utilizador_autor):
         len(blocos),
     )
     return blocos
+
+
+def contar_pendentes_aprovacao():
+    """Quantas coisas esperam decisão no Stock: requisições
+    `pendente` (por aprovar) + devoluções `pendente` (por confirmar).
+    É o número da pílula do menu. Nunca rebenta: um erro conta 0.
+    """
+    try:
+        return len(repositorio.listar_requisicoes(estado="pendente")) + len(
+            repositorio.listar_devolucoes(estado="pendente")
+        )
+    except Exception:
+        return 0

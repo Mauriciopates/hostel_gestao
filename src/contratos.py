@@ -301,6 +301,27 @@ def procurar(ocupacao_id):
     return repositorio.procurar_ocupacao(ocupacao_id)
 
 
+def esta_finalizada(ocupacao, hoje=None):
+    """Diz se uma reserva Airbnb já terminou: está ativa (não foi
+    cancelada) e a data de saída já passou.
+
+    É um estado CALCULADO ao ler, nunca guardado — o mesmo princípio
+    de `despesas.esta_vencida`. No próprio dia da saída a reserva
+    ainda conta como ativa (o hóspede sai nesse dia). Contratos
+    mensais não têm esta noção (podem não ter data de fim), por isso
+    devolvem sempre False.
+    """
+    if not ocupacao.get("ativo") or ocupacao.get("tipo") != "airbnb":
+        return False
+
+    fim = ocupacao.get("data_fim")
+
+    if fim is None:
+        return False
+
+    return fim < (hoje or date.today())
+
+
 def listar(
     incluir_inativas=False,
     unidade_id=None,

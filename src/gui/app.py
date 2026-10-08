@@ -61,6 +61,7 @@ from types import TracebackType
 import customtkinter as ctk
 
 import config
+import despesas
 import estoque
 import prechecking
 import servidores
@@ -151,12 +152,23 @@ ITENS_MENU = [
         # Pendentes por validar (F5): pílula vermelha, some quando é 0.
         "contador": prechecking.contar_pendentes,
     },
-    {"tipo": "item", "texto": "Stock", "ecra": EcraStock, "perfis": _TODOS},
+    {
+        "tipo": "item",
+        "texto": "Stock",
+        "ecra": EcraStock,
+        "perfis": _TODOS,
+        # Requisições e devoluções à espera de decisão (v1.12.0).
+        "contador": sessao.contador_so_gestao(
+            estoque.contar_pendentes_aprovacao
+        ),
+    },
     {
         "tipo": "item",
         "texto": "Despesas",
         "ecra": EcraDespesas,
         "perfis": _GESTAO,
+        # Despesas pendentes, por aprovar (v1.12.0).
+        "contador": sessao.contador_so_gestao(despesas.contar_pendentes),
     },
     {
         "tipo": "item",

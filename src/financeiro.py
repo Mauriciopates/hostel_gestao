@@ -824,3 +824,265 @@ def resultado(data_inicio, data_fim):
         "resultado_liquido": resultado_liquido,
         "cogs_quantidade": cogs_quantidade,
     }
+
+
+# =====================================================================
+# BLOCO 4 — RENTABILIDADE POR PROPRIEDADE E UNIDADE (v1.12.0)
+# =====================================================================
+
+
+def _ids_compras_de_stock():
+    """Ids das despesas que vêm do stock (via 2): as que têm itens.
+
+    O stock é central — não pertence a nenhuma unidade; só chega a
+    uma unidade (no futuro) quando é enviado a um colaborador. Por
+    isso uma compra de stock sem unidade não é "por atribuir": é o
+    "Stock central".
+    """
+    return {
+        item["despesa_id"] for item in repositorio.listar_itens_despesa()
+    }
+
+
+def despesas_por_unidade(data_inicio, data_fim):
+    """Devolve as despesas pagas no período repartidas por destino.
+
+    Devolve o terno `(por_unidade, gerais, stock_central)`:
+
+        por_unidade   — {"UNI-001": Decimal(...), ...}: despesas pagas
+                        com `unidade_id` preenchido;
+        gerais        — Decimal: despesas pagas SEM unidade, que não
+                        são compras de stock (as "despesas gerais não
+                        atribuídas");
+        stock_central — Decimal: compras de stock (via 2) pagas e sem
+                        unidade — ficam no armazém, não são gerais.
+
+    Mesmos critérios de `despesas_por_categoria`: só `estado="paga"`,
+    agregadas por `data_pagamento` dentro de [data_inicio, data_fim).
+    A soma de tudo é igual à `despesas_operacionais` de `resultado`.
+    """
+    _validar_periodo(data_inicio, data_fim)
+
+    por_unidade = {}
+    gerais = Decimal("0.00")
+    stock_central = Decimal("0.00")
+    compras_stock = _ids_compras_de_stock()
+
+    for despesa in despesas.listar_despesas(estado=_ESTADO_PAGA):
+        if despesa["data_pagamento"] is None:
+            continue
+
+        if not (data_inicio <= despesa["data_pagamento"] < data_fim):
+            continue
+
+        unidade_id = despesa.get("unidade_id")
+
+        # Sem unidade pode vir None ou "" (o repositório grava vazio
+        # como NULL, mas a leitura nem sempre devolve None).
+        if not unidade_id:
+            if despesa["id"] in compras_stock:
+                stock_central += despesa["valor"]
+            else:
+                gerais += despesa["valor"]
+            continue
+
+        por_unidade[unidade_id] = (
+            por_unidade.get(unidade_id, Decimal("0.00")) + despesa["valor"]
+        )
+
+    return por_unidade, gerais, stock_central
+
+
+def despesas_gerais(data_inicio, data_fim):
+    """Lista as despesas pagas no período que NÃO têm unidade — as
+    "despesas gerais não atribuídas" do relatório de rentabilidade.
+
+    Mesmos critérios de `despesas_por_unidade` (pagas, por
+    `data_pagamento` em [data_inicio, data_fim)); a soma dos valores
+    é o `gerais` desse relatório. Uma despesa cuja unidade já não
+    existe também conta como geral. Ordenadas por data de pagamento
+    e id.
+    """
+    _validar_periodo(data_inicio, data_fim)
+
+    lista = []
+    compras_stock = _ids_compras_de_stock()
+
+    for despesa in despesas.listar_despesas(estado=_ESTADO_PAGA):
+        if despesa["data_pagamento"] is None:
+            continue
+
+        if not (data_inicio <= despesa["data_pagamento"] < data_fim):
+            continue
+
+        unidade_id = despesa.get("unidade_id")
+
+        if unidade_id and repositorio.procurar_unidade(unidade_id):
+            continue
+
+        # O stock é central: uma compra sem unidade não é "por
+        # atribuir" (ver `_ids_compras_de_stock`).
+        if not unidade_id and despesa["id"] in compras_stock:
+            continue
+
+        lista.append(despesa)
+
+    lista.sort(key=lambda d: (d["data_pagamento"], d["id"]))
+    return lista
+
+
+def resultado_da_unidade(unidade_id, data_inicio, data_fim):
+    """Resultado (Receita de tabela − Descontos − Despesas) de uma
+    unidade no período — o "antes" e o "depois" do modal de atribuição.
+    Uma unidade sem receita nem despesas no período tem resultado 0.
+    """
+    for propriedade in rentabilidade(data_inicio, data_fim)["propriedades"]:
+        for unidade in propriedade["unidades"]:
+            if unidade["unidade_id"] == unidade_id:
+                return unidade["resultado"]
+
+    return Decimal("0.00")
+
+
+def _linha_rentabilidade(receita, descontos, valor_despesas):
+    """Monta os números de uma linha do relatório de rentabilidade.
+
+    `receita` é a RECEBIDA (já líquida de desconto). A conta fecha
+    como nos outros relatórios (v1.11.1):
+
+        receita_tabela − descontos − despesas = resultado
+
+    porque `receita_tabela = receita + descontos`. Nunca se subtrai
+    o desconto à receita recebida (era o desconto a dobrar).
+    `rentavel` é `resultado >= 0`.
+    """
+    resultado_linha = receita - valor_despesas
+
+    return {
+        "receita_tabela": receita + descontos,
+        "descontos": descontos,
+        "receita": receita,
+        "despesas": valor_despesas,
+        "resultado": resultado_linha,
+        "rentavel": resultado_linha >= 0,
+    }
+
+
+def rentabilidade(data_inicio, data_fim):
+    """Devolve a rentabilidade do período por propriedade e unidade.
+
+    Estrutura:
+
+        {
+            "propriedades": [
+                {
+                    "propriedade_id": "PRO-001",
+                    "propriedade_nome": "...",
+                    "receita_tabela": Decimal, "descontos": Decimal,
+                    "receita": Decimal, "despesas": Decimal,
+                    "resultado": Decimal, "rentavel": bool,
+                    "unidades": [
+                        {"unidade_id": "UNI-001",
+                         "unidade_nome": "...", (mesmas 6 chaves)},
+                    ],
+                },
+            ],
+            "gerais": Decimal,   # despesas sem unidade (sem stock)
+            "stock_central": Decimal,   # compras de stock no armazém
+            "total": {mesmas 6 chaves},
+        }
+
+    Receita − Descontos − Despesas da unidade = Resultado. Entram
+    todas as unidades com receita, desconto OU despesa paga no
+    período (uma unidade só com despesas aparece, não rentável).
+
+    As despesas gerais (sem unidade) NÃO entram em nenhuma unidade
+    nem propriedade: ficam em `gerais` e só pesam no `total`, que
+    portanto bate sempre com `resultado()` do mesmo período. Uma
+    despesa cuja unidade já não existe conta como geral.
+    """
+    _validar_periodo(data_inicio, data_fim)
+
+    zero = Decimal("0.00")
+
+    receitas = {
+        item["unidade_id"]: item
+        for item in receita_por_unidade(data_inicio, data_fim)
+    }
+    despesas_unidade, gerais, stock_central = despesas_por_unidade(
+        data_inicio, data_fim
+    )
+
+    # O total sai das fontes (não das linhas), para bater com
+    # `resultado()` mesmo que alguma unidade tenha desaparecido.
+    total_receita = sum((i["receita"] for i in receitas.values()), zero)
+    total_descontos = sum((i["desconto"] for i in receitas.values()), zero)
+    total_despesas = (
+        sum(despesas_unidade.values(), zero) + gerais + stock_central
+    )
+
+    por_propriedade = {}
+
+    for unidade_id in sorted(set(receitas) | set(despesas_unidade)):
+        unidade = repositorio.procurar_unidade(unidade_id)
+        valor_desp = despesas_unidade.get(unidade_id, zero)
+
+        if unidade is None:
+            gerais += valor_desp
+            continue
+
+        item = receitas.get(unidade_id)
+        receita = item["receita"] if item else zero
+        descontos = item["desconto"] if item else zero
+
+        propriedade_id = unidade["propriedade_id"]
+
+        if propriedade_id not in por_propriedade:
+            propriedade = repositorio.procurar_propriedade(propriedade_id)
+            por_propriedade[propriedade_id] = {
+                "propriedade_id": propriedade_id,
+                "propriedade_nome": (
+                    propriedade["nome"] if propriedade else propriedade_id
+                ),
+                "_receita": zero,
+                "_descontos": zero,
+                "_despesas": zero,
+                "unidades": [],
+            }
+
+        grupo = por_propriedade[propriedade_id]
+        grupo["_receita"] += receita
+        grupo["_descontos"] += descontos
+        grupo["_despesas"] += valor_desp
+
+        linha = {
+            "unidade_id": unidade_id,
+            "unidade_nome": unidade["nome"],
+        }
+        linha.update(_linha_rentabilidade(receita, descontos, valor_desp))
+        grupo["unidades"].append(linha)
+
+    propriedades_lista = []
+
+    for propriedade_id in sorted(por_propriedade):
+        grupo = por_propriedade[propriedade_id]
+        linha = {
+            "propriedade_id": grupo["propriedade_id"],
+            "propriedade_nome": grupo["propriedade_nome"],
+        }
+        linha.update(
+            _linha_rentabilidade(
+                grupo["_receita"], grupo["_descontos"], grupo["_despesas"]
+            )
+        )
+        linha["unidades"] = grupo["unidades"]
+        propriedades_lista.append(linha)
+
+    return {
+        "propriedades": propriedades_lista,
+        "gerais": gerais,
+        "stock_central": stock_central,
+        "total": _linha_rentabilidade(
+            total_receita, total_descontos, total_despesas
+        ),
+    }

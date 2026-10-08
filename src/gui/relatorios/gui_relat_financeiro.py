@@ -1,5 +1,6 @@
 """Relatórios da área Financeiro: resultado, receita por unidade e
-por propriedade, despesas por categoria e COGS por produto."""
+por propriedade, rentabilidade, despesas por categoria e COGS por
+produto."""
 
 from decimal import Decimal
 
@@ -10,7 +11,9 @@ import financeiro
 import unidades
 
 from .. import componentes
+from .. import sessao
 from .. import tema
+from ..despesas import gui_desp_atribuir
 from . import gui_relat_comum
 from .gui_relat_base import RelatorioBase
 
@@ -479,6 +482,374 @@ class RelatFinanceiro(RelatorioBase):
             master,
             "receita_propriedade",
             colunas=("Propriedade", "Receita", "Desconto"),
+            linhas=linhas_export,
+        )
+
+    # -- 3b. RENTABILIDADE (v1.12.0) ----------------------------------
+
+    _VISTAS_RENTABILIDADE = ("Por propriedade", "Por unidade")
+
+    def _vista_rentabilidade(self):
+        """A vista escolhida ("Por propriedade" / "Por unidade").
+        Guardada em `filtros_por_relatorio`, como os filtros dos
+        outros relatórios — mantém-se enquanto o popup estiver
+        aberto."""
+        return self.filtros_por_relatorio.get("rentabilidade", {}).get(
+            "vista", self._VISTAS_RENTABILIDADE[0]
+        )
+
+    def _mudar_vista_rentabilidade(self, vista):
+        self.filtros_por_relatorio.setdefault("rentabilidade", {})[
+            "vista"
+        ] = vista
+        self._recarregar_conteudo()
+
+    def _botao_atribuir_gerais(self, master):
+        """"Ver e atribuir (N)" na linha das despesas gerais: abre a
+        lista para dar unidade a cada uma (só Master/Admin). Ao
+        aplicar, o relatório recarrega."""
+        if sessao.tipo_utilizador_ativo() not in ("Master", "Admin"):
+            return componentes.Rotulo(master, "")
+
+        quantas = len(
+            financeiro.despesas_gerais(self.data_inicio, self.data_fim)
+        )
+        if not quantas:
+            return componentes.Rotulo(master, "")
+
+        return componentes.Botao(
+            master,
+            f"Ver e atribuir ({quantas})",
+            lambda: gui_desp_atribuir.DespesasGeraisModal(
+                self,
+                self.data_inicio,
+                self.data_fim,
+                self._recarregar_conteudo,
+            ),
+            "primario",
+            width=122,
+            height=26,
+        )
+
+    @staticmethod
+    def _montar_linhas_rentabilidade(dados, por_unidade):
+        """Transforma o resultado de `financeiro.rentabilidade` na
+        lista de linhas do relatório — a MESMA lista desenha o ecrã e
+        alimenta a exportação (PDF, CSV e Excel), por isso os três
+        mostram sempre o mesmo.
+
+        Cada linha é um dicionário:
+
+            tipo      — "propriedade" · "unidade" · "gerais" · "stock"
+                        · "total"
+            ecra      — texto da primeira coluna no ecrã
+            exportar  — texto da primeira coluna nos ficheiros
+            valores   — (receita de tabela, descontos, despesas,
+                        resultado); descontos e despesas com sinal
+                        negativo (são o que se tira)
+            rentavel  — True / False, ou None (despesas gerais)
+        """
+        linhas = []
+
+        def valores(item):
+            return (
+                item["receita_tabela"],
+                _simetrico(item["descontos"]),
+                _simetrico(item["despesas"]),
+                item["resultado"],
+            )
+
+        for propriedade in dados["propriedades"]:
+            nome_prop = _celula_entidade(
+                propriedade["propriedade_nome"],
+                propriedade["propriedade_id"],
+            )
+            export_prop = (
+                f"{propriedade['propriedade_nome']} "
+                f"({propriedade['propriedade_id']})"
+            )
+            linhas.append(
+                {
+                    "tipo": "propriedade",
+                    "ecra": nome_prop,
+                    "exportar": export_prop,
+                    "valores": valores(propriedade),
+                    "rentavel": propriedade["rentavel"],
+                }
+            )
+
+            if not por_unidade:
+                continue
+
+            for unidade in propriedade["unidades"]:
+                linhas.append(
+                    {
+                        "tipo": "unidade",
+                        "ecra": "    " + _celula_entidade(
+                            unidade["unidade_nome"], unidade["unidade_id"]
+                        ).replace("\n", "\n    "),
+                        "exportar": (
+                            f"{export_prop} / {unidade['unidade_nome']} "
+                            f"({unidade['unidade_id']})"
+                        ),
+                        "valores": valores(unidade),
+                        "rentavel": unidade["rentavel"],
+                    }
+                )
+
+        gerais = dados["gerais"]
+        if gerais != 0:
+            menos = _simetrico(gerais)
+            linhas.append(
+                {
+                    "tipo": "gerais",
+                    "ecra": "Despesas gerais não atribuídas",
+                    "exportar": "Despesas gerais não atribuídas",
+                    "valores": (
+                        Decimal("0.00"),
+                        Decimal("0.00"),
+                        menos,
+                        menos,
+                    ),
+                    "rentavel": None,
+                }
+            )
+
+        stock_central = dados.get("stock_central", Decimal("0.00"))
+        if stock_central != 0:
+            menos = _simetrico(stock_central)
+            linhas.append(
+                {
+                    "tipo": "stock",
+                    "ecra": "Stock central (compras de stock)",
+                    "exportar": "Stock central (compras de stock)",
+                    "valores": (
+                        Decimal("0.00"),
+                        Decimal("0.00"),
+                        menos,
+                        menos,
+                    ),
+                    "rentavel": None,
+                }
+            )
+
+        total = dados["total"]
+        texto_total = f"TOTAL ({len(dados['propriedades'])} propriedades)"
+        linhas.append(
+            {
+                "tipo": "total",
+                "ecra": texto_total,
+                "exportar": texto_total,
+                "valores": valores(total),
+                "rentavel": total["rentavel"],
+            }
+        )
+
+        return linhas
+
+    def _desenhar_rentabilidade(self, master):
+        """Relatório "Rentabilidade": por propriedade ou por unidade.
+
+        Receita de tabela − Descontos − Despesas = Resultado, com o
+        Estado Rentável (resultado >= 0) / Não rentável. As despesas
+        sem unidade aparecem numa linha à parte e só pesam no total.
+        Negativos a vermelho (ecrã, PDF e Excel).
+
+        A exportação usa o rodapé comum dos outros relatórios, com
+        exatamente as linhas que estão no ecrã.
+        """
+        dados = financeiro.rentabilidade(self.data_inicio, self.data_fim)
+        total = dados["total"]
+
+        self._titulo_relatorio(master, "Rentabilidade")
+
+        # ---- 4 KPIs (iguais aos do Resultado) -----------------------
+        kpis = ctk.CTkFrame(master, fg_color="transparent")
+        kpis.pack(fill="x", pady=(0, 14))
+        for coluna in range(4):
+            kpis.grid_columnconfigure(coluna, weight=1, uniform="kpi")
+
+        descontos = _simetrico(total["descontos"])
+        despesas_total = _simetrico(total["despesas"])
+        cor_resultado = (
+            tema.TEXTO_LIVRE if total["resultado"] >= 0 else tema.TEXTO_ERRO
+        )
+        cartoes = (
+            (
+                "Receita de tabela",
+                _formatar_valor(total["receita_tabela"]),
+                _cor_valor(total["receita_tabela"]),
+            ),
+            ("Descontos", _formatar_valor(descontos), _cor_valor(descontos)),
+            (
+                "Despesas",
+                _formatar_valor(despesas_total),
+                _cor_valor(despesas_total),
+            ),
+            (
+                "Resultado",
+                _formatar_valor(total["resultado"]),
+                cor_resultado,
+            ),
+        )
+        for indice, (rotulo, valor, cor) in enumerate(cartoes):
+            self._kpi(kpis, indice, rotulo, valor, cor)
+
+        # ---- Vista ---------------------------------------------------
+        vista = self._vista_rentabilidade()
+        barra = componentes.Contentor(master)
+        barra.pack(fill="x", pady=(0, 10))
+        componentes.SeletorVistas(
+            barra,
+            self._VISTAS_RENTABILIDADE,
+            self._mudar_vista_rentabilidade,
+            inicial=vista,
+        ).pack(side="left")
+
+        # ---- Tabela --------------------------------------------------
+        nomes_colunas = (
+            "Propriedade / Unidade",
+            "Receita tabela",
+            "Descontos",
+            "Despesas",
+            "Resultado",
+            "Estado",
+        )
+        colunas = (
+            componentes.Coluna(nomes_colunas[0], peso=3, minimo=180),
+            componentes.Coluna(
+                nomes_colunas[1], peso=1, minimo=105, alinhamento="e"
+            ),
+            componentes.Coluna(
+                nomes_colunas[2], peso=1, minimo=85, alinhamento="e"
+            ),
+            componentes.Coluna(
+                nomes_colunas[3], peso=1, minimo=85, alinhamento="e"
+            ),
+            componentes.Coluna(
+                nomes_colunas[4], peso=1, minimo=90, alinhamento="e"
+            ),
+            componentes.Coluna(
+                nomes_colunas[5], peso=1, minimo=132, alinhamento="centro"
+            ),
+        )
+
+        vazio = (
+            not dados["propriedades"]
+            and dados["gerais"] == 0
+            and dados.get("stock_central", 0) == 0
+        )
+        linhas = (
+            []
+            if vazio
+            else self._montar_linhas_rentabilidade(
+                dados, vista == self._VISTAS_RENTABILIDADE[1]
+            )
+        )
+
+        # O corpo da tabela cresce com as linhas (até 9); a partir daí
+        # rola por dentro. Sem isto ficava nos 200 px por omissão e as
+        # últimas linhas (gerais, total) escondiam-se.
+        tabela = componentes.Tabela(
+            master,
+            rolagem_horizontal=True,
+            colunas=colunas,
+            altura_linha=44,
+            mensagem_vazia="Sem receita nem despesas no período.",
+            tom_alternado=True,
+            altura_corpo=44 * min(max(len(linhas), 2), 9) + 4,
+        )
+        tabela.pack(fill="x")
+
+        if vazio:
+            tabela.mostrar_vazio()
+            self._rodape_export(
+                master, "rentabilidade", colunas=nomes_colunas, linhas=[]
+            )
+            return
+
+        linhas_export = []
+
+        for item in linhas:
+            tipo = item["tipo"]
+            e_total = tipo == "total"
+            negrito = tipo in ("total", "propriedade") and (
+                e_total or vista == self._VISTAS_RENTABILIDADE[1]
+            )
+            estilo = "forte" if negrito else "texto"
+            cor_normal = tema.AZUL_PRINCIPAL if e_total else None
+
+            linha = tabela.nova_linha(fixa=e_total)
+            tabela.colocar(
+                linha,
+                0,
+                componentes.Rotulo(
+                    linha,
+                    item["ecra"],
+                    estilo=estilo,
+                    cor=(
+                        tema.COR_TEXTO_SECUNDARIO
+                        if tipo in ("gerais", "stock")
+                        else None
+                    ),
+                    justify="left",
+                ),
+            )
+            for posicao, valor in enumerate(item["valores"], start=1):
+                tabela.colocar(
+                    linha,
+                    posicao,
+                    componentes.Rotulo(
+                        linha,
+                        _formatar_valor(valor),
+                        estilo=estilo,
+                        cor=_cor_valor(valor, cor_normal),
+                        anchor="e",
+                    ),
+                )
+
+            if item["rentavel"] is None:
+                texto_estado = ""
+                celula_estado = (
+                    self._botao_atribuir_gerais(linha)
+                    if tipo == "gerais"
+                    else componentes.Rotulo(linha, "")
+                )
+            elif item["rentavel"]:
+                texto_estado = "Rentável"
+                celula_estado = componentes.Etiqueta(
+                    linha, texto_estado, "livre", largura=96
+                )
+            else:
+                texto_estado = "Não rentável"
+                celula_estado = componentes.Etiqueta(
+                    linha, texto_estado, "erro", largura=96
+                )
+            tabela.colocar(linha, 5, celula_estado)
+
+            linhas_export.append(
+                [item["exportar"], *item["valores"], texto_estado]
+            )
+
+        ctk.CTkLabel(
+            master,
+            text=(
+                "Resultado = Receita de tabela − Descontos − Despesas. "
+                "As despesas gerais (sem unidade) e o stock central "
+                "(compras de stock, que ficam no armazém) entram só no "
+                "total, não em cada unidade."
+            ),
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=10),
+            anchor="w",
+            justify="left",
+            wraplength=780,
+        ).pack(fill="x", pady=(10, 0))
+
+        self._rodape_export(
+            master,
+            "rentabilidade",
+            colunas=nomes_colunas,
             linhas=linhas_export,
         )
 

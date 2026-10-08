@@ -5,7 +5,7 @@ soma, e devolve números. Estes testes correm contra a base de dados
 de teste dedicada (ver `apoio_BD.py`) — NUNCA contra a base de dados
 real.
 
-ESTRUTURA DO FICHEIRO — quatro classes:
+ESTRUTURA DO FICHEIRO — cinco classes:
 
   1. `TesteHelpersPuros`   — unittest.TestCase puro, SEM MySQL.
      Cobre os helpers de cálculo de datas e de rateio do Bloco 1
@@ -23,6 +23,9 @@ ESTRUTURA DO FICHEIRO — quatro classes:
      e `cogs_por_produto`.
 
   4. `TesteResultado`      — BaseMySQLTest. `resultado` agregado.
+
+  5. `TesteRentabilidade`   — BaseMySQLTest. `despesas_por_unidade` e
+     `rentabilidade` (v1.12.0).
 
 NOTA sobre helpers privados testados diretamente: `_meses_do_periodo`,
 `_listar_ocupacoes_do_periodo`, `_meses_de_vigencia_no_periodo`,
@@ -1443,6 +1446,570 @@ class TesteResultado(BaseMySQLTest):
         self.assertEqual(r["receita"], Decimal("250.00"))
         self.assertEqual(r["resultado_liquido"], Decimal("250.00"))
         self.assertEqual(r["cogs_quantidade"], 5)
+
+
+# =====================================================================
+# 5. Rentabilidade por propriedade e unidade (v1.12.0)
+# =====================================================================
+
+
+class _BaseRentabilidade(BaseMySQLTest):
+    """Cenário comum: duas propriedades, três unidades, dois clientes
+    e os atalhos para contrato, reserva e despesa paga."""
+
+    PERIODO = (date(2026, 1, 1), date(2026, 2, 1))
+
+    def setUp(self):
+        super().setUp()
+        self.autor = _criar_master()
+        self.categoria = _criar_categoria("Água", self.autor)
+
+        self.propriedade_a = _criar_propriedade("Prédio A")
+        self.propriedade_b = _criar_propriedade("Prédio B")
+
+        self.unidade_mensal = _criar_unidade_mensal(
+            self.propriedade_a["id"], preco_base="250.00"
+        )
+        _dar_capacidade_a_unidade(self.unidade_mensal["id"])
+        self.unidade_airbnb = _criar_unidade_airbnb(self.propriedade_a["id"])
+        self.unidade_b = _criar_unidade_mensal(
+            self.propriedade_b["id"], preco_base="300.00"
+        )
+
+        self.cliente_mensal = _criar_cliente_mensal()
+        self.cliente_airbnb = _criar_cliente_airbnb()
+
+    def _contrato_mensal(self, renda="250.00"):
+        _criar_contrato_mensal(
+            self.unidade_mensal["id"],
+            self.cliente_mensal["id"],
+            date(2026, 1, 1),
+            renda=renda,
+            data_fim=date(2026, 2, 1),
+        )
+
+    def _reserva_airbnb(self):
+        """Reserva de 3 noites dentro do período, ao preço de tabela
+        (sem desconto, que exigiria autorização). Devolve o preço."""
+        inicio, fim = date(2026, 1, 10), date(2026, 1, 13)
+        _criar_reserva_airbnb(
+            self.unidade_airbnb["id"], self.cliente_airbnb["id"], inicio, fim
+        )
+        return contratos.calcular_preco_airbnb(
+            unidades.procurar(self.unidade_airbnb["id"]), inicio, fim
+        )
+
+    def _despesa(self, valor, unidade_id=None, data=date(2026, 1, 15)):
+        return _criar_despesa_paga(
+            self.categoria["id"], valor, data, self.autor, unidade_id
+        )
+
+
+class TesteRentabilidade(_BaseRentabilidade):
+    """`despesas_por_unidade` e `rentabilidade`.
+
+    Receita de tabela − Descontos − Despesas = Resultado; Rentável
+    quando o resultado é >= 0. As despesas sem unidade ficam à parte
+    e só pesam no total.
+    """
+
+    # -- despesas_por_unidade -----------------------------------------
+
+    def test_despesas_por_unidade_separa_gerais(self):
+        self._despesa("40.00", self.unidade_mensal["id"])
+        self._despesa("10.00", self.unidade_mensal["id"])
+        self._despesa("25.00")
+
+        por_unidade, gerais, stock = financeiro.despesas_por_unidade(
+            *self.PERIODO
+        )
+
+        self.assertEqual(
+            por_unidade, {self.unidade_mensal["id"]: Decimal("50.00")}
+        )
+        self.assertEqual(gerais, Decimal("25.00"))
+        self.assertEqual(stock, Decimal("0.00"))
+
+    def test_despesas_por_unidade_ignora_pendentes_e_fora_do_periodo(self):
+        self._despesa("40.00", self.unidade_mensal["id"], date(2026, 3, 1))
+        despesas.criar_despesa_manual(
+            categoria_id=self.categoria["id"],
+            valor=Decimal("99.00"),
+            data_lancamento=date(2026, 1, 10),
+            responsavel_id=self.autor["id"],
+            autor=self.autor,
+            unidade_id=self.unidade_mensal["id"],
+        )
+
+        por_unidade, gerais, stock = financeiro.despesas_por_unidade(
+            *self.PERIODO
+        )
+
+        self.assertEqual(por_unidade, {})
+        self.assertEqual(gerais, Decimal("0.00"))
+
+    def test_despesas_por_unidade_periodo_invalido(self):
+        with self.assertRaises(ValueError):
+            financeiro.despesas_por_unidade(date(2026, 2, 1), date(2026, 1, 1))
+
+    # -- rentabilidade ------------------------------------------------
+
+    def test_rentabilidade_sem_dados(self):
+        r = financeiro.rentabilidade(*self.PERIODO)
+
+        self.assertEqual(r["propriedades"], [])
+        self.assertEqual(r["gerais"], Decimal("0.00"))
+        self.assertEqual(r["total"]["resultado"], Decimal("0.00"))
+        self.assertEqual(r["total"]["receita_tabela"], Decimal("0.00"))
+
+    def test_rentabilidade_estrutura(self):
+        self._contrato_mensal()
+        self._despesa("20.00", self.unidade_mensal["id"])
+
+        r = financeiro.rentabilidade(*self.PERIODO)
+
+        self.assertEqual(
+            set(r), {"propriedades", "gerais", "stock_central", "total"}
+        )
+        chaves = {
+            "receita_tabela",
+            "descontos",
+            "receita",
+            "despesas",
+            "resultado",
+            "rentavel",
+        }
+        self.assertTrue(chaves <= set(r["total"]))
+        prop = r["propriedades"][0]
+        self.assertTrue(chaves <= set(prop))
+        self.assertEqual(prop["propriedade_id"], self.propriedade_a["id"])
+        self.assertEqual(prop["propriedade_nome"], "Prédio A")
+        unidade = prop["unidades"][0]
+        self.assertTrue(chaves <= set(unidade))
+        self.assertEqual(unidade["unidade_id"], self.unidade_mensal["id"])
+        self.assertEqual(unidade["unidade_nome"], "Unidade Mensal")
+
+    def test_rentabilidade_unidade_rentavel(self):
+        self._contrato_mensal("250.00")
+        self._despesa("100.00", self.unidade_mensal["id"])
+
+        r = financeiro.rentabilidade(*self.PERIODO)
+        unidade = r["propriedades"][0]["unidades"][0]
+
+        self.assertEqual(unidade["receita_tabela"], Decimal("250.00"))
+        self.assertEqual(unidade["descontos"], Decimal("0.00"))
+        self.assertEqual(unidade["despesas"], Decimal("100.00"))
+        self.assertEqual(unidade["resultado"], Decimal("150.00"))
+        self.assertTrue(unidade["rentavel"])
+
+    def test_rentabilidade_desconto_nao_conta_a_dobrar(self):
+        """Tabela 250, desconto 50, recebida 200, despesas 80:
+        resultado = 200 − 80 = 120 (e não 70)."""
+        _criar_contrato_mensal_com_desconto(
+            self.unidade_mensal["id"],
+            self.cliente_mensal["id"],
+            date(2026, 1, 1),
+            renda_calculada="250.00",
+            renda_praticada="200.00",
+            autor=self.autor,
+            data_fim=date(2026, 2, 1),
+        )
+        self._despesa("80.00", self.unidade_mensal["id"])
+
+        unidade = financeiro.rentabilidade(*self.PERIODO)["propriedades"][
+            0
+        ]["unidades"][0]
+
+        self.assertEqual(unidade["receita_tabela"], Decimal("250.00"))
+        self.assertEqual(unidade["descontos"], Decimal("50.00"))
+        self.assertEqual(unidade["receita"], Decimal("200.00"))
+        self.assertEqual(unidade["resultado"], Decimal("120.00"))
+        self.assertEqual(
+            unidade["receita_tabela"]
+            - unidade["descontos"]
+            - unidade["despesas"],
+            unidade["resultado"],
+        )
+
+    def test_rentabilidade_unidade_nao_rentavel(self):
+        self._contrato_mensal("250.00")
+        self._despesa("300.00", self.unidade_mensal["id"])
+
+        r = financeiro.rentabilidade(*self.PERIODO)
+        unidade = r["propriedades"][0]["unidades"][0]
+
+        self.assertEqual(unidade["resultado"], Decimal("-50.00"))
+        self.assertFalse(unidade["rentavel"])
+        self.assertFalse(r["propriedades"][0]["rentavel"])
+        self.assertFalse(r["total"]["rentavel"])
+
+    def test_rentabilidade_resultado_zero_e_rentavel(self):
+        self._contrato_mensal("250.00")
+        self._despesa("250.00", self.unidade_mensal["id"])
+
+        unidade = financeiro.rentabilidade(*self.PERIODO)["propriedades"][
+            0
+        ]["unidades"][0]
+
+        self.assertEqual(unidade["resultado"], Decimal("0.00"))
+        self.assertTrue(unidade["rentavel"])
+
+    def test_rentabilidade_unidade_so_com_despesas_aparece(self):
+        self._despesa("40.00", self.unidade_b["id"])
+
+        r = financeiro.rentabilidade(*self.PERIODO)
+
+        self.assertEqual(len(r["propriedades"]), 1)
+        prop = r["propriedades"][0]
+        self.assertEqual(prop["propriedade_id"], self.propriedade_b["id"])
+        unidade = prop["unidades"][0]
+        self.assertEqual(unidade["receita_tabela"], Decimal("0.00"))
+        self.assertEqual(unidade["resultado"], Decimal("-40.00"))
+        self.assertFalse(unidade["rentavel"])
+
+    def test_rentabilidade_gerais_ficam_fora_das_unidades(self):
+        self._contrato_mensal("250.00")
+        self._despesa("30.00")
+
+        r = financeiro.rentabilidade(*self.PERIODO)
+        prop = r["propriedades"][0]
+
+        self.assertEqual(r["gerais"], Decimal("30.00"))
+        self.assertEqual(prop["despesas"], Decimal("0.00"))
+        self.assertEqual(prop["unidades"][0]["despesas"], Decimal("0.00"))
+        self.assertEqual(prop["resultado"], Decimal("250.00"))
+        # ... mas pesam no total.
+        self.assertEqual(r["total"]["despesas"], Decimal("30.00"))
+        self.assertEqual(r["total"]["resultado"], Decimal("220.00"))
+
+    def test_rentabilidade_so_gerais_nao_cria_propriedades(self):
+        self._despesa("30.00")
+
+        r = financeiro.rentabilidade(*self.PERIODO)
+
+        self.assertEqual(r["propriedades"], [])
+        self.assertEqual(r["gerais"], Decimal("30.00"))
+        self.assertEqual(r["total"]["resultado"], Decimal("-30.00"))
+        self.assertFalse(r["total"]["rentavel"])
+
+    def test_rentabilidade_agrupa_unidades_por_propriedade(self):
+        self._contrato_mensal("250.00")
+        preco_airbnb = self._reserva_airbnb()
+        self._despesa("50.00", self.unidade_mensal["id"])
+        self._despesa("20.00", self.unidade_airbnb["id"])
+        self._despesa("70.00", self.unidade_b["id"])
+
+        r = financeiro.rentabilidade(*self.PERIODO)
+
+        self.assertEqual(
+            [p["propriedade_id"] for p in r["propriedades"]],
+            sorted([self.propriedade_a["id"], self.propriedade_b["id"]]),
+        )
+        por_id = {p["propriedade_id"]: p for p in r["propriedades"]}
+        prop_a = por_id[self.propriedade_a["id"]]
+        prop_b = por_id[self.propriedade_b["id"]]
+
+        self.assertEqual(len(prop_a["unidades"]), 2)
+        self.assertEqual(len(prop_b["unidades"]), 1)
+        self.assertEqual(prop_a["receita"], Decimal("250.00") + preco_airbnb)
+        self.assertEqual(prop_a["despesas"], Decimal("70.00"))
+        self.assertEqual(
+            prop_a["resultado"], Decimal("180.00") + preco_airbnb
+        )
+        self.assertEqual(prop_b["resultado"], Decimal("-70.00"))
+        self.assertEqual(
+            r["total"]["resultado"], Decimal("110.00") + preco_airbnb
+        )
+
+    def test_rentabilidade_propriedade_soma_das_unidades(self):
+        self._contrato_mensal("250.00")
+        self._reserva_airbnb()
+        self._despesa("50.00", self.unidade_mensal["id"])
+        self._despesa("20.00", self.unidade_airbnb["id"])
+
+        prop = financeiro.rentabilidade(*self.PERIODO)["propriedades"][0]
+
+        for chave in ("receita_tabela", "descontos", "despesas", "resultado"):
+            self.assertEqual(
+                prop[chave],
+                sum((u[chave] for u in prop["unidades"]), Decimal("0.00")),
+                chave,
+            )
+
+    def test_rentabilidade_total_bate_com_resultado(self):
+        _criar_contrato_mensal_com_desconto(
+            self.unidade_mensal["id"],
+            self.cliente_mensal["id"],
+            date(2026, 1, 1),
+            renda_calculada="250.00",
+            renda_praticada="200.00",
+            autor=self.autor,
+            data_fim=date(2026, 2, 1),
+        )
+        self._despesa("60.00", self.unidade_mensal["id"])
+        self._despesa("15.00")
+
+        r = financeiro.rentabilidade(*self.PERIODO)
+        base = financeiro.resultado(*self.PERIODO)
+
+        self.assertEqual(r["total"]["receita"], base["receita"])
+        self.assertEqual(r["total"]["descontos"], base["descontos"])
+        self.assertEqual(r["total"]["receita_tabela"], base["receita_tabela"])
+        self.assertEqual(
+            r["total"]["despesas"], base["despesas_operacionais"]
+        )
+        self.assertEqual(
+            r["total"]["resultado"], base["resultado_liquido"]
+        )
+
+    def test_rentabilidade_periodo_invalido(self):
+        with self.assertRaises(ValueError):
+            financeiro.rentabilidade(date(2026, 2, 1), date(2026, 1, 1))
+
+
+class TesteAtribuirUnidade(_BaseRentabilidade):
+    """v1.12.0 — despesas gerais e atribuição de unidade a uma
+    despesa paga (a única exceção ao bloqueio)."""
+
+    def teste_despesas_gerais_lista_so_as_pagas_sem_unidade(self):
+        g1 = self._despesa("25.00")
+        self._despesa("40.00", self.unidade_mensal["id"])
+        self._despesa("9.00", None, date(2026, 3, 1))
+
+        lista = financeiro.despesas_gerais(*self.PERIODO)
+
+        self.assertEqual([g1["id"]], [d["id"] for d in lista])
+
+    def teste_despesas_gerais_bate_com_o_total_gerais(self):
+        self._despesa("25.00")
+        self._despesa("5.50")
+
+        lista = financeiro.despesas_gerais(*self.PERIODO)
+        _, gerais, _ = financeiro.despesas_por_unidade(*self.PERIODO)
+
+        self.assertEqual(sum(d["valor"] for d in lista), gerais)
+
+    def teste_atribuir_passa_a_pesar_na_unidade(self):
+        geral = self._despesa("700.00")
+
+        d = despesas.atribuir_unidade(
+            geral["id"], self.unidade_mensal["id"], self.autor
+        )
+
+        self.assertEqual(d["unidade_id"], self.unidade_mensal["id"])
+        guardada = despesas.procurar_despesa(geral["id"])
+        self.assertEqual(guardada["unidade_id"], self.unidade_mensal["id"])
+        self.assertEqual(guardada["unidade_atribuida_por_id"],
+                         self.autor["id"])
+        self.assertIsNotNone(guardada["unidade_atribuida_em"])
+        self.assertEqual(guardada["estado"], "paga")
+        self.assertEqual(guardada["valor"], Decimal("700.00"))
+
+        self.assertEqual(financeiro.despesas_gerais(*self.PERIODO), [])
+        r = financeiro.rentabilidade(*self.PERIODO)
+        self.assertEqual(r["gerais"], Decimal("0.00"))
+        self.assertEqual(r["total"]["resultado"], Decimal("-700.00"))
+
+    def teste_atribuir_so_uma_vez(self):
+        geral = self._despesa("10.00")
+        despesas.atribuir_unidade(
+            geral["id"], self.unidade_mensal["id"], self.autor
+        )
+        with self.assertRaises(ValueError):
+            despesas.atribuir_unidade(
+                geral["id"], self.unidade_b["id"], self.autor
+            )
+
+    def teste_atribuir_recusa_despesa_que_ja_tem_unidade(self):
+        d = self._despesa("10.00", self.unidade_mensal["id"])
+        with self.assertRaises(ValueError):
+            despesas.atribuir_unidade(
+                d["id"], self.unidade_b["id"], self.autor
+            )
+
+    def teste_atribuir_recusa_cancelada_inexistente_e_sem_unidade(self):
+        d = despesas.criar_despesa_manual(
+            categoria_id=self.categoria["id"],
+            valor=Decimal("10.00"),
+            data_lancamento=date(2026, 1, 10),
+            responsavel_id=self.autor["id"],
+            autor=self.autor,
+        )
+        with self.assertRaises(ValueError):
+            despesas.atribuir_unidade(d["id"], "", self.autor)
+        with self.assertRaises(ValueError):
+            despesas.atribuir_unidade(d["id"], "UNI-999", self.autor)
+        with self.assertRaises(ValueError):
+            despesas.atribuir_unidade("DSP-999", self.unidade_b["id"],
+                                      self.autor)
+        despesas.cancelar_despesa(d["id"], "engano", self.autor)
+        with self.assertRaises(ValueError):
+            despesas.atribuir_unidade(
+                d["id"], self.unidade_b["id"], self.autor
+            )
+
+    def teste_atribuir_exige_autor_administrativo(self):
+        geral = self._despesa("10.00")
+        with self.assertRaises(ValueError):
+            despesas.atribuir_unidade(
+                geral["id"], self.unidade_b["id"], None
+            )
+
+    def teste_atribuir_a_pendente_tambem_funciona(self):
+        d = despesas.criar_despesa_manual(
+            categoria_id=self.categoria["id"],
+            valor=Decimal("10.00"),
+            data_lancamento=date(2026, 1, 10),
+            responsavel_id=self.autor["id"],
+            autor=self.autor,
+        )
+        r = despesas.atribuir_unidade(d["id"], self.unidade_b["id"],
+                                      self.autor)
+        self.assertEqual(r["unidade_id"], self.unidade_b["id"])
+        self.assertEqual(r["estado"], "pendente")
+
+    def teste_dividir_reparte_ao_centimo_e_cancela_a_original(self):
+        propriedade = self.unidade_mensal["propriedade_id"]
+        geral = self._despesa("100.00")
+
+        novas = despesas.dividir_despesa_sem_unidade(
+            geral["id"], propriedade, self.autor
+        )
+
+        self.assertEqual(2, len(novas))
+        self.assertEqual(
+            Decimal("100.00"), sum(d["valor"] for d in novas)
+        )
+        original = despesas.procurar_despesa(geral["id"])
+        self.assertEqual("cancelada", original["estado"])
+        self.assertIn("Dividida", original["motivo_cancelamento"])
+        for nova in novas:
+            guardada = despesas.procurar_despesa(nova["id"])
+            self.assertEqual("paga", guardada["estado"])
+            self.assertEqual(guardada["unidade_atribuida_por_id"],
+                             self.autor["id"])
+
+        # O total pago não muda: sai das gerais, entra nas unidades.
+        r = financeiro.rentabilidade(*self.PERIODO)
+        self.assertEqual(r["gerais"], Decimal("0.00"))
+        self.assertEqual(r["total"]["resultado"], Decimal("-100.00"))
+
+    def teste_dividir_resto_vai_para_a_ultima_unidade(self):
+        propriedade = self.unidade_mensal["propriedade_id"]
+        geral = self._despesa("0.05")
+        novas = despesas.dividir_despesa_sem_unidade(
+            geral["id"], propriedade, self.autor
+        )
+        self.assertEqual(Decimal("0.05"), sum(d["valor"] for d in novas))
+
+    def teste_dividir_recusa_casos_invalidos(self):
+        propriedade = self.unidade_mensal["propriedade_id"]
+        com_unidade = self._despesa("10.00", self.unidade_mensal["id"])
+        with self.assertRaises(ValueError):
+            despesas.dividir_despesa_sem_unidade(
+                com_unidade["id"], propriedade, self.autor
+            )
+        geral = self._despesa("10.00")
+        with self.assertRaises(ValueError):
+            despesas.dividir_despesa_sem_unidade(
+                geral["id"], "PRO-999", self.autor
+            )
+        with self.assertRaises(ValueError):
+            despesas.dividir_despesa_sem_unidade(
+                "DSP-999", propriedade, self.autor
+            )
+        pendente = despesas.criar_despesa_manual(
+            categoria_id=self.categoria["id"],
+            valor=Decimal("10.00"),
+            data_lancamento=date(2026, 1, 10),
+            responsavel_id=self.autor["id"],
+            autor=self.autor,
+        )
+        with self.assertRaises(ValueError):
+            despesas.dividir_despesa_sem_unidade(
+                pendente["id"], propriedade, self.autor
+            )
+
+    def teste_resultado_da_unidade_antes_e_depois(self):
+        self._contrato_mensal()
+        uid = self.unidade_mensal["id"]
+        self.assertEqual(
+            financeiro.resultado_da_unidade(uid, *self.PERIODO),
+            Decimal("250.00"),
+        )
+        geral = self._despesa("100.00")
+        despesas.atribuir_unidade(geral["id"], uid, self.autor)
+        self.assertEqual(
+            financeiro.resultado_da_unidade(uid, *self.PERIODO),
+            Decimal("150.00"),
+        )
+        self.assertEqual(
+            financeiro.resultado_da_unidade(
+                self.unidade_b["id"], *self.PERIODO),
+            Decimal("0.00"),
+        )
+
+    # -- stock central ------------------------------------------------
+
+    def _compra_de_stock(self, valor="30.00"):
+        despesas.criar_categoria("Compra de Stock", self.autor)
+        produto = estoque.criar_produto("Lixívia", "L")
+        despesa, _ = despesas.criar_despesa_stock(
+            itens=[{"produto_id": produto["id"], "quantidade": 5}],
+            valor_total=Decimal(valor),
+            data_lancamento=date(2026, 1, 15),
+            responsavel_id=self.autor["id"],
+            autor=self.autor,
+        )
+        return despesa
+
+    def teste_compra_de_stock_nao_e_geral_e_fica_no_stock_central(self):
+        self._despesa("25.00")
+        self._compra_de_stock("30.00")
+
+        _, gerais, stock = financeiro.despesas_por_unidade(*self.PERIODO)
+
+        self.assertEqual(Decimal("25.00"), gerais)
+        self.assertEqual(Decimal("30.00"), stock)
+
+    def teste_despesas_gerais_nao_lista_compras_de_stock(self):
+        geral = self._despesa("25.00")
+        self._compra_de_stock()
+
+        lista = financeiro.despesas_gerais(*self.PERIODO)
+
+        self.assertEqual([geral["id"]], [d["id"] for d in lista])
+
+    def teste_rentabilidade_stock_central_pesa_so_no_total(self):
+        self._compra_de_stock("30.00")
+
+        r = financeiro.rentabilidade(*self.PERIODO)
+
+        self.assertEqual(Decimal("0.00"), r["gerais"])
+        self.assertEqual(Decimal("30.00"), r["stock_central"])
+        self.assertEqual(Decimal("-30.00"), r["total"]["resultado"])
+        liquido = financeiro.resultado(*self.PERIODO)["resultado_liquido"]
+        self.assertEqual(r["total"]["resultado"], liquido)
+
+    def teste_atribuir_recusa_compra_de_stock(self):
+        compra = self._compra_de_stock()
+        with self.assertRaises(ValueError) as contexto:
+            despesas.atribuir_unidade(
+                compra["id"], self.unidade_b["id"], self.autor
+            )
+        self.assertIn("stock", str(contexto.exception))
+
+    def teste_contar_pendentes_de_despesas(self):
+        self.assertEqual(despesas.contar_pendentes(), 0)
+        despesas.criar_despesa_manual(
+            categoria_id=self.categoria["id"],
+            valor=Decimal("10.00"),
+            data_lancamento=date(2026, 1, 10),
+            responsavel_id=self.autor["id"],
+            autor=self.autor,
+        )
+        self._despesa("5.00")
+        self.assertEqual(despesas.contar_pendentes(), 1)
 
 
 if __name__ == "__main__":

@@ -77,6 +77,12 @@ RELATORIOS = {
             "filtros": [],
         },
         {
+            "id": "rentabilidade",
+            "titulo": "Rentabilidade",
+            "periodo": True,
+            "filtros": [],
+        },
+        {
             "id": "despesas_categoria",
             "titulo": "Despesas por categoria",
             "periodo": True,
@@ -166,7 +172,11 @@ RELATORIOS = {
 
 # Rótulos das áreas no hub — a ordem é a ordem dos cartões.
 AREAS = (
-    ("financeiro", "Financeiro", "Resultado · Receita · Despesas · COGS"),
+    (
+        "financeiro",
+        "Financeiro",
+        "Resultado · Receita · Rentabilidade · Despesas · COGS",
+    ),
     ("contratos", "Contratos", "Ocupações · Mensais · Airbnb · Ocupação"),
     ("stock", "Stock", "Movimentos · Stock atual · Requisições · Devoluções"),
 )

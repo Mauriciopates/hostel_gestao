@@ -3,6 +3,98 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [1.12.0] — 2026-10-08
+
+Revisão com a colega de turma, Blocos 3 e 3b (branch `revisao`):
+relatório de Rentabilidade por propriedade e unidade, detalhe completo
+da despesa, atribuição de unidade às despesas gerais e pendências no
+menu lateral. **Migração 0005** (duas colunas novas em `despesas`;
+corre sozinha ao abrir a aplicação).
+
+### Adicionado — Bloco 3 (Rentabilidade)
+
+- **Relatório "Rentabilidade"** (Relatórios · Financeiro) — por
+  propriedade ou por unidade (seletor no topo): Receita de tabela −
+  Descontos − Despesas = Resultado, com o estado Rentável (resultado
+  ≥ 0) ou Não rentável. Quatro cartões iguais aos do Resultado,
+  negativos a vermelho no ecrã, no PDF e no Excel. As despesas pagas
+  sem unidade aparecem numa linha à parte ("Despesas gerais não
+  atribuídas") e só pesam no total, que bate sempre com o relatório
+  Resultado. PDF, CSV e Excel usam o rodapé de exportação comum e
+  têm exatamente as linhas do ecrã (na vista por unidade, a primeira
+  coluna traz "Propriedade / Unidade").
+- **`financeiro.rentabilidade`** e **`financeiro.despesas_por_unidade`**
+  — o motor do relatório. Uma unidade só com despesas também aparece
+  (não rentável); uma despesa cuja unidade já não existe conta como
+  geral.
+- **`Tabela(altura_corpo=...)`** — altura pedida para o corpo com
+  scroll (omisso = 200 px, como até aqui). O relatório novo usa-a para
+  não esconder as últimas linhas (gerais e total).
+
+### Adicionado — Bloco 3b (despesas e pendências)
+
+- **Detalhe da despesa (Gerir) completo** — imputação ("Geral, sem
+  unidade", "Armazém (geral)" ou a unidade), quem lançou, se é
+  recorrente, comprovativo, itens do stock e quem os confirmou, quem
+  cancelou e porquê, e quem atribuiu a unidade. Só aparecem as linhas
+  que fazem sentido para o estado e a origem da despesa.
+- **Rentabilidade · "Ver e atribuir (N)"** na linha das despesas gerais
+  (Master/Admin): abre a lista "Despesas gerais não atribuídas" do
+  período, com um seletor por linha (uma unidade, ou dividir pelas
+  unidades de uma propriedade) e "Aplicar". O relatório recarrega.
+- **Modal "Atribuir despesa a uma unidade"** (botão "Atribuir unidade"
+  no detalhe): mostra o resultado da unidade antes → depois; o botão só
+  fica ativo com uma escolha.
+- **Menu lateral** — pílula vermelha com o número de pendências em
+  *Stock* (requisições por aprovar + devoluções pendentes) e
+  *Despesas* (despesas pendentes), como nos Pré check-ins. Só o
+  Master/Admin vê os números.
+- **`despesas.atribuir_unidade`** — a única exceção ao bloqueio das
+  despesas pagas: dá UMA unidade a uma despesa sem unidade, uma só vez;
+  valor, categoria e datas continuam trancados. Fica gravado quem
+  atribuiu e quando.
+- **`despesas.dividir_despesa_sem_unidade`** — reparte uma despesa paga
+  sem unidade, em partes iguais, pelas unidades ativas de uma
+  propriedade: cria N despesas pagas e cancela a original (com motivo),
+  por isso o total pago não muda. O resto do arredondamento vai para a
+  última unidade (a soma bate ao cêntimo).
+- **`despesas.contar_pendentes`**, **`estoque.contar_pendentes_aprovacao`**,
+  **`financeiro.despesas_gerais`**, **`financeiro.resultado_da_unidade`**
+  e **`sessao.contador_so_gestao`**.
+
+- **Stock central** — o stock é central, não é de nenhuma unidade (só
+  se liga a uma unidade, no futuro, no envio ao colaborador). Por isso
+  uma compra de stock sem unidade já não aparece como "despesa geral
+  não atribuída": tem a sua linha, "Stock central (compras de stock)",
+  na Rentabilidade (pesa só no total, que continua a bater com o
+  Resultado), não entra na lista de atribuição e `atribuir_unidade`
+  recusa-a. `financeiro.despesas_por_unidade` devolve agora
+  `(por_unidade, gerais, stock_central)` e `rentabilidade` ganha a
+  chave `stock_central`.
+
+- **Reservas Airbnb · estado "Finalizada"** — uma reserva ativa cuja
+  data de saída já passou mostra a etiqueta azul "Finalizada" (e
+  "finalizada" nas ações) em vez de "Ativa". É calculado ao ler, não
+  se grava nada (`contratos.esta_finalizada`); no próprio dia da saída
+  continua ativa. As canceladas continuam "Cancelada".
+
+### Base de dados
+
+- Migração `0005_despesa_unidade_atribuida`: `despesas.unidade_atribuida_por_id`
+  (FK para `responsaveis`) e `despesas.unidade_atribuida_em`.
+  Idempotente; `esquema.sql` atualizado (49 chaves estrangeiras).
+
+### Testes
+- `teste_financeiro`: `TesteRentabilidade` (16).
+- `teste_gui_rentabilidade` (novo): montagem das linhas (sinais, ordem,
+  gerais, total, texto dos ficheiros) (9).
+- `teste_componentes`: `TesteTabelaAlturaCorpo` (2).
+- `teste_financeiro` (3b): `TesteAtribuirUnidade` (atribuir, uma só vez,
+  dividir, contagens, resultado antes/depois).
+- `teste_migracoes`: `TesteDespesaUnidadeAtribuida` (2).
+- `teste_gui_atribuir` (novo): os dois modais, o detalhe e os
+  contadores.
+
 ## [1.11.2] — 2026-10-07
 
 Revisão com a colega de turma, Bloco 2 (branch `revisao`): campos de
@@ -3114,4 +3206,4 @@ Fase de análise e desenho. Sem código.
 ### Segurança
 - Histórico do Git limpo com `git-filter-repo` após deteção de dados pessoais
   reais em repositório público. Repositório recriado, dados de exemplo
-  anonimizados
+  anonimizados

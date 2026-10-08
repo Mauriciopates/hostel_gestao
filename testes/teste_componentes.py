@@ -1033,6 +1033,46 @@ class TesteTabelaRolagemHorizontal(unittest.TestCase):
         )
 
 
+class TesteTabelaAlturaCorpo(unittest.TestCase):
+    """`Tabela(altura_corpo=...)` (v1.12.0): altura pedida para o corpo
+    com scroll; sem ela, mantém-se a de sempre."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.root = _criar_root()
+        cls.janela = tkinter.Toplevel(cls.root)
+        cls.janela.geometry("600x700+0+0")
+        cls.root.update()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.janela.destroy()
+        _destruir_root(cls.root)
+
+    def _altura_pedida(self, **kwargs):
+        """Altura pedida pela área de scroll do corpo (o canvas)."""
+        from gui.componentes import Coluna, Tabela
+
+        for filho in self.janela.winfo_children():
+            filho.destroy()
+        tabela = Tabela(
+            self.janela,
+            colunas=[Coluna("A", peso=1, minimo=100)],
+            **kwargs,
+        )
+        tabela.pack(fill="x")
+        for _ in range(5):
+            self.root.update()
+        return tabela.corpo._parent_canvas.winfo_reqheight()
+
+    def test_sem_altura_mantem_a_de_sempre(self):
+        self.assertEqual(200, self._altura_pedida())
+
+    def test_altura_pedida_e_respeitada(self):
+        self.assertEqual(320, self._altura_pedida(altura_corpo=320))
+        self.assertEqual(112, self._altura_pedida(altura_corpo=112))
+
+
 class TesteCarregarEmSegundoPlano(unittest.TestCase):
     """A leitura corre numa thread; o resultado volta à thread
     principal. Os testes fazem girar o loop do Tk à mão até acabar.

@@ -70,7 +70,7 @@ Este módulo NÃO acede a ficheiros nem à interface. Fala com o
 sinaliza erro com `raise ValueError`.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 import estoque
@@ -1102,8 +1102,6 @@ def confirmar_itens_despesa(despesa_id, autor):
     preenchidos). Os itens ficam acessíveis via
     `listar_itens_despesa`, com os `movimento_id` já gravados.
     """
-    from datetime import datetime
-
     _validar_autor(autor)
 
     despesa = repositorio.procurar_despesa(despesa_id)
@@ -1248,6 +1246,188 @@ def cancelar_despesa(despesa_id, motivo, autor):
     repositorio.atualizar_despesa(despesa_id, campos)
     despesa.update(campos)
     return despesa
+
+
+def atribuir_unidade(despesa_id, unidade_id, autor):
+    """Atribui UMA unidade a uma despesa que ficou sem unidade.
+
+    É a única exceção ao bloqueio das despesas pagas (v1.12.0): o
+    valor, a categoria e as datas continuam trancados — só muda a
+    IMPUTAÇÃO (a que unidade a despesa pesa na rentabilidade). Regras:
+
+      - a despesa tem de existir e não estar cancelada (pendente ou
+        paga);
+      - não se aplica a compras de stock (têm itens): o stock é
+        central, não é de nenhuma unidade;
+      - só se atribui quando ainda NÃO tem unidade, e só uma vez —
+        para corrigir de novo, cancela-se e relança-se;
+      - a unidade tem de existir (pode estar inativa: histórico);
+      - fica gravado quem atribuiu e quando.
+
+    Devolve a despesa atualizada.
+    """
+    _validar_autor(autor)
+
+    despesa = repositorio.procurar_despesa(despesa_id)
+
+    if despesa is None:
+        raise ValueError(f"A despesa {despesa_id} não existe.")
+
+    if despesa["estado"] == "cancelada":
+        raise ValueError(
+            f"A despesa {despesa_id} está cancelada — não se atribui "
+            f"unidade."
+        )
+
+    if despesa.get("unidade_id"):
+        raise ValueError(
+            f"A despesa {despesa_id} já tem unidade. A atribuição só "
+            f"se faz uma vez; para corrigir, cancele e lance de novo."
+        )
+
+    if not unidade_id:
+        raise ValueError("Escolha a unidade a que a despesa pertence.")
+
+    if repositorio.listar_itens_despesa(despesa_id):
+        raise ValueError(
+            f"A despesa {despesa_id} é uma compra de stock: o stock é "
+            f"central e só se liga a uma unidade no envio ao "
+            f"colaborador, não na despesa."
+        )
+
+    if repositorio.procurar_unidade(unidade_id) is None:
+        raise ValueError(f"A unidade {unidade_id} não existe.")
+
+    campos = {
+        "unidade_id": unidade_id,
+        "unidade_atribuida_por_id": autor["id"],
+        "unidade_atribuida_em": datetime.now().replace(microsecond=0),
+    }
+    repositorio.atualizar_despesa(despesa_id, campos)
+    despesa.update(campos)
+    return despesa
+
+
+def dividir_despesa_sem_unidade(despesa_id, propriedade_id, autor):
+    """Reparte, em partes iguais, uma despesa PAGA sem unidade pelas
+    unidades ativas de uma propriedade (o "Dividir" do modal de
+    atribuição, v1.12.0).
+
+    Como o valor da despesa paga está trancado, não se mexe nela: são
+    criadas N despesas pagas (uma por unidade, com a mesma categoria,
+    fornecedor, datas, descrição e quem a lançou; a atribuição fica
+    registada em quem/quando) e a original é CANCELADA com o motivo
+    "Dividida pelas unidades de …", listando as novas. Como a
+    original deixa de contar, o total pago não muda.
+
+    Ao contrário de `dividir_despesa_por_propriedade`, aqui a soma
+    das partes bate CERTO ao cêntimo (o resto vai para a última
+    unidade): é a correção de uma despesa já paga, não se perdem
+    cêntimos.
+
+    Só para despesas `paga`, sem unidade e sem itens de stock. Devolve
+    a lista das despesas novas.
+    """
+    _validar_autor(autor)
+
+    despesa = repositorio.procurar_despesa(despesa_id)
+
+    if despesa is None:
+        raise ValueError(f"A despesa {despesa_id} não existe.")
+
+    if despesa["estado"] != "paga":
+        raise ValueError(
+            f"Só se divide uma despesa paga ({despesa_id} está "
+            f"{despesa['estado']})."
+        )
+
+    if despesa.get("unidade_id"):
+        raise ValueError(f"A despesa {despesa_id} já tem unidade.")
+
+    if repositorio.listar_itens_despesa(despesa_id):
+        raise ValueError(
+            f"A despesa {despesa_id} vem do stock (tem itens) — "
+            f"atribua-a a uma só unidade."
+        )
+
+    propriedade = repositorio.procurar_propriedade(propriedade_id)
+
+    if propriedade is None:
+        raise ValueError(f"A propriedade {propriedade_id} não existe.")
+
+    unidades_ativas = repositorio.listar_unidades(
+        propriedade_id=propriedade_id
+    )
+
+    if not unidades_ativas:
+        raise ValueError(
+            f"A propriedade {propriedade['nome']} não tem unidades "
+            f"ativas — não há por quem dividir."
+        )
+
+    quantas = len(unidades_ativas)
+    parte = (despesa["valor"] / quantas).quantize(Decimal("0.01"))
+    resto = despesa["valor"] - parte * quantas
+    agora = datetime.now().replace(microsecond=0)
+
+    criadas = []
+
+    for posicao, unidade in enumerate(unidades_ativas):
+        valor = parte + (resto if posicao == quantas - 1 else 0)
+        nova = {
+            "id": repositorio.proximo_id(PREFIXO_DESPESA),
+            "unidade_id": unidade["id"],
+            "categoria_id": despesa["categoria_id"],
+            "fornecedor_id": despesa["fornecedor_id"],
+            "valor": valor,
+            "data_lancamento": despesa["data_lancamento"],
+            "data_pagamento": despesa["data_pagamento"],
+            "data_vencimento": despesa["data_vencimento"],
+            "estado": "paga",
+            "recorrente": False,
+            "despesa_origem_id": None,
+            "itens_confirmados": True,
+            "itens_confirmados_por_id": None,
+            "itens_confirmados_em": None,
+            "responsavel_lancamento_id": despesa[
+                "responsavel_lancamento_id"
+            ],
+            "responsavel_cancelamento_id": None,
+            "motivo_cancelamento": None,
+            "descricao": (
+                f"{despesa['descricao']} (parte de {despesa_id})".strip()
+            ),
+            "comprovativo_caminho": despesa["comprovativo_caminho"],
+        }
+        repositorio.inserir_despesa(nova)
+        repositorio.atualizar_despesa(
+            nova["id"],
+            {
+                "unidade_atribuida_por_id": autor["id"],
+                "unidade_atribuida_em": agora,
+            },
+        )
+        criadas.append(nova)
+
+    cancelar_despesa(
+        despesa_id,
+        f"Dividida pelas unidades de {propriedade['nome']}: "
+        + ", ".join(d["id"] for d in criadas),
+        autor,
+    )
+
+    return criadas
+
+
+def contar_pendentes():
+    """Despesas à espera de aprovação (estado `pendente`) — o número
+    da pílula do menu. Nunca rebenta: um erro conta como 0. Quem
+    decide a que perfis se mostra é a GUI.
+    """
+    try:
+        return len(repositorio.listar_despesas(estado="pendente"))
+    except Exception:
+        return 0
 
 
 def editar_valor_despesa(despesa_id, novo_valor, autor):
