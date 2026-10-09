@@ -226,9 +226,9 @@ class Configuracoes(ctk.CTkFrame):
         self._area_tabs = ctk.CTkFrame(self, fg_color="transparent")
         self._area_tabs.pack(fill="both", expand=True, padx=20, pady=(4, 16))
 
-        # ---- Constrói os frames de cada tab ---------------------------
-        for tab_def in self._tabs_visiveis:
-            self._desenhar_tab(tab_def)
+        # Os frames das tabs constroem-se SÓ quando se abrem pela
+        # primeira vez (`_mostrar_tab`): abrir o ecrã deixou de pagar
+        # as 5 tabs de uma vez (centenas de widgets e leituras).
 
         # Mostra a tab inicial (a primeira da lista)
         if self._tabs_visiveis:
@@ -245,6 +245,13 @@ class Configuracoes(ctk.CTkFrame):
             return  # já está ativa
 
         self._tab_ativa = tab_id
+
+        # ---- Constrói a tab na primeira vez que é pedida --------------
+        if self._tabs_ui[tab_id]["frame"] is None:
+            for tab_def in self._tabs_visiveis:
+                if tab_def["id"] == tab_id:
+                    self._desenhar_tab(tab_def)
+                    break
 
         # ---- Mostra só o frame da tab ativa ---------------------------
         for tid, dados in self._tabs_ui.items():
