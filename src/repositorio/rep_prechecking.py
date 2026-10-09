@@ -106,13 +106,18 @@ def resumo_por_referencia(referencias):
             "LEFT JOIN pendentes p ON p.token_hash = t.token_hash "
             "AND p.estado = 'pendente' "
             f"WHERE t.referencia IN ({marcas}) "
-            "ORDER BY t.criado_em",
+            "ORDER BY t.criado_em, (t.usado_em IS NULL), t.usado_em",
             tuple(referencias),
         )
         linhas = cast(list, cursor.fetchall())
     finally:
         conexao.close()
 
+    # `criado_em` é DATETIME (precisão de 1 s): dois links gerados no mesmo
+    # segundo empatam. O desempate no ORDER BY põe o link por usar depois
+    # dos já usados (gerar um link novo apaga os por usar, por isso só
+    # pode haver um, e é sempre o mais recente) e, entre usados, o usado
+    # mais tarde por último.
     resumo = {}
     for linha in linhas:            # o mais recente fica por último
         anterior = resumo.get(linha["referencia"], {})

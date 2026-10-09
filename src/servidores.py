@@ -543,8 +543,8 @@ def _importar_ficheiros_env():
     """Converte os .env da raiz do projeto em servidores da lista.
 
     - .env    -> "Local (Windows)", ligação direta.
-    - VM.env  -> "VM (VirtualBox)", pelo túnel SSH para a VM db-server
-                 (valores da montagem feita a 26/09/2026, ficheiro 12).
+    - VM.env  -> "VM (VirtualBox)", pelo túnel SSH para a VM nova-vm
+                 (nova-vm, 192.168.56.11; a VM db-server antiga já não se usa).
     As passwords passam para o cofre. Os .env não são apagados.
     """
     # Sem o cofre, as passwords não tinham onde ficar: melhor parar já
@@ -581,8 +581,8 @@ def _importar_ficheiros_env():
             "utilizador": v.get("DB_USER", "root"),
             "base": v.get("DB_NAME", "hostel_gestao"),
             "tunel": {
-                "ssh_utilizador": "db-server",
-                "ssh_host": "192.168.56.10",
+                "ssh_utilizador": "nova-vm",
+                "ssh_host": "192.168.56.11",
                 "ssh_porta": 22,
                 "porta_mysql": 6213,
                 "porta_local": int(v.get("DB_PORT") or "3307"),

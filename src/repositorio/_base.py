@@ -3,9 +3,12 @@ backups diários e a ligação ao MySQL (`obter_conexao`).
 
 Todos os outros ficheiros do pacote `repositorio` importam daqui."""
 
+import atexit
 import logging
 import os
 import subprocess
+import threading
+import time
 from datetime import date, timedelta
 from typing import cast
 
@@ -220,17 +223,60 @@ def proximo_id(prefixo):
 # entidade, todas já migradas (ver docstring do ficheiro).
 
 
-def obter_conexao(base=None):
-    """Abre uma ligação nova ao servidor MySQL, com as credenciais do
-    config (lidas do .env — nunca escritas aqui nem no código-fonte).
+# Reaproveitamento de ligações (otimização de desempenho)
+#
+# MEDIÇÃO (09/10/2026, ferramentas/perfil): cada ecrã abria UMA ligação
+# nova por query (Dashboard: 34 queries = 34 ligações, ~1,5 s dos 2,2 s
+# totais; Dashboard › Financeiro: 29 ligações = 2,7 s de 3,6 s). As
+# queries em si custavam 1-6 ms. Abrir uma ligação (handshake +
+# autenticação, em Python puro) é o que pesa — e numa VM, com túnel SSH,
+# pesa muito mais.
+#
+# Solução: `close()` deixa de fechar. A ligação volta a um conjunto de
+# ligações livres e a próxima `obter_conexao()` reaproveita-a. Nenhum dos
+# sítios que chamam `obter_conexao()` muda: continuam a fazer
+# `conexao = obter_conexao()` ... `conexao.close()`.
+#
+# O que mantém o comportamento igual ao de antes:
+# - Ao "fechar" faz-se ROLLBACK. Antes, fechar a ligação descartava
+#   qualquer transação aberta; assim continua. Também evita ler dados
+#   velhos: com REPEATABLE READ, uma transação deixada aberta por um
+#   SELECT mostraria sempre o estado de quando começou.
+# - Uma ligação só é entregue a QUEM a pediu: chamadas encadeadas
+#   (uma função que chama outra a meio de uma transação) recebem
+#   ligações diferentes, como antes.
+# - A chave inclui servidor, porta, utilizador e base — trocar de
+#   servidor (ou `config.DB_NAME`, como fazem os testes) nunca
+#   reaproveita uma ligação de outro sítio.
+# - Uma ligação parada há mais de _VERIFICAR_APOS_S é verificada antes de
+#   ser reaproveitada; se morreu (túnel caído, timeout do MySQL), é
+#   descartada e abre-se uma nova.
+#
+# Desligar tudo isto (para comparar ou em caso de problema): variável de
+# ambiente HOSTEL_SEM_POOL=1.
 
-    `base` escolhe outra base do MESMO servidor (F5: a
-    `config.DB_NAME_PRECHECKING`); por omissão, a do sistema.
+_REUTILIZAR = os.environ.get("HOSTEL_SEM_POOL") != "1"
+_MAX_LIVRES = 4            # ligações paradas guardadas por servidor/base
+_VERIFICAR_APOS_S = 10     # parada há mais do que isto → confirma antes
 
-    Antes de ligar confirma que o túnel SSH (se o servidor usar um)
-    continua aberto e reabre-o se tiver caído — ver
-    `servidores.garantir_tunel` (v1.8.2).
-    """
+_trinco = threading.Lock()
+_livres = {}               # chave -> [(ligacao, instante_em_que_ficou_livre)]
+
+
+def _fechar_silencioso(ligacao):
+    try:
+        ligacao.close()
+    except Exception:  # noqa: BLE001 — já a descartar, o erro não interessa
+        pass
+
+
+def _chave_ligacao(base):
+    return (config.DB_HOST, config.DB_PORT, config.DB_USER,
+            base or config.DB_NAME)
+
+
+def _abrir_nova(base):
+    """Abre uma ligação nova ao MySQL (o que `obter_conexao` fazia)."""
     servidores.garantir_tunel(config.SERVIDOR)
     return mysql.connector.connect(
         host=config.DB_HOST,
@@ -243,3 +289,109 @@ def obter_conexao(base=None):
         # (erro 2059 no .exe). Ver rep_esquema._ligar_sem_base.
         use_pure=True,
     )
+
+
+def _tirar_livre(chave):
+    """Devolve uma ligação livre e viva para `chave`, ou None."""
+    while True:
+        with _trinco:
+            livres = _livres.get(chave)
+            if not livres:
+                return None
+            ligacao, desde = livres.pop()
+
+        if time.monotonic() - desde > _VERIFICAR_APOS_S:
+            try:
+                viva = ligacao.is_connected()
+            except Exception:  # noqa: BLE001
+                viva = False
+            if not viva:
+                _fechar_silencioso(ligacao)
+                continue
+
+        return ligacao
+
+
+class _LigacaoReutilizavel:
+    """O que `obter_conexao()` devolve: a ligação real, mas com um
+    `close()` que a devolve ao conjunto em vez de a fechar.
+
+    Tudo o resto (cursor, commit, rollback, ...) passa direto para a
+    ligação real. Depois do `close()` já não se pode usar — como antes.
+    """
+
+    def __init__(self, ligacao, chave):
+        self._real = ligacao
+        self._chave = chave
+
+    def close(self):
+        ligacao, self._real = self._real, None
+        if ligacao is None:  # fechar duas vezes não faz mal
+            return
+
+        try:
+            # Equivale a fechar sem ter feito commit.
+            ligacao.rollback()
+        except Exception:  # noqa: BLE001 — ligação morta ou com leitura
+            # por acabar ("Unread result"): não serve para reaproveitar.
+            _fechar_silencioso(ligacao)
+            return
+
+        with _trinco:
+            livres = _livres.setdefault(self._chave, [])
+            if len(livres) < _MAX_LIVRES:
+                livres.append((ligacao, time.monotonic()))
+                return
+
+        _fechar_silencioso(ligacao)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *excecao):
+        self.close()
+        return False
+
+    def __getattr__(self, nome):
+        ligacao = self.__dict__.get("_real")
+        if ligacao is None:
+            raise mysql.connector.Error("A ligação já foi fechada.")
+        return getattr(ligacao, nome)
+
+
+def fechar_ligacoes():
+    """Fecha de vez todas as ligações livres (ao sair da aplicação, ou
+    antes de apagar/recriar uma base)."""
+    with _trinco:
+        paradas = [lig for lista in _livres.values() for lig, _ in lista]
+        _livres.clear()
+
+    for ligacao in paradas:
+        _fechar_silencioso(ligacao)
+
+
+atexit.register(fechar_ligacoes)
+
+
+def obter_conexao(base=None):
+    """Devolve uma ligação ao servidor MySQL, com as credenciais do
+    config (lidas do .env — nunca escritas aqui nem no código-fonte).
+
+    `base` escolhe outra base do MESMO servidor (F5: a
+    `config.DB_NAME_PRECHECKING`); por omissão, a do sistema.
+
+    Reaproveita uma ligação livre quando há (ver o bloco acima); só abre
+    uma nova — confirmando antes que o túnel SSH, se o servidor usar um,
+    continua aberto (`servidores.garantir_tunel`, v1.8.2) — quando não
+    há nenhuma. Quem chama continua a fazer `close()` no fim.
+    """
+    if not _REUTILIZAR:
+        return _abrir_nova(base)
+
+    chave = _chave_ligacao(base)
+    ligacao = _tirar_livre(chave)
+
+    if ligacao is None:
+        ligacao = _abrir_nova(base)
+
+    return _LigacaoReutilizavel(ligacao, chave)

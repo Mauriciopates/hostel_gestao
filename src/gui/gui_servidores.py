@@ -122,10 +122,10 @@ class _Formulario:
         self.campo_ssh_utilizador = self._campo(
             self.bloco_tunel, "Utilizador SSH",
             tunel.get("ssh_utilizador", ""),
-            "Ex.: db-server")
+            "Ex.: nova-vm")
         self.campo_ssh_host = self._campo(
             self.bloco_tunel, "Endereço da máquina", tunel.get("ssh_host", ""),
-            "Ex.: 192.168.56.10")
+            "Ex.: 192.168.56.11")
         self.campo_ssh_porta = self._campo(
             self.bloco_tunel, "Porta SSH",
             str(tunel.get("ssh_porta", 22)), "22")
