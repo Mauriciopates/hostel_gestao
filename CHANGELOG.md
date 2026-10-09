@@ -47,7 +47,7 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
   e `teste_cache_painel` (novo, 8, inclui os alertas de stock em lote).
 
 ## [2.0.0] — 2026-10-09
-
+bash montar_pacote.sh
 **Fecho do sistema.** Versão final de entrega, sobre a 1.12.0 (Blocos 3
 e 3b da revisão com a colega de turma), com a suite de testes completa
 a passar. Não há alterações de comportamento na aplicação.
@@ -3266,4 +3266,4 @@ Fase de análise e desenho. Sem código.
 ### Segurança
 - Histórico do Git limpo com `git-filter-repo` após deteção de dados pessoais
   reais em repositório público. Repositório recriado, dados de exemplo
-  anonimizados
+  anonimizados
