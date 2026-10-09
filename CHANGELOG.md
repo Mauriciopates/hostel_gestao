@@ -5,11 +5,21 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
 
 ## [2.0.0] — 2026-10-09
 
-**Fecho do sistema.** Versão final de entrega: reúne tudo o que foi
-feito na revisão com a colega de turma (Blocos 3 e 3b, branch
-`revisao`), com a suite de testes completa a passar. Não há alterações
-de comportamento para além das listadas abaixo; os saltos de versão
-anteriores (1.x) ficam como histórico do desenvolvimento.
+**Fecho do sistema.** Versão final de entrega, sobre a 1.12.0 (Blocos 3
+e 3b da revisão com a colega de turma), com a suite de testes completa
+a passar. Não há alterações de comportamento na aplicação.
+
+### Alterado
+
+- `config.VERSAO` passa a `2.0.0`.
+
+### Testes
+
+- **`teste_gui_configuracoes`** deixou de depender do foco do teclado
+  (chama o tratador do campo em vez de simular a tecla); no Windows o
+  `KeyRelease` gerado só chegava ao campo com a janela em foco.
+
+## [1.12.0] — 2026-10-08
 
 Revisão com a colega de turma, Blocos 3 e 3b (branch `revisao`):
 relatório de Rentabilidade por propriedade e unidade, detalhe completo
@@ -100,9 +110,6 @@ corre sozinha ao abrir a aplicação).
 - `teste_migracoes`: `TesteDespesaUnidadeAtribuida` (2).
 - `teste_gui_atribuir` (novo): os dois modais, o detalhe e os
   contadores.
-- **`teste_gui_configuracoes`** deixou de depender do foco do teclado
-  (chama o tratador do campo em vez de simular a tecla); no Windows o
-  `KeyRelease` gerado só chegava ao campo com a janela em foco.
 
 
 ## [1.11.2] — 2026-10-07
