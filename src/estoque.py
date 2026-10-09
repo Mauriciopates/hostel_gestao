@@ -616,8 +616,19 @@ def listar_alertas_stock():
     """
     alertas = []
 
+    # Uma leitura só dos movimentos (em vez de uma por produto): o
+    # saldo continua a ser calculado a cada chamada a partir dos
+    # movimentos — a mesma regra de `saldo_produto`, em lote.
+    saldos = {}
+
+    for m in repositorio.listar_movimentos():
+        sinal = -1 if m["tipo"] == "saida" else 1
+        saldos[m["produto_id"]] = (
+            saldos.get(m["produto_id"], 0) + sinal * m["quantidade"]
+        )
+
     for produto in listar_produtos():
-        saldo = saldo_produto(produto["id"])
+        saldo = saldos.get(produto["id"], 0)
 
         if saldo >= produto["stock_minimo"]:
             continue

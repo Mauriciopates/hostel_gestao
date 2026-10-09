@@ -36,6 +36,12 @@ class VistaHoje(comum.VistaBase):
     """Vista operacional do dia, para Master e Admin."""
 
     def _construir(self):
+        # Uma janela de leitura para o ecrã todo: os contratos, os
+        # nomes e a ocupação lêem-se uma vez, não uma por bloco.
+        with painel.leitura_em_cache():
+            self._construir_conteudo()
+
+    def _construir_conteudo(self):
         self._construir_kpis()
 
         fila = componentes.Contentor(self.area)

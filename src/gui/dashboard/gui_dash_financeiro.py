@@ -56,6 +56,13 @@ class VistaFinanceiro(comum.VistaBase):
     # -- construção ---------------------------------------------------
 
     def _construir(self):
+        # Uma só janela de leitura para o ecrã todo: resumo, gráfico,
+        # propriedades e despesas partilham as mesmas leituras da base
+        # (eram 111 queries; ver `financeiro.leitura_em_cache`).
+        with financeiro.leitura_em_cache():
+            self._construir_conteudo()
+
+    def _construir_conteudo(self):
         inicio, fim = painel.periodo_do_mes(self.ano, self.mes)
         _, mes_ant = painel.mes_anterior(self.ano, self.mes)
         nome_mes = comum.NOMES_MESES_LONGOS[self.mes - 1]

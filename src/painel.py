@@ -31,6 +31,8 @@ Regras de negócio fechadas com o aluno (27/09/2026):
 """
 
 import calendar
+import threading
+from contextlib import contextmanager
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -66,6 +68,70 @@ _PRODUTOS_NO_DETALHE = 2
 # =====================================================================
 
 
+# =====================================================================
+# Cache de leitura — vale só durante um `with leitura_em_cache():`
+# =====================================================================
+#
+# O ecrã "Hoje" pede os mesmos dados várias vezes (os contratos, os
+# nomes das unidades e dos clientes, a ocupação, o staff). Dentro da
+# janela cada leitura faz-se UMA vez; fora dela nada muda — cada
+# chamada lê da base, como sempre. Mesmo desenho de
+# `financeiro.leitura_em_cache`: por thread, devolve cópias, acaba
+# ao sair (também com exceção).
+
+_cache = threading.local()
+
+
+@contextmanager
+def leitura_em_cache():
+    """Janela em que as leituras repetidas do painel se fazem uma vez."""
+    exterior = getattr(_cache, "dados", None)
+
+    if exterior is None:
+        _cache.dados = {}
+
+    try:
+        yield
+    finally:
+        if exterior is None:
+            _cache.dados = None
+
+
+def _copiar(valor):
+    if isinstance(valor, list):
+        return [dict(v) if isinstance(v, dict) else v for v in valor]
+    if isinstance(valor, dict):
+        return {
+            k: list(v) if isinstance(v, list) else v
+            for k, v in valor.items()
+        }
+    return valor
+
+
+def _lembrar(chave, produzir):
+    dados = getattr(_cache, "dados", None)
+
+    if dados is None:
+        return produzir()
+
+    if chave not in dados:
+        dados[chave] = _copiar(produzir())
+
+    return _copiar(dados[chave])
+
+
+def _contratos(**filtros):
+    """`contratos.listar(**filtros)`, lido uma vez por janela."""
+    chave = ("contratos", tuple(sorted(filtros.items())))
+    return _lembrar(chave, lambda: contratos.listar(**filtros))
+
+
+def _taxa_ocupacao(data, tipo):
+    return _lembrar(
+        ("taxa", data, tipo), lambda: unidades.taxa_ocupacao(data, tipo=tipo)
+    )
+
+
 def _rotulos_unidades():
     """{unidade_id: "Propriedade · Unidade"} de todas as unidades.
 
@@ -73,18 +139,24 @@ def _rotulos_unidades():
     unidade entretanto desativada, e o nome tem de continuar a sair.
     Uma consulta só, em vez de uma por linha.
     """
-    return {
-        u["id"]: f"{u['propriedade_nome']} · {u['nome']}"
-        for u in unidades.listar_com_propriedade(incluir_inativas=True)
-    }
+    return _lembrar(
+        ("rotulos",),
+        lambda: {
+            u["id"]: f"{u['propriedade_nome']} · {u['nome']}"
+            for u in unidades.listar_com_propriedade(incluir_inativas=True)
+        },
+    )
 
 
 def _nomes_clientes():
     """{cliente_id: nome} de todos os clientes (incluindo inativos)."""
-    return {
-        c["id"]: c["nome"]
-        for c in clientes.listar(incluir_inativos=True)
-    }
+    return _lembrar(
+        ("nomes_clientes",),
+        lambda: {
+            c["id"]: c["nome"]
+            for c in clientes.listar(incluir_inativos=True)
+        },
+    )
 
 
 def staff_por_unidade():
@@ -93,6 +165,10 @@ def staff_por_unidade():
     Só responsáveis ativos do tipo "Staff". Uma unidade sem ninguém
     não aparece no dicionário (quem consulta usa `.get(id, [])`).
     """
+    return _lembrar(("staff",), _ler_staff_por_unidade)
+
+
+def _ler_staff_por_unidade():
     mapa = {}
 
     for responsavel in responsaveis.listar():
@@ -153,7 +229,7 @@ def kpis_hoje(data):
     entradas = {"airbnb": 0, "mensal": 0}
     saidas = {"airbnb": 0, "mensal": 0}
 
-    for ocupacao in contratos.listar():
+    for ocupacao in _contratos():
         if ocupacao["data_inicio"] == data:
             entradas[ocupacao["tipo"]] += 1
 
@@ -161,8 +237,8 @@ def kpis_hoje(data):
             saidas[ocupacao["tipo"]] += 1
 
     return {
-        "airbnb": unidades.taxa_ocupacao(data, tipo="airbnb"),
-        "mensal": unidades.taxa_ocupacao(data, tipo="mensal"),
+        "airbnb": _taxa_ocupacao(data, "airbnb"),
+        "mensal": _taxa_ocupacao(data, "mensal"),
         "entradas": entradas,
         "saidas": saidas,
     }
@@ -182,7 +258,7 @@ def movimento_do_dia(data):
     entradas = []
     saidas = []
 
-    for ocupacao in contratos.listar():
+    for ocupacao in _contratos():
         if ocupacao["data_inicio"] == data:
             entradas.append(_linha_ocupacao(ocupacao, rotulos, nomes))
 
@@ -221,7 +297,7 @@ def limpezas(data_inicio, dias=1, responsavel_id=None):
         raise ValueError("O número de dias tem de ser pelo menos 1.")
 
     data_fim = data_inicio + timedelta(days=dias)
-    ocupacoes = contratos.listar()
+    ocupacoes = _contratos()
 
     geridas = None
     if responsavel_id is not None:
@@ -284,7 +360,7 @@ def proximos_dias(data, dias=3):
     Os dias sem movimento também aparecem, com zeros — um dia
     calmo também é informação.
     """
-    ocupacoes = contratos.listar()
+    ocupacoes = _contratos()
     resumo = []
 
     for deslocamento in range(1, dias + 1):
@@ -403,7 +479,7 @@ def alertas(tipo_utilizador):
 
     if tipo_utilizador in _GESTAO:
         avisos = [
-            o for o in contratos.listar(aviso_documento=True)
+            o for o in _contratos(aviso_documento=True)
             if o.get("ativo", True)
         ]
         if avisos:
@@ -515,10 +591,13 @@ def resumo_financeiro(ano, mes):
 
     Nenhuma conta nova: é o `financeiro.resultado` duas vezes.
     """
-    atual = financeiro.resultado(*periodo_do_mes(ano, mes))
-    anterior = financeiro.resultado(
-        *periodo_do_mes(*mes_anterior(ano, mes))
-    )
+    # Os dois meses leem as mesmas tabelas: uma só leitura (ver
+    # `financeiro.leitura_em_cache`).
+    with financeiro.leitura_em_cache():
+        atual = financeiro.resultado(*periodo_do_mes(ano, mes))
+        anterior = financeiro.resultado(
+            *periodo_do_mes(*mes_anterior(ano, mes))
+        )
 
     return {
         "atual": atual,
@@ -544,20 +623,23 @@ def evolucao_mensal(ano, mes, meses=6):
     lista = []
     ano_atual, mes_atual = ano, mes
 
-    for _ in range(meses):
-        resultado = financeiro.resultado(
-            *periodo_do_mes(ano_atual, mes_atual)
-        )
-        lista.append(
-            {
-                "ano": ano_atual,
-                "mes": mes_atual,
-                "rotulo": NOMES_MESES[mes_atual - 1],
-                "receita": resultado["receita"],
-                "despesas": resultado["despesas_operacionais"],
-            }
-        )
-        ano_atual, mes_atual = mes_anterior(ano_atual, mes_atual)
+    # Cada mês relia as mesmas tabelas inteiras (despesas pagas,
+    # movimentos, detalhes das ocupações): com a cache lê-se uma vez.
+    with financeiro.leitura_em_cache():
+        for _ in range(meses):
+            resultado = financeiro.resultado(
+                *periodo_do_mes(ano_atual, mes_atual)
+            )
+            lista.append(
+                {
+                    "ano": ano_atual,
+                    "mes": mes_atual,
+                    "rotulo": NOMES_MESES[mes_atual - 1],
+                    "receita": resultado["receita"],
+                    "despesas": resultado["despesas_operacionais"],
+                }
+            )
+            ano_atual, mes_atual = mes_anterior(ano_atual, mes_atual)
 
     lista.reverse()
 
@@ -588,7 +670,7 @@ def rendas_a_vencer(data, dias=7):
     nomes = _nomes_clientes()
     lista = []
 
-    for ocupacao in contratos.listar(tipo="mensal"):
+    for ocupacao in _contratos(tipo="mensal"):
         detalhe = contratos.detalhes_mensal(ocupacao["id"])
 
         if detalhe is None:

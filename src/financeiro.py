@@ -82,7 +82,9 @@ Este módulo não acede a ficheiros nem à interface. Fala com o
 `raise ValueError`.
 """
 
+import threading
 from calendar import monthrange
+from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal
 
@@ -107,6 +109,112 @@ _TIPO_ENTRADA = "entrada"
 
 # Estado da despesa que conta para o resultado.
 _ESTADO_PAGA = "paga"
+
+
+# =====================================================================
+# CACHE DE LEITURA (otimização de desempenho, 09/10/2026)
+# =====================================================================
+#
+# MEDIÇÃO: a vista Financeiro do Dashboard chamava `resultado()` 8 vezes
+# (mês atual e anterior no resumo + 6 meses do gráfico) e CADA chamada
+# voltava a ler da base as mesmas tabelas inteiras — todas as despesas
+# pagas, todos os movimentos de stock, os detalhes de cada ocupação, as
+# categorias, os produtos, as unidades. Eram 111 queries para desenhar
+# um ecrã, e a base de dados era ~1/6 do tempo total.
+#
+# `leitura_em_cache()` abre uma janela em que cada leitura destas se faz
+# UMA vez e as seguintes reaproveitam o resultado. Fora da janela nada
+# muda (sem cache, comportamento igual ao de sempre — por isso os testes
+# existentes não são afetados). Dentro da janela os dados são um
+# instantâneo: serve ecrãs de leitura, que não gravam enquanto se
+# constroem. Quem chama devolve cópias (as listas e os dicionários que
+# recebe podem ser alterados sem estragar a cache).
+#
+#     with financeiro.leitura_em_cache():
+#         ... várias chamadas a resultado(), receita_por_unidade(), ...
+#
+# É segura para encadear (uma janela dentro de outra reaproveita a de
+# fora) e é por thread.
+
+_cache = threading.local()
+
+
+@contextmanager
+def leitura_em_cache():
+    """Janela em que as leituras repetidas da base se fazem uma só vez."""
+    if getattr(_cache, "dados", None) is not None:
+        yield  # já há uma janela aberta: reaproveita-a
+        return
+
+    _cache.dados = {}
+    try:
+        yield
+    finally:
+        _cache.dados = None
+
+
+def _copiar(valor):
+    """Cópia superficial de uma lista de dicionários, de um dicionário
+    ou de um par (mensal, airbnb); o resto devolve-se como está."""
+    if isinstance(valor, list):
+        return [_copiar(item) for item in valor]
+    if isinstance(valor, dict):
+        return dict(valor)
+    if isinstance(valor, tuple):
+        return tuple(_copiar(item) for item in valor)
+    if isinstance(valor, set):
+        return set(valor)
+    return valor
+
+
+def _lembrar(chave, produzir):
+    """Devolve `produzir()`; dentro de `leitura_em_cache` só a 1.ª vez."""
+    dados = getattr(_cache, "dados", None)
+
+    if dados is None:
+        return produzir()
+
+    if chave not in dados:
+        dados[chave] = produzir()
+
+    return _copiar(dados[chave])
+
+
+def _despesas_pagas():
+    return _lembrar(
+        ("despesas_pagas",),
+        lambda: despesas.listar_despesas(estado=_ESTADO_PAGA),
+    )
+
+
+def _categoria(categoria_id):
+    return _lembrar(
+        ("categoria", categoria_id),
+        lambda: despesas.procurar_categoria(categoria_id),
+    )
+
+
+def _movimentos():
+    return _lembrar(("movimentos",), estoque.listar_movimentos)
+
+
+def _produto(produto_id):
+    return _lembrar(
+        ("produto", produto_id), lambda: estoque.procurar_produto(produto_id)
+    )
+
+
+def _unidade(unidade_id):
+    return _lembrar(
+        ("unidade", unidade_id), lambda: repositorio.procurar_unidade(unidade_id)
+    )
+
+
+def _propriedade(propriedade_id):
+    return _lembrar(
+        ("propriedade", propriedade_id),
+        lambda: repositorio.procurar_propriedade(propriedade_id),
+    )
 
 
 # =====================================================================
@@ -345,11 +453,14 @@ def _listar_ocupacoes_do_periodo(data_inicio, data_fim, tipo=None):
     agregação — se um dia a assinatura do repositório mudar, muda
     só aqui.
     """
-    return repositorio.listar_ocupacoes(
-        incluir_inativas=True,
-        tipo=tipo,
-        data_inicio=data_inicio,
-        data_fim=data_fim,
+    return _lembrar(
+        ("ocupacoes", data_inicio, data_fim, tipo),
+        lambda: repositorio.listar_ocupacoes(
+            incluir_inativas=True,
+            tipo=tipo,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+        ),
     )
 
 # =====================================================================
@@ -457,10 +568,13 @@ def _detalhes_da_ocupacao(ocupacao):
     """
     import contratos
 
-    if ocupacao["tipo"] == _TIPO_MENSAL:
-        return contratos.detalhes_mensal(ocupacao["id"]), None
+    def ler():
+        if ocupacao["tipo"] == _TIPO_MENSAL:
+            return contratos.detalhes_mensal(ocupacao["id"]), None
 
-    return None, contratos.detalhes_airbnb(ocupacao["id"])
+        return None, contratos.detalhes_airbnb(ocupacao["id"])
+
+    return _lembrar(("detalhes", ocupacao["id"], ocupacao["tipo"]), ler)
 
 
 def receita_por_unidade(data_inicio, data_fim):
@@ -576,7 +690,7 @@ def receita_por_propriedade(data_inicio, data_fim):
     por_propriedade = {}
 
     for item in por_unidade:
-        unidade = repositorio.procurar_unidade(item["unidade_id"])
+        unidade = _unidade(item["unidade_id"])
 
         if unidade is None:
             # Unidade desapareceu da base? Não devia acontecer (o
@@ -587,7 +701,7 @@ def receita_por_propriedade(data_inicio, data_fim):
         propriedade_id = unidade["propriedade_id"]
 
         if propriedade_id not in por_propriedade:
-            propriedade = repositorio.procurar_propriedade(propriedade_id)
+            propriedade = _propriedade(propriedade_id)
             nome = propriedade["nome"] if propriedade else propriedade_id
 
             por_propriedade[propriedade_id] = {
@@ -631,7 +745,7 @@ def despesas_por_categoria(data_inicio, data_fim):
     """
     _validar_periodo(data_inicio, data_fim)
 
-    despesas_pagas = despesas.listar_despesas(estado=_ESTADO_PAGA)
+    despesas_pagas = _despesas_pagas()
 
     por_categoria = {}
 
@@ -648,7 +762,7 @@ def despesas_por_categoria(data_inicio, data_fim):
         categoria_id = despesa["categoria_id"]
 
         if categoria_id not in por_categoria:
-            categoria = despesas.procurar_categoria(categoria_id)
+            categoria = _categoria(categoria_id)
             nome = categoria["nome"] if categoria else categoria_id
 
             por_categoria[categoria_id] = {
@@ -691,7 +805,7 @@ def cogs_por_produto(data_inicio, data_fim):
     """
     _validar_periodo(data_inicio, data_fim)
 
-    movimentos = estoque.listar_movimentos()
+    movimentos = _movimentos()
 
     # Soma as saídas e subtrai as entradas de devolução. Um
     # dicionário por produto com a quantidade acumulada.
@@ -725,7 +839,7 @@ def cogs_por_produto(data_inicio, data_fim):
         if quantidade == 0:
             continue
 
-        produto = estoque.procurar_produto(produto_id)
+        produto = _produto(produto_id)
         nome = produto["nome"] if produto else produto_id
 
         resultado.append(
@@ -839,9 +953,13 @@ def _ids_compras_de_stock():
     isso uma compra de stock sem unidade não é "por atribuir": é o
     "Stock central".
     """
-    return {
-        item["despesa_id"] for item in repositorio.listar_itens_despesa()
-    }
+    return _lembrar(
+        ("compras_de_stock",),
+        lambda: {
+            item["despesa_id"]
+            for item in repositorio.listar_itens_despesa()
+        },
+    )
 
 
 def despesas_por_unidade(data_inicio, data_fim):
@@ -868,7 +986,7 @@ def despesas_por_unidade(data_inicio, data_fim):
     stock_central = Decimal("0.00")
     compras_stock = _ids_compras_de_stock()
 
-    for despesa in despesas.listar_despesas(estado=_ESTADO_PAGA):
+    for despesa in _despesas_pagas():
         if despesa["data_pagamento"] is None:
             continue
 
@@ -908,7 +1026,7 @@ def despesas_gerais(data_inicio, data_fim):
     lista = []
     compras_stock = _ids_compras_de_stock()
 
-    for despesa in despesas.listar_despesas(estado=_ESTADO_PAGA):
+    for despesa in _despesas_pagas():
         if despesa["data_pagamento"] is None:
             continue
 
@@ -917,7 +1035,7 @@ def despesas_gerais(data_inicio, data_fim):
 
         unidade_id = despesa.get("unidade_id")
 
-        if unidade_id and repositorio.procurar_unidade(unidade_id):
+        if unidade_id and _unidade(unidade_id):
             continue
 
         # O stock é central: uma compra sem unidade não é "por
@@ -1024,7 +1142,7 @@ def rentabilidade(data_inicio, data_fim):
     por_propriedade = {}
 
     for unidade_id in sorted(set(receitas) | set(despesas_unidade)):
-        unidade = repositorio.procurar_unidade(unidade_id)
+        unidade = _unidade(unidade_id)
         valor_desp = despesas_unidade.get(unidade_id, zero)
 
         if unidade is None:
@@ -1038,7 +1156,7 @@ def rentabilidade(data_inicio, data_fim):
         propriedade_id = unidade["propriedade_id"]
 
         if propriedade_id not in por_propriedade:
-            propriedade = repositorio.procurar_propriedade(propriedade_id)
+            propriedade = _propriedade(propriedade_id)
             por_propriedade[propriedade_id] = {
                 "propriedade_id": propriedade_id,
                 "propriedade_nome": (
