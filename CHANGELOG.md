@@ -3,6 +3,49 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [2.0.1] — 2026-10-09
+
+**Desempenho.** Abertura dos ecrãs mais rápida, medida na `nova-vm`
+(túnel SSH). Não há alterações de regras de negócio nem de aspeto.
+
+### Alterado
+
+- **Pool de ligações MySQL** (`repositorio/_base.py`) — as ligações são
+  reutilizadas em vez de abrir uma por consulta (era o maior custo com
+  o servidor remoto). `close()` faz `rollback()` e devolve a ligação ao
+  pool, por isso cada leitura continua a ver dados frescos; uma ligação
+  parada há mais de 10 s é verificada antes de voltar a ser usada.
+  `HOSTEL_SEM_POOL=1` desliga o pool (para comparar).
+- **Cache de leitura do Financeiro** (`financeiro.leitura_em_cache`) —
+  dentro de um ecrã, as despesas pagas, os movimentos de stock, as
+  categorias, os produtos e as ocupações do período lêem-se uma vez.
+  Devolve cópias e acaba ao sair do bloco (também com exceção).
+  Dashboard › Financeiro: 111 → 50 consultas.
+- **Cache de leitura do painel** (`painel.leitura_em_cache`) — o
+  Dashboard › Hoje lê os contratos, os nomes das unidades e dos
+  clientes, a ocupação e o staff uma só vez. 55 → 33 consultas.
+- **`estoque.listar_alertas_stock`** — lê todos os movimentos de uma
+  vez e calcula os saldos em memória, em vez de duas consultas por
+  produto. O saldo continua a ser calculado a cada chamada (decisão 9)
+  e a ordem dos alertas é a mesma.
+- **Configurações** — cada separador só é construído no primeiro clique.
+  Abertura de ~2,1 s e 426 widgets para ~0,6 s e 82 widgets.
+- **Servidores** — a importação dos ficheiros `.env` e os exemplos do
+  ecrã de servidores usam `nova-vm` / `192.168.56.11` (antes
+  `db-server`).
+
+### Corrigido
+
+- **`rep_prechecking.resumo_por_referencia`** — desempate no `ORDER BY`
+  (`criado_em`, `usado_em IS NULL`, `usado_em`): com duas linhas no
+  mesmo segundo (DATETIME sem frações) a ordem dependia da velocidade da
+  consulta e um teste falhava de forma intermitente.
+
+### Testes
+
+- `teste_pool_ligacoes` (novo, 13), `teste_cache_financeiro` (novo, 10)
+  e `teste_cache_painel` (novo, 8, inclui os alertas de stock em lote).
+
 ## [2.0.0] — 2026-10-09
 
 **Fecho do sistema.** Versão final de entrega, sobre a 1.12.0 (Blocos 3
