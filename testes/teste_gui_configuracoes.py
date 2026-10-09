@@ -91,9 +91,10 @@ class TesteGerirModal(BaseMySQLTest):
     def _escrever(self, modal, texto):
         modal.campo.delete(0, "end")
         modal.campo.insert(0, texto)
-        modal.campo._entry.focus_force()
-        self.raiz.update()
-        modal.campo._entry.event_generate("<KeyRelease>", keysym="5")
+        # Chama o tratador em vez de simular a tecla: um KeyRelease gerado
+        # só chega ao campo se a janela tiver o foco do teclado, o que no
+        # Windows depende do que o utilizador estiver a fazer.
+        modal._ao_escrever()
         self.raiz.update()
 
     def test_sem_mudanca_nao_deixa_confirmar(self):

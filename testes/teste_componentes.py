@@ -1051,6 +1051,7 @@ class TesteTabelaAlturaCorpo(unittest.TestCase):
 
     def _altura_pedida(self, **kwargs):
         """Altura pedida pela área de scroll do corpo (o canvas)."""
+        from gui import componentes
         from gui.componentes import Coluna, Tabela
 
         for filho in self.janela.winfo_children():
@@ -1063,7 +1064,11 @@ class TesteTabelaAlturaCorpo(unittest.TestCase):
         tabela.pack(fill="x")
         for _ in range(5):
             self.root.update()
-        return tabela.corpo._parent_canvas.winfo_reqheight()
+        # O Tk mede em pixels REAIS; o pedido é em pixels lógicos. No
+        # Windows com escala a 125% (ou 150%) os dois diferem, por
+        # isso volta-se ao valor lógico antes de comparar.
+        real = tabela.corpo._parent_canvas.winfo_reqheight()
+        return round(real / componentes.escala(self.janela))
 
     def test_sem_altura_mantem_a_de_sempre(self):
         self.assertEqual(200, self._altura_pedida())
