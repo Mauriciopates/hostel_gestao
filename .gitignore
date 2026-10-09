@@ -12,6 +12,7 @@ backups/
 logs/
 contratos_gerados/
 testes/teste_logs/
+ferramentas/
 *.db
 *.sqlite3
 *.env*
@@ -27,3 +28,4 @@ servidores.json
 # Executável (PyInstaller) — reconstrói-se a partir do .spec
 build/
 dist/
+

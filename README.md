@@ -18,7 +18,7 @@ e programação de sistemas de informação.
 | Fase | Âmbito | Estado |
 |------|--------|--------|
 | 1.0 | CLI + JSON | Finalizado |
-| 2.0 | GUI CustomTkinter + MySQL + financeiro, relatórios, utilizadores | Em andamento |
+| 2.0 | GUI CustomTkinter + MySQL + financeiro, relatórios, utilizadores | Finalizado |
 | 3.0 | Django + Nginx | Fora da entrega de outubro - Continuação para desenvolvimento pessoal |
 
 ---
@@ -95,6 +95,9 @@ python -m unittest discover -s testes -p "teste_*.py" -t . -v
 python -m unittest testes.teste_clientes -v
 
 # Testes com a base de teste local criada
+
+source .venv/Scripts/activate 
+
 HOSTEL_SERVIDOR=local python -m unittest discover -s testes -t . -p "teste_*.py"
 ```
 
