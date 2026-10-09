@@ -94,9 +94,8 @@ python -m unittest discover -s testes -p "teste_*.py" -t . -v
 # Um só ficheiro
 python -m unittest testes.teste_clientes -v
 
-# Uma só classe / um só teste
-python -m unittest testes.teste_clientes.TesteCriar -v
-python -m unittest testes.teste_clientes.TesteCriar.test_id_com_prefixo_cli -v
+# Testes com a base de teste local criada
+HOSTEL_SERVIDOR=local python -m unittest discover -s testes -t . -p "teste_*.py"
 ```
 
 O `-t .` é obrigatório: os testes importam `from testes.apoio_BD import ...`,
