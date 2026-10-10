@@ -95,7 +95,7 @@ PRAZO_CONSERVACAO_FISCAL_DIAS = 3650  # art.º 40.º Código Comercial
 PRAZO_CONSERVACAO_LOGS_DIAS = 180  # minimização
 
 # Mostrada na interface (decisão 21); atualizar a cada fecho de versão.
-VERSAO = "2.1.0"
+VERSAO = "2.2.0"
 
 # --- Utilizador Master padrão (reset do sistema) ----------------------------
 # Usados pela função "Começar do zero" (gui_configuracoes.py → Fase 4).
@@ -144,7 +144,7 @@ FICHEIRO_ESQUEMA = _PASTA_CODIGO / "bd" / "esquema.sql"
 FICHEIRO_ESQUEMA_PRECHECKING = (
     _PASTA_CODIGO / "bd" / "esquema_prechecking.sql"
 )
-# Modelo HTML do relatório de desempenho (v2.1.0, `--desempenho`).
+# Modelo HTML do relatório de desempenho (v2.2.0, `--desempenho`).
 # Também tem de estar nos "datas" do .spec.
 FICHEIRO_MODELO_DESEMPENHO = (
     _PASTA_CODIGO / "impressao" / "modelos" / "desempenho.html"

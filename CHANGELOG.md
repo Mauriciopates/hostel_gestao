@@ -3,12 +3,11 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
-## [2.1.0] — 2026-10-10
+## [2.2.0] — 2026-10-10
 
-Revisão do sistema em uso (branch `revisao`): calendário, reservas,
-guia de entrega, contrato mensal e senhorio da propriedade, e medição
-de desempenho dentro da própria aplicação. **Migração 0006** (coluna
-nova em `propriedades`; corre sozinha ao abrir a aplicação).
+**Medição de desempenho dentro da própria aplicação**, para medir no
+cliente de teste (Sin-11), onde a aplicação é o executável. Sem
+alterações na base de dados.
 
 ### Adicionado
 
@@ -27,6 +26,25 @@ nova em `propriedades`; corre sozinha ao abrir a aplicação).
   `impressao/modelos/desempenho.html` (incluído no `.spec`). O
   LEIA-ME do pacote (`montar_pacote.sh`) e o da ferramenta
   `ferramentas/perfil/` passam a ter o comando.
+
+### Alterado
+
+- `config.VERSAO` passa a `2.2.0`.
+
+### Testes
+
+- `teste_desempenho` (novo, 13): contas, embrulho do conector (com um
+  conector falso) e gravação do relatório (pasta temporária).
+
+## [2.1.0] — 2026-10-10
+
+Revisão do sistema em uso (branch `revisao`): calendário, reservas,
+guia de entrega, contrato mensal e senhorio da propriedade.
+**Migração 0006** (coluna nova em `propriedades`; corre sozinha ao
+abrir a aplicação).
+
+### Adicionado
+
 - **Senhorio da propriedade** — coluna `propriedades.senhorio_nome`
   (migração 0006) e campo "Senhorio" em Nova/Editar Propriedade
   (`propriedades.criar`/`atualizar` aceitam `senhorio_nome`, opcional).
@@ -68,8 +86,7 @@ nova em `propriedades`; corre sozinha ao abrir a aplicação).
 
 ### Testes
 
-- `teste_desempenho` (novo, 13); `teste_rotulo_lugar` (novo, 4);
-  `teste_guia_entrega` reescrito para a
+- `teste_rotulo_lugar` (novo, 4); `teste_guia_entrega` reescrito para a
   guia por unidade e por staff; `TesteSenhorio` em `teste_propriedades`;
   `TestePropriedadeSenhorio` (migração 0006) em `teste_migracoes`;
   `teste_impressao` sem o senhorio como responsável. `apoio_BD` aplica a

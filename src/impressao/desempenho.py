@@ -1,4 +1,4 @@
-"""Ficheiros do modo `--desempenho` (v2.1.0): relatório HTML, CSV e
+"""Ficheiros do modo `--desempenho` (v2.2.0): relatório HTML, CSV e
 JSON, na pasta de relatórios da aplicação (a mesma dos PDFs).
 
 O JSON serve para a medição seguinte, NO MESMO SERVIDOR, mostrar a

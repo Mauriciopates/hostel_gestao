@@ -1,4 +1,4 @@
-"""Testes do modo `--desempenho` (v2.1.0) — unittest, sem base de
+"""Testes do modo `--desempenho` (v2.2.0) — unittest, sem base de
 dados: o `desempenho` faz contas e embrulha o conector (testa-se com
 um conector falso) e o `impressao.desempenho` grava ficheiros (numa
 pasta temporária).

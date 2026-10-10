@@ -1,4 +1,4 @@
-"""Modo `--desempenho` — a parte que se vê (v2.1.0).
+"""Modo `--desempenho` — a parte que se vê (v2.2.0).
 
 Depois do login, se a aplicação arrancou com `--desempenho`, o
 `main_gui` chama `iniciar(app)`. Só um Master pode medir (decisão de

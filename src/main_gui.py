@@ -75,7 +75,7 @@ def main():
     config.garantir_diretorios()
     registo_logs.configurar("gui")
 
-    # MEDIÇÃO DE DESEMPENHO (v2.1.0): `HostelGestao.exe --desempenho`.
+    # MEDIÇÃO DE DESEMPENHO (v2.2.0): `HostelGestao.exe --desempenho`.
     # O cronómetro das consultas tem de entrar ANTES de qualquer
     # ligação à base (o pool guarda as que abrir). A medição em si só
     # começa depois do login, e só para um Master (gui_desempenho).

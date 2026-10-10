@@ -1,4 +1,4 @@
-"""Medição de desempenho dos ecrãs — modo `--desempenho` (v2.1.0).
+"""Medição de desempenho dos ecrãs — modo `--desempenho` (v2.2.0).
 
 Corre-se com `HostelGestao.exe --desempenho` (ou
 `python src/main_gui.py --desempenho`): depois do login normal, um
