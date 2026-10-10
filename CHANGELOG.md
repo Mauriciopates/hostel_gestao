@@ -3,6 +3,62 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [2.1.0] — 2026-10-10
+
+Revisão do sistema em uso (branch `revisao`): calendário, reservas,
+guia de entrega, contrato mensal e senhorio da propriedade.
+**Migração 0006** (coluna nova em `propriedades`; corre sozinha ao
+abrir a aplicação).
+
+### Adicionado
+
+- **Senhorio da propriedade** — coluna `propriedades.senhorio_nome`
+  (migração 0006) e campo "Senhorio" em Nova/Editar Propriedade
+  (`propriedades.criar`/`atualizar` aceitam `senhorio_nome`, opcional).
+  O contrato mensal impresso passa a pôr este nome como Primeiro
+  Contraente; o popup "Imprimir contrato" mostra-o e recusa gerar o PDF
+  se a propriedade não o tiver.
+- **Calendário Airbnb · Detalhe do dia** — numa noite livre, o botão
+  "+ Nova reserva" abre a Nova Reserva Airbnb já com a unidade e a data
+  de entrada preenchidas; numa noite ocupada/reservada, "Ver reserva"
+  abre as ações dessa reserva (antes: "Abrir unidade" / lista).
+- **`estoque.unidade_do_rol`** — lê a unidade de destino de um Rol da
+  nota dele ("(UNI-xxx)"), sem coluna nova em `requisicoes`.
+
+### Alterado
+
+- **Reservas Airbnb** — título da linha = propriedade; subtítulo =
+  unidade · cliente · período, sem os códigos UNI-/CLI-. A seta do
+  período usa a fonte Segoe UI (a Roboto mostrava um quadrado).
+- **Guia de entrega** — o botão passou de Stock · Requisições para a
+  **Rota de Envio**. A guia é agora **por unidade**: cada bloco tem o
+  Rol de Lavandaria dessa unidade e uma caixa "Entregue"; os pedidos de
+  staff ficam num bloco por staff, com o nome; um Rol sem unidade
+  reconhecível vai para "Rol sem unidade", no fim. O PDF deixou de ter a
+  tabela "Total a entregar" (repetia as linhas) e tem as assinaturas uma
+  só vez, no fim.
+- **Contrato mensal · seletor de lugar** — mostra quarto, cama e tipo
+  (Solteiro, Casal, Beliche superior/inferior), ex.: "Quarto 2 · Cama 1
+  · Solteiro · livre (0/1)".
+- **Novo Contrato Mensal a partir da Planta de Lugares** — abre em
+  popup por cima da lista de Contratos Mensais; ao criar, fecha e a
+  lista atualiza (antes trocava o ecrã inteiro e ficava no formulário).
+- **Texto do contrato impresso** — acentuação corrigida em todas as
+  cláusulas ("é celebrado", "n.º", "cláusulas", "renovação", ...).
+
+### Corrigido
+
+- **Editar propriedade sem IBAN** — o campo vinha com "—" e o
+  "Guardar" recusava-o como IBAN inválido; agora fica vazio.
+
+### Testes
+
+- `teste_rotulo_lugar` (novo, 4); `teste_guia_entrega` reescrito para a
+  guia por unidade e por staff; `TesteSenhorio` em `teste_propriedades`;
+  `TestePropriedadeSenhorio` (migração 0006) em `teste_migracoes`;
+  `teste_impressao` sem o senhorio como responsável. `apoio_BD` aplica a
+  migração 0006 à base de teste.
+
 ## [2.0.1] — 2026-10-09
 
 **Desempenho.** Abertura dos ecrãs mais rápida, medida na `nova-vm`
