@@ -80,6 +80,7 @@ from .. import componentes
 from . import gui_est_comum
 from .. import sessao
 from .. import tema
+from .gui_est_guia import GuiaEntregaModal
 from .gui_est_requisicoes import _RejeitarRequisicaoModal
 
 # Aliases dos helpers partilhados — mesma convenção dos outros
@@ -161,6 +162,23 @@ class ListaAprovacao(ctk.CTkFrame):
                 ).EcraStock
             ),
         ).pack(side="left")
+
+        # Guia de entrega (10/10/2026: veio de Stock · Requisições
+        # para aqui). Só Master/Admin, que são quem envia —
+        # `estoque.guia_entrega` volta a validar o perfil.
+        if sessao.tipo_utilizador_ativo() in ("Master", "Admin"):
+            ctk.CTkButton(
+                barra,
+                text="Guia de entrega",
+                height=32,
+                corner_radius=tema.RAIO_BOTAO,
+                fg_color="transparent",
+                border_width=2,
+                border_color=tema.AZUL_PRINCIPAL,
+                text_color=tema.AZUL_PRINCIPAL,
+                hover_color=tema.ID_CHIP_FUNDO,
+                command=lambda: GuiaEntregaModal(self),
+            ).pack(side="left", padx=(10, 0))
 
         # ---- Filtros: Estado, Tipo, Responsável ----
         filtros = ctk.CTkFrame(self, fg_color="transparent")

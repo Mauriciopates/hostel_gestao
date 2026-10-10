@@ -5,7 +5,8 @@ Duas partes:
 
 - `TesteMontarGuia`: `estoque.montar_guia_entrega` é uma função
   PURA (recebe tudo já lido), por isso testa-se sem base de dados,
-  com dicionários feitos à mão.
+  com dicionários feitos à mão. Desde 10/10/2026 a guia é por
+  unidade (o Rol vai para a unidade da reserva).
 - `TesteDonoDoRol` e `TesteGuiaEntregaBD`: correm contra a base de
   teste (`BaseMySQLTest`), porque o dono do Rol sai da tabela
   `responsavel_unidade` e a guia lê as requisições enviadas.
@@ -57,23 +58,42 @@ _PRODUTOS = {
     "PRD-003": {"id": "PRD-003", "nome": "Toalha", "unidade_medida": "un"},
 }
 
-_RESPONSAVEIS = {
-    "RES-001": {"id": "RES-001", "nome": "Mauricio",
-                "tipo_utilizador": "Master"},
-    "RES-002": {"id": "RES-002", "nome": "Ana", "tipo_utilizador": "Staff"},
-    "RES-003": {"id": "RES-003", "nome": "Bruno",
-                "tipo_utilizador": "Staff"},
+_UNIDADES = {
+    "UNI-001": {"id": "UNI-001", "nome": "Bonfim 1",
+                "propriedade_nome": "Casa Bonfim"},
+    "UNI-003": {"id": "UNI-003", "nome": "AP 1",
+                "propriedade_nome": "Santa Catarina"},
+    "UNI-008": {"id": "UNI-008", "nome": "AP 2",
+                "propriedade_nome": "Santa Catarina"},
 }
 
 
-def _montar(requisicoes, itens, unidades_por_resp=None):
-    return estoque.montar_guia_entrega(
-        requisicoes,
-        itens,
-        _PRODUTOS,
-        _RESPONSAVEIS,
-        unidades_por_resp or {},
+def _nota(unidade_id, nome="AP 1"):
+    """A nota que `_dono_do_rol` escreve em todo o Rol."""
+    return (
+        f"Rol da unidade {nome} ({unidade_id}), reserva RSV-001, "
+        f"registada por Mauricio."
     )
+
+
+_NOMES = {"RES-002": "Ana", "RES-003": "Bruno"}
+
+
+def _montar(requisicoes, itens):
+    return estoque.montar_guia_entrega(
+        requisicoes, itens, _PRODUTOS, _UNIDADES, _NOMES
+    )
+
+
+class TesteUnidadeDoRol(unittest.TestCase):
+
+    def test_le_a_unidade_da_nota(self):
+        self.assertEqual(estoque.unidade_do_rol(_nota("UNI-008")), "UNI-008")
+
+    def test_nota_sem_unidade_devolve_none(self):
+        self.assertIsNone(estoque.unidade_do_rol("Rol antigo"))
+        self.assertIsNone(estoque.unidade_do_rol(""))
+        self.assertIsNone(estoque.unidade_do_rol(None))
 
 
 class TesteMontarGuia(unittest.TestCase):
@@ -81,30 +101,59 @@ class TesteMontarGuia(unittest.TestCase):
     def test_sem_requisicoes_devolve_lista_vazia(self):
         self.assertEqual(_montar([], {}), [])
 
-    def test_agrupa_por_staff_e_separa_requisicoes_do_rol(self):
+    def test_rol_vai_para_o_bloco_da_unidade_da_reserva(self):
+        blocos = _montar(
+            [_req("REQ-001", "RES-002", origem="rol",
+                  obs=_nota("UNI-003"))],
+            {"REQ-001": [_item("PRD-002", 2, 2)]},
+        )
+        self.assertEqual(len(blocos), 1)
+        self.assertEqual(blocos[0]["unidade"]["id"], "UNI-003")
+        self.assertEqual([e["id"] for e in blocos[0]["rol"]], ["REQ-001"])
+        self.assertFalse(blocos[0]["sem_unidade"])
+
+    def test_um_bloco_por_unidade_mesmo_com_o_mesmo_staff(self):
         blocos = _montar(
             [
-                _req("REQ-001", "RES-002"),
-                _req("REQ-002", "RES-002", origem="rol"),
+                _req("REQ-001", "RES-002", origem="rol",
+                     obs=_nota("UNI-003")),
+                _req("REQ-002", "RES-002", origem="rol",
+                     obs=_nota("UNI-008", "AP 2")),
             ],
             {
-                "REQ-001": [_item("PRD-001", 2, 2)],
+                "REQ-001": [_item("PRD-002", 1, 1)],
                 "REQ-002": [_item("PRD-002", 1, 1)],
             },
         )
-        self.assertEqual(len(blocos), 1)
-        self.assertEqual(blocos[0]["responsavel"]["id"], "RES-002")
         self.assertEqual(
-            [e["id"] for e in blocos[0]["requisicoes"]], ["REQ-001"]
+            [b["unidade"]["id"] for b in blocos], ["UNI-003", "UNI-008"]
         )
-        self.assertEqual([e["id"] for e in blocos[0]["rol"]], ["REQ-002"])
-        self.assertFalse(blocos[0]["por_atribuir"])
 
-    def test_rol_de_quem_nao_e_staff_vai_para_por_atribuir(self):
+    def test_dois_rol_da_mesma_unidade_ficam_no_mesmo_bloco(self):
+        blocos = _montar(
+            [
+                _req("REQ-001", "RES-002", origem="rol",
+                     obs=_nota("UNI-003")),
+                _req("REQ-002", "RES-003", origem="rol",
+                     obs=_nota("UNI-003")),
+            ],
+            {
+                "REQ-001": [_item("PRD-003", 2, 2)],
+                "REQ-002": [_item("PRD-003", 4, 4), _item("PRD-002", 2, 2)],
+            },
+        )
+        self.assertEqual(len(blocos), 1)
+        totais = {t["produto_id"]: t["quantidade"]
+                  for t in blocos[0]["totais"]}
+        self.assertEqual(totais, {"PRD-003": 6, "PRD-002": 2})
+        self.assertEqual(blocos[0]["total_itens"], 8)
+
+    def test_pedido_de_staff_vai_para_o_bloco_do_staff_no_fim(self):
         blocos = _montar(
             [
                 _req("REQ-001", "RES-002"),
-                _req("REQ-002", "RES-001", origem="rol"),
+                _req("REQ-002", "RES-002", origem="rol",
+                     obs=_nota("UNI-003")),
             ],
             {
                 "REQ-001": [_item("PRD-001", 2, 2)],
@@ -113,36 +162,66 @@ class TesteMontarGuia(unittest.TestCase):
         )
         self.assertEqual(len(blocos), 2)
         ultimo = blocos[-1]
-        self.assertTrue(ultimo["por_atribuir"])
-        self.assertIsNone(ultimo["responsavel"])
-        self.assertEqual([e["id"] for e in ultimo["rol"]], ["REQ-002"])
-
-    def test_requisicao_normal_de_um_master_fica_no_bloco_dele(self):
-        """Só o Rol vai para "Por atribuir" — uma requisição normal
-        é sempre de quem a pediu, seja qual for o perfil."""
-        blocos = _montar(
-            [_req("REQ-001", "RES-001")],
-            {"REQ-001": [_item("PRD-001", 1, 1)]},
+        self.assertTrue(ultimo["sem_unidade"])
+        self.assertIsNone(ultimo["unidade"])
+        self.assertEqual(ultimo["staff"], {"id": "RES-002", "nome": "Ana"})
+        self.assertEqual(
+            [e["id"] for e in ultimo["requisicoes"]], ["REQ-001"]
         )
-        self.assertEqual(len(blocos), 1)
-        self.assertFalse(blocos[0]["por_atribuir"])
-        self.assertEqual(blocos[0]["responsavel"]["id"], "RES-001")
 
-    def test_totais_somam_o_mesmo_produto_entre_requisicao_e_rol(self):
+    def test_um_bloco_por_staff_ordenado_pelo_nome(self):
         blocos = _montar(
             [
-                _req("REQ-001", "RES-002"),
-                _req("REQ-002", "RES-002", origem="rol"),
+                _req("REQ-001", "RES-003"),
+                _req("REQ-002", "RES-002"),
+                _req("REQ-003", "RES-002"),
             ],
             {
-                "REQ-001": [_item("PRD-003", 2, 2)],
-                "REQ-002": [_item("PRD-003", 4, 4), _item("PRD-002", 2, 2)],
+                "REQ-001": [_item("PRD-001", 1, 1)],
+                "REQ-002": [_item("PRD-001", 1, 1)],
+                "REQ-003": [_item("PRD-003", 2, 2)],
             },
         )
-        totais = {t["produto_id"]: t["quantidade"]
-                  for t in blocos[0]["totais"]}
-        self.assertEqual(totais, {"PRD-003": 6, "PRD-002": 2})
-        self.assertEqual(blocos[0]["total_itens"], 8)
+        self.assertEqual(
+            [b["staff"]["nome"] for b in blocos], ["Ana", "Bruno"]
+        )
+        self.assertEqual(
+            [e["id"] for e in blocos[0]["requisicoes"]],
+            ["REQ-002", "REQ-003"],
+        )
+
+    def test_rol_sem_unidade_vem_depois_dos_pedidos_de_staff(self):
+        blocos = _montar(
+            [
+                _req("REQ-001", "RES-002", origem="rol", obs="Rol antigo"),
+                _req("REQ-002", "RES-003"),
+            ],
+            {
+                "REQ-001": [_item("PRD-002", 1, 1)],
+                "REQ-002": [_item("PRD-001", 1, 1)],
+            },
+        )
+        self.assertEqual(blocos[0]["staff"]["nome"], "Bruno")
+        self.assertIsNone(blocos[1]["staff"])
+        self.assertEqual([e["id"] for e in blocos[1]["rol"]], ["REQ-001"])
+
+    def test_rol_sem_unidade_reconhecivel_vai_para_sem_unidade(self):
+        blocos = _montar(
+            [
+                _req("REQ-001", "RES-002", origem="rol", obs="Rol antigo"),
+                _req("REQ-002", "RES-002", origem="rol",
+                     obs=_nota("UNI-999")),
+            ],
+            {
+                "REQ-001": [_item("PRD-002", 1, 1)],
+                "REQ-002": [_item("PRD-002", 1, 1)],
+            },
+        )
+        self.assertEqual(len(blocos), 1)
+        self.assertTrue(blocos[0]["sem_unidade"])
+        self.assertEqual(
+            [e["id"] for e in blocos[0]["rol"]], ["REQ-001", "REQ-002"]
+        )
 
     def test_usa_quantidade_enviada_e_so_cai_na_pedida_sem_envio(self):
         blocos = _montar(
@@ -167,25 +246,26 @@ class TesteMontarGuia(unittest.TestCase):
         itens = blocos[0]["requisicoes"][0]["itens"]
         self.assertEqual([i["produto_id"] for i in itens], ["PRD-002"])
 
-    def test_blocos_ordenados_pelo_nome_do_staff(self):
+    def test_blocos_ordenados_por_propriedade_e_unidade(self):
         blocos = _montar(
-            [_req("REQ-001", "RES-003"), _req("REQ-002", "RES-002")],
+            [
+                _req("REQ-001", "RES-002", origem="rol",
+                     obs=_nota("UNI-008", "AP 2")),
+                _req("REQ-002", "RES-002", origem="rol",
+                     obs=_nota("UNI-001", "Bonfim 1")),
+                _req("REQ-003", "RES-002", origem="rol",
+                     obs=_nota("UNI-003")),
+            ],
             {
-                "REQ-001": [_item("PRD-001", 1, 1)],
-                "REQ-002": [_item("PRD-001", 1, 1)],
+                "REQ-001": [_item("PRD-002", 1, 1)],
+                "REQ-002": [_item("PRD-002", 1, 1)],
+                "REQ-003": [_item("PRD-002", 1, 1)],
             },
         )
         self.assertEqual(
-            [b["responsavel"]["nome"] for b in blocos], ["Ana", "Bruno"]
+            [b["unidade"]["id"] for b in blocos],
+            ["UNI-001", "UNI-003", "UNI-008"],
         )
-
-    def test_unidades_do_staff_vem_no_bloco(self):
-        blocos = _montar(
-            [_req("REQ-001", "RES-002")],
-            {"REQ-001": [_item("PRD-001", 1, 1)]},
-            {"RES-002": [{"id": "UNI-001", "nome": "Foz Velha"}]},
-        )
-        self.assertEqual(blocos[0]["unidades"][0]["id"], "UNI-001")
 
 
 # =====================================================================
@@ -286,7 +366,7 @@ class TesteGuiaEntregaBD(_BaseRol):
         with self.assertRaises(ValueError):
             estoque.guia_entrega(date.today(), "Staff")
 
-    def test_rol_enviado_hoje_aparece_no_bloco_do_staff(self):
+    def test_rol_enviado_hoje_aparece_no_bloco_da_unidade(self):
         staff = responsaveis.criar("Ana")
         unidades.atribuir_responsavel(self.unidade["id"], staff["id"])
         requisicao = self._gerar_rol()
@@ -294,9 +374,10 @@ class TesteGuiaEntregaBD(_BaseRol):
         blocos = estoque.guia_entrega(date.today(), "Master")
 
         self.assertEqual(len(blocos), 1)
-        self.assertEqual(blocos[0]["responsavel"]["id"], staff["id"])
+        self.assertEqual(blocos[0]["unidade"]["id"], self.unidade["id"])
+        self.assertEqual(blocos[0]["unidade"]["propriedade_nome"],
+                         "Foz Velha")
         self.assertEqual(blocos[0]["rol"][0]["id"], requisicao["id"])
-        self.assertEqual(blocos[0]["unidades"][0]["id"], self.unidade["id"])
         self.assertEqual(blocos[0]["total_itens"], 2)
 
     def test_outro_dia_nao_tem_nada(self):

@@ -23,6 +23,14 @@ contrato mensal):
 - A validação do formato do IBAN (módulo 97) NÃO vive aqui — vive
   em `validacoes.py`, tal como o NIF e as datas. Este módulo só
   guarda o que lhe chega.
+
+ALTERAÇÕES 10/10/2026 (senhorio da propriedade, para a impressão do
+contrato mensal):
+
+- `criar` e `atualizar` aceitam `senhorio_nome` — o nome de quem
+  arrenda (Primeiro Contraente). Opcional, como o IBAN: uma
+  propriedade antiga não o tem; a impressão do contrato é que
+  recusa avançar sem ele.
 """
 
 from datetime import date
@@ -34,7 +42,7 @@ import responsaveis
 PREFIXO = "PRO"
 
 
-def criar(nome, morada="", iban=""):
+def criar(nome, morada="", iban="", senhorio_nome=""):
     """Cria uma propriedade e grava-a imediatamente na base de dados.
 
     Devolve o registo criado. Ao contrário da versão antiga (em
@@ -47,6 +55,9 @@ def criar(nome, morada="", iban=""):
     formato canónico que o módulo de negócio aceita; a formatação
     com espaços de 4 em 4 fica para quem apresenta (a GUI, o PDF do
     contrato).
+
+    'senhorio_nome' é opcional (10/10/2026) — o nome que aparece no
+    contrato mensal como Primeiro Contraente.
     """
     nome = nome.strip()
 
@@ -58,6 +69,7 @@ def criar(nome, morada="", iban=""):
         "nome": nome,
         "morada": morada.strip(),
         "iban": iban.strip(),
+        "senhorio_nome": senhorio_nome.strip(),
         "ativo": True,
     }
 
@@ -81,8 +93,11 @@ def listar(incluir_inativas=False):
     return repositorio.listar_propriedades(incluir_inativas=incluir_inativas)
 
 
-def atualizar(propriedade_id, nome=None, morada=None, iban=None):
-    """Altera o nome, a morada ou o IBAN de uma propriedade existente.
+def atualizar(
+    propriedade_id, nome=None, morada=None, iban=None, senhorio_nome=None
+):
+    """Altera o nome, a morada, o IBAN ou o senhorio de uma
+    propriedade existente.
 
     Um parâmetro a None significa não alterar; uma cadeia vazia
     significa apagar o conteúdo. A morada e o IBAN podem ficar
@@ -112,6 +127,9 @@ def atualizar(propriedade_id, nome=None, morada=None, iban=None):
 
     if iban is not None:
         campos["iban"] = iban.strip()
+
+    if senhorio_nome is not None:
+        campos["senhorio_nome"] = senhorio_nome.strip()
 
     if campos:
         repositorio.atualizar_propriedade(propriedade_id, campos)

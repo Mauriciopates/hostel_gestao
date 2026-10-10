@@ -761,14 +761,17 @@ class TestePDF(BaseMySQLTest):
 
     def _preparar_contrato(self):
         """Fixture completa para gerar um contrato mensal:
-        propriedade + unidade + quarto + lugar + cliente + contrato
-        + responsável (senhorio)."""
-        master = _criar_master("Senhorio")
+        propriedade (com senhorio) + unidade + quarto + lugar +
+        cliente + contrato. Desde 10/10/2026 o senhorio vem da
+        propriedade."""
         propriedade = _criar_propriedade("Prédio A")
 
-        # IBAN na propriedade — o contrato imprime-o na Cláusula 3ª.
+        # IBAN na propriedade — o contrato imprime-o na Cláusula 3ª —
+        # e o senhorio, que vai para o parágrafo de abertura.
         propriedades.atualizar(
-            propriedade["id"], iban="PT50000201231234567890154"
+            propriedade["id"],
+            iban="PT50000201231234567890154",
+            senhorio_nome="Ana Maria Ferreira",
         )
         propriedade = propriedades.procurar(propriedade["id"])
 
@@ -790,7 +793,6 @@ class TestePDF(BaseMySQLTest):
             "cliente": cliente,
             "ocupacao": ocupacao,
             "mensal": mensal,
-            "senhorio": master,
         }
 
     def test_pdf_contrato_cria_ficheiro(self):
@@ -802,7 +804,6 @@ class TestePDF(BaseMySQLTest):
             cliente=dados["cliente"],
             unidade=dados["unidade"],
             propriedade=dados["propriedade"],
-            senhorio=dados["senhorio"],
             local="Porto",
         )
 
@@ -819,7 +820,6 @@ class TestePDF(BaseMySQLTest):
             cliente=dados["cliente"],
             unidade=dados["unidade"],
             propriedade=dados["propriedade"],
-            senhorio=dados["senhorio"],
             local="Porto",
         )
 
@@ -842,7 +842,6 @@ class TestePDF(BaseMySQLTest):
             cliente=dados["cliente"],
             unidade=dados["unidade"],
             propriedade=dados["propriedade"],
-            senhorio=dados["senhorio"],
             local="Foz do Douro — Matosinhos",
         )
 
@@ -850,8 +849,8 @@ class TestePDF(BaseMySQLTest):
 
     def test_pdf_contrato_sem_iban_nao_rebenta(self):
         """O IBAN da propriedade é opcional — sem ele, o contrato
-        imprime um hífen na Cláusula 3ª."""
-        master = _criar_master("Senhorio")
+        imprime um hífen na Cláusula 3ª (e sem senhorio, um hífen no
+        lugar do nome — o ecrã é que impede imprimir assim)."""
         propriedade = _criar_propriedade("Sem IBAN")
         # Não lhe metemos IBAN.
 
@@ -873,7 +872,6 @@ class TestePDF(BaseMySQLTest):
             cliente=cliente,
             unidade=unidade,
             propriedade=propriedade,
-            senhorio=master,
             local="Porto",
         )
 
@@ -890,7 +888,6 @@ class TestePDF(BaseMySQLTest):
             cliente=dados["cliente"],
             unidade=dados["unidade"],
             propriedade=dados["propriedade"],
-            senhorio=dados["senhorio"],
             local="Porto",
         )
 

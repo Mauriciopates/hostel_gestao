@@ -225,6 +225,19 @@ _MIGRACAO_0005 = (
 )
 
 
+# --- 0006: senhorio da propriedade ------------------------------------
+# 10/10/2026: o contrato mensal impresso passou a levar o nome do
+# senhorio (Primeiro Contraente) da propriedade, em vez de um
+# responsável escolhido na hora. Coluna opcional (NULL numa
+# propriedade antiga, até alguém a preencher). Numa base que já a
+# tem, não faz nada.
+_MIGRACAO_0006 = _se(
+    _nao(_existe_coluna("propriedades", "senhorio_nome")),
+    "ALTER TABLE propriedades ADD COLUMN senhorio_nome VARCHAR(150) "
+    "NULL AFTER morada",
+)
+
+
 # Lista oficial, por ordem. Só cresce — nunca alterar uma já publicada.
 MIGRACOES = [
     ("0001_categoria_compra_de_stock", [_SQL_CATEGORIA_COMPRA_DE_STOCK]),
@@ -246,6 +259,7 @@ MIGRACOES = [
     ("0003_avisos_privacidade_fks", _MIGRACAO_0003),
     ("0004_consentimento_comunicacoes", _MIGRACAO_0004),
     ("0005_despesa_unidade_atribuida", _MIGRACAO_0005),
+    ("0006_propriedade_senhorio", _MIGRACAO_0006),
 ]
 
 _FORMATO_NOME = re.compile(r"^\d{4}_[a-z0-9_]+$")

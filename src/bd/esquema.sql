@@ -16,6 +16,8 @@
 -- Migração 0005: `despesas.unidade_atribuida_por_id` e
 -- `unidade_atribuida_em` (+ FK; 49 no total) — auditoria da atribuição
 -- de unidade a uma despesa paga sem unidade.
+-- Migração 0006: `propriedades.senhorio_nome` — nome do senhorio
+-- (Primeiro Contraente) que vai para o contrato mensal impresso.
 -- Partiu do `Modelo_de_dados_esquema_v.1.5.6.sql`, com:
 --   - CREATE TABLE IF NOT EXISTS (pode correr numa base já criada);
 --   - ordem das tabelas pela dependência das chaves estrangeiras;
@@ -147,6 +149,7 @@ CREATE TABLE IF NOT EXISTS `propriedades` (
   `id` varchar(10) NOT NULL,
   `nome` varchar(150) NOT NULL,
   `morada` varchar(255) DEFAULT NULL,
+  `senhorio_nome` varchar(150) DEFAULT NULL,
   `ativo` tinyint(1) NOT NULL DEFAULT '1',
   `desativado_por_id` varchar(10) DEFAULT NULL,
   `data_desativacao` date DEFAULT NULL,

@@ -247,6 +247,42 @@ class TesteAtualizar(BaseMySQLTest):
             propriedades.atualizar("PRO-999", nome="Teste")
 
 
+class TesteSenhorio(BaseMySQLTest):
+    """Senhorio da propriedade (10/10/2026) — vai para o contrato."""
+
+    def teste_criar_sem_senhorio_fica_vazio(self):
+        pro_id = propriedades.criar("Foz")["id"]
+
+        self.assertEqual("", propriedades.procurar(pro_id)["senhorio_nome"])
+
+    def teste_criar_com_senhorio_grava_sem_espacos(self):
+        pro_id = propriedades.criar(
+            "Foz", senhorio_nome="  Ana Ferreira  "
+        )["id"]
+
+        self.assertEqual(
+            "Ana Ferreira", propriedades.procurar(pro_id)["senhorio_nome"]
+        )
+
+    def teste_atualizar_altera_e_apaga_o_senhorio(self):
+        pro_id = propriedades.criar("Foz")["id"]
+
+        propriedades.atualizar(pro_id, senhorio_nome="Ana Ferreira")
+        self.assertEqual(
+            "Ana Ferreira", propriedades.procurar(pro_id)["senhorio_nome"]
+        )
+
+        propriedades.atualizar(pro_id, senhorio_nome="")
+        self.assertEqual("", propriedades.procurar(pro_id)["senhorio_nome"])
+
+    def teste_atualizar_outro_campo_nao_mexe_no_senhorio(self):
+        pro_id = propriedades.criar("Foz", senhorio_nome="Ana")["id"]
+
+        propriedades.atualizar(pro_id, nome="Foz Velha")
+
+        self.assertEqual("Ana", propriedades.procurar(pro_id)["senhorio_nome"])
+
+
 class TesteDesativarReativar(BaseMySQLTest):
     """Desativação e reposição (decisão 8)."""
 

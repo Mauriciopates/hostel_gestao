@@ -11,21 +11,23 @@ from ._base import obter_conexao
 def inserir_propriedade(propriedade):
     """Insere uma propriedade nova na base de dados.
 
-    Espera um dicionário com id, nome, morada, iban, ativo. O `iban`
-    é opcional (ver docstring do módulo) — quando não vier no
-    dicionário, grava-se NULL.
+    Espera um dicionário com id, nome, morada, iban, senhorio_nome,
+    ativo. O `iban` e o `senhorio_nome` são opcionais — quando não
+    vierem no dicionário (ou vierem vazios), grava-se NULL.
     """
     conexao = obter_conexao()
     try:
         cursor = conexao.cursor()
         cursor.execute(
-            "INSERT INTO propriedades (id, nome, morada, iban, ativo) "
-            "VALUES (%s, %s, %s, %s, %s)",
+            "INSERT INTO propriedades "
+            "(id, nome, morada, iban, senhorio_nome, ativo) "
+            "VALUES (%s, %s, %s, %s, %s, %s)",
             (
                 propriedade["id"],
                 propriedade["nome"],
                 propriedade["morada"],
                 propriedade.get("iban") or None,
+                propriedade.get("senhorio_nome") or None,
                 propriedade["ativo"],
             ),
         )
@@ -45,6 +47,9 @@ def _normalizar_propriedade(linha):
 
     if linha.get("iban") is None:
         linha["iban"] = ""
+
+    if linha.get("senhorio_nome") is None:
+        linha["senhorio_nome"] = ""
 
     return linha
 
@@ -99,6 +104,9 @@ def atualizar_propriedade(propriedade_id, campos):
 
     if "iban" in campos:
         campos["iban"] = campos["iban"] or None
+
+    if "senhorio_nome" in campos:
+        campos["senhorio_nome"] = campos["senhorio_nome"] or None
 
     colunas = ", ".join(f"{nome_campo} = %s" for nome_campo in campos)
     valores = list(campos.values()) + [propriedade_id]

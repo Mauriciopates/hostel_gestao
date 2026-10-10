@@ -661,6 +661,49 @@ class TesteDespesaUnidadeAtribuida(BaseMigracoesTest):
         self.assertIn("unidade_atribuida_em", self._colunas())
 
 
+class TestePropriedadeSenhorio(BaseMigracoesTest):
+    """Migração 0006 — coluna propriedades.senhorio_nome."""
+
+    _NOME = "0006_propriedade_senhorio"
+
+    def setUp(self):
+        super().setUp()
+        _executar("ALTER TABLE propriedades DROP COLUMN senhorio_nome")
+
+    def tearDown(self):
+        conexao = repositorio.obter_conexao()
+        try:
+            cursor = conexao.cursor()
+            for instrucao in self._instrucoes():
+                cursor.execute(instrucao)
+            conexao.commit()
+        finally:
+            conexao.close()
+        super().tearDown()
+
+    def _instrucoes(self):
+        return [m for m in migracoes.MIGRACOES if m[0] == self._NOME][0][1]
+
+    def _colunas(self):
+        conexao = repositorio.obter_conexao()
+        try:
+            cursor = conexao.cursor()
+            cursor.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = DATABASE() "
+                "AND table_name = 'propriedades'"
+            )
+            return {str(c[0]) for c in cast(list, cursor.fetchall())}
+        finally:
+            conexao.close()
+
+    def teste_cria_a_coluna_e_e_idempotente(self):
+        lista = [m for m in migracoes.MIGRACOES if m[0] == self._NOME]
+        self.assertEqual([self._NOME], migracoes.aplicar_pendentes(lista))
+        self.assertIn("senhorio_nome", self._colunas())
+        self.assertEqual([], migracoes.aplicar_pendentes(lista))
+
+
 class TesteValidarLista(unittest.TestCase):
     """Validação da lista — não precisa de base de dados."""
 

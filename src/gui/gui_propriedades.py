@@ -1757,9 +1757,11 @@ class PlantaLugaresModal(ctk.CTkToplevel):
 
 
 class NovaPropriedadeModal(ctk.CTkToplevel):
-    """Modal de criação de uma propriedade — nome, morada e IBAN
-    (opcional). O IBAN foi acrescentado em 13/09/2026 para a
-    impressão do contrato mensal: a Cláusula 3ª mostra o IBAN para
+    """Modal de criação de uma propriedade — nome, morada, senhorio
+    e IBAN (opcional). O senhorio chegou a 10/10/2026: é o nome que
+    o contrato mensal impresso põe como Primeiro Contraente. O IBAN
+    foi acrescentado em 13/09/2026 para a impressão do contrato
+    mensal: a Cláusula 3ª mostra o IBAN para
     onde o inquilino paga a renda, e é a propriedade que o guarda
     (não o cliente — decisão do aluno, ver conversa).
     """
@@ -1769,7 +1771,7 @@ class NovaPropriedadeModal(ctk.CTkToplevel):
         self.tela_lista = tela_lista
 
         self.title("Nova Propriedade")
-        self.geometry("380x360")
+        self.geometry("380x430")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
         self.transient(tela_lista)
@@ -1799,6 +1801,19 @@ class NovaPropriedadeModal(ctk.CTkToplevel):
         ).pack(anchor="w", padx=20)
         self.campo_morada = ctk.CTkEntry(self, corner_radius=tema.RAIO_CAMPO)
         self.campo_morada.pack(fill="x", padx=20, pady=(2, 10))
+
+        ctk.CTkLabel(
+            self,
+            text="Senhorio",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=20)
+        self.campo_senhorio = ctk.CTkEntry(
+            self,
+            corner_radius=tema.RAIO_CAMPO,
+            placeholder_text="nome que assina o contrato mensal",
+        )
+        self.campo_senhorio.pack(fill="x", padx=20, pady=(2, 10))
 
         ctk.CTkLabel(
             self,
@@ -1857,7 +1872,10 @@ class NovaPropriedadeModal(ctk.CTkToplevel):
 
         try:
             propriedade = propriedades.criar(
-                self.campo_nome.get(), self.campo_morada.get(), iban=iban
+                self.campo_nome.get(),
+                self.campo_morada.get(),
+                iban=iban,
+                senhorio_nome=self.campo_senhorio.get(),
             )
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))
@@ -1888,7 +1906,7 @@ class EditarPropriedadeModal(ctk.CTkToplevel):
         self.prop = prop
 
         self.title(f"Editar Propriedade — {prop['nome']}")
-        self.geometry("380x360")
+        self.geometry("380x430")
         self.resizable(False, False)
         self.configure(fg_color=tema.COR_FUNDO)
         self.transient(tela_lista)
@@ -1923,6 +1941,20 @@ class EditarPropriedadeModal(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             self,
+            text="Senhorio",
+            text_color=tema.COR_TEXTO_SECUNDARIO,
+            font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=20)
+        self.campo_senhorio = ctk.CTkEntry(
+            self,
+            corner_radius=tema.RAIO_CAMPO,
+            placeholder_text="nome que assina o contrato mensal",
+        )
+        self.campo_senhorio.insert(0, prop.get("senhorio_nome") or "")
+        self.campo_senhorio.pack(fill="x", padx=20, pady=(2, 10))
+
+        ctk.CTkLabel(
+            self,
             text="IBAN (opcional)",
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=11),
@@ -1934,7 +1966,11 @@ class EditarPropriedadeModal(ctk.CTkToplevel):
         )
         # Mostra formatado com espaços, para leitura — mas o que se
         # grava é o cru, limpo no `_guardar`.
-        self.campo_iban.insert(0, _formatar_iban(prop["iban"]))
+        # Sem IBAN o campo fica vazio — o "—" do `_formatar_iban` ia
+        # para a caixa e o "Guardar" recusava-o como IBAN inválido
+        # (apanhado a 10/10/2026, ao acrescentar o senhorio).
+        if prop["iban"]:
+            self.campo_iban.insert(0, _formatar_iban(prop["iban"]))
         self.campo_iban.pack(fill="x", padx=20, pady=(2, 2))
 
         ctk.CTkLabel(
@@ -1985,6 +2021,7 @@ class EditarPropriedadeModal(ctk.CTkToplevel):
                 nome=self.campo_nome.get(),
                 morada=self.campo_morada.get(),
                 iban=iban,
+                senhorio_nome=self.campo_senhorio.get(),
             )
         except ValueError as erro:
             componentes.mostrar_erro(str(erro))

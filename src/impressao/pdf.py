@@ -202,7 +202,6 @@ def gerar_contrato_pdf(
     cliente,
     unidade,
     propriedade,
-    senhorio,
     local,
 ):
     """Gera o PDF do contrato mensal e devolve o caminho do ficheiro.
@@ -211,24 +210,26 @@ def gerar_contrato_pdf(
     negócio (o `gui_contratos.py` faz as leituras com
     `contratos.procurar`, `contratos.detalhes_mensal`,
     `clientes.procurar`, `unidades.procurar`,
-    `propriedades.procurar`, `responsaveis.procurar`):
+    `propriedades.procurar`):
 
     - `ocupacao`: linha base da ocupação (traz id, data_inicio, tipo)
     - `mensal`: dados específicos do contrato mensal (renda_praticada,
       caucao, dia_vencimento)
     - `cliente`: registo do cliente (nome)
     - `unidade`: registo da unidade (nome)
-    - `propriedade`: registo da propriedade (iban)
-    - `senhorio`: registo do responsável escolhido no popup (nome)
+    - `propriedade`: registo da propriedade (iban, senhorio_nome —
+      10/10/2026: o senhorio passou a ser o da propriedade, já não
+      um responsável escolhido no popup)
     - `local`: string escrita no popup (cidade da assinatura)
 
     Devolve o `Path` do ficheiro gerado (não só o nome — quem
     chama pode precisar do caminho todo para o mostrar).
 
     Não valida nada: assume que o `gui_contratos.py` já validou
-    (cliente não anonimizado, senhorio escolhido, local preenchido).
+    (cliente não anonimizado, senhorio preenchido, local preenchido).
     """
     caminho = _caminho_contrato(ocupacao["id"])
+    nome_senhorio = propriedade.get("senhorio_nome") or "-"
 
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -253,13 +254,13 @@ def gerar_contrato_pdf(
         largura_util,
         6,
         base.sanitizar_texto_pdf(
-            f"Entre {senhorio['nome']}, na qualidade de Primeiro "
+            f"Entre {nome_senhorio}, na qualidade de Primeiro "
             f"Contraente (senhorio), e {cliente['nome']}, na "
-            f"qualidade de Segundo Contraente (inquilino), e "
+            f"qualidade de Segundo Contraente (inquilino), é "
             f"celebrado o presente contrato de arrendamento do "
             f"quarto sito na unidade {unidade['nome']}, "
-            f"correspondente ao contrato n.o {ocupacao['id']}, que "
-            f"se rege pelas clausulas seguintes."
+            f"correspondente ao contrato n.º {ocupacao['id']}, que "
+            f"se rege pelas cláusulas seguintes."
         ),
         align="J",
     )
@@ -267,14 +268,14 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 1 - Prazo -------------------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 1 - Prazo", **_NOVA_LINHA)
+    pdf.cell(largura_util, 6, "Cláusula 1 - Prazo", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
         6,
         base.sanitizar_texto_pdf(
-            f"1. O presente contrato de arrendamento e feito pelo "
-            f"prazo de 3 meses, tendo o seu inicio a "
+            f"1. O presente contrato de arrendamento é feito pelo "
+            f"prazo de 3 meses, tendo o seu início a "
             f"{base.formatar_data_pt(ocupacao['data_inicio'])}."
         ),
         align="J",
@@ -283,16 +284,16 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 2 - Renovação ---------------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 2 - Renovacao", **_NOVA_LINHA)
+    pdf.cell(largura_util, 6, "Cláusula 2 - Renovação", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
         6,
         base.sanitizar_texto_pdf(
             "2. No seu termo, o presente contrato de arrendamento "
-            "renovar-se-a automaticamente por igual e sucessivos "
-            "periodos de 3 meses, nos termos do art. 1096 do CC, "
-            "com as alteracoes introduzidas pela Lei n. 31/2012, "
+            "renovar-se-á automaticamente por igual e sucessivos "
+            "períodos de 3 meses, nos termos do art. 1096.º do CC, "
+            "com as alterações introduzidas pela Lei n.º 31/2012, "
             "de 14 de Agosto."
         ),
         align="J",
@@ -302,11 +303,11 @@ def gerar_contrato_pdf(
         largura_util,
         6,
         base.sanitizar_texto_pdf(
-            "3. A Segunda Contraente, nao pode ceder a terceiros o "
+            "3. A Segunda Contraente, não pode ceder a terceiros o "
             "gozo do locado, total ou parcialmente, gratuita ou "
-            "onerosamente, seja a que titulo for e independentemente "
-            "da natureza juridica do titulo pelo qual se opera essa "
-            "cedencia."
+            "onerosamente, seja a que título for e independentemente "
+            "da natureza jurídica do título pelo qual se opera essa "
+            "cedência."
         ),
         align="J",
     )
@@ -316,7 +317,7 @@ def gerar_contrato_pdf(
         6,
         base.sanitizar_texto_pdf(
             "4. Fica impedida, igualmente, a hospedagem e o "
-            "subarrendamento, ou a permanencia de outras pessoas "
+            "subarrendamento, ou a permanência de outras pessoas "
             "para pernoitar com o(a) inquilino(a)."
         ),
         align="J",
@@ -327,10 +328,10 @@ def gerar_contrato_pdf(
         6,
         base.sanitizar_texto_pdf(
             "5. Caso se verifique a hospedagem, o subarrendamento, "
-            "ou a permanencia de outras pessoas para pernoitar com "
+            "ou a permanência de outras pessoas para pernoitar com "
             "o(a) inquilino(a), concede este(a) a faculdade ao "
             "Primeiro Contraente, de cessar imediatamente o contrato "
-            "de arrendamento, sem direito a devolucao da caucao na "
+            "de arrendamento, sem direito a devolução da caução na "
             "totalidade."
         ),
         align="J",
@@ -340,14 +341,14 @@ def gerar_contrato_pdf(
         largura_util,
         6,
         base.sanitizar_texto_pdf(
-            "6. E igualmente proibida a permanencia de animais, "
-            "quer no quarto, quer na fraccao, assim como o consumo "
-            "de tabaco dentro da fraccao (incluindo as janelas dos "
+            "6. É igualmente proibida a permanência de animais, "
+            "quer no quarto, quer na fracção, assim como o consumo "
+            "de tabaco dentro da fracção (incluindo as janelas dos "
             "quarto, casa de banho, sala e cozinha), sendo que no "
-            "caso de ser fumador(a) devera deslocar-se a varanda e "
-            "utilizar um dos cinzeiros disponiveis para o efeito, "
-            "sendo que sempre que o utilize devera despejar as "
-            "cinzas e as beatas e higieniza-lo."
+            "caso de ser fumador(a) deverá deslocar-se à varanda e "
+            "utilizar um dos cinzeiros disponíveis para o efeito, "
+            "sendo que sempre que o utilize deverá despejar as "
+            "cinzas e as beatas e higienizá-lo."
         ),
         align="J",
     )
@@ -355,17 +356,17 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 3 - Valor da renda ----------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 3 - Valor da renda", **_NOVA_LINHA)
+    pdf.cell(largura_util, 6, "Cláusula 3 - Valor da renda", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
         6,
         base.sanitizar_texto_pdf(
-            f"1. A renda mensal pelo presente arrendamento e de "
+            f"1. A renda mensal pelo presente arrendamento é de "
             f"{base.formatar_valor_pt(mensal['renda_praticada'])} "
-            f"euros, que devera ser paga entre o 1. e o "
-            f"{mensal['dia_vencimento']}. dia do mes a que disser "
-            f"respeito, atraves de deposito ou transferencia para o "
+            f"euros, que deverá ser paga entre o 1.º e o "
+            f"{mensal['dia_vencimento']}.º dia do mês a que disser "
+            f"respeito, através de depósito ou transferência para o "
             f"IBAN {propriedade.get('iban') or '-'}."
         ),
         align="J",
@@ -386,8 +387,8 @@ def gerar_contrato_pdf(
         6,
         base.sanitizar_texto_pdf(
             f"a) {base.formatar_valor_pt(mensal['renda_praticada'])} "
-            f"euros, a titulo de pagamento da renda correspondente "
-            f"a cada mes;"
+            f"euros, a título de pagamento da renda correspondente "
+            f"a cada mês;"
         ),
         align="J",
     )
@@ -397,8 +398,8 @@ def gerar_contrato_pdf(
         6,
         base.sanitizar_texto_pdf(
             f"b) {base.formatar_valor_pt(mensal['caucao'])} euros, "
-            f"correspondentes a antecipacao de um mes de renda, "
-            f"designada por caucao."
+            f"correspondentes a antecipação de um mês de renda, "
+            f"designada por caução."
         ),
         align="J",
     )
@@ -406,18 +407,18 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 4 - Denúncia ----------------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 4 - Denuncia", **_NOVA_LINHA)
+    pdf.cell(largura_util, 6, "Cláusula 4 - Denúncia", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
         6,
         base.sanitizar_texto_pdf(
-            "1. A Segunda Contraente podera denunciar o presente "
+            "1. A Segunda Contraente poderá denunciar o presente "
             "contrato de arrendamento no termo do prazo "
-            "contratualizado, impedindo a sua renovacao, com uma "
-            "antecedencia minima de 30 dias, mediante comunicacao "
+            "contratualizado, impedindo a sua renovação, com uma "
+            "antecedência mínima de 30 dias, mediante comunicação "
             "escrita, ao Primeiro Contraente, nos termos do art. "
-            "1098, n. 3 do CC."
+            "1098.º, n.º 3 do CC."
         ),
         align="J",
     )
@@ -426,12 +427,12 @@ def gerar_contrato_pdf(
         largura_util,
         6,
         base.sanitizar_texto_pdf(
-            "2. O incumprimento do aviso previo de 30 dias quanto a "
-            "denuncia do contrato por parte da Segunda Contraente, "
-            "ou no decurso das suas renovacoes, nao obsta a "
-            "cessacao do contrato, mas obriga esta ao pagamento das "
-            "rendas correspondentes ao periodo de pre-aviso em "
-            "falta, segundo o disposto no art. 1098, n. 6 do CC."
+            "2. O incumprimento do aviso prévio de 30 dias quanto à "
+            "denúncia do contrato por parte da Segunda Contraente, "
+            "ou no decurso das suas renovações, não obsta a "
+            "cessação do contrato, mas obriga esta ao pagamento das "
+            "rendas correspondentes ao período de pré-aviso em "
+            "falta, segundo o disposto no art. 1098.º, n.º 6 do CC."
         ),
         align="J",
     )
@@ -440,11 +441,11 @@ def gerar_contrato_pdf(
         largura_util,
         6,
         base.sanitizar_texto_pdf(
-            "3. O Primeiro Contraente podera denunciar o contrato "
-            "de arrendamento, ao termino do prazo contratual de um "
-            "ano, impedindo assim a sua renovacao, mediante "
-            "comunicacao ao Segundo Contraente, com uma "
-            "antecedencia nao inferior a 30 dias."
+            "3. O Primeiro Contraente poderá denunciar o contrato "
+            "de arrendamento, ao término do prazo contratual de um "
+            "ano, impedindo assim a sua renovação, mediante "
+            "comunicação ao Segundo Contraente, com uma "
+            "antecedência não inferior a 30 dias."
         ),
         align="J",
     )
@@ -453,11 +454,11 @@ def gerar_contrato_pdf(
         largura_util,
         6,
         base.sanitizar_texto_pdf(
-            "4. O Primeiro Contraente, podera no decurso do "
+            "4. O Primeiro Contraente, poderá no decurso do "
             "arrendamento, ainda que durante o prazo inicial "
             "estipulado de 3 meses, denunciar a qualquer tempo o "
             "contrato de arrendamento, no caso de se verificar que "
-            "o segundo Contraente, por algum motivo, nao cumpra "
+            "o segundo Contraente, por algum motivo, não cumpra "
             "escrupulosamente com o estipulado no contrato."
         ),
         align="J",
@@ -468,9 +469,9 @@ def gerar_contrato_pdf(
         6,
         base.sanitizar_texto_pdf(
             "5. O Primeiro Contraente. No decurso das suas "
-            "renovacoes, podera denunciar antes do termino das suas "
-            "renovacoes, mediante comunicacao escrita. Ao Segundo "
-            "Contraente, com uma antecedencia nao inferior a 30 "
+            "renovações, poderá denunciar antes do término das suas "
+            "renovações, mediante comunicação escrita. Ao Segundo "
+            "Contraente, com uma antecedência não inferior a 30 "
             "dias."
         ),
         align="J",
@@ -479,18 +480,18 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 5 - Fim ---------------------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 5 - Fim", **_NOVA_LINHA)
+    pdf.cell(largura_util, 6, "Cláusula 5 - Fim", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
         6,
         base.sanitizar_texto_pdf(
             "O local arrendado destina-se exclusivamente a "
-            "habitacao da Segunda Contraente, reconhecendo este que "
-            "o mesmo cumpre cabalmente o fim a que se destina, nao "
-            "podendo dar-lhe outro uso, nem subarrenda-lo ou ceder "
+            "habitação da Segunda Contraente, reconhecendo este que "
+            "o mesmo cumpre cabalmente o fim a que se destina, não "
+            "podendo dar-lhe outro uso, nem subarrendá-lo ou ceder "
             "por qualquer outra forma, no todo ou em parte, sem a "
-            "previa autorizacao, por escrito, do Primeiro "
+            "prévia autorização, por escrito, do Primeiro "
             "Contraente."
         ),
         align="J",
@@ -499,24 +500,24 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 6 - Manutenção --------------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 6 - Manutencao", **_NOVA_LINHA)
+    pdf.cell(largura_util, 6, "Cláusula 6 - Manutenção", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
         6,
         base.sanitizar_texto_pdf(
             "1. O Segundo Contraente obriga-se a manter o quarto "
-            "que ocupa individualmente no estado de conservacao e "
+            "que ocupa individualmente no estado de conservação e "
             "limpeza em que se encontra, e as partes comuns da "
-            "fraccao, conjuntamente com os restantes inquilinos que "
-            "a habitam, no estado de conservacao e limpeza em que "
-            "actualmente se encontram as instalacoes e canalizacoes "
-            "de agua, luz, esgotos, moveis, utensilios, pagando a "
-            "sua custa todas as reparacoes decorrentes de culpa ou "
-            "negligencia sua, bem como, manter em bom estado os "
+            "fracção, conjuntamente com os restantes inquilinos que "
+            "a habitam, no estado de conservação e limpeza em que "
+            "actualmente se encontram as instalações e canalizações "
+            "de água, luz, esgotos, móveis, utensílios, pagando à "
+            "sua custa todas as reparações decorrentes de culpa ou "
+            "negligência sua, bem como, manter em bom estado os "
             "respectivos soalhos, portas, janelas, pinturas vidros, "
             "ressalvando o desgaste de sua normal e prudente "
-            "utilizacao."
+            "utilização."
         ),
         align="J",
     )
@@ -526,11 +527,11 @@ def gerar_contrato_pdf(
         6,
         base.sanitizar_texto_pdf(
             "2. O Segundo Contraente obriga-se a custear todas as "
-            "reparacoes decorrentes de culpa ou negligencia sua no "
+            "reparações decorrentes de culpa ou negligência sua no "
             "quarto e respectivo equipamento e solidariamente nas "
-            "partes comuns da fraccao e respectivo equipamento, no "
-            "caso de se vir a verificar algum dano e negligencia "
-            "nos referidos e que nao se venha a apurar a quem cabe "
+            "partes comuns da fracção e respectivo equipamento, no "
+            "caso de se vir a verificar algum dano e negligência "
+            "nos referidos e que não se venha a apurar a quem cabe "
             "a responsabilidade."
         ),
         align="J",
@@ -540,8 +541,8 @@ def gerar_contrato_pdf(
         largura_util,
         6,
         base.sanitizar_texto_pdf(
-            "3. E importante que todos os inquilinos zelem pelo bom "
-            "funcionamento e manutencao da fraccao, mobilia e demais "
+            "3. É importante que todos os inquilinos zelem pelo bom "
+            "funcionamento e manutenção da fracção, mobília e demais "
             "equipamentos, a fim de se evitarem problemas futuros "
             "para todos os interessados."
         ),
@@ -551,17 +552,17 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 7 - Obras -------------------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 7 - Obras", **_NOVA_LINHA)
+    pdf.cell(largura_util, 6, "Cláusula 7 - Obras", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
         6,
         base.sanitizar_texto_pdf(
-            "O Segundo Contraente nao podera fazer quaisquer obras "
-            "no local arrendado sem a previa autorizacao, nem "
+            "O Segundo Contraente não poderá fazer quaisquer obras "
+            "no local arrendado sem a prévia autorização, nem "
             "levantar quaisquer benfeitorias por si realizadas, nem "
-            "por elas pedir indemnizacao ou alegar qualquer direito "
-            "de retencao."
+            "por elas pedir indemnização ou alegar qualquer direito "
+            "de retenção."
         ),
         align="J",
     )
@@ -569,17 +570,17 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 8 - Despesas ----------------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 8 - Despesas", **_NOVA_LINHA)
+    pdf.cell(largura_util, 6, "Cláusula 8 - Despesas", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
         6,
         base.sanitizar_texto_pdf(
             "Com a assinatura do presente contrato, o Segundo "
-            "Contraente declara que as despesas de agua, luz e "
-            "internet ficarao a seu cargo e as mesmas serao "
+            "Contraente declara que as despesas de água, luz e "
+            "internet ficarão a seu cargo e as mesmas serão "
             "liquidadas equitativamente pelo Segundo Contraente e "
-            "pelos restantes inquilinos que habitarem a fraccao."
+            "pelos restantes inquilinos que habitarem a fracção."
         ),
         align="J",
     )
@@ -587,17 +588,17 @@ def gerar_contrato_pdf(
 
     # ---- Cláusula 9 - Estado do locado --------------------------
     pdf.set_font("Times", "B", 11)
-    pdf.cell(largura_util, 6, "Clausula 9 - Estado do locado", **_NOVA_LINHA)
+    pdf.cell(largura_util, 6, "Cláusula 9 - Estado do locado", **_NOVA_LINHA)
     pdf.set_font("Times", "", 11)
     pdf.multi_cell(
         largura_util,
         6,
         base.sanitizar_texto_pdf(
-            "1. Ao presente contrato sao anexadas fotografias do "
+            "1. Ao presente contrato são anexadas fotografias do "
             "locado, demonstrativas do estado em que o mesmo se "
             "encontra, assim como a listagem de bens comuns e "
-            "individuais do quarto, e memorando de co-habitacao da "
-            "fraccao, contendo as regras e boa conduta, manutencao "
+            "individuais do quarto, e memorando de co-habitação da "
+            "fracção, contendo as regras e boa conduta, manutenção "
             "e funcionamento, sendo que as referidas ficam a fazer "
             "parte integrante do presente contrato."
         ),
@@ -608,12 +609,12 @@ def gerar_contrato_pdf(
         largura_util,
         6,
         base.sanitizar_texto_pdf(
-            "2. No momento de restituicao do imovel, havera lugar "
+            "2. No momento de restituição do imóvel, haverá lugar "
             "a uma vistoria a realizar pelo Primeiro Contraente ou "
-            "por seus representantes, na presenca do segundo "
+            "por seus representantes, na presença do segundo "
             "Contraente, que se obriga a entregar o quarto equipado "
-            "e no mesmo estado de conservacao e limpeza que o "
-            "recebeu aquando do inicio do contrato."
+            "e no mesmo estado de conservação e limpeza que o "
+            "recebeu aquando do início do contrato."
         ),
         align="J",
     )
@@ -626,8 +627,8 @@ def gerar_contrato_pdf(
         base.sanitizar_texto_pdf(
             "Este contrato foi celebrado em dois documentos "
             "originais, declarando as partes contratantes dispensar "
-            "o reconhecimento notarial, nao podendo tal facto ser "
-            "invocado por qualquer das partes como vicio, nulidade "
+            "o reconhecimento notarial, não podendo tal facto ser "
+            "invocado por qualquer das partes como vício, nulidade "
             "ou anulabilidade do mesmo."
         ),
         align="J",
@@ -668,7 +669,7 @@ def gerar_contrato_pdf(
     pdf.cell(
         largura_coluna,
         6,
-        base.sanitizar_texto_pdf(senhorio["nome"]),
+        base.sanitizar_texto_pdf(nome_senhorio),
         align="C",
     )
     pdf.cell(
@@ -1028,50 +1029,43 @@ def _linhas_entradas(entradas, com_nota):
     return linhas
 
 
-def _desenhar_bloco_guia(pdf, bloco):
+def _desenhar_bloco_guia(pdf, bloco, numero):
+    """Um bloco da guia = uma unidade (10/10/2026: antes era um
+    staff). Faixa com "n · Propriedade · Unidade (UNI-xxx)" — ou
+    "Pedidos de staff · Nome" — e a caixa "Entregue" para marcar à
+    mão; depois o Rol de Lavandaria e os pedidos.
+    """
     largura_util = pdf.w - pdf.l_margin - pdf.r_margin
 
-    # ---- Faixa do staff ------------------------------------------
-    if bloco["por_atribuir"]:
-        titulo = "Por atribuir"
-        lado = "unidade sem staff, ou com mais de um"
+    # Um bloco curto não se parte entre páginas: se já não cabe o
+    # cabeçalho e umas linhas, começa na página seguinte.
+    if pdf.get_y() > pdf.h - pdf.b_margin - 40:
+        pdf.add_page()
+
+    # ---- Faixa da unidade ----------------------------------------
+    if bloco.get("staff"):
+        titulo = f"{numero} · Pedidos de staff · {bloco['staff']['nome']}"
+        pdf.set_fill_color(*_AMBAR)
+    elif bloco["sem_unidade"]:
+        titulo = f"{numero} · Rol sem unidade"
         pdf.set_fill_color(*_AMBAR)
     else:
-        responsavel = bloco["responsavel"]
-        titulo = f"{responsavel['nome']} ({responsavel['id']})"
-        lado = responsavel.get("tipo_utilizador") or ""
+        unidade = bloco["unidade"]
+        propriedade = unidade.get("propriedade_nome") or ""
+        prefixo = f"{propriedade} · " if propriedade else ""
+        titulo = f"{numero} · {prefixo}{unidade['nome']} ({unidade['id']})"
         pdf.set_fill_color(*_NAVY)
     pdf.set_text_color(255, 255, 255)
-    _texto(pdf, largura_util * 0.7, 9, f"  {titulo}", "B", 11, fill=True)
-    _texto(pdf, largura_util * 0.3, 9, f"{lado}  ", "", 9, fill=True,
-           align="R", **_NOVA_LINHA)
+    y_faixa = pdf.get_y()
+    _texto(pdf, largura_util - 30, 9, f"  {titulo}", "B", 11, fill=True)
+    _texto(pdf, 30, 9, "Entregue  ", "", 9, fill=True, align="R",
+           **_NOVA_LINHA)
+    # Caixa para marcar à mão (o "☐" não existe na Helvetica).
+    pdf.set_draw_color(255, 255, 255)
+    pdf.rect(pdf.l_margin + largura_util - 30 + 3, y_faixa + 2.5, 4, 4)
     pdf.set_text_color(0, 0, 0)
 
-    if bloco["unidades"]:
-        nomes = " · ".join(
-            f"{u['nome']} ({u['id']})" for u in bloco["unidades"]
-        )
-        pdf.set_fill_color(*_FUNDO_CLARO)
-        pdf.set_text_color(*_CINZA_TEXTO)
-        pdf.set_font("Helvetica", "", 8)
-        pdf.multi_cell(
-            largura_util,
-            5,
-            base.sanitizar_texto_pdf(f"Unidades: {nomes}"),
-            fill=True,
-        )
-        pdf.set_text_color(0, 0, 0)
-
     larguras = [28, largura_util - 28 - 32, 32]
-
-    if bloco["requisicoes"]:
-        _titulo_secao(pdf, "Requisições")
-        _tabela_guia(
-            pdf,
-            larguras,
-            ("Req.", "Produto", "Qtd."),
-            _linhas_entradas(bloco["requisicoes"], com_nota=False),
-        )
 
     if bloco["rol"]:
         _titulo_secao(pdf, "Rol de Lavandaria")
@@ -1082,43 +1076,42 @@ def _desenhar_bloco_guia(pdf, bloco):
             _linhas_entradas(bloco["rol"], com_nota=True),
         )
 
-    _titulo_secao(pdf, "Total a entregar")
-    linhas_total = [
-        ("", t["nome"], f"{t['quantidade']} {t['unidade_medida']}".strip())
-        for t in bloco["totais"]
-    ]
-    linhas_total.append(("", "Total de itens", str(bloco["total_itens"])))
-    _tabela_guia(
-        pdf,
-        larguras,
-        ("", "Produto", "Qtd."),
-        linhas_total,
-        destaque_ultima=True,
-    )
+    if bloco["requisicoes"]:
+        _titulo_secao(pdf, "Pedidos de stock")
+        _tabela_guia(
+            pdf,
+            larguras,
+            ("Req.", "Produto", "Qtd."),
+            _linhas_entradas(bloco["requisicoes"], com_nota=False),
+        )
 
-    # ---- Assinaturas ---------------------------------------------
-    pdf.ln(14)
-    terco = (largura_util - 20) / 3
-    recebido = (
-        "Recebido por"
-        if bloco["por_atribuir"]
-        else f"Recebido por ({bloco['responsavel']['nome']})"
-    )
+    # 10/10/2026: sem a tabela "Total a entregar" — repetia as linhas
+    # de cima (pedido do aluno). Fica só a descrição das requisições.
+    pdf.ln(6)
+
+
+def _desenhar_assinaturas(pdf):
+    """Linhas de assinatura no fim da guia (uma vez só)."""
+    largura_util = pdf.w - pdf.l_margin - pdf.r_margin
+    if pdf.get_y() > pdf.h - pdf.b_margin - 20:
+        pdf.add_page()
+    pdf.ln(10)
+    metade = (largura_util - 10) / 2
     y = pdf.get_y()
     pdf.set_draw_color(154, 168, 180)
-    for i, rotulo in enumerate(("Entregue por", recebido, "Data / hora")):
-        x = pdf.l_margin + i * (terco + 10)
-        pdf.line(x, y, x + terco, y)
+    for i, rotulo in enumerate(("Entregue por", "Data / hora")):
+        x = pdf.l_margin + i * (metade + 10)
+        pdf.line(x, y, x + metade, y)
         pdf.set_xy(x, y + 1)
         pdf.set_text_color(*_CINZA_TEXTO)
-        _texto(pdf, terco, 5, rotulo, "", 8)
+        _texto(pdf, metade, 5, rotulo, "", 8)
     pdf.set_text_color(0, 0, 0)
 
 
 def gerar_guia_entrega_pdf(data_envio, blocos, gerado_por):
-    """Gera o PDF da Guia de entrega — UMA PÁGINA POR STAFF (decisão
-    do aluno, 27/09/2026: a folha entrega-se a cada um), com o bloco
-    "Por atribuir" na sua própria página, no fim.
+    """Gera o PDF da Guia de entrega — UM BLOCO POR UNIDADE, seguidos
+    (10/10/2026, pedido do aluno: separar por unidade, sem o nome do
+    staff), com o "Sem unidade" no fim e as assinaturas no fecho.
 
     'blocos' é o que `estoque.guia_entrega` devolve. 'gerado_por' é
     o nome de quem gera (vai para o cabeçalho). Devolve o `Path`.
@@ -1129,20 +1122,24 @@ def gerar_guia_entrega_pdf(data_envio, blocos, gerado_por):
     pdf.set_margins(left=15, top=15, right=15)
     pdf.set_auto_page_break(auto=True, margin=22)
 
-    for bloco in blocos:
-        pdf.add_page()
-        _desenhar_cabecalho(pdf, "Guia de entrega", data_envio, data_envio)
-        pdf.set_text_color(*_CINZA_TEXTO)
-        _texto(pdf, 0, 5, f"Gerado por {gerado_por}", "", 9, **_NOVA_LINHA)
-        pdf.set_text_color(0, 0, 0)
-        pdf.ln(6)
-        _desenhar_bloco_guia(pdf, bloco)
+    pdf.add_page()
+    _desenhar_cabecalho(pdf, "Guia de entrega", data_envio, data_envio)
+    pdf.set_text_color(*_CINZA_TEXTO)
+    n_unidades = sum(1 for b in blocos if not b["sem_unidade"])
+    resumo = (
+        f"Gerado por {gerado_por} · {n_unidades} "
+        f"unidade{'' if n_unidades == 1 else 's'}"
+    )
+    _texto(pdf, 0, 5, resumo, "", 9, **_NOVA_LINHA)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(6)
 
     if not blocos:
-        pdf.add_page()
-        _desenhar_cabecalho(pdf, "Guia de entrega", data_envio, data_envio)
-        pdf.ln(10)
         _texto(pdf, 0, 8, "Sem envios nesta data.", "", 11, **_NOVA_LINHA)
+    else:
+        for numero, bloco in enumerate(blocos, start=1):
+            _desenhar_bloco_guia(pdf, bloco, numero)
+        _desenhar_assinaturas(pdf)
 
     pdf.output(str(caminho))
     return caminho

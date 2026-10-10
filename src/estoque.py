@@ -111,6 +111,7 @@ ALTERAÇÕES 20/09/2026 (Fase 3 — Configurações lidas da BD):
 """
 
 import logging
+import re
 from datetime import date
 
 import configuracoes
@@ -1925,12 +1926,13 @@ def _dono_do_rol(ocupacao, registado_por_id):
     unidade — a ligação vem de `responsavel_unidade`, só conta quem
     está ativo e é do tipo "Staff". Com exatamente um, o Rol fica
     em nome dele. Com nenhum ou com mais de um, fica em nome de
-    quem registou a reserva e a Guia de entrega mostra-o no bloco
-    "Por atribuir" (ver `montar_guia_entrega`).
+    quem registou a reserva.
 
     Devolve (responsavel_id, nota) — a nota diz de que unidade e
     reserva é o Rol e quem registou a reserva, porque a requisição
-    não guarda a unidade (a guia mostra esta nota).
+    não guarda a unidade. A Guia de entrega lê a unidade desta nota
+    para pôr o Rol no bloco da unidade (ver `unidade_do_rol`) — o
+    "(UNI-xxx)" tem de continuar a vir aqui.
     """
     import unidades as _unidades
 
@@ -2584,10 +2586,12 @@ def criar_kit_roupa_base(autor_id):
 # =====================================================================
 # GUIA DE ENTREGA (27/09/2026, v1.6.0 — mockup aprovado pelo aluno)
 #
-# O que saiu do armazém num dia (data de envio), agrupado pelo staff
-# que entrega. A requisição não guarda a unidade: o destino sai do
-# staff (`responsavel_unidade`). Cada bloco tem as requisições
-# normais, o Rol de Lavanderia e o total somado por produto.
+# O que saiu do armazém num dia (data de envio), agrupado pela
+# unidade de destino (10/10/2026 — antes era pelo staff que
+# entrega). A requisição não guarda a unidade: o destino do Rol sai
+# da nota dele (`unidade_do_rol`); os pedidos de staff ficam num
+# bloco por staff, com o nome dele. Cada bloco tem o Rol de
+# Lavanderia, os pedidos e o total somado por produto.
 # =====================================================================
 # Estados que já saíram do armazém — "fechada" também entra: a guia
 # é o retrato do que foi enviado nesse dia, confirmado ou não.
@@ -2617,15 +2621,17 @@ def _linhas_guia(itens, produtos_por_id):
     return linhas
 
 
-def _novo_bloco(responsavel, unidades_do_staff, por_atribuir=False):
+def _novo_bloco(unidade, sem_unidade=False, staff=None):
+    """`staff` (dict com id e nome) só nos blocos de pedidos de staff:
+    sem unidade na base, a guia diz de quem é cada pedido."""
     return {
-        "responsavel": responsavel,
-        "unidades": list(unidades_do_staff),
+        "unidade": unidade,
+        "staff": staff,
         "requisicoes": [],
         "rol": [],
         "totais": [],
         "total_itens": 0,
-        "por_atribuir": por_atribuir,
+        "sem_unidade": sem_unidade,
     }
 
 
@@ -2644,34 +2650,68 @@ def _fechar_totais(bloco):
     bloco["total_itens"] = sum(t["quantidade"] for t in bloco["totais"])
 
 
+# "Rol da unidade AP 2 (UNI-008), reserva RSV-009, ..." — a nota que
+# `_dono_do_rol` escreve em todo o Rol. O destino do Rol é a unidade
+# da reserva, e é daqui que a guia o lê (decisão do aluno, 10/10/2026:
+# sem coluna nova na tabela `requisicoes`).
+_UNIDADE_NA_NOTA = re.compile(r"\((UNI-\d+)\)")
+
+
+def unidade_do_rol(observacoes):
+    """ID da unidade de destino de um Rol, lido da nota dele, ou None
+    se a nota não a tiver (Rol antigo ou nota editada à mão)."""
+    encontrado = _UNIDADE_NA_NOTA.search(observacoes or "")
+    return encontrado.group(1) if encontrado else None
+
+
+def _chave_ordem_unidade(bloco):
+    unidade = bloco["unidade"]
+    return (
+        (unidade.get("propriedade_nome") or "").lower(),
+        unidade["nome"].lower(),
+    )
+
+
 def montar_guia_entrega(
     requisicoes,
     itens_por_requisicao,
     produtos_por_id,
-    responsaveis_por_id,
-    unidades_por_responsavel,
+    unidades_por_id,
+    nomes_responsaveis=None,
 ):
-    """Agrupa as requisições enviadas num dia pelo staff que entrega.
+    """Agrupa o que saiu do armazém num dia pela UNIDADE de destino.
 
     Função PURA (não lê a base) — recebe tudo já lido, para poder
     ser testada sem MySQL. Quem lê é `guia_entrega`.
 
+    10/10/2026 (pedido do aluno): a guia passou de "por staff" para
+    "por unidade" — sem o nome de quem entrega, só a unidade, os
+    pedidos e o Rol de Lavanderia que vão para lá.
+
     Regras:
-    - Requisição normal → bloco do responsável dela.
-    - Rol → bloco do responsável se ele for Staff; senão (Rol de uma
-      unidade sem staff, com mais de um, ou antigo, gerado em nome de
-      quem registou a reserva) → bloco "Por atribuir".
+    - Rol → bloco da unidade da reserva (lida da nota, ver
+      `unidade_do_rol`). Sem unidade reconhecível → bloco
+      "Sem unidade".
+    - Pedido de staff → não tem unidade na base; vai para um bloco
+      "Pedidos de staff" do staff que o pediu (10/10/2026: um bloco
+      por staff, com o nome dele), depois das unidades.
     - Requisição sem nenhuma linha com quantidade > 0 não entra.
 
-    Devolve a lista de blocos, ordenada pelo nome do staff, com o
-    "Por atribuir" em último (só se tiver alguma coisa). Cada bloco:
-    {responsavel (dict ou None), unidades, requisicoes, rol, totais,
-    total_itens, por_atribuir}; cada entrada de requisicoes/rol:
+    'nomes_responsaveis' (opcional): {responsavel_id: nome}, para o
+    título dos blocos de pedidos de staff. Sem ele, mostra o ID.
+
+    Devolve a lista de blocos: unidades (por propriedade e unidade),
+    depois os pedidos de staff (pelo nome) e, por último, o Rol sem
+    unidade reconhecível. Cada bloco: {unidade (dict ou None), staff
+    (dict ou None), requisicoes, rol, totais, total_itens,
+    sem_unidade}; cada entrada de requisicoes/rol:
     {id, estado, observacoes, itens: [{produto_id, nome,
     unidade_medida, quantidade}]}.
     """
+    nomes_responsaveis = nomes_responsaveis or {}
     blocos = {}
-    por_atribuir = _novo_bloco(None, [], por_atribuir=True)
+    pedidos_por_staff = {}
+    sem_unidade = _novo_bloco(None, sem_unidade=True)
 
     for requisicao in sorted(requisicoes, key=lambda r: r["id"]):
         linhas = _linhas_guia(
@@ -2686,26 +2726,37 @@ def montar_guia_entrega(
             "observacoes": requisicao.get("observacoes") or "",
             "itens": linhas,
         }
-        dono_id = requisicao["responsavel_id"]
-        dono = responsaveis_por_id.get(dono_id)
-        e_rol = requisicao.get("origem") == "rol"
 
-        if e_rol and (dono is None or dono.get("tipo_utilizador") != "Staff"):
-            por_atribuir["rol"].append(entrada)
+        if requisicao.get("origem") != "rol":
+            dono_id = requisicao["responsavel_id"]
+            if dono_id not in pedidos_por_staff:
+                pedidos_por_staff[dono_id] = _novo_bloco(
+                    None,
+                    sem_unidade=True,
+                    staff={
+                        "id": dono_id,
+                        "nome": nomes_responsaveis.get(dono_id, dono_id),
+                    },
+                )
+            pedidos_por_staff[dono_id]["requisicoes"].append(entrada)
             continue
 
-        if dono_id not in blocos:
-            blocos[dono_id] = _novo_bloco(
-                dono or {"id": dono_id, "nome": dono_id},
-                unidades_por_responsavel.get(dono_id, []),
-            )
-        blocos[dono_id]["rol" if e_rol else "requisicoes"].append(entrada)
+        unidade_id = unidade_do_rol(entrada["observacoes"])
+        unidade = unidades_por_id.get(unidade_id)
+        if unidade is None:
+            sem_unidade["rol"].append(entrada)
+            continue
 
-    resultado = sorted(
-        blocos.values(), key=lambda b: b["responsavel"]["nome"].lower()
+        if unidade_id not in blocos:
+            blocos[unidade_id] = _novo_bloco(unidade)
+        blocos[unidade_id]["rol"].append(entrada)
+
+    resultado = sorted(blocos.values(), key=_chave_ordem_unidade)
+    resultado += sorted(
+        pedidos_por_staff.values(), key=lambda b: b["staff"]["nome"].lower()
     )
-    if por_atribuir["rol"]:
-        resultado.append(por_atribuir)
+    if sem_unidade["rol"]:
+        resultado.append(sem_unidade)
 
     for bloco in resultado:
         _fechar_totais(bloco)
@@ -2715,7 +2766,7 @@ def montar_guia_entrega(
 
 def guia_entrega(data_envio, tipo_utilizador_autor):
     """Lê o que foi enviado em `data_envio` e devolve os blocos da
-    Guia de entrega (ver `montar_guia_entrega`).
+    Guia de entrega, por unidade (ver `montar_guia_entrega`).
 
     Só Master ou Admin — são eles que enviam; validado aqui e não só
     no ecrã (mesma disciplina de `enviar_requisicao`).
@@ -2739,18 +2790,21 @@ def guia_entrega(data_envio, tipo_utilizador_autor):
     produtos_por_id = {
         p["id"]: p for p in listar_produtos(incluir_inativos=True)
     }
-    ids = {r["responsavel_id"] for r in requisicoes}
-    responsaveis_por_id = {i: responsaveis.procurar(i) for i in ids}
-    unidades_por_responsavel = {
-        i: _unidades.unidades_geridas_por(i) for i in ids
+    unidades_por_id = {
+        u["id"]: u
+        for u in _unidades.listar_com_propriedade(incluir_inativas=True)
+    }
+    nomes_responsaveis = {
+        r["id"]: r["nome"]
+        for r in responsaveis.listar(incluir_inativos=True)
     }
 
     blocos = montar_guia_entrega(
         requisicoes,
         itens_por_requisicao,
         produtos_por_id,
-        responsaveis_por_id,
-        unidades_por_responsavel,
+        unidades_por_id,
+        nomes_responsaveis,
     )
     logger.info(
         "Guia de entrega lida — data=%s, requisicoes=%s, blocos=%s",

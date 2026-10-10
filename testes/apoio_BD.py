@@ -139,6 +139,7 @@ _MIGRACOES_DE_ESTRUTURA = (
     "0003_avisos_privacidade_fks",
     "0004_consentimento_comunicacoes",
     "0005_despesa_unidade_atribuida",
+    "0006_propriedade_senhorio",
 )
 _INSTRUCOES_ESTRUTURA = [
     instrucao

@@ -329,7 +329,12 @@ class NovoContratoMensal(ctk.CTkFrame):
                 )
                 self.lugares_da_unidade.append(lugar)
                 opcoes.append(
-                    _rotulo_lugar(lugar, ocupantes, lugar["capacidade"])
+                    _rotulo_lugar(
+                        lugar,
+                        ocupantes,
+                        lugar["capacidade"],
+                        nome_quarto=quarto["nome"],
+                    )
                 )
 
         self.combo_lugar.configure(values=opcoes)

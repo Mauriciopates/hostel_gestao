@@ -104,7 +104,6 @@ import responsaveis
 from .. import componentes
 from . import gui_est_comum
 from .gui_est_devolucoes import _ResumoRequisicaoModal
-from .gui_est_guia import GuiaEntregaModal
 from .. import sessao
 from .. import tema
 
@@ -171,20 +170,8 @@ class ListaRequisicoes(ctk.CTkFrame):
             command=lambda: _EscolherTipoRequisicaoModal(self),
         ).pack(side="left")
 
-        # Guia de entrega (27/09/2026): só Master/Admin, que são quem
-        # envia. `estoque.guia_entrega` volta a validar o perfil.
-        if sessao.tipo_utilizador_ativo() in ("Master", "Admin"):
-            ctk.CTkButton(
-                barra_criar,
-                text="Guia de entrega",
-                corner_radius=tema.RAIO_BOTAO,
-                fg_color="transparent",
-                border_width=2,
-                border_color=tema.AZUL_PRINCIPAL,
-                text_color=tema.AZUL_PRINCIPAL,
-                hover_color=tema.ID_CHIP_FUNDO,
-                command=lambda: GuiaEntregaModal(self),
-            ).pack(side="left", padx=(10, 0))
+        # O botão "Guia de entrega" saiu daqui para a Rota de Envio
+        # (10/10/2026) — é lá que se trata do que sai do armazém.
 
         barra = ctk.CTkFrame(self, fg_color="transparent")
         barra.pack(fill="x", padx=20, pady=(0, 6))

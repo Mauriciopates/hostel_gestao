@@ -26,6 +26,9 @@ _colocar_no_topo = componentes.colocar_no_topo
 # Helpers partilhados dos contratos (nomes públicos em
 # gui_cnt_comum) — alias local, mesmo padrão dos gui_est_*.
 _formatar_data = gui_cnt_comum.formatar_data
+
+# Fonte com o carácter "→" (a Roboto do CustomTkinter não o tem).
+_FONTE_COM_SETA = "Segoe UI"
 _identificar_unidade = gui_cnt_comum.identificar_unidade
 _identificar_cliente = gui_cnt_comum.identificar_cliente
 
@@ -142,7 +145,7 @@ _ALTURA_LINHA_RESERVA = 52
 _COLUNAS_RESERVA = (
     componentes.Coluna("ID", minimo=_LARGURA_ID_RESERVA + 24, espaco=8),
     componentes.Coluna(
-        "NOME DA UNIDADE", peso=3, minimo=_LARGURA_UNIDADE_RESERVA
+        "PROPRIEDADE", peso=3, minimo=_LARGURA_UNIDADE_RESERVA
     ),
     componentes.Coluna(
         "STATUS",
@@ -237,6 +240,16 @@ class ListaReservasAirbnb(ctk.CTkFrame):
             self.tabela.mostrar_vazio()
             return
 
+        # Unidade + nome da propriedade de todas as reservas numa só
+        # consulta (10/10/2026: o título da linha passou a ser a
+        # propriedade, para se identificar a reserva mais depressa).
+        self.unidades_por_id = {
+            u["id"]: u
+            for u in unidades.listar_com_propriedade(
+                incluir_inativas=True, tipo="airbnb"
+            )
+        }
+
         # Estado do pré check-in de todas as reservas numa só consulta.
         self.estados_prechecking = prechecking.estados(
             o["id"] for o in lista
@@ -250,9 +263,12 @@ class ListaReservasAirbnb(ctk.CTkFrame):
     def _desenhar_ocupacao(self, ocupacao):
         inativa = not ocupacao["ativo"]
 
-        unidade = unidades.procurar(ocupacao["unidade_id"])
+        unidade = self.unidades_por_id.get(ocupacao["unidade_id"])
         cliente = clientes.procurar(ocupacao["cliente_id"])
         nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
+        nome_propriedade = (
+            unidade["propriedade_nome"] if unidade else nome_unidade
+        )
         nome_cliente = cliente["nome"] if cliente else ocupacao["cliente_id"]
         periodo = (
             f"{_formatar_data(ocupacao['data_inicio'])} → "
@@ -275,27 +291,28 @@ class ListaReservasAirbnb(ctk.CTkFrame):
             esticar="w",
         )
 
-        subtitulo = (
-            f"{ocupacao['unidade_id']} · "
-            f"{nome_cliente} ({ocupacao['cliente_id']}) · "
-            f"{periodo}"
-        )
+        # 10/10/2026: título = propriedade; subtítulo = unidade ·
+        # cliente · período, sem os códigos UNI-/CLI- (pedido do
+        # aluno, para identificar a reserva mais depressa).
+        subtitulo = f"{nome_unidade} · {nome_cliente} · {periodo}"
 
         bloco_unidade = ctk.CTkFrame(linha, fg_color="transparent")
         ctk.CTkLabel(
             bloco_unidade,
-            text=nome_unidade,
+            text=nome_propriedade,
             text_color=(
                 tema.TEXTO_INDISPONIVEL if inativa else tema.COR_TEXTO
             ),
             font=ctk.CTkFont(size=13, weight="bold"),
             anchor="w",
         ).pack(fill="x")
+        # "Segoe UI" (e não a Roboto por omissão do CustomTkinter):
+        # a Roboto não tem a seta "→" e mostrava um quadrado no lugar.
         ctk.CTkLabel(
             bloco_unidade,
             text=subtitulo,
             text_color=tema.COR_TEXTO_SECUNDARIO,
-            font=ctk.CTkFont(size=11),
+            font=ctk.CTkFont(family=_FONTE_COM_SETA, size=11),
             anchor="w",
         ).pack(fill="x")
         self.tabela.colocar(linha, 1, bloco_unidade)
@@ -390,6 +407,15 @@ class ListaReservasAirbnb(ctk.CTkFrame):
 
         componentes.mostrar_sucesso(f"Reserva {ocupacao['id']} reativada.")
         self._recarregar()
+
+
+def abrir_acoes_reserva(tela_lista, ocupacao):
+    """Abre o popup de ações de uma reserva por cima de `tela_lista`.
+
+    Porta pública para quem está fora deste módulo — o Calendário usa-a
+    no botão "Ver reserva" do detalhe do dia (10/10/2026).
+    """
+    return _AcoesReservaAirbnbModal(tela_lista, ocupacao)
 
 
 class _AcoesReservaAirbnbModal(ctk.CTkToplevel):

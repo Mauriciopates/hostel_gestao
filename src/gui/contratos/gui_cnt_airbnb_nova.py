@@ -40,7 +40,18 @@ class NovaReservaAirbnb(ctk.CTkFrame):
     tipar).
     """
 
-    def __init__(self, master, controlador, unidade_id=None, popup_pai=None):
+    def __init__(
+        self,
+        master,
+        controlador,
+        unidade_id=None,
+        popup_pai=None,
+        data_inicio=None,
+    ):
+        """`unidade_id` e `data_inicio` (opcionais) pré-preenchem a
+        unidade e a data de entrada — usados pelo Calendário, ao
+        clicar numa noite livre (10/10/2026).
+        """
         super().__init__(master, fg_color=tema.COR_FUNDO)
         self.controlador = controlador
         self.unidade_selecionada = None
@@ -65,6 +76,9 @@ class NovaReservaAirbnb(ctk.CTkFrame):
         self._montar_cartao_checkin_tardio()
         self._montar_resumo()
         self._montar_rodape()
+
+        if data_inicio is not None:
+            self.campo_data_inicio.insert(0, data_inicio.strftime("%d/%m/%Y"))
 
         self._recarregar_unidades(unidade_id)
         self._recarregar_clientes()
@@ -771,9 +785,14 @@ class NovaReservaAirbnb(ctk.CTkFrame):
 
 
 class NovaReservaAirbnbModal(ctk.CTkToplevel):
-    """Popup com o formulário de Nova Reserva Airbnb."""
+    """Popup com o formulário de Nova Reserva Airbnb.
 
-    def __init__(self, tela_lista):
+    `unidade_id` e `data_inicio` (opcionais) chegam do Calendário: o
+    clique numa noite livre abre o formulário já com a unidade e a
+    data de entrada preenchidas (10/10/2026).
+    """
+
+    def __init__(self, tela_lista, unidade_id=None, data_inicio=None):
         super().__init__(tela_lista)
         self.tela_lista = tela_lista
 
@@ -788,7 +807,9 @@ class NovaReservaAirbnbModal(ctk.CTkToplevel):
         NovaReservaAirbnb(
             self,
             controlador=tela_lista.controlador,
+            unidade_id=unidade_id,
             popup_pai=self,
+            data_inicio=data_inicio,
         ).pack(fill="both", expand=True)
 
     def _fechar(self):

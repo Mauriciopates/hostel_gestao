@@ -5,8 +5,30 @@ Mesmo papel do `gui_est_comum.py` / `gui_desp_comum.py`: nomes
 públicos aqui; cada `gui_cnt_*` cria o alias privado no topo."""
 
 
-def rotulo_lugar(lugar, ocupantes, capacidade):
-    """Rótulo do dropdown de lugar: nome + estado ao vivo.
+_TIPOS_CAMA = {
+    "solteiro": "Solteiro",
+    "casal": "Casal",
+    "beliche": "Beliche",
+}
+
+
+def rotulo_tipo_cama(lugar):
+    """"Solteiro", "Casal" ou "Beliche" (com a posição, se houver:
+    "Beliche superior"). Vazio se o lugar não tiver tipo."""
+    tipo = _TIPOS_CAMA.get(lugar.get("tipo_cama") or "", "")
+    posicao = lugar.get("posicao_beliche")
+    if tipo == "Beliche" and posicao:
+        return f"{tipo} {posicao}"
+    return tipo
+
+
+def rotulo_lugar(lugar, ocupantes, capacidade, nome_quarto=None):
+    """Rótulo do dropdown de lugar: quarto · cama · tipo · estado.
+
+    10/10/2026 (pedido do aluno): passou a levar o quarto e o tipo
+    de cama — duas "Cama 1" de quartos diferentes apareciam iguais,
+    e não se via se era solteiro, casal ou beliche.
+    Ex.: "Quarto 2 · Cama 1 · Solteiro · livre (0/1)".
 
     Só distingue livre/parcial/ocupado (nunca "reservado" — decisão
     4 do módulo): aqui só interessa saber se ainda cabe mais gente.
@@ -18,7 +40,9 @@ def rotulo_lugar(lugar, ocupantes, capacidade):
     else:
         estado = "parcial"
 
-    return f"{lugar['nome']} · {estado} ({ocupantes}/{capacidade})"
+    partes = [nome_quarto, lugar["nome"], rotulo_tipo_cama(lugar)]
+    inicio = " · ".join(p for p in partes if p)
+    return f"{inicio} · {estado} ({ocupantes}/{capacidade})"
 
 
 # =====================================================================

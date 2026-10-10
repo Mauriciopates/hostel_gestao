@@ -114,7 +114,6 @@ import contratos
 import unidades
 from . import componentes
 from . import tema
-from .contratos.gui_cnt_mensal_novo import NovoContratoMensal
 
 # Alias local para o helper que vivia neste ficheiro e passou a
 # viver em componentes.py. Mantém-se o nome antigo com "_" para o
@@ -442,11 +441,20 @@ class PlantaLugares(ctk.CTkFrame):
     def _abrir_contrato(self, lugar_id):
         """Abre o Novo Contrato Mensal já pré-preenchido com a
         unidade atual e o lugar clicado.
+
+        10/10/2026: em popup por cima da lista de Contratos Mensais
+        (antes trocava o ecrã inteiro pelo formulário e, depois de
+        criar, ficava-se nele). Ao criar, o popup fecha e a lista
+        atualiza-se.
         """
+        from .contratos.gui_cnt_mensal_lista import ListaContratosMensais
+
         self.controlador.mostrar_frame(
-            NovoContratoMensal,
-            unidade_id=self.unidade_id,
-            lugar_id=lugar_id,
+            ListaContratosMensais,
+            novo_contrato={
+                "unidade_id": self.unidade_id,
+                "lugar_id": lugar_id,
+            },
         )
 
     # -- desenho da planta ------------------------------------------

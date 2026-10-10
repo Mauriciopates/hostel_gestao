@@ -1534,23 +1534,39 @@ class DetalheDiaModal(ctk.CTkToplevel):
             command=self.destroy,
         ).pack(side="left", fill="x", expand=True, padx=(0, 5))
 
+        # Noite Airbnb livre: o botão é a ação de criar (verde, como
+        # o "+ Nova Reserva Airbnb" da lista); os outros são navegar.
+        if self._e_airbnb_livre():
+            cor, cor_hover = tema.VERDE, tema.VERDE
+        else:
+            cor, cor_hover = tema.AZUL_PRINCIPAL, tema.AZUL_CLARO
+
         ctk.CTkButton(
             rodape,
             text=self._rotulo_acao_principal(),
             height=38,
             corner_radius=tema.RAIO_BOTAO,
-            fg_color=tema.AZUL_PRINCIPAL,
-            hover_color=tema.AZUL_CLARO,
+            fg_color=cor,
+            hover_color=cor_hover,
             command=self._executar_acao_principal,
         ).pack(side="right", fill="x", expand=True, padx=(5, 0))
+
+    def _e_airbnb_livre(self):
+        """True numa noite Airbnb sem reserva (nem manutenção)."""
+        return self.uni["tipo"] == "airbnb" and self.estado not in (
+            "manutencao",
+            "ocupado",
+            "reservado",
+        )
 
     def _rotulo_acao_principal(self):
         """Texto do botão principal, consoante o estado e o regime.
 
         - Manutenção → "Abrir unidade" (não há mais nada a fazer).
         - Mensal (qualquer estado) → "Abrir unidade".
-        - Airbnb ocupado/reservado → "Abrir reserva".
-        - Airbnb livre → "Abrir unidade".
+        - Airbnb ocupado/reservado → "Ver reserva".
+        - Airbnb livre → "+ Nova reserva" (10/10/2026: antes era
+          "Abrir unidade"; agora cria logo a reserva nessa noite).
         """
         if self.estado == "manutencao":
             return "Abrir unidade"
@@ -1559,9 +1575,9 @@ class DetalheDiaModal(ctk.CTkToplevel):
             return "Abrir unidade"
 
         if self.estado in ("ocupado", "reservado"):
-            return "Abrir reserva"
+            return "Ver reserva"
 
-        return "Abrir unidade"
+        return "+ Nova reserva"
 
     def _executar_acao_principal(self):
         """Navega para o destino correspondente e fecha os dois
@@ -1569,9 +1585,12 @@ class DetalheDiaModal(ctk.CTkToplevel):
 
         Três destinos possíveis, decididos por regime e estado:
 
-        - Airbnb ocupado/reservado → `ListaReservasAirbnb` (a tabela
-          de reservas, onde a reserva em causa vive).
-        - Mensal (qualquer estado) ou Airbnb livre → abre o
+        - Airbnb ocupado/reservado → `ListaReservasAirbnb` com o
+          popup de ações dessa reserva já aberto por cima.
+        - Airbnb livre → `ListaReservasAirbnb` com o popup "Nova
+          Reserva Airbnb" aberto, já com a unidade e a data de
+          entrada preenchidas (10/10/2026).
+        - Mensal (qualquer estado) → abre o
           `UnidadesDaPropriedadeModal` da propriedade a que a
           unidade pertence, para se ver a unidade em concreto.
           Não `ListaPropriedades`, que é a lista de propriedades —
@@ -1589,7 +1608,11 @@ class DetalheDiaModal(ctk.CTkToplevel):
         ANTES de abrir o popup das unidades. Deixar a pilha de
         popups aberta punha o novo popup por baixo dos antigos.
         """
-        from gui.contratos.gui_cnt_airbnb_lista import ListaReservasAirbnb
+        from gui.contratos.gui_cnt_airbnb_lista import (
+            ListaReservasAirbnb,
+            abrir_acoes_reserva,
+        )
+        from gui.contratos.gui_cnt_airbnb_nova import NovaReservaAirbnbModal
         from gui.gui_propriedades import (
             ListaPropriedades,
             UnidadesDaPropriedadeModal,
@@ -1598,16 +1621,36 @@ class DetalheDiaModal(ctk.CTkToplevel):
         tela_semana = self.tela_semana
         controlador = tela_semana.controlador
 
-        # Airbnb ocupado ou reservado → vai para a tabela de
-        # reservas. É o único caso em que "Abrir reserva" faz
-        # sentido: a reserva em causa está nessa lista.
+        # Airbnb livre → lista de reservas + "Nova Reserva Airbnb"
+        # já com a unidade e a noite clicada como data de entrada.
+        # O popup precisa da lista por trás (`tela_lista`), que é
+        # quem recarrega a tabela quando ele fecha.
+        if self._e_airbnb_livre():
+            unidade_id, dia = self.uni["id"], self.dia
+            self.destroy()
+            tela_semana.destroy()
+            controlador.mostrar_frame(ListaReservasAirbnb)
+            NovaReservaAirbnbModal(
+                controlador.frame_atual,
+                unidade_id=unidade_id,
+                data_inicio=dia,
+            )
+            return
+
+        # Airbnb ocupado ou reservado → lista de reservas, com o
+        # popup de ações da reserva dessa noite já aberto.
         if self.uni["tipo"] == "airbnb" and self.estado in (
             "ocupado",
             "reservado",
         ):
+            ocupacao = contratos.ocupacao_airbnb_no_dia(
+                self.uni["id"], self.dia
+            )
             self.destroy()
             tela_semana.destroy()
             controlador.mostrar_frame(ListaReservasAirbnb)
+            if ocupacao is not None:
+                abrir_acoes_reserva(controlador.frame_atual, ocupacao)
             return
 
         # Todos os outros casos → unidades da propriedade a que a

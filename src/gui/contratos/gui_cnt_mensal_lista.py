@@ -84,7 +84,6 @@ import configuracoes
 import contratos
 import impressao
 import propriedades
-import responsaveis
 import unidades
 
 from gui import componentes, tema
@@ -309,7 +308,13 @@ class ListaContratosMensais(ctk.CTkFrame):
     "Gerir", que abre `_AcoesContratoModal`.
     """
 
-    def __init__(self, master, controlador):
+    def __init__(self, master, controlador, novo_contrato=None):
+        """`novo_contrato` (opcional): {"unidade_id", "lugar_id"} —
+        abre logo o popup "Novo Contrato Mensal" por cima da lista,
+        já preenchido. Usado pela Planta de Lugares (10/10/2026: o
+        contrato deixou de abrir em ecrã inteiro e, ao ser criado,
+        volta-se a esta lista).
+        """
         super().__init__(master, fg_color=tema.COR_FUNDO)
         self.controlador = controlador
 
@@ -325,6 +330,18 @@ class ListaContratosMensais(ctk.CTkFrame):
             hover_color=tema.VERDE,
             command=lambda: NovoContratoModal(self),
         ).pack(side="left")
+
+        if novo_contrato is not None:
+            # Depois de a lista estar no ecrã: o popup é `transient`
+            # dela e tem de abrir por cima, não por trás.
+            self.after(
+                50,
+                lambda: NovoContratoModal(
+                    self,
+                    unidade_id=novo_contrato.get("unidade_id"),
+                    lugar_id=novo_contrato.get("lugar_id"),
+                ),
+            )
 
         barra = ctk.CTkFrame(self, fg_color="transparent")
         barra.pack(fill="x", padx=20, pady=(0, 4))
@@ -723,8 +740,12 @@ class _AcoesContratoModal(ctk.CTkToplevel):
 
 
 class _ImprimirContratoModal(ctk.CTkToplevel):
-    """Popup intermédio do "Imprimir contrato" — pede o senhorio e o
-    local, antes de gerar o PDF.
+    """Popup intermédio do "Imprimir contrato" — mostra o senhorio
+    e pede o local, antes de gerar o PDF.
+
+    10/10/2026: o senhorio deixou de ser escolhido aqui entre os
+    responsáveis — passou a ser o da propriedade (campo "Senhorio"
+    na ficha da propriedade). Aqui só se mostra, para confirmar.
     """
 
     def __init__(self, tela_lista, ocupacao, popup_pai=None):
@@ -737,6 +758,15 @@ class _ImprimirContratoModal(ctk.CTkToplevel):
         cliente = clientes.procurar(ocupacao["cliente_id"])
         nome_unidade = unidade["nome"] if unidade else ocupacao["unidade_id"]
         nome_cliente = cliente["nome"] if cliente else ocupacao["cliente_id"]
+        propriedade = (
+            propriedades.procurar(unidade["propriedade_id"])
+            if unidade
+            else None
+        )
+        self.nome_senhorio = (
+            propriedade.get("senhorio_nome") if propriedade else ""
+        ) or ""
+        self.nome_propriedade = propriedade["nome"] if propriedade else ""
 
         self.title(f"Imprimir contrato — {ocupacao['id']}")
         self.geometry("460x400")
@@ -768,21 +798,22 @@ class _ImprimirContratoModal(ctk.CTkToplevel):
             font=ctk.CTkFont(size=11),
         ).pack(anchor="w", padx=24)
 
-        self.responsaveis_disponiveis = responsaveis.listar()
-        nomes = ["Escolher responsável"] + [
-            f"{r['id']} · {r['nome']}" for r in self.responsaveis_disponiveis
-        ]
-        self.combo_senhorio = componentes.Seletor(
-            self, values=nomes, corner_radius=tema.RAIO_CAMPO
-        )
-        self.combo_senhorio.set(nomes[0])
-        self.combo_senhorio.pack(fill="x", padx=24, pady=(2, 2))
+        ctk.CTkLabel(
+            self,
+            text=self.nome_senhorio or "Sem senhorio na propriedade",
+            text_color=(
+                tema.COR_TEXTO if self.nome_senhorio else tema.TEXTO_ERRO
+            ),
+            font=ctk.CTkFont(size=13, weight="bold"),
+            anchor="w",
+        ).pack(fill="x", padx=24, pady=(2, 2))
 
         ctk.CTkLabel(
             self,
             text=(
-                "Assina do lado do senhorio. Aparece no PDF como "
-                '"Primeiro Contraente".'
+                f"Vem da propriedade {self.nome_propriedade} "
+                "(Propriedades → Editar → Senhorio). Aparece no PDF "
+                'como "Primeiro Contraente".'
             ),
             text_color=tema.COR_TEXTO_SECUNDARIO,
             font=ctk.CTkFont(size=10),
@@ -838,21 +869,12 @@ class _ImprimirContratoModal(ctk.CTkToplevel):
             command=self._gerar_pdf,
         ).pack(side="right")
 
-    def _responsavel_escolhido_id(self):
-        indice = self.combo_senhorio.cget("values").index(
-            self.combo_senhorio.get()
-        )
-        if indice == 0:
-            return ""
-        return self.responsaveis_disponiveis[indice - 1]["id"]
-
     def _gerar_pdf(self):
-        senhorio_id = self._responsavel_escolhido_id()
-
-        if not senhorio_id:
+        if not self.nome_senhorio:
             componentes.mostrar_erro(
-                "Escolhe o senhorio que assina pelo lado do Primeiro "
-                "Contraente."
+                f"A propriedade {self.nome_propriedade} não tem senhorio "
+                "preenchido.\n\nPreenche-o em Propriedades → Editar "
+                "antes de imprimir o contrato."
             )
             return
 
@@ -861,14 +883,6 @@ class _ImprimirContratoModal(ctk.CTkToplevel):
         if not local:
             componentes.mostrar_erro(
                 "Escreve o local (cidade) onde o contrato é assinado."
-            )
-            return
-
-        senhorio = responsaveis.procurar(senhorio_id)
-
-        if senhorio is None:
-            componentes.mostrar_erro(
-                f"O responsável {senhorio_id} já não existe."
             )
             return
 
@@ -915,7 +929,6 @@ class _ImprimirContratoModal(ctk.CTkToplevel):
                 cliente=cliente,
                 unidade=unidade,
                 propriedade=propriedade,
-                senhorio=senhorio,
                 local=local,
             )
         except Exception as erro:
