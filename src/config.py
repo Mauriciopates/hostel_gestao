@@ -144,6 +144,11 @@ FICHEIRO_ESQUEMA = _PASTA_CODIGO / "bd" / "esquema.sql"
 FICHEIRO_ESQUEMA_PRECHECKING = (
     _PASTA_CODIGO / "bd" / "esquema_prechecking.sql"
 )
+# Modelo HTML do relatório de desempenho (v2.1.0, `--desempenho`).
+# Também tem de estar nos "datas" do .spec.
+FICHEIRO_MODELO_DESEMPENHO = (
+    _PASTA_CODIGO / "impressao" / "modelos" / "desempenho.html"
+)
 
 # --- Imagens (v1.8.0, INST-04) --------------------------------------
 # Fonte única do caminho do `img/` (logótipo, ícone). A correr do

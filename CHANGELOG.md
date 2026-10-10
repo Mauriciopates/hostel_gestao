@@ -6,12 +6,27 @@ Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7)
 ## [2.1.0] — 2026-10-10
 
 Revisão do sistema em uso (branch `revisao`): calendário, reservas,
-guia de entrega, contrato mensal e senhorio da propriedade.
-**Migração 0006** (coluna nova em `propriedades`; corre sozinha ao
-abrir a aplicação).
+guia de entrega, contrato mensal e senhorio da propriedade, e medição
+de desempenho dentro da própria aplicação. **Migração 0006** (coluna
+nova em `propriedades`; corre sozinha ao abrir a aplicação).
 
 ### Adicionado
 
+- **Modo `--desempenho`** (`HostelGestao.exe --desempenho` ou
+  `python src/main_gui.py --desempenho`) — depois do login, e só para um
+  Master, a aplicação abre sozinha cada ecrã do menu e dos hubs (3x
+  cada), com uma janela de progresso e o botão "Parar". No fim grava
+  HTML, CSV e JSON na pasta de relatórios e abre o HTML: tempo de cada
+  ecrã, parte de base de dados / construção / desenho, n.º de
+  consultas, pistas do que melhorar e, a partir da 2.ª medição no
+  mesmo servidor, a diferença para a anterior. O hub de Despesas não é
+  aberto (lança as despesas recorrentes ao abrir). Serve para medir no
+  cliente de teste (Sin-11), onde a aplicação é o executável. Módulos
+  novos: `desempenho.py`, `gui/gui_desempenho.py`,
+  `impressao/desempenho.py` e o modelo
+  `impressao/modelos/desempenho.html` (incluído no `.spec`). O
+  LEIA-ME do pacote (`montar_pacote.sh`) e o da ferramenta
+  `ferramentas/perfil/` passam a ter o comando.
 - **Senhorio da propriedade** — coluna `propriedades.senhorio_nome`
   (migração 0006) e campo "Senhorio" em Nova/Editar Propriedade
   (`propriedades.criar`/`atualizar` aceitam `senhorio_nome`, opcional).
@@ -53,7 +68,8 @@ abrir a aplicação).
 
 ### Testes
 
-- `teste_rotulo_lugar` (novo, 4); `teste_guia_entrega` reescrito para a
+- `teste_desempenho` (novo, 13); `teste_rotulo_lugar` (novo, 4);
+  `teste_guia_entrega` reescrito para a
   guia por unidade e por staff; `TesteSenhorio` em `teste_propriedades`;
   `TestePropriedadeSenhorio` (migração 0006) em `teste_migracoes`;
   `teste_impressao` sem o senhorio como responsável. `apoio_BD` aplica a

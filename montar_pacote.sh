@@ -77,6 +77,14 @@ passo "3/4 LEIA-ME.txt"
     printf '  2. Manual_Instalacao_Sistema  - aplicacao e funcionalidades\r\n'
     printf '\r\n'
     printf 'Esta pasta tem de ficar em C:\\HostelGestao_instalacao\r\n'
+    printf '\r\n'
+    printf 'MEDIR O DESEMPENHO DOS ECRAS (so um Master)\r\n'
+    printf '  PowerShell:\r\n'
+    printf '  & "C:\\HostelGestao_instalacao\\HostelGestao\\HostelGestao.exe" --desempenho\r\n'
+    printf '  Entrar como Master e confirmar. A aplicacao abre os ecras\r\n'
+    printf '  sozinha (3x cada) e no fim abre o relatorio (HTML), gravado\r\n'
+    printf '  na pasta de relatorios da aplicacao. Nao e preciso clicar em nada.\r\n'
+    printf '  Alternativa: atalho com " --desempenho" no fim do campo Destino.\r\n'
 } > "$DESTINO/LEIA-ME.txt"
 
 # --- 4. ZIP ------------------------------------------------------------

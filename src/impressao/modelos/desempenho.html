@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desempenho - Hostel Clean</title>
+<style>
+:root{--bg:#f5f7f9;--card:#fff;--ink:#0c2f48;--mut:#5a6b7a;--line:#dde3e8;--pri:#0e6291;--ok:#2e8b57;--warn:#9a7b12;--bad:#c0392b;--okb:#e1f5ea;--warnb:#fff3d6;--badb:#fbe4e1;--d1:#0e6291;--d2:#2b99bf;--d3:#b9dbe9}
+@media (prefers-color-scheme:dark){:root{--bg:#14181f;--card:#1e242e;--ink:#e8eef3;--mut:#94a3ad;--line:#323a47;--pri:#4fa3d1;--ok:#8fd9ae;--warn:#f0d888;--bad:#f0a79c;--okb:#1c3a2a;--warnb:#4a3b14;--badb:#4a1e19;--d1:#4fa3d1;--d2:#2b6f93;--d3:#24465c}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 'Segoe UI',system-ui,sans-serif;padding:16px}
+.wrap{max-width:1050px;margin:0 auto}.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+h1{font-size:19px;margin:0 0 2px}.mut{color:var(--mut);font-size:13px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin:14px 0}
+.kpi{border:1px solid var(--line);border-radius:8px;padding:8px 10px}.kpi b{display:block;font-size:19px}.kpi span{color:var(--mut);font-size:12px}
+.tab{overflow-x:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:middle}
+th{color:var(--mut);font-size:12px}tbody tr{cursor:pointer}tbody tr:hover{background:rgba(127,127,127,.08)}tbody tr.sel{background:rgba(14,98,145,.12)}
+.stack{display:flex;height:12px;border-radius:3px;overflow:hidden;background:var(--line);min-width:110px}.stack i{display:block;height:100%}
+.pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600}
+.ok{background:var(--okb);color:var(--ok)}.warn{background:var(--warnb);color:var(--warn)}.bad{background:var(--badb);color:var(--bad)}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--mut);margin:8px 0;flex-wrap:wrap}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
+.detail{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:12px}.detail h2{font-size:14px;margin:0 0 6px}
+code{background:rgba(127,127,127,.15);padding:1px 5px;border-radius:4px;font-size:12px;word-break:break-all}
+.tip{background:var(--warnb);border-radius:6px;padding:8px 10px;margin-top:8px;font-size:13px}.tip div+div{margin-top:4px}
+.up{color:var(--bad)}.down{color:var(--ok)}.note{margin-top:12px;font-size:13px;color:var(--mut)}
+@media (max-width:640px){th:nth-child(5),td:nth-child(5),th:nth-child(6),td:nth-child(6){display:none}}
+</style></head><body><div class="wrap"><div class="card">
+<h1>Desempenho dos ecrãs</h1>
+<div class="mut" id="meta"></div>
+<div class="kpis" id="kpis"></div>
+<div class="legend"><span><i style="background:var(--d1)"></i>Base de dados</span><span><i style="background:var(--d2)"></i>Construção do ecrã</span><span><i style="background:var(--d3)"></i>Desenho</span><span id="lim"></span></div>
+<div class="tab"><table><thead><tr><th>Ecrã</th><th>Tempo</th><th>Estado</th><th>vs anterior</th><th>Consultas</th><th>Widgets</th><th>Distribuição</th></tr></thead><tbody id="rows"></tbody></table></div>
+<div class="detail" id="det"></div><div class="note" id="extra"></div></div></div>
+<script>
+var D=__JSON__;
+function fmt(ms){return ms>=1000?(ms/1000).toFixed(1).replace('.',',')+' s':Math.round(ms)+' ms'}
+function est(ms){return ms<D.ok?['OK','ok']:ms<=D.lento?['Atenção','warn']:['Lento','bad']}
+function esc(s){return String(s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})}
+var L=D.linhas.filter(function(l){return !l.erro&&!l.saltado}).sort(function(a,b){return b.total-a.total});
+var S=D.linhas.filter(function(l){return l.saltado}),E=D.linhas.filter(function(l){return l.erro}),R=D.resumo;
+document.getElementById('meta').textContent=D.quando+' · servidor: '+D.servidor+' · cada ecrã aberto '+D.repeticoes+'x (média)';
+document.getElementById('lim').textContent='OK < '+D.ok+' ms · Atenção até '+D.lento+' ms · Lento acima';
+var k=[[R.medidos,'ecrãs medidos'],[R.mais_lento?R.mais_lento.nome:'-','mais lento'+(R.mais_lento?' ('+fmt(R.mais_lento.total)+')':'')],[fmt(R.media),'média de abertura'],[R.lentos,'acima de '+D.lento+' ms'],[R.consultas,'consultas no total']];
+document.getElementById('kpis').innerHTML=k.map(function(x){return '<div class="kpi"><b>'+esc(x[0])+'</b><span>'+esc(x[1])+'</span></div>'}).join('');
+var rows=document.getElementById('rows'),det=document.getElementById('det');
+function show(i){var d=L[i],tr=rows.children;for(var j=0;j<tr.length;j++)tr[j].className=j===i?'sel':'';
+ var e=est(d.total),h='<h2>'+esc(d.nome)+' · '+fmt(d.total)+' <span class="pill '+e[1]+'">'+e[0]+'</span></h2>';
+ h+='<div>Base de dados: <b>'+fmt(d.dados)+'</b> · Construção: <b>'+fmt(d.construcao)+'</b> · Desenho: <b>'+fmt(d.desenho)+'</b> · 1.ª abertura: <b>'+fmt(d.primeira)+'</b> · Pior: <b>'+fmt(d.maximo)+'</b></div>';
+ h+='<div>Consultas: <b>'+d.n_consultas+'</b> · Ligações abertas: <b>'+d.n_ligacoes+'</b> ('+fmt(d.ms_ligacoes)+') · Widgets: <b>'+d.widgets+'</b> · Escritas: <b>'+d.escritas+'</b></div>';
+ h+='<div class="tip">'+d.dicas.map(function(t){return '<div>'+esc(t)+'</div>'}).join('')+'</div>';
+ if(d.lentas.length){h+='<div style="margin-top:8px"><b>Consultas mais pesadas</b></div>'+d.lentas.map(function(q){return '<div style="margin-top:4px">'+fmt(q.ms)+' ('+q.n+'x) <code>'+esc(q.sql)+'</code></div>'}).join('')}
+ det.innerHTML=h}
+L.forEach(function(d,i){var e=est(d.total),t=Math.max(d.dados+d.construcao+d.desenho,1),tr=document.createElement('tr');
+ var v='-';if(d.anterior!=null){var df=d.total-d.anterior,p=d.anterior?df/d.anterior:0;v='<span class="'+(df>0?'up':'down')+'">'+(df>0?'+':'')+Math.round(df)+' ms ('+(p>0?'+':'')+Math.round(p*100)+'%)</span>'}
+ tr.innerHTML='<td>'+esc(d.nome)+'</td><td><b>'+fmt(d.total)+'</b></td><td><span class="pill '+e[1]+'">'+e[0]+'</span></td><td>'+v+'</td><td>'+d.n_consultas+'</td><td>'+d.widgets+'</td><td><div class="stack"><i style="width:'+d.dados/t*100+'%;background:var(--d1)"></i><i style="width:'+d.construcao/t*100+'%;background:var(--d2)"></i><i style="width:'+d.desenho/t*100+'%;background:var(--d3)"></i></div></td>';
+ tr.onclick=function(){show(i)};rows.appendChild(tr)});
+var x='';if(S.length)x+='<div><b>Não medidos</b> (gravam na base ao abrir): '+S.map(function(l){return esc(l.nome)+' — '+esc(l.saltado)}).join('; ')+'</div>';
+if(E.length)x+='<div><b>Falharam ao abrir:</b> '+E.map(function(l){return esc(l.nome)+' ('+esc(l.erro)+')'}).join('; ')+'</div>';
+document.getElementById('extra').innerHTML=x;
+if(L.length)show(0);
+</script></body></html>

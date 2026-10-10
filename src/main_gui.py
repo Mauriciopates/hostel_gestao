@@ -28,10 +28,12 @@ uma janela-raiz de cada vez.
 """
 
 import logging
+import sys
 import tkinter
 
 import config
 import configuracoes
+import desempenho
 import instalacao
 import instancia
 import migracoes
@@ -72,6 +74,15 @@ def main():
     """
     config.garantir_diretorios()
     registo_logs.configurar("gui")
+
+    # MEDIÇÃO DE DESEMPENHO (v2.1.0): `HostelGestao.exe --desempenho`.
+    # O cronómetro das consultas tem de entrar ANTES de qualquer
+    # ligação à base (o pool guarda as que abrir). A medição em si só
+    # começa depois do login, e só para um Master (gui_desempenho).
+    modo_desempenho = desempenho.OPCAO_ARRANQUE in sys.argv[1:]
+    if modo_desempenho:
+        desempenho.instrumentar_mysql()
+        logger.info("Arranque em modo de medição de desempenho")
 
     # CÓPIA ÚNICA (v1.8.1): antes de tudo o resto — de abrir o túnel e
     # de tocar na base. Uma segunda cópia avisa e fecha. Num reinício
@@ -125,6 +136,13 @@ def main():
         # para arrancar (rebentaria). Sai já.
         if app.terminar_pedido:
             break
+
+        if modo_desempenho:
+            # Só na primeira abertura (não depois de um logoff).
+            modo_desempenho = False
+            from gui import gui_desempenho
+
+            app.after(500, lambda a=app: gui_desempenho.iniciar(a))
 
         app.mainloop()
 

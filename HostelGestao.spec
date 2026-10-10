@@ -38,6 +38,10 @@ datas = [
     # Esquema oficial da base (INST-03). config.FICHEIRO_ESQUEMA procura-o
     # em sys._MEIPASS / "bd" / "esquema.sql".
     ("src/bd/esquema.sql", "bd"),
+    # Modelo do relatório de desempenho (v2.1.0, `--desempenho`).
+    # config.FICHEIRO_MODELO_DESEMPENHO → sys._MEIPASS / "impressao" /
+    # "modelos" / "desempenho.html".
+    ("src/impressao/modelos/desempenho.html", "impressao/modelos"),
     # Logótipo e ícone. config.PASTA_IMG → sys._MEIPASS / "img".
     ("img", "img"),
 ]
