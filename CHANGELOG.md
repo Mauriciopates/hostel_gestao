@@ -3,6 +3,41 @@
 Todas as alterações relevantes deste projeto são registadas neste ficheiro.
 Numeração segundo maior.menor.correção (decisão de arquitetura, secção 7).
 
+## [2.3.0] — 2026-10-10
+
+**Reação ao clique e "a carregar" nos ecrãs lentos** (item 1 das
+otimizações medidas no cliente de teste Sin-11 com `--desempenho`,
+mockup aprovado a 10/10/2026). O tempo de abrir cada ecrã é o mesmo;
+deixa de parecer que a aplicação parou. Sem alterações na base de
+dados.
+
+### Alterado
+
+- **Menu lateral** — o clique marca logo o item e mostra "A abrir
+  <ecrã>…" com a barra a correr, com o cursor em "a trabalhar"
+  (`app.navegar`, `componentes.TelaAbrir`). Enquanto um ecrã abre, os
+  outros cliques no menu são ignorados (deixa de haver ecrãs em fila).
+- **Pílulas do menu** — já não se relêem da base a cada troca de ecrã:
+  só se a última leitura tiver mais de 20 s
+  (`BarraLateral.atualizar_contadores_se_preciso`) e de 60 em 60 s.
+- **Dashboard, Dashboard › Financeiro e Relatórios** — enquanto as
+  contas correm aparece "A calcular…" por cima do próprio ecrã
+  (`componentes.com_janela_carregar` + `CamadaCarregar`, desenhada no
+  ecrã e não numa janela à parte, porque no Windows a janela só
+  aparecia depois das contas). Também ao mudar de mês/vista e ao mudar
+  o período ou o filtro de um relatório.
+- **Hub de Relatórios** — ao clicar em Financeiro / Contratos / Stock
+  aparece logo "A abrir relatórios · <área>…" até o relatório estar
+  desenhado (`RelatorioModal(..., ao_pronto=...)`); cliques repetidos
+  são ignorados.
+- `config.VERSAO` passa a `2.3.0`.
+
+### Testes
+
+- `teste_gui_navegacao` (novo, 8): navegação pelo menu, cliques
+  repetidos ignorados, leitura das pílulas e "A calcular…" (aparece
+  durante o trabalho e sai no fim, mesmo com erro).
+
 ## [2.2.0] — 2026-10-10
 
 **Medição de desempenho dentro da própria aplicação**, para medir no

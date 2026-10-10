@@ -73,8 +73,11 @@ class RelatorioBase(ctk.CTkToplevel):
     _LARGURA = 1000
     _ALTURA = 700
 
-    def __init__(self, tela_hub, area):
+    def __init__(self, tela_hub, area, ao_pronto=None):
         super().__init__(tela_hub)
+        # Chamado depois do primeiro relatório desenhado (v2.3.0): o hub
+        # tira o seu "A abrir relatórios…".
+        self._ao_pronto = ao_pronto
         self.tela_hub = tela_hub
         self.controlador = tela_hub.controlador
 
@@ -122,9 +125,20 @@ class RelatorioBase(ctk.CTkToplevel):
         self._construir_corpo()
         self._construir_rodape()
 
-        # Desenha a primeira vez.
+        # Desenha a primeira vez. O conteúdo só vem quando a janela já
+        # está no ecrã (no Windows o CTkToplevel aparece ~200 ms depois
+        # de criado), para o "A calcular o relatório…" (v2.3.0) se ver
+        # por cima dela.
         self._recarregar_lista_lateral()
-        self._recarregar_conteudo()
+        self.after(300, self._primeiro_desenho)
+
+    def _primeiro_desenho(self):
+        try:
+            self._recarregar_conteudo()
+        finally:
+            if self._ao_pronto is not None:
+                self._ao_pronto()
+                self._ao_pronto = None
 
     # -- construção ---------------------------------------------------
 
@@ -267,6 +281,19 @@ class RelatorioBase(ctk.CTkToplevel):
             botao.pack(fill="x", padx=4, pady=1)
 
     def _recarregar_conteudo(self):
+        """Redesenha o relatório escolhido, com a janelinha "A calcular
+        o relatório…" por cima (v2.3.0, mockup aprovado a 10/10/2026):
+        abrir, trocar de relatório, de período ou de filtro passa
+        todo por aqui."""
+        if not self.winfo_exists():
+            return
+        # A camada vai sobre o popup inteiro e não sobre a área do
+        # conteúdo: o desenho começa por apagar os filhos dessa área.
+        componentes.com_janela_carregar(
+            self, "A calcular o relatório…", self._desenhar_conteudo
+        )
+
+    def _desenhar_conteudo(self):
         """Desenha o relatório escolhido na área de conteúdo.
 
         Despacha para a função `_desenhar_<id>` correspondente. Essas

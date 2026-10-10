@@ -117,6 +117,13 @@ def _dono_do_aviso():
     return {}
 
 
+# Pílulas do menu (v2.3.0): numa troca de ecrã só se relêem se a
+# última leitura tiver mais do que isto; e há uma releitura automática
+# a cada `_INTERVALO_CONTADORES_MS`.
+_VALIDADE_CONTADORES_S = 20
+_INTERVALO_CONTADORES_MS = 60_000
+
+
 class BarraLateral(ctk.CTkFrame):
     """Barra lateral de navegação. Recebe uma lista de itens — cada
     um ou uma secção (rótulo não clicável, ex. "MENSAL") ou um item
@@ -161,6 +168,9 @@ class BarraLateral(ctk.CTkFrame):
         self._botoes_por_ecra = {}
         # (etiqueta, função) dos itens com contador — F5, 05/10/2026.
         self._contadores = []
+        # Quando foram lidos pela última vez (v2.3.0): já não se relêem
+        # em cada clique do menu — ver `atualizar_contadores_se_preciso`.
+        self._contadores_lidos_em = 0.0
 
         # =============================================================
         # LOGO no topo, dentro de uma caixa quase-branca
@@ -306,8 +316,8 @@ class BarraLateral(ctk.CTkFrame):
                     corner_radius=tema.RAIO_BOTAO,
                     font=ctk.CTkFont(size=12),
                     anchor="w",
-                    command=lambda ecra=item["ecra"]: (
-                        controlador.mostrar_frame(ecra)
+                    command=lambda ecra=item["ecra"], t=item["texto"]: (
+                        self._navegar(ecra, t)
                     ),
                 )
                 botao.pack(fill="x", padx=6, pady=1)
@@ -322,18 +332,50 @@ class BarraLateral(ctk.CTkFrame):
                     etiqueta = Etiqueta(botao, "0", "erro")
                     tornar_cliclavel(
                         etiqueta,
-                        lambda ecra=item["ecra"]: (
-                            controlador.mostrar_frame(ecra)
+                        lambda ecra=item["ecra"], t=item["texto"]: (
+                            self._navegar(ecra, t)
                         ),
                     )
                     self._contadores.append((etiqueta, item["contador"]))
 
         self.atualizar_contadores()
+        if self._contadores:
+            self.after(_INTERVALO_CONTADORES_MS, self._ciclo_contadores)
+
+    def _navegar(self, ecra, texto):
+        """Clique num item (v2.3.0): o controlador que souber `navegar`
+        mostra logo "A abrir …" e ignora cliques repetidos; um
+        controlador mais simples (testes) só troca de ecrã."""
+        navegar = getattr(self.controlador, "navegar", None)
+        if callable(navegar):
+            navegar(ecra, texto)
+        else:
+            self.controlador.mostrar_frame(ecra)
+
+    def _ciclo_contadores(self):
+        """Relê as pílulas de tempos a tempos, mesmo sem cliques."""
+        if not self.winfo_exists():
+            return
+        self.atualizar_contadores()
+        self.after(_INTERVALO_CONTADORES_MS, self._ciclo_contadores)
+
+    def atualizar_contadores_se_preciso(self):
+        """Chamado a cada troca de ecrã (v2.3.0). Só volta a ler se a
+        última leitura tiver mais de `_VALIDADE_CONTADORES_S`: no
+        Sin-11 cada contador eram idas à base em CADA clique do menu.
+        Quem muda uma contagem (ex. validar um pré check-in) continua
+        a chamar `atualizar_contadores()`, que lê sempre."""
+        if time.monotonic() - self._contadores_lidos_em >= (
+            _VALIDADE_CONTADORES_S
+        ):
+            self.atualizar_contadores()
 
     def atualizar_contadores(self):
         """Recalcula os contadores dos itens (chamado ao montar a
-        barra e a cada troca de ecrã). Um erro na contagem esconde a
-        pílula em vez de rebentar a navegação."""
+        barra, de tempos a tempos e por quem muda uma contagem). Um
+        erro na contagem esconde a pílula em vez de rebentar a
+        navegação."""
+        self._contadores_lidos_em = time.monotonic()
         for etiqueta, funcao in self._contadores:
             try:
                 quantos = int(funcao())
@@ -2742,6 +2784,113 @@ def carregar_em_segundo_plano(
     threading.Thread(target=correr, daemon=True).start()
     id_mostrar = master.after(_ATRASO_JANELA_CARREGAR_MS, mostrar_janela)
     master.after(_INTERVALO_VERIFICACAO_MS, verificar)
+
+
+def com_janela_carregar(master, texto, trabalho):
+    """Cobre `master` com o aviso "A calcular…" (`CamadaCarregar`),
+    deixa o Tk desenhá-lo e só depois corre `trabalho()` — na thread
+    PRINCIPAL. Devolve o que o `trabalho` devolver (v2.3.0, item 1 da
+    lista de otimizações do Sin-11, mockup aprovado a 10/10/2026).
+
+    Para quando ler e desenhar estão misturados (vistas do Dashboard,
+    relatórios) e não dá para separar a leitura numa thread como o
+    `carregar_em_segundo_plano` faz: o ecrã fica na mesma ocupado,
+    mas com o aviso à vista em vez de parecer parado.
+
+    Porque é uma camada DENTRO do `master` e não uma janela própria
+    (1.ª versão, testada no Sin-11 a 10/10/2026): no Windows o
+    CTkToplevel só aparece uns 200 ms depois de criado, através de
+    `after` — com a thread principal ocupada nas contas, a janelinha
+    nunca chegava a ver-se e a área ficava em branco. Um frame
+    desenha-se logo.
+
+    Enquanto corre, os cliques do menu lateral são ignorados (a marca
+    `_a_navegar` da aplicação) — trocar de ecrã a meio deixava o
+    `trabalho` a desenhar num ecrã já destruído.
+    """
+    principal = master.winfo_toplevel()
+    camada = None
+    marca_antes = getattr(principal, "_a_navegar", None)
+    if marca_antes is not None:
+        principal._a_navegar = True
+
+    try:
+        if master.winfo_viewable():
+            camada = CamadaCarregar(master, texto)
+            principal.configure(cursor="watch")
+            principal.update()
+        return trabalho()
+    finally:
+        if camada is not None:
+            camada.fechar()
+        try:
+            principal.configure(cursor="")
+        except tkinter.TclError:
+            pass
+        if marca_antes is not None:
+            # Um pouco depois: os cliques que ficaram na fila do Tk
+            # durante as contas também caem no "ignorar".
+            principal.after(
+                150, lambda: setattr(principal, "_a_navegar", marca_antes)
+            )
+
+
+class CamadaCarregar(ctk.CTkFrame):
+    """Aviso "A calcular…" com a barra a correr, POR CIMA de um widget
+    (place, a ocupar-lhe a área toda) — v2.3.0. Tira-se com
+    `fechar()`."""
+
+    def __init__(self, master, texto):
+        super().__init__(master, fg_color=tema.COR_FUNDO, corner_radius=0)
+        caixa = ctk.CTkFrame(
+            self,
+            fg_color=tema.COR_FUNDO,
+            border_width=1,
+            border_color=tema.COR_BORDA,
+            corner_radius=tema.RAIO_CARTAO,
+        )
+        caixa.place(relx=0.5, rely=0.4, anchor="center")
+        Rotulo(caixa, texto, "cartao", anchor="center").pack(
+            padx=28, pady=(18, 10)
+        )
+        self.barra = BarraCorrer(caixa)
+        self.barra.pack(padx=28, pady=(0, 20))
+        self.barra.start()
+        self.place(x=0, y=0, relwidth=1, relheight=1)
+        self.lift()
+
+    def fechar(self):
+        try:
+            self.barra.stop()
+            self.destroy()
+        except tkinter.TclError:
+            pass
+
+
+class TelaAbrir(ctk.CTkFrame):
+    """Ocupa a área de conteúdo enquanto um ecrã do menu é construído:
+    "A abrir Calendário…" com a barra a correr (v2.3.0, mockup
+    aprovado a 10/10/2026). Quem a põe e tira é
+    `Aplicacao.navegar`."""
+
+    def __init__(self, master, nome_ecra):
+        super().__init__(master, fg_color=tema.COR_FUNDO, corner_radius=0)
+        centro = Contentor(self)
+        centro.place(relx=0.5, rely=0.45, anchor="center")
+        texto = f"A abrir {nome_ecra}…" if nome_ecra else "A abrir…"
+        Rotulo(centro, texto, "cartao", anchor="center").pack(
+            pady=(0, 12)
+        )
+        self.barra = BarraCorrer(centro)
+        self.barra.pack()
+        self.barra.start()
+
+    def destroy(self):
+        try:
+            self.barra.stop()
+        except tkinter.TclError:
+            pass
+        super().destroy()
 
 
 def tornar_cliclavel(widget, ao_clicar):

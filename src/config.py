@@ -95,7 +95,7 @@ PRAZO_CONSERVACAO_FISCAL_DIAS = 3650  # art.º 40.º Código Comercial
 PRAZO_CONSERVACAO_LOGS_DIAS = 180  # minimização
 
 # Mostrada na interface (decisão 21); atualizar a cada fecho de versão.
-VERSAO = "2.2.0"
+VERSAO = "2.3.0"
 
 # --- Utilizador Master padrão (reset do sistema) ----------------------------
 # Usados pela função "Começar do zero" (gui_configuracoes.py → Fase 4).

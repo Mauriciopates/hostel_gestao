@@ -1182,6 +1182,59 @@ class Aplicacao(ctk.CTk):
 
         return popup.trocada
 
+    def navegar(self, classe_frame, nome=""):
+        """Clique num item do menu lateral (v2.3.0, mockup aprovado a
+        10/10/2026).
+
+        No Sin-11 um ecrã demorava até 6 s a abrir sem dar sinal
+        nenhum, e voltava-se a clicar — os cliques ficavam em fila e
+        abriam ecrãs uns atrás dos outros. Agora:
+
+        1. o item fica marcado e a área de conteúdo mostra logo
+           "A abrir <nome>…" (`TelaAbrir`), com o cursor "a trabalhar";
+        2. o ecrã é construído a seguir (`mostrar_frame`);
+        3. cliques no menu durante esse tempo são ignorados — a marca
+           `_a_navegar` só sai um pouco DEPOIS de o ecrã estar pronto,
+           para os cliques que ficaram na fila do Tk também caírem.
+        """
+        if getattr(self, "_a_navegar", False):
+            return
+        self._a_navegar = True
+
+        self.barra_lateral.marcar_ativo(classe_frame)
+        if self.frame_atual is not None:
+            self.frame_atual.destroy()
+            self.frame_atual = None
+        self._tela_abrir = componentes.TelaAbrir(self.area_conteudo, nome)
+        self._tela_abrir.pack(fill="both", expand=True)
+        self.configure(cursor="watch")
+        # `update` e não só `update_idletasks`: o CustomTkinter desenha
+        # nos eventos <Configure>. Um clique que chegue aqui cai no
+        # `return` do topo (a marca já está posta).
+        self.update()
+
+        self.after(20, lambda: self._concluir_navegacao(classe_frame))
+
+    def _concluir_navegacao(self, classe_frame):
+        try:
+            self.mostrar_frame(classe_frame)
+        finally:
+            self._tirar_tela_abrir()
+            try:
+                self.configure(cursor="")
+            except tkinter.TclError:
+                pass
+            self.after(150, self._libertar_navegacao)
+
+    def _libertar_navegacao(self):
+        self._a_navegar = False
+
+    def _tirar_tela_abrir(self):
+        tela = getattr(self, "_tela_abrir", None)
+        if tela is not None:
+            tela.destroy()
+            self._tela_abrir = None
+
     def mostrar_frame(self, classe_frame, **kwargs):
         """Troca o ecrã atual pelo indicado em classe_frame."""
         if self.frame_atual is not None:
@@ -1190,10 +1243,13 @@ class Aplicacao(ctk.CTk):
         self.frame_atual = classe_frame(
             self.area_conteudo, controlador=self, **kwargs
         )
+        # O "A abrir…" (se houver) fica à vista durante a construção e
+        # só sai quando o ecrã novo está pronto a entrar.
+        self._tirar_tela_abrir()
         self.frame_atual.pack(fill="both", expand=True)
 
         self.barra_lateral.marcar_ativo(classe_frame)
-        self.barra_lateral.atualizar_contadores()
+        self.barra_lateral.atualizar_contadores_se_preciso()
 
     def trocar_utilizador(self):
         """Logoff: fecha a janela e pede reabertura ao `main_gui`.

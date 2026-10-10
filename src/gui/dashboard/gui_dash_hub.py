@@ -110,7 +110,20 @@ class Dashboard(ctk.CTkFrame):
 
         if nome not in self.vistas:
             classe = self.opcoes[nome]
-            self.vistas[nome] = classe(self.palco, self.controlador)
+
+            def construir():
+                return classe(self.palco, self.controlador)
+
+            # v2.3.0: ao trocar de vista com o Dashboard já no ecrã
+            # (ex. "Financeiro", 6 s no Sin-11) aparece "A calcular…".
+            # Na primeira vista, ao abrir o ecrã, já está à vista o
+            # "A abrir Dashboard…" do menu.
+            if self.winfo_viewable():
+                self.vistas[nome] = componentes.com_janela_carregar(
+                    self, f"A calcular {nome}…", construir
+                )
+            else:
+                self.vistas[nome] = construir()
 
         self.vista_atual = self.vistas[nome]
         self.vista_atual.pack(fill="both", expand=True)
@@ -128,4 +141,6 @@ class Dashboard(ctk.CTkFrame):
                 del self.vistas[nome]
 
         if self.vista_atual is not None:
-            self.vista_atual.atualizar()
+            componentes.com_janela_carregar(
+                self, "A atualizar…", self.vista_atual.atualizar
+            )

@@ -153,7 +153,28 @@ class EcraRelatorios(ctk.CTkFrame):
     # -- navegação ----------------------------------------------------
 
     def _abrir_area(self, chave_area):
-        RelatorioModal(self, chave_area)
+        """Clique num cartão (v2.3.0): o hub fica logo coberto por
+        "A abrir relatórios…" e o popup abre a seguir; a camada sai
+        quando o primeiro relatório estiver desenhado. Cliques
+        repetidos enquanto isso são ignorados."""
+        if getattr(self, "_a_abrir", None) is not None:
+            return
+
+        titulo = dict((c, t) for c, t, _ in AREAS).get(chave_area, "")
+        self._a_abrir = componentes.CamadaCarregar(
+            self, f"A abrir relatórios · {titulo}…"
+        )
+        self.update()
+
+        def pronto():
+            camada, self._a_abrir = self._a_abrir, None
+            if camada is not None:
+                camada.fechar()
+
+        self.after(
+            10,
+            lambda: RelatorioModal(self, chave_area, ao_pronto=pronto),
+        )
 
 
 class RelatorioModal(RelatFinanceiro, RelatContratos, RelatStock):

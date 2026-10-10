@@ -48,7 +48,10 @@ class VistaFinanceiro(comum.VistaBase):
         else:
             self.ano, self.mes = painel.mes_seguinte(self.ano, self.mes)
 
-        self.atualizar()
+        # v2.3.0: mudar de mês volta a fazer as contas todas.
+        componentes.com_janela_carregar(
+            self, "A calcular o Financeiro…", self.atualizar
+        )
 
     def _e_mes_atual(self):
         return (self.ano, self.mes) >= (self.hoje.year, self.hoje.month)
